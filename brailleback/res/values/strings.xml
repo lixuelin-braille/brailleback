@@ -2,7 +2,7 @@
 <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
 
     <!-- Title for the brailleback, preferences activity. -->
-    <string name="brailleback_setup_title" translatable="false">林夕读屏</string>
+    <string name="brailleback_setup_title" translatable="false">盲文迁移项目</string>
 
     <!-- Displayed on the accessibility settings screen when the user has selected BrailleBack. Note that in the phrase "the letter l", the letter is a lowercase L, not an uppercase I. -->
     <string name="service_description">When BrailleBack is on, your device will connect to a paired bluetooth braille display and present the screen content in braille. Keys on the braille display can be used to navigate the screen, activate items and enter text. For more information, press space and dots 1, 2 and 3 (the letter l in braille) on your display when connected.</string>
@@ -276,5 +276,86 @@
     <!-- Text for menu item for telling user to update talkback to support labels. -->
     <string name="menu_item_update_talkback">Custom labels not supported. Update talkback</string>
 
-</resources>
 
+    <!-- ==================== 音效方案（Sound Scheme） ==================== -->
+    <!-- 内置方案名称 -->
+    <string name="sound_scheme_default">天坦默认</string>
+    <string name="sound_scheme_apple">苹果</string>
+    <string name="sound_scheme_tatans">天坦</string>
+
+    <!-- 音效设置 -->
+    <string name="pref_sound_category_title">音效</string>
+    <string name="pref_sound_enabled_title">启用音效</string>
+    <string name="pref_sound_enabled_summary_on">已开启音效反馈</string>
+    <string name="pref_sound_enabled_summary_off">已关闭音效反馈</string>
+    <string name="pref_sound_volume_title">音效音量</string>
+    <string name="pref_sound_scheme_title">音效方案</string>
+    <string name="pref_sound_scheme_summary">当前方案：%1$s</string>
+    <string name="pref_sound_editor_title">音效管理器（自定义）</string>
+    <string name="pref_sound_editor_summary">自定义当前方案的每个音效</string>
+    <string name="pref_sound_create_title">新建音效方案</string>
+    <string name="pref_sound_create_summary">基于现有方案新建一套音效</string>
+    <string name="pref_sound_reset_title">重置当前方案</string>
+    <string name="pref_sound_reset_summary">恢复当前方案全部内置音效</string>
+
+    <!-- 音效事件名称 -->
+    <string name="sound_name_focus">不可点击焦点</string>
+    <string name="sound_name_actionable_focus">可点击焦点</string>
+    <string name="sound_name_scroll_tone">滚动</string>
+    <string name="sound_name_tick">点击</string>
+    <string name="sound_name_view_entered">无焦点框</string>
+    <string name="sound_name_window_state">窗口改变</string>
+    <string name="sound_name_window_navigation">窗口导航</string>
+    <string name="sound_name_gesture_end">手势完成</string>
+    <string name="sound_name_hyperlink">文本链接</string>
+    <string name="sound_name_long_clicked">长按</string>
+    <string name="sound_name_chime_up">暂时使用系统手势</string>
+    <string name="sound_name_chime_down">结束使用系统手势</string>
+    <string name="sound_name_complete">执行失败</string>
+    <string name="sound_name_toast">气泡通知</string>
+    <string name="sound_name_copy_success">复制</string>
+    <string name="sound_name_screenshot">截屏</string>
+    <string name="sound_name_key">键盘</string>
+    <string name="sound_name_emoji">Emoji表情</string>
+    <string name="sound_name_image_caption">图标识别</string>
+    <string name="sound_name_loading">识别中</string>
+    <string name="sound_name_recognize_complete">识别完成</string>
+    <string name="sound_name_double_click">双击</string>
+    <string name="sound_name_custom_actions">操作</string>
+    <string name="sound_name_gesture_begin">手势开始</string>
+    <string name="sound_name_silence">静音</string>
+    <string name="sound_name_screen_lock">锁屏</string>
+    <string name="sound_name_ding_focus">叮-聚焦</string>
+    <string name="sound_name_add_success">追加复制</string>
+
+    <!-- 音效方案编辑器 -->
+    <string name="sound_editor_title">音效方案：%1$s</string>
+    <string name="sound_editor_play">试听</string>
+    <string name="sound_editor_customize">自定义音效</string>
+    <string name="sound_editor_reset">重置音效</string>
+    <string name="sound_editor_enabled">启用</string>
+    <string name="sound_editor_pick_sound">从手机中选择音频文件（ogg/mp3/wav）</string>
+    <string name="sound_editor_use_builtin">使用内置音效</string>
+    <string name="sound_editor_no_custom">内置音效</string>
+    <string name="sound_editor_silenced">已静音</string>
+    <string name="sound_editor_rename">重命名方案</string>
+    <string name="sound_editor_delete">删除方案</string>
+    <string name="sound_editor_new_name_hint">请输入方案名称</string>
+    <string name="sound_editor_base_scheme">基础方案</string>
+    <string name="sound_editor_delete_confirm">确定删除该音效方案吗？</string>
+    <string name="sound_editor_created">已创建方案：%1$s</string>
+    <string name="sound_editor_duplicate_name">已存在同名方案</string>
+    <string name="sound_editor_volume">音效音量：%1$d</string>
+    <string name="sound_editor_pick_custom">选择自定义音效…</string>
+    <string name="sound_editor_scheme_management">方案管理</string>
+
+    <!-- 音效设置 key -->
+    <string name="pref_sound_enabled_key" translatable="false">pref_sound_enabled</string>
+    <string name="pref_sound_volume_key" translatable="false">pref_sound_volume</string>
+    <string name="pref_sound_scheme_key" translatable="false">pref_sound_scheme</string>
+    <string name="pref_sound_editor_key" translatable="false">pref_sound_editor</string>
+    <string name="pref_sound_create_key" translatable="false">pref_sound_create</string>
+    <string name="pref_sound_reset_key" translatable="false">pref_sound_reset</string>
+
+    <string name="pref_sound_volume_summary">50</string>
+</resources>

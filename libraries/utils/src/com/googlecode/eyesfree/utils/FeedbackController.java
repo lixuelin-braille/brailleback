@@ -26,6 +26,7 @@ import android.media.MediaPlayer.OnPreparedListener;
 import android.media.SoundPool;
 import android.media.SoundPool.OnLoadCompleteListener;
 import android.os.Handler;
+import android.text.TextUtils;
 import android.os.Vibrator;
 import android.util.Log;
 import android.util.SparseArray;
@@ -270,6 +271,51 @@ public class FeedbackController {
         }
 
         return true;
+    }
+
+    /**
+     * Plays an audio file from an absolute path. Used for user-customized
+     * earcons (scheme system). Unlike the SoundPool-based methods this uses
+     * MediaPlayer so arbitrary files (ogg/mp3/wav) can be played.
+     *
+     * @param path absolute path to the audio file
+     * @param volume playback volume in the range 0..1
+     * @return {@code true} if playback was started successfully
+     */
+    public boolean playSoundPath(String path, float volume) {
+        if (!mAuditoryEnabled || TextUtils.isEmpty(path)) {
+            return false;
+        }
+
+        final MediaPlayer mp = new MediaPlayer();
+        mp.setOnPreparedListener(new OnPreparedListener() {
+            @Override
+            public void onPrepared(MediaPlayer mp) {
+                mp.start();
+            }
+        });
+        mp.setOnCompletionListener(new OnCompletionListener() {
+            @Override
+            public void onCompletion(MediaPlayer mp) {
+                mp.release();
+            }
+        });
+
+        try {
+            mp.setAudioStreamType(DEFAULT_STREAM);
+            mp.setDataSource(path);
+            mp.setVolume(volume, volume);
+            mp.prepareAsync();
+            return true;
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (IllegalArgumentException e) {
+            e.printStackTrace();
+        } catch (SecurityException e) {
+            e.printStackTrace();
+        }
+        mp.release();
+        return false;
     }
 
     /**

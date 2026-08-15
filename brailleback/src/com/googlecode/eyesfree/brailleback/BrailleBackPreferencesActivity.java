@@ -16,9 +16,11 @@
 
 package com.googlecode.eyesfree.brailleback;
 
+import android.app.AlertDialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.DialogInterface;
 import android.content.IntentFilter;
 import android.Manifest;
 import android.content.SharedPreferences;
@@ -29,11 +31,18 @@ import android.preference.ListPreference;
 import android.preference.Preference;
 import android.preference.PreferenceActivity;
 import android.preference.PreferenceManager;
+import android.widget.EditText;
+import android.text.InputType;
+import android.widget.SeekBar;
+import android.widget.Toast;
 import android.text.TextUtils;
 import android.util.Log;
 import com.googlecode.eyesfree.braille.display.Display;
 import com.googlecode.eyesfree.braille.display.DisplayClient;
 import com.googlecode.eyesfree.braille.translate.TableInfo;
+import com.googlecode.eyesfree.brailleback.sound.SoundScheme;
+import com.googlecode.eyesfree.brailleback.sound.SoundSchemeEditorActivity;
+import com.googlecode.eyesfree.brailleback.sound.SoundSchemeManager;
 import com.googlecode.eyesfree.brailleback.utils.PreferenceUtils;
 import com.googlecode.eyesfree.utils.LogUtils;
 import java.text.CollationKey;
@@ -71,6 +80,11 @@ public class BrailleBackPreferencesActivity extends PreferenceActivity
     private Preference mOverlayTutorialPreference;
     private Preference mLicensesPreference;
     private ListPreference mLogLevelPreference;
+    private ListPreference mSoundSchemePreference;
+    private Preference mSoundVolumePreference;
+    private Preference mSoundCreatePreference;
+    private Preference mSoundEditorPreference;
+    private Preference mSoundResetPreference;
     private int mConnectionState = Display.STATE_NOT_CONNECTED;
     private String mConnectionProgress = null;
     private List<TableInfo> mTables;
@@ -373,6 +387,156 @@ public class BrailleBackPreferencesActivity extends PreferenceActivity
             startActivity(intent);
         }
         return false;
+    }
+
+    // ------------------------------------------------------------------
+    // Sound scheme preferences (earcons)
+    // ------------------------------------------------------------------
+
+    @SuppressWarnings("deprecation")
+    private void setupSoundPreferences() {
+        mSoundSchemePreference = (ListPreference) findPreferenceByResId(
+                R.string.pref_sound_scheme_key);
+        mSoundSchemePreference.setOnPreferenceChangeListener(this);
+        mSoundVolumePreference = findPreferenceByResId(
+                R.string.pref_sound_volume_key);
+        mSoundVolumePreference.setOnPreferenceClickListener(this);
+        mSoundCreatePreference = findPreferenceByResId(
+                R.string.pref_sound_create_key);
+        mSoundCreatePreference.setOnPreferenceClickListener(this);
+        mSoundEditorPreference = findPreferenceByResId(
+                R.string.pref_sound_editor_key);
+        mSoundEditorPreference.setOnPreferenceClickListener(this);
+        mSoundResetPreference = findPreferenceByResId(
+                R.string.pref_sound_reset_key);
+        mSoundResetPreference.setOnPreferenceClickListener(this);
+        refreshSoundPreferences();
+    }
+
+    private void refreshSoundPreferences() {
+        SoundSchemeManager manager = SoundSchemeManager.getInstance(this);
+        List<SoundScheme> schemes = manager.getAllSchemes();
+        int count = schemes.size();
+        CharSequence[] entries = new CharSequence[count];
+        CharSequence[] values = new CharSequence[count];
+        for (int i = 0; i < count; i++) {
+            entries[i] = schemes.get(i).getName();
+            values[i] = schemes.get(i).getKey();
+        }
+        mSoundSchemePreference.setEntries(entries);
+        mSoundSchemePreference.setEntryValues(values);
+        SoundScheme active = manager.getActiveScheme();
+        if (active != null) {
+            mSoundSchemePreference.setValue(active.getKey());
+            mSoundSchemePreference.setSummary(active.getName());
+        }
+        mSoundVolumePreference.setSummary(
+                getString(R.string.sound_editor_volume, manager.getVolume()));
+    }
+
+    private void showVolumeDialog() {
+        final SoundSchemeManager manager = SoundSchemeManager.getInstance(this);
+        final SeekBar seekBar = new SeekBar(this);
+        seekBar.setMax(100);
+        seekBar.setProgress(manager.getVolume());
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.pref_sound_volume_title)
+                .setView(seekBar)
+                .setPositiveButton(android.R.string.ok,
+                        new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                int volume = seekBar.getProgress();
+                                manager.setVolume(volume);
+                                mSoundVolumePreference.setSummary(
+                                        getString(R.string.sound_editor_volume, volume));
+                            }
+                        })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    private void showCreateSchemeDialog() {
+        final SoundSchemeManager manager = SoundSchemeManager.getInstance(this);
+        final EditText nameInput = new EditText(this);
+        nameInput.setSingleLine(true);
+        nameInput.setInputType(InputType.TYPE_CLASS_TEXT);
+        nameInput.setHint(R.string.sound_editor_new_name_hint);
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.pref_sound_create_title)
+                .setView(nameInput)
+                .setPositiveButton(android.R.string.ok,
+                        new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                final String name = nameInput.getText().toString().trim();
+                                if (name.length() == 0) {
+                                    return;
+                                }
+                                showChooseBaseDialog(manager, name);
+                            }
+                        })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    private void showChooseBaseDialog(final SoundSchemeManager manager, final String name) {
+        List<SoundScheme> schemes = manager.getAllSchemes();
+        final CharSequence[] baseNames = new CharSequence[schemes.size()];
+        final String[] baseKeys = new String[schemes.size()];
+        for (int i = 0; i < schemes.size(); i++) {
+            baseNames[i] = schemes.get(i).getName();
+            baseKeys[i] = schemes.get(i).getKey();
+        }
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.sound_editor_base_scheme)
+                .setSingleChoiceItems(baseNames, 0, null)
+                .setPositiveButton(android.R.string.ok,
+                        new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                android.widget.ListView list =
+                                        ((AlertDialog) dialog).getListView();
+                                int checked = list.getCheckedItemPosition();
+                                if (checked < 0) {
+                                    checked = 0;
+                                }
+                                SoundScheme created = manager.createScheme(name, baseKeys[checked]);
+                                if (created == null) {
+                                    Toast.makeText(BrailleBackPreferencesActivity.this,
+                                            R.string.sound_editor_duplicate_name,
+                                            Toast.LENGTH_SHORT).show();
+                                    return;
+                                }
+                                manager.setActiveScheme(created.getKey());
+                                refreshSoundPreferences();
+                                Toast.makeText(BrailleBackPreferencesActivity.this,
+                                        getString(R.string.sound_editor_created, name),
+                                        Toast.LENGTH_SHORT).show();
+                            }
+                        })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    private void confirmResetScheme() {
+        new AlertDialog.Builder(this)
+                .setMessage(R.string.pref_sound_reset_title)
+                .setPositiveButton(android.R.string.ok,
+                        new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                SoundSchemeManager manager =
+                                        SoundSchemeManager.getInstance(BrailleBackPreferencesActivity.this);
+                                manager.resetScheme(manager.getActiveScheme().getKey());
+                                refreshSoundPreferences();
+                                Toast.makeText(BrailleBackPreferencesActivity.this,
+                                        R.string.sound_editor_use_builtin,
+                                        Toast.LENGTH_SHORT).show();
+                            }
+                        })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
     }
 
     private boolean updateListPreferenceSummary(

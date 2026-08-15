@@ -127,5 +127,35 @@
 
         </PreferenceScreen>
     </PreferenceCategory>
+    <PreferenceCategory
+         android:key="pref_category_sound"
+         android:title="@string/pref_sound_category_title" >
+        <SwitchPreference
+             android:key="@string/pref_sound_enabled_key"
+             android:title="@string/pref_sound_enabled_title"
+             android:summaryOn="@string/pref_sound_enabled_summary_on"
+             android:summaryOff="@string/pref_sound_enabled_summary_off"
+             android:defaultValue="true" />
+        <Preference
+             android:key="@string/pref_sound_volume_key"
+             android:title="@string/pref_sound_volume_title"
+             android:summary="@string/pref_sound_volume_summary" />
+        <ListPreference
+             android:key="@string/pref_sound_scheme_key"
+             android:title="@string/pref_sound_scheme_title"
+             android:summary="@string/pref_sound_scheme_summary" />
+        <Preference
+             android:key="@string/pref_sound_create_key"
+             android:title="@string/pref_sound_create_title"
+             android:summary="@string/pref_sound_create_summary" />
+        <Preference
+             android:key="@string/pref_sound_editor_key"
+             android:title="@string/pref_sound_editor_title"
+             android:summary="@string/pref_sound_editor_summary" />
+        <Preference
+             android:key="@string/pref_sound_reset_key"
+             android:title="@string/pref_sound_reset_title"
+             android:summary="@string/pref_sound_reset_summary" />
+    </PreferenceCategory>
 </PreferenceScreen>
 
