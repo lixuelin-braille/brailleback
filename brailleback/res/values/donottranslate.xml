@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Preference keys -->
+    <string name="pref_category_device_key">category_device</string>
+    <string name="pref_connection_status_key">connection_status</string>
+    <string name="pref_key_bindings_key">key_bindings</string>
+    <string name="pref_category_braille_key">category_braille</string>
+    <string name="pref_braille_type_key">braille_type</string>
+    <string name="pref_six_dot_braille_table_key">six_dot_braille_table</string>
+    <string name="pref_eight_dot_braille_table_key">eight_dot_braille_table</string>
+    <!-- Used when the user hasn't specified any table and it is determined by the user locale. -->
+    <string name="table_value_default">auto</string>
+    <string name="pref_braille_type_six_dot_value">six_dot</string>
+    <string name="pref_braille_type_eight_dot_value">eight_dot</string>
+    <string name="pref_braille_type_default">@string/pref_braille_type_six_dot_value</string>
+    <string-array name="pref_braille_type_values">
+        <item>@string/pref_braille_type_six_dot_value</item>
+    </string-array>
+    <string-array name="pref_braille_type_entries">
+        <item>@string/pref_braille_type_six_dot_label</item>
+    </string-array>
+    <string name="pref_category_miscellaneous_key">category_miscellaneous</string>
+    <string name="pref_category_developer_key">category_developer</string><string name="pref_connection_protocol_key">connection_protocol</string>
+    <string-array name="pref_connection_protocol_values">
+        <item>auto</item>
+        <item>hid</item>
+        <item>rfcomm</item>
+    </string-array>
+    <string-array name="pref_connection_protocol_entries">
+        <item>@string/pref_connection_protocol_auto_label</item>
+        <item>@string/pref_connection_protocol_hid_label</item>
+        <item>@string/pref_connection_protocol_rfcomm_label</item>
+    </string-array>
+    <string name="pref_category_braille_overlay_key">category_braille_overlay</string>
+    <string name="pref_braille_overlay_key">overlay_enabled</string>
+    <bool name="pref_braille_overlay_default">false</bool>
+    <string name="pref_braille_overlay_tutorial_key">show_overlay_tutorial</string>
+    <string name="pref_os_license_key">opensource_license_notice</string>
+    <string name="pref_braille_word_wrap_key">braille_word_wrap</string>
+    <string name="pref_braille_contracted_mode_key">braille_contracted_mode</string>
+    <string name="pref_motion_mode_key">motion_mode</string>
+    <string name="pref_pause_behavior_key">pause_behavior</string>
+    <string name="pref_pause_behavior_clear_value">clear</string>
+    <string name="pref_pause_behavior_keep_value">keep</string>
+    <string-array name="pref_pause_behavior_values">
+        <item>@string/pref_pause_behavior_clear_value</item>
+        <item>@string/pref_pause_behavior_keep_value</item>
+    </string-array>
+    <string-array name="pref_pause_behavior_entries">
+        <item>@string/pref_pause_behavior_clear_label</item>
+        <item>@string/pref_pause_behavior_keep_label</item>
+    </string-array>
+    <string name="pref_idle_clear_key">idle_clear_timeout</string>
+    <string name="pref_idle_clear_off_value">0</string>
+    <string name="pref_idle_clear_1min_value">1</string>
+    <string name="pref_idle_clear_3min_value">3</string>
+    <string name="pref_idle_clear_5min_value">5</string>
+    <string-array name="pref_idle_clear_values">
+        <item>@string/pref_idle_clear_off_value</item>
+        <item>@string/pref_idle_clear_1min_value</item>
+        <item>@string/pref_idle_clear_3min_value</item>
+        <item>@string/pref_idle_clear_5min_value</item>
+    </string-array>
+    <string-array name="pref_idle_clear_entries">
+        <item>@string/pref_idle_clear_off_label</item>
+        <item>@string/pref_idle_clear_1min_label</item>
+        <item>@string/pref_idle_clear_3min_label</item>
+        <item>@string/pref_idle_clear_5min_label</item>
+    </string-array>
+
+    <string name="pref_volume_long_press_up_key">volume_long_press_up</string>
+    <string name="pref_volume_long_press_down_key">volume_long_press_down</string>
+    <string name="pref_volume_double_press_key">volume_double_press</string>
+    <string name="pref_volume_action_none_value">none</string>
+    <string name="pref_volume_action_pause_value">pause_display</string>
+    <string name="pref_volume_action_grade_value">toggle_grade</string>
+    <string-array name="pref_volume_action_values">
+        <item>@string/pref_volume_action_none_value</item>
+        <item>@string/pref_volume_action_pause_value</item>
+        <item>@string/pref_volume_action_grade_value</item>
+    </string-array>
+    <string-array name="pref_volume_action_entries">
+        <item>@string/pref_volume_action_none_label</item>
+        <item>@string/pref_volume_action_pause_label</item>
+        <item>@string/pref_volume_action_grade_label</item>
+    </string-array>
+
+
+    <bool name="pref_braille_word_wrap_default">true</bool>
+
+    <!-- Log level preference -->
+    <string name="pref_log_level_key">log_level</string>
+    <string name="pref_log_level_default">5</string>
+    <string-array name="pref_log_level_entries">
+        <item>NONE</item>
+        <item>ASSERT</item>
+        <item>ERROR</item>
+        <item>WARN</item>
+        <item>INFO</item>
+        <item>DEBUG</item>
+        <item>VERBOSE</item>
+    </string-array>
+    <string-array name="pref_log_level_values">
+        <item>9</item>
+        <item>7</item>
+        <item>6</item>
+        <item>5</item>
+        <item>4</item>
+        <item>3</item>
+        <item>2</item>
+    </string-array>
+</resources>
+

@@ -1,0 +1,39 @@
+# --- Gradle / Android build outputs ---
+.gradle/
+build/
+captures/
+.cxx/
+.externalNativeBuild/
+*.apk
+*.aab
+
+# --- Machine-specific ---
+local.properties
+
+# --- NDK build intermediates (regenerated from service/jni) ---
+service/obj/
+service/temp/
+
+# --- Duplicate prebuilt native libs (canonical copy lives in service/jniLibs) ---
+service/libs/
+
+# --- IDE ---
+.idea/
+*.iml
+*.ipr
+*.iws
+.classpath
+.project
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# --- Python / misc ---
+__pycache__/
+*.pyc
+temp/
+
+# --- Editor backups ---
+*.bak*

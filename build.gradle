@@ -1,0 +1,17 @@
+// Top-level build file. Modernized for AGP 9.2.0 + Gradle 9.4.1 (Alibaba mirrors).
+plugins {
+    id 'com.android.application' version '9.2.0' apply false
+    id 'com.android.library' version '9.2.0' apply false
+}
+
+allprojects {
+    repositories {
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/public' }
+        mavenCentral()
+    }
+}
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}
