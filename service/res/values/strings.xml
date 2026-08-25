@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-    <string name="app_name" translatable="false">林夕读屏</string>
+    <string name="app_name" translatable="false">brailleback盲文</string>
     <string name="service_label" translatable="false">Braille Service</string>
     <!-- Displayed to the user when trying to connect to a braille display. Contains the bluetooth name of the display. -->
     <string name="connprog_trying">Looking for: <xliff:g id="display_name">%s</xliff:g></string>

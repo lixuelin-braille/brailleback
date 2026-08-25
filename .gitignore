@@ -37,3 +37,7 @@ temp/
 
 # --- Editor backups ---
 *.bak*
+
+# --- NDK build output ---
+service/jni/obj/
+**/jni/obj/

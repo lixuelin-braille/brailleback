@@ -35,6 +35,7 @@ android {
         main {
             manifest.srcFile 'AndroidManifest.xml'
             java.srcDirs = ['src']
+            kotlin.srcDirs = ['src']
             resources.srcDirs = ['src']
             aidl.srcDirs = ['src']
             res.srcDirs = ['res']

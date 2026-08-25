@@ -20,7 +20,11 @@ import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.Manifest;
+import android.os.Build;
 import android.preference.PreferenceManager;
+import android.util.Log;
 import com.googlecode.eyesfree.braille.service.R;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -36,11 +40,14 @@ import java.util.regex.Pattern;
  */
 public class DeviceFinder {
 
+    private static final String LOG_TAG = "DeviceFinder";
+
     private static final UUID SERIAL_BOARD_UUID =
             UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
     private static final String LAST_CONNECTED_DEVICE_KEY =
             "lastBluetoothDevice";
 
+    private final Context mContext;
     private final SharedPreferences mSharedPreferences;
 
     /**
@@ -150,36 +157,49 @@ public class DeviceFinder {
     }
 
     public DeviceFinder(Context context) {
+        mContext = context.getApplicationContext();
         mSharedPreferences =
-                PreferenceManager.getDefaultSharedPreferences(context);
+                PreferenceManager.getDefaultSharedPreferences(mContext);
     }
 
     /**
      * Returns a list of bonded and supported devices in the order they
      * should be tried.
+     *
+     * <p>On Android 12+ (API 31) reading the bonded device list requires
+     * {@code BLUETOOTH_CONNECT}; if the permission is missing this returns an
+     * empty list instead of crashing with a {@link SecurityException}.
      */
     public List<DeviceInfo> findDevices() {
+        if (!hasBluetoothConnectPermission()) {
+            return Collections.emptyList();
+        }
         BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
         if (adapter == null) {
             return Collections.emptyList();
         }
 
         List<DeviceInfo> ret = new ArrayList<DeviceInfo>();
-    // getBondedDevices() may contain null.
-    Set<BluetoothDevice> bondedDevices = adapter.getBondedDevices();
-    if (bondedDevices == null) {
-      return ret;
-    }
-        for (BluetoothDevice dev : bondedDevices) {
-      if (dev == null) {
-        continue;
-      }
-            for (SupportedDevice matcher : SUPPORTED_DEVICES) {
-                DeviceInfo matched = matcher.match(dev);
-                if (matched != null) {
-                    ret.add(matched);
+        try {
+            // getBondedDevices() may contain null.
+            Set<BluetoothDevice> bondedDevices = adapter.getBondedDevices();
+            if (bondedDevices == null) {
+                return ret;
+            }
+            for (BluetoothDevice dev : bondedDevices) {
+                if (dev == null) {
+                    continue;
+                }
+                for (SupportedDevice matcher : SUPPORTED_DEVICES) {
+                    DeviceInfo matched = matcher.match(dev);
+                    if (matched != null) {
+                        ret.add(matched);
+                    }
                 }
             }
+        } catch (SecurityException e) {
+            Log.w(LOG_TAG, "BLUETOOTH_CONNECT permission denied; no devices", e);
+            return Collections.emptyList();
         }
         String lastAddress = mSharedPreferences.getString(
             LAST_CONNECTED_DEVICE_KEY, null);
@@ -195,6 +215,16 @@ public class DeviceFinder {
             }
         }
         return ret;
+    }
+
+    /** Returns true if the app can read the bonded Bluetooth devices. */
+    private boolean hasBluetoothConnectPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            // Pre-Android 12: BLUETOOTH is a normal permission granted at install.
+            return true;
+        }
+        return mContext.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)
+                == PackageManager.PERMISSION_GRANTED;
     }
 
     public void rememberSuccessfulConnection(DeviceInfo info) {

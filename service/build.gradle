@@ -22,11 +22,17 @@ android {
         main {
             manifest.srcFile 'AndroidManifest.xml'
             java.srcDirs = ['src']
+            kotlin.srcDirs = ['src']
             resources.srcDirs = ['src']
             aidl.srcDirs = ['src']
             res.srcDirs = ['res']
             assets.srcDirs = ['assets']
             jniLibs.srcDirs = ['jniLibs']
+        }
+        test {
+            java.srcDirs = ['test/java']
+            kotlin.srcDirs = ['test/kotlin']
+            assets.srcDirs = ['assets']
         }
         debug.setRoot('build-types/debug')
         release.setRoot('build-types/release')
@@ -53,5 +59,6 @@ dependencies {
     implementation project(':client')
     androidTestImplementation 'androidx.test:runner:1.5.2'
     androidTestImplementation 'androidx.test:rules:1.5.0'
+    testImplementation 'junit:junit:4.13.2'
 }
 

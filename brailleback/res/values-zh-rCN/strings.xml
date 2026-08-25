@@ -26,10 +26,17 @@
     <string name="type_seekbar" msgid="979094491475615458">"搜索控件"</string>
     <string name="type_quickcontact" msgid="5224329178093450337">"联系人"</string>
     <string name="preferences_title" msgid="368535298674637475">"盲文提示偏好设置"</string>
+    <string name="permission_bluetooth_title">需要蓝牙权限</string>
+    <string name="permission_bluetooth_message">"要连接盲文点显器，brailleback盲文需要访问蓝牙。请在设置中授予权限。"</string>
     <string name="pref_category_device_title" msgid="8644919099122845217">"设备"</string>
+    <string name="pref_category_device_summary">"连接状态、协议与键盘帮助"</string>
     <string name="pref_connection_status_title" msgid="8350285056432214602">"状态"</string>
     <string name="pref_key_bindings_title" msgid="1228004448435300774">"键盘帮助"</string>
     <string name="pref_category_braille_title" msgid="2900211401917503360">"盲文"</string>
+    <string name="pref_category_braille_summary">"盲文类型、表格与显示行为"</string>
+    <string name="pref_category_braille_type_title">"盲文类型"</string>
+    <string name="pref_category_volume_title">"音量键"</string>
+    <string name="pref_category_behavior_title">"显示行为"</string>
     <string name="pref_braille_type_title" msgid="830832481671746224">"盲文类型"</string>
     <string name="pref_six_dot_braille_table_title" msgid="4612604998154279310">"书面盲文表格"</string>
     <string name="pref_eight_dot_braille_table_title" msgid="1960546664278216814">"计算机盲文表格"</string>
@@ -54,6 +61,8 @@
     <string name="pref_volume_action_none_label">关闭</string>
     <string name="pref_volume_action_pause_label">暂停/继续点显</string>
     <string name="pref_volume_action_grade_label">切换缩写模式</string>
+    <string name="pref_sound_category_title">音效</string>
+    <string name="pref_sound_category_summary">启用或关闭音效反馈</string>
 
 
     <string name="pref_braille_contracted_mode_summary_on">使用缩写（二级）盲文</string>
@@ -66,7 +75,9 @@
     <string name="pref_braille_table_default_label" msgid="1462752739972207613">"自动（<xliff:g id="TABLE_NAME">%1$s</xliff:g>）"</string>
     <string name="pref_braille_table_default_none_label" msgid="1448225003385606644">"自动（无）"</string>
     <string name="pref_category_miscellaneous_title" msgid="1296461419739225100">"其他"</string>
+    <string name="pref_category_miscellaneous_summary">"高级选项与许可证"</string>
     <string name="pref_category_developer_title" msgid="7276576143816692867">"开发者选项"</string>
+    <string name="pref_category_developer_summary">"日志级别与屏幕叠加层"</string>
     <string name="pref_category_braille_overlay_title" msgid="1947056854402684698">"屏幕叠加层"</string>
     <string name="pref_braille_overlay_title" msgid="1490370457319373830">"在屏幕上显示盲文输出"</string>
     <string name="pref_braille_overlay_tutorial_title" msgid="6443284526953091708">"发布教程"</string>

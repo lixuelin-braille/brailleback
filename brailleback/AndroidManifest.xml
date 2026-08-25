@@ -24,12 +24,16 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <!-- Android 12+ requires BLUETOOTH_CONNECT to enumerate bonded braille
+         displays (DeviceFinder.getBondedDevices). BLUETOOTH_SCAN is not used:
+         this app only connects to already-paired displays. -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="com.googlecode.eyesfree.braille.display.PERMISSION_CONNECT" />
 
-    <!-- Required for overlays. -->
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- Overlays are rendered as TYPE_ACCESSIBILITY_OVERLAY inside the
+         accessibility service, which does not require SYSTEM_ALERT_WINDOW.
+         The minSdk (23) is above the TYPE_SYSTEM_ERROR fallback path, so this
+         permission was redundant and has been removed. -->
 
     <!-- Required for reading/writing custom view labels. -->
     <uses-permission android:name="com.google.android.marvin.talkback.permission.LABELING" />
@@ -161,11 +165,6 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
-
-            <activity
-            android:name=".sound.SoundSchemeEditorActivity"
-            android:label="@string/pref_sound_editor_title"
-            android:exported="false" />
 </application>
 </manifest>
 
