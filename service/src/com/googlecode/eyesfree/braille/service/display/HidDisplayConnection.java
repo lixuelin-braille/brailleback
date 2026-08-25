@@ -126,6 +126,9 @@ public class HidDisplayConnection implements DriverThread.OnInitListener {
     DriverThread dt = mDriverThread;
     if (dt != null) {
       dt.writeWindow(patterns);
+    } else {
+      Log.w(LOG_TAG, "writeWindow before driver is ready; dropping "
+          + patterns.length + " cells");
     }
   }
 

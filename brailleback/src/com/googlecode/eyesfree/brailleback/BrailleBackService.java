@@ -405,8 +405,15 @@ public class BrailleBackService
     // Hand the BrailleDisplayController over to the display service
     // so it can drive Braille HID standard (usage page 0x41) displays.
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
-      final android.accessibilityservice.BrailleDisplayController bdc =
-          getBrailleDisplayController();
+      // BrailleDisplayController is flag-gated on Android 15 and guaranteed
+      // only on Android 16+.  When the platform flag is off the call throws;
+      // fall back to classic RFCOMM instead of crashing the service.
+      android.accessibilityservice.BrailleDisplayController bdc = null;
+      try {
+        bdc = getBrailleDisplayController();
+      } catch (RuntimeException e) {
+        Log.w("BrailleBack", "BrailleDisplayController unavailable: " + e);
+      }
       Log.i("BrailleBack", "onServiceConnected pid=" + android.os.Process.myPid()
           + " BrailleDisplayController=" + bdc);
       HidBridge.setController(bdc);

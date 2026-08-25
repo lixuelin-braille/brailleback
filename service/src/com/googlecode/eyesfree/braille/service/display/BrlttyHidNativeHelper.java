@@ -81,6 +81,7 @@ public final class BrlttyHidNativeHelper {
   /** Outputs text to the braille display. */
   public static void writeBrailleDisplay(byte[] buffer) {
     if (brailleDisplayController == null) {
+      Log.e(TAG, "write while BrailleDisplayController is null (connection torn down?)");
       return;
     }
     Log.d(TAG, "write " + buffer.length + " bytes");
@@ -89,6 +90,10 @@ public final class BrlttyHidNativeHelper {
     } catch (IOException e) {
       Log.e(TAG, "Error writing to BrailleDisplayController: " + e);
       brailleDisplayController.disconnect();
+    } catch (RuntimeException e) {
+      // e.g. IllegalArgumentException for an over-sized buffer (bad report
+      // layout): report it but keep the connection alive.
+      Log.e(TAG, "BrailleDisplayController.write rejected the report: " + e);
     }
   }
 

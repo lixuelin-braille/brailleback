@@ -52,6 +52,13 @@ static const HidItemsDescriptor *hidAndroidGetItems(HidHandle *handle) {
     }
     jbyteArray reportDescriptor = (jbyteArray)(*env)->CallStaticObjectMethod(
         env, hidHelperClass, getReportDescriptorMethod);
+    if (reportDescriptor == NULL) {
+      // No report descriptor available yet (e.g. the HID connection is being
+      // torn down).  Returning NULL makes the driver report a clean init
+      // failure instead of crashing on GetArrayLength(NULL).
+      logMessage(LOG_ERR, "HID report descriptor is not available");
+      return NULL;
+    }
     int size = (*env)->GetArrayLength(env, reportDescriptor);
     HidItemsDescriptor *items;
     if ((items = malloc(sizeof(*items) + size))) {

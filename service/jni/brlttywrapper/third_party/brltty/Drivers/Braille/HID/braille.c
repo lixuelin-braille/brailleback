@@ -402,12 +402,20 @@ static void handlePressedKeysArray(BrailleDisplay *brl, unsigned char *keys) {
 
 static int writeHidCells(BrailleDisplay *brl, const unsigned char *cells,
                          unsigned char cellCount) {
-  // HIDRAW expects the report ID in the first byte, followed by the
-  // output report.
-  int bufferSize = cellCount + 1;
+  // HIDRAW: if the output report has a report ID, that ID must be the first
+  // byte of every write; otherwise only the report payload is written.  The
+  // input path above applies the same rule via "hasNumberedReport", so mirror
+  // it here: without this, a device whose descriptor has no numbered output
+  // report got a spurious 0x00 prefix on every write and stayed blank.
+  int hasNumberedReport = brl->data->reportInfo.outputReportId != 0;
+  int bufferSize = hasNumberedReport ? cellCount + 1 : cellCount;
   unsigned char buffer[bufferSize];
-  buffer[0] = brl->data->reportInfo.outputReportId;
-  memcpy(buffer + 1, cells, cellCount);
+  int offset = 0;
+  if (hasNumberedReport) {
+    buffer[0] = brl->data->reportInfo.outputReportId;
+    offset = 1;
+  }
+  memcpy(buffer + offset, cells, cellCount);
   return brl->gioEndpoint->handleMethods->writeData(
       brl->gioEndpoint->handle, buffer, bufferSize, /*timeout=*/0);
 }
