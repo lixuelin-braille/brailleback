@@ -51,7 +51,7 @@ include $(CLEAR_VARS)
 
 LOCAL_PATH := $(WRAPPER_PATH)
 LOCAL_MODULE    := brlttywrap
-LOCAL_LDFLAGS := -no-canonical-prefixes -Wl,--allow-multiple-definition
+LOCAL_LDFLAGS := -no-canonical-prefixes -Wl,--allow-multiple-definition -Wl,-z,max-page-size=16384
 LOCAL_LDLIBS := -llog
 LOCAL_C_INCLUDES := $(BRLTTY_PATH)/Headers
 LOCAL_CFLAGS := -I$(WRAPPER_PATH)/.. -D__ANDROID__
