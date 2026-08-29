@@ -1247,6 +1247,13 @@ public class DisplayManager
                 -1 /*cursorPosition*/, oldDisplayPosition);
         int oldTextEnd = displayToTextPosition(oldTranslationResult,
                 -1 /*cursorPosition*/, oldDisplayPosition + getNumTextCells());
+        // displayToTextPosition() can legitimately return -1 (it returns the
+        // passed-in cursorPosition, which is -1 here, and the position maps
+        // themselves may contain -1).  Feeding -1 into getSpans() would query a
+        // bogus range, so bail out instead.
+        if (oldTextStart < 0 || oldTextEnd < 0) {
+            return -1;
+        }
         // Find the nodes that overlap with the display.
         AccessibilityNodeInfoCompat[] displayedNodes =
                 oldSpanned.getSpans(oldTextStart, oldTextEnd,
@@ -1264,9 +1271,18 @@ public class DisplayManager
                     -1 /*cursorPosition*/, oldSpanned.getSpanStart(oldNode));
             int newDisplayStart = textToDisplayPosition(newTranslationResult,
                     -1 /*cursorPosition*/, newSpanned.getSpanStart(newNode));
-      // TODO: If crashes happen here, return -1 when *DisplayStart == -1.
-      // Offset position according to diff in node position.
-      int newDisplayPosition = oldDisplayPosition + (newDisplayStart - oldDisplayStart);
+            // textToDisplayPosition() may return -1 (unmappable position: it
+            // returns the cursor position, which is -1 here, and the position
+            // maps may contain -1).  Subtracting those would yield a bogus --
+            // possibly negative -- display position that later indexes into the
+            // cell array.  Skip this node and try the next one; if every node
+            // is unmappable we fall through to "return -1" below.
+            if (oldDisplayStart < 0 || newDisplayStart < 0) {
+                continue;
+            }
+            // Offset position according to diff in node position.
+            int newDisplayPosition =
+                    oldDisplayPosition + (newDisplayStart - oldDisplayStart);
             return newDisplayPosition;
         }
         return -1;

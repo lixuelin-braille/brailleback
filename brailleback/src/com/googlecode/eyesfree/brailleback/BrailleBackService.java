@@ -433,6 +433,12 @@ public class BrailleBackService
     @Override
     public void onDestroy() {
     instance = null;
+    // Drop the static BrailleDisplayController reference held by HidBridge.
+    // It must be cleared before shutdownDependencies(): otherwise the static
+    // outlives this service, HidBridge.isAvailable() keeps returning true, and
+    // DisplayService may try to connect using a controller bound to a dead
+    // service.  Cleared early so the shutdown path sees no stale controller.
+    HidBridge.setController(null);
         PreferenceManager.getDefaultSharedPreferences(this)
                 .unregisterOnSharedPreferenceChangeListener(mPreferenceListener);
         super.onDestroy();
@@ -630,8 +636,14 @@ public class BrailleBackService
       translatorManager.shutdown();
       translatorManager = null;
         }
-    // TODO: Shut down feedback manager and braille translator
-    // when those classes have shutdown methods.
+    if (feedbackManager != null) {
+      // Releases the TTS/audio/MIDI resources held by FeedbackController.
+      // Deliberately NOT nulling the reference: feedbackManager is used by
+      // callbacks such as onConnectionStateChanged()/onMappedInputEvent(),
+      // and nulling it could turn a leak into an NPE.  shutdown() is what
+      // actually frees the resources.
+      feedbackManager.shutdown();
+    }
     if (focusTracker != null) {
       focusTracker.unregister();
       focusTracker = null;
