@@ -29,6 +29,7 @@ import com.googlecode.eyesfree.braille.translate.TranslationResult;
 import com.googlecode.eyesfree.braille.translate.TranslatorClient;
 import com.googlecode.eyesfree.braille.utils.ZipResourceExtractor;
 import java.io.File;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -56,6 +57,9 @@ public class TranslatorService extends Service {
     private JiebaDict mJiebaDict;
     private BrailleSegmenter mSegmenter;
     private volatile boolean mSegmenterReady = false;
+    // Logged once so the log is not flooded by repeated translate() calls
+    // while the segmenter is still loading.
+    private volatile boolean mWarnedUnsegmented = false;
     private static final String SEG_TAG = "BrailleSegmenter";
 
     @Override
@@ -86,7 +90,11 @@ public class TranslatorService extends Service {
                     InputStream is = getAssets().open("jiebadt.txt");
                     mJiebaDict.init(is);
                     if (is != null) {
-                        try { is.close(); } catch (Exception e) {}
+                        try {
+                            is.close();
+                        } catch (Exception e) {
+                            Log.w(LOG_TAG, "Failed to close jieba dict stream", e);
+                        }
                     }
                     if (mJiebaDict.isInitialized()) {
                         mSegmenter = new BrailleSegmenter(mJiebaDict);
@@ -94,7 +102,13 @@ public class TranslatorService extends Service {
                         try {
                             InputStream si = getAssets().open("sunshine_split.txt");
                             mSegmenter.loadSplitDict(si);
-                            if (si != null) { try { si.close(); } catch (Exception e) {} }
+                            if (si != null) {
+                                try {
+                                    si.close();
+                                } catch (Exception e) {
+                                    Log.w(LOG_TAG, "Failed to close split dict stream", e);
+                                }
+                            }
                             Log.i(LOG_TAG, "Split dict loaded");
                         } catch (Exception e) {
                             Log.w(LOG_TAG, "Split dict load failed", e);
@@ -160,6 +174,106 @@ public class TranslatorService extends Service {
             return LibLouisWrapper.translate(text, tableName, cursorPosition,
                     computerBrailleAtCursor);
         }
+    }
+
+    /** Returns whether {@code c} is a Unicode braille pattern character
+     * (U+2800-U+28FF).  Such characters directly encode the dots of one
+     * braille cell, so they must be passed through to the display verbatim
+     * instead of being re-translated as ordinary text (which the braille
+     * tables have no rule for and would corrupt). */
+    private static boolean isBrailleCellChar(char c) {
+        return c >= 0x2800 && c <= 0x28FF;
+    }
+
+    private static boolean containsBrailleUnicode(String text) {
+        for (int i = 0; i < text.length(); i++) {
+            if (isBrailleCellChar(text.charAt(i))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Translates text that may contain Unicode braille pattern characters.
+     * Ordinary runs are translated with the configured table (using the
+     * segmenter for Chinese tables); runs of braille pattern characters are
+     * mapped one-to-one to their dot cells ({@code codepoint & 0xFF}), so a
+     * standard electronic braille document displays correctly on the braille
+     * display instead of being re-translated and scrambled.
+     */
+    private TranslationResult translateWithBraillePassThrough(String text,
+            String tableName, int cursorPosition,
+            boolean computerBrailleAtCursor) {
+        int len = text.length();
+        ByteArrayOutputStream cellBuf = new ByteArrayOutputStream();
+        int[] ttb = new int[len];
+        for (int i = 0; i < len; i++) {
+            ttb[i] = -1;
+        }
+        List<Integer> btt = new ArrayList<Integer>();
+        int cellOffset = 0;
+        int i = 0;
+        while (i < len) {
+            int start = i;
+            boolean braille = isBrailleCellChar(text.charAt(i));
+            while (i < len && isBrailleCellChar(text.charAt(i)) == braille) {
+                i++;
+            }
+            String run = text.substring(start, i);
+            if (braille) {
+                int n = run.length();
+                for (int k = 0; k < n; k++) {
+                    int cell = run.charAt(k) & 0xFF;
+                    cellBuf.write(cell);
+                    ttb[start + k] = cellOffset + k;
+                    btt.add(start + k);
+                }
+                cellOffset += n;
+            } else {
+                TranslationResult sub;
+                if (mSegmenterReady && isChineseTable(tableName)) {
+                    sub = translateWithSegment(run, tableName, -1,
+                            computerBrailleAtCursor);
+                } else {
+                    sub = LibLouisWrapper.translate(run, tableName, -1,
+                            computerBrailleAtCursor);
+                }
+                if (sub == null) {
+                    return null;
+                }
+                byte[] subCells = sub.getCells();
+                int[] subTtb = sub.getTextToBraillePositions();
+                int[] subBtt = sub.getBrailleToTextPositions();
+                for (int k = 0; k < subCells.length; k++) {
+                    cellBuf.write(subCells[k]);
+                    int st = (subBtt != null && k < subBtt.length
+                            && subBtt[k] >= 0) ? subBtt[k] : k;
+                    btt.add(start + st);
+                }
+                for (int k = 0; k < run.length(); k++) {
+                    int sc = (subTtb != null && k < subTtb.length
+                            && subTtb[k] >= 0) ? subTtb[k]
+                            : (k < subCells.length ? k : subCells.length);
+                    ttb[start + k] = cellOffset + sc;
+                }
+                cellOffset += subCells.length;
+            }
+        }
+        byte[] cells = cellBuf.toByteArray();
+        int[] bttArr = new int[btt.size()];
+        for (int k = 0; k < bttArr.length; k++) {
+            bttArr[k] = btt.get(k);
+        }
+        int cursor = -1;
+        if (cursorPosition >= 0) {
+            if (cursorPosition < len && ttb[cursorPosition] >= 0) {
+                cursor = ttb[cursorPosition];
+            } else if (cursorPosition >= len) {
+                cursor = cellOffset;
+            }
+        }
+        return new TranslationResult(cells, ttb, bttArr, cursor);
     }
 
     private void extractDataFiles() {
@@ -279,9 +393,32 @@ public class TranslatorService extends Service {
                 Log.e(LOG_TAG, "Unknown table id in translate: " + tableId);
                 return null;
             }
+            // Pass Unicode braille pattern characters (U+2800-U+28FF) through
+            // verbatim: each such character already encodes the dots of one
+            // cell, and re-translating it as ordinary text corrupts the
+            // display of standard electronic braille documents.
+            if (containsBrailleUnicode(text)) {
+                TranslationResult passThrough = translateWithBraillePassThrough(
+                        text, tableName, cursorPosition, computerBrailleAtCursor);
+                if (passThrough != null) {
+                    return passThrough;
+                }
+            }
             if (mSegmenterReady && isChineseTable(tableName)) {
                 return translateWithSegment(text, tableName, cursorPosition,
                         computerBrailleAtCursor);
+            }
+            if (isChineseTable(tableName) && !mSegmenterReady
+                    && !mWarnedUnsegmented) {
+                // Chinese table but the segmenter is not up yet (dictionary
+                // still loading, or initialization failed).  Falling back to
+                // liblouis means NO word segmentation, so the braille degrades
+                // to per-character output.  This used to be completely silent;
+                // make it visible so the cause is diagnosable.
+                mWarnedUnsegmented = true;
+                Log.w(LOG_TAG, "Chinese table '" + tableName
+                        + "' translated WITHOUT segmentation"
+                        + " (segmenter not ready yet)");
             }
             return LibLouisWrapper.translate(text, tableName, cursorPosition,
                     computerBrailleAtCursor);
