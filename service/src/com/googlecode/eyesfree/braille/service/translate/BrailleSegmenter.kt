@@ -252,7 +252,13 @@ class BrailleSegmenter(private val dict: JiebaDict) {
                 && !NAMESET.contains(word) && !SPLIT4_INNER.contains(word)) {
                 val a = word.substring(0, 2)
                 val b = word.substring(2, 4)
-                if (dict.isWord(a) && dict.isWord(b)) {
+                // 跨拆分点双字（如「二氧化碳」的「氧化」、「氢氧化钠」的「氧化」）：
+                // 若它是比两侧半词都高频的真词，说明 2+2 会把一个固定搭配从中间劈开
+                // （化学名等），此时保持连写。对照：「风声鹤唳」的「声鹤」非词，照常分写。
+                val mid = word.substring(1, 3)
+                val midFreq = dict.freq(mid)
+                val cutsRealWord = midFreq > dict.freq(a) && midFreq > dict.freq(b)
+                if (dict.isWord(a) && dict.isWord(b) && !cutsRealWord) {
                     merged.add(arrayOf(a, ws.toString(), (ws + 2).toString()))
                     merged.add(arrayOf(b, (ws + 2).toString(), we.toString()))
                     continue

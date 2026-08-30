@@ -95,6 +95,15 @@ class JiebaDict {
         return f != null && f > 0
     }
 
+    /**
+     * 词频。非完整词（仅作为前缀登记、值为 0）返回 0。
+     * 供分词规则比较「跨拆分点双字」与两侧半词的常见程度。
+     */
+    fun freq(word: String): Int {
+        val f = freqMap[word]
+        return if (f != null && f > 0) f else 0
+    }
+
     /** 构建 DAG：每个位置 k -> 可达结束位置列表（含 k 自身）。 */
     private fun buildDag(sentence: String): Map<Int, List<Int>> {
         val dag = HashMap<Int, List<Int>>()
