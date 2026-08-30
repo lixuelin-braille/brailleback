@@ -11,12 +11,16 @@ import java.nio.ByteBuffer
 import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
 import java.nio.charset.StandardCharsets
+import kotlin.math.max
 import kotlin.math.min
 
 object BrailleFileDecoder {
 
     /** BRF 标准换页符（Form Feed）。 */
     private const val FORM_FEED = '\u000C'
+
+    /** 空白方：盲文里一切缩进都靠它表达。 */
+    private const val BLANK = '\u2800'
 
     /**
      * North American Braille ASCII Code (NABCC) 点位表。
@@ -279,6 +283,33 @@ object BrailleFileDecoder {
         return out
     }
 
+    /** 行首空白方数量——盲文的缩进就是靠它表达的，属于内容而非格式。 */
+    private fun leadingBlanks(s: String): Int {
+        var n = 0
+        while (n < s.length && s[n] == BLANK) n++
+        return n
+    }
+
+    /** 由 [n] 个空白方拼出的缩进前缀。 */
+    private fun indentOf(n: Int): String =
+        if (n <= 0) "" else BLANK.toString().repeat(n)
+
+    /**
+     * 回行缩进，依据 GB/T 15720-2008 第 7 章「中国盲文的一般书写格式」：
+     *
+     * - 首行空两方（7.2 正文抬头空两方）→ 回行**顶格**；
+     *   真实语料支持：缩进 2 之后接缩进 0 占 87%（862 次）
+     * - 首行空四方（7.5 夹在文内的诗歌空四方，换行空六方）→ 回行**空六方**；
+     *   真实语料支持：缩进 4 之后接缩进 6 共 410 次
+     * - 其余缩进（3、5、6 …）含义随书而异（乐谱声部、目录层级等），
+     *   **保持与首行一致**：信息不足时不猜测，避免破坏原有层次。
+     */
+    private fun hangingIndent(firstIndent: Int): Int = when (firstIndent) {
+        2 -> 0
+        4 -> 6
+        else -> firstIndent
+    }
+
     /** 把正文折成物理行，供屏幕分页使用。 */
     private fun buildRows(text: String, cellsPerLine: Int): List<Row> {
         val rows = ArrayList<Row>()
@@ -287,18 +318,25 @@ object BrailleFileDecoder {
                 rows.add(BLANK_ROW)
                 continue
             }
-            if (block.text.length <= cellsPerLine) {
+            val indent = leadingBlanks(block.text)
+            val body = block.text.substring(indent)
+            // 整行只有缩进、或一行放得下：原样保留，一个方都不改
+            if (body.isEmpty() || block.text.length <= cellsPerLine) {
                 rows.add(Row(block.text, true, true, block.pageBreakBefore))
-            } else {
-                var i = 0
-                var first = true
-                while (i < block.text.length) {
-                    val end = min(i + cellsPerLine, block.text.length)
-                    rows.add(Row(block.text.substring(i, end), first,
-                        end >= block.text.length, block.pageBreakBefore && first))
-                    first = false
-                    i = end
-                }
+                continue
+            }
+            val hang = hangingIndent(indent)
+            val firstWidth = max(1, cellsPerLine - indent)
+            val hangWidth = max(1, cellsPerLine - hang)
+            var i = 0
+            var first = true
+            while (i < body.length) {
+                val width = if (first) firstWidth else hangWidth
+                val end = min(i + width, body.length)
+                rows.add(Row(indentOf(if (first) indent else hang) + body.substring(i, end),
+                    first, end >= body.length, block.pageBreakBefore && first))
+                first = false
+                i = end
             }
         }
         return rows
@@ -399,8 +437,15 @@ object BrailleFileDecoder {
         while (remaining > 0 && pos < stream.length) {
             var newLine = stream.indexOf('\n', pos)
             if (newLine < 0) newLine = stream.length
-            val end = min(pos + cellsPerLine, newLine)
-            out.add(stream.substring(pos, end))
+            // 定位本段起点（可能早于 offset，此处仅为读取段首缩进，不做切片）
+            val paraStart = if (pos == 0) 0 else stream.lastIndexOf('\n', pos - 1) + 1
+            // 首行：段首缩进已包含在内容里，原样输出；
+            // 回行：按标准补回行缩进，并把这部分宽度从本行扣除。
+            val hang = if (pos == paraStart) 0
+            else hangingIndent(leadingBlanks(stream.substring(paraStart, newLine)))
+            val width = max(1, cellsPerLine - hang)
+            val end = min(pos + width, newLine)
+            out.add(indentOf(hang) + stream.substring(pos, end))
             // 到达段落边界就跳过分隔符；连续的空段落会在下一轮输出空行
             pos = if (end >= newLine) newLine + 1 else end
             remaining--

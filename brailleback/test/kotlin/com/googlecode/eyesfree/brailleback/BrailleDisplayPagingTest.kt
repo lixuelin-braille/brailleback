@@ -95,19 +95,25 @@ class BrailleDisplayPagingTest {
             val screen = BrailleFileDecoder.screenAt(stream, offset, 40, 20)
             // 屏幕里的 '\n' 既有段落分隔符也有折行产生的换行，
             // 折行不是内容，故去掉全部换行后应与源流的连续内容一致。
-            val flat = screen.replace("\n", "")
-            val fromSource = stream.substring(offset).replace("\n", "")
+            // 同时去掉空方 U+2800：它既可能是原文自带的缩进，也可能是
+            // 折行时按标准补的回行缩进，两者都不是「内容字符」。
+            val flat = screen.replace("\n", "").replace("\u2800", "")
+            val fromSource = stream.substring(offset)
+                .replace("\n", "").replace("\u2800", "")
             assertEquals(
                 "offset=$offset 屏幕内容应就是从该偏移起的连续正文",
                 fromSource.substring(0, minOf(flat.length, fromSource.length)),
                 flat
             )
-            // 同时确认屏幕首屏与点显器首屏来自同一位置
+            // 同时确认屏幕首行与点显器一屏取自同一位置。
+            // 屏幕首行 = 回行缩进 + 从 offset 起的连续内容；点显器一屏 = 从
+            // offset 起的连续内容（段落换行展平为空方）。缩进不论来自原文还是
+            // 折行时按标准补的，都不是内容，故去掉后屏幕首行应是点显器内容的开头。
             val firstLine = screen.lines().first()
-            assertEquals(
-                "offset=$offset 屏幕与点显器起点须一致",
-                BrailleFileDecoder.cellsAt(stream, offset, firstLine.length),
-                firstLine
+            val display = BrailleFileDecoder.cellsAt(stream, offset, firstLine.length)
+            assertTrue(
+                "offset=$offset 屏幕首行应取自点显器同一起点",
+                display.trimStart('\u2800').startsWith(firstLine.trimStart('\u2800'))
             )
         }
     }

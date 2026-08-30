@@ -95,7 +95,7 @@
     <string name="braille_reader_goto">Go to</string>
     <string name="braille_reader_no_content">Open a file first</string>
     <string name="braille_reader_toc_title">Contents</string>
-    <string name="braille_reader_toc_item">p.%1$d-%2$d  %3$s</string>
+    <string name="braille_reader_toc_item">p.%1$d-%2$d</string>
     <string name="braille_reader_bookmarks_title">Bookmarks</string>
     <string name="braille_reader_bm_item">p.%1$d  %2$s</string>
     <string name="braille_reader_bm_added">Bookmarked page %1$d</string>

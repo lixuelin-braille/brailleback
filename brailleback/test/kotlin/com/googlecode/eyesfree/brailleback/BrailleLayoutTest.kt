@@ -117,4 +117,76 @@ class BrailleLayoutTest {
         )
         assertTrue("首页不应以空行开头", first.lines().first().isNotEmpty())
     }
+
+    // ------------------------------------------------------------------
+    // 行首缩进与回行缩进（GB/T 15720-2008 第 7 章 一般书写格式）
+    // ------------------------------------------------------------------
+
+    private val BL = "\u2800"
+
+    /** 去掉全部空方（缩进与回行缩进都不是内容字符）。 */
+    private fun stripBlanks(s: String) = s.replace(BL, "")
+
+    /** 一行：[indent] 个空方 + [n] 个可见内容。 */
+    private fun indented(indent: Int, n: Int) = BL.repeat(indent) + line(n)
+
+    /** 行首空白方数量。 */
+    private fun leadOf(s: String) = s.takeWhile { it == BL[0] }.length
+
+    @Test
+    fun `正文抬头空两方时回行顶格`() {
+        // 7.2：每段另起一行空两方书写，换行时顶格书写
+        val rows = BrailleFileDecoder.buildPages(indented(2, 60), 20, 100)
+            .first().lines()
+        assertTrue("内容应折行", rows.size >= 3)
+        assertEquals("首行须保留原生缩进两方", 2, leadOf(rows[0]))
+        assertEquals("回行顶格（标准 7.2）", 0, leadOf(rows[1]))
+        assertEquals("回行可用宽度更大，应放得下更多内容", 20, rows[1].length)
+    }
+
+    @Test
+    fun `文内诗歌空四方时回行空六方`() {
+        // 7.5：夹在文内的诗歌，采用空四方，一行不够换行空六方的格式
+        val rows = BrailleFileDecoder.buildPages(indented(4, 60), 20, 100)
+            .first().lines()
+        assertTrue("内容应折行", rows.size >= 3)
+        assertEquals("首行须保留原生缩进四方", 4, leadOf(rows[0]))
+        assertEquals("回行空六方（标准 7.5）", 6, leadOf(rows[1]))
+    }
+
+    @Test
+    fun `放得下的行原样保留不改动`() {
+        val text = indented(3, 10)
+        val rows = BrailleFileDecoder.buildPages(text, 20, 100).first().lines()
+        assertEquals(1, rows.size)
+        assertEquals("一个方都不应改动", text, rows[0])
+    }
+
+    @Test
+    fun `整行只有缩进时原样保留`() {
+        val text = BL.repeat(5)
+        val rows = BrailleFileDecoder.buildPages(text, 20, 100).first().lines()
+        assertEquals("不应被折成空", text, rows[0])
+    }
+
+    @Test
+    fun `screenAt 同样遵循回行缩进规则`() {
+        val stream = BrailleFileDecoder.toReadingStream(indented(4, 60))
+        val lines = BrailleFileDecoder.screenAt(stream, 0, 20, 5).lines()
+        assertTrue("内容应折行", lines.size >= 3)
+        assertEquals("首行保留原生缩进四方", 4, leadOf(lines[0]))
+        assertEquals("回行空六方", 6, leadOf(lines[1]))
+        for (l in lines) {
+            assertTrue("行宽不应超过 20 方，实际 ${l.length}", l.length <= 20)
+        }
+    }
+
+    @Test
+    fun `折行不增删内容字符`() {
+        val text = indented(4, 60)
+        val src = stripBlanks(text)
+        val flat = stripBlanks(
+            BrailleFileDecoder.buildPages(text, 20, 100).first().replace("\n", ""))
+        assertEquals("去掉空方后内容须与原文一致", src, flat)
+    }
 }

@@ -387,8 +387,7 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
         var u = 0
         while (u < total) {
             val last = min(u + TOC_PAGE_STEP, total) - 1
-            labels.add(getString(R.string.braille_reader_toc_item,
-                u + 1, last + 1, previewAt(u * unit)))
+            labels.add(getString(R.string.braille_reader_toc_item, u + 1, last + 1))
             targets.add(u)
             u = last + 1
         }

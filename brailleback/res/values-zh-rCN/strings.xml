@@ -55,7 +55,7 @@
     <string name="braille_reader_goto">"跳页"</string>
     <string name="braille_reader_no_content">"请先打开文件"</string>
     <string name="braille_reader_toc_title">"目录"</string>
-    <string name="braille_reader_toc_item">"第%1$d-%2$d页  %3$s"</string>
+    <string name="braille_reader_toc_item">"第%1$d-%2$d页"</string>
     <string name="braille_reader_bookmarks_title">"书签"</string>
     <string name="braille_reader_bm_item">"第%1$d页  %2$s"</string>
     <string name="braille_reader_bm_added">"已添加书签：第 %1$d 页"</string>
