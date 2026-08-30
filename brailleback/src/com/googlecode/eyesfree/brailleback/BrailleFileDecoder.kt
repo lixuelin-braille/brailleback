@@ -237,16 +237,24 @@ object BrailleFileDecoder {
     /** 空行：既是段落结尾也是段落开头，不参与孤行判定。 */
     private val BLANK_ROW = Row("", true, true)
 
-    /** 把正文折成物理行，并折叠空行、去掉首尾空行、标记换页点。 */
-    private fun buildRows(text: String, cellsPerLine: Int): List<Row> {
-        val rows = ArrayList<Row>()
+    /** 折叠空行、去掉首尾空行后的一段正文。 */
+    private class Block(
+        val text: String,
+        val pageBreakBefore: Boolean
+    )
+
+    /**
+     * 把正文整理为段落块列表：连续空行折叠为 1 个、去掉首尾空行、
+     * 标记 BRF 换页符产生的强制分页点。供 [buildRows] 与 [toReadingStream] 共用。
+     */
+    private fun collapseBlocks(text: String): List<Block> {
+        val out = ArrayList<Block>()
         var pendingBlank = false
         val sections = text.split(FORM_FEED)
         for (sectionIndex in sections.indices) {
-            val section = sections[sectionIndex]
-            // 换页符之后的第一行强制另起一页（首个分段除外）
+            // 换页符之后另起一段（首个分段除外）
             var pendingBreak = sectionIndex > 0
-            for (rawLine in section.split('\n')) {
+            for (rawLine in sections[sectionIndex].split('\n')) {
                 val line = toUnicodeBraille(rawLine.trimEnd('\r'))
                 if (line.isEmpty()) {
                     // 连续空行只记一次，等到遇到实际内容时才落到结果里，
@@ -255,31 +263,43 @@ object BrailleFileDecoder {
                     continue
                 }
                 if (pendingBlank) {
-                    if (rows.isNotEmpty()) {
-                        rows.add(BLANK_ROW)
+                    if (out.isNotEmpty()) {
+                        out.add(Block("", false))
                     }
                     pendingBlank = false
                 }
-                val breakBefore = pendingBreak
+                out.add(Block(line, pendingBreak))
                 pendingBreak = false
-                if (line.length <= cellsPerLine) {
-                    rows.add(Row(line, true, true, breakBefore))
-                } else {
-                    var i = 0
-                    var first = true
-                    while (i < line.length) {
-                        val end = min(i + cellsPerLine, line.length)
-                        rows.add(Row(line.substring(i, end), first, end >= line.length,
-                            breakBefore && first))
-                        first = false
-                        i = end
-                    }
-                }
             }
         }
-        // 去掉结尾空行
-        while (rows.isNotEmpty() && rows[rows.size - 1] === BLANK_ROW) {
-            rows.removeAt(rows.size - 1)
+        // 去掉结尾空段
+        while (out.isNotEmpty() && out[out.size - 1].text.isEmpty()) {
+            out.removeAt(out.size - 1)
+        }
+        return out
+    }
+
+    /** 把正文折成物理行，供屏幕分页使用。 */
+    private fun buildRows(text: String, cellsPerLine: Int): List<Row> {
+        val rows = ArrayList<Row>()
+        for (block in collapseBlocks(text)) {
+            if (block.text.isEmpty()) {
+                rows.add(BLANK_ROW)
+                continue
+            }
+            if (block.text.length <= cellsPerLine) {
+                rows.add(Row(block.text, true, true, block.pageBreakBefore))
+            } else {
+                var i = 0
+                var first = true
+                while (i < block.text.length) {
+                    val end = min(i + cellsPerLine, block.text.length)
+                    rows.add(Row(block.text.substring(i, end), first,
+                        end >= block.text.length, block.pageBreakBefore && first))
+                    first = false
+                    i = end
+                }
+            }
         }
         return rows
     }
@@ -333,6 +353,65 @@ object BrailleFileDecoder {
             }
         }
         return ""
+    }
+
+    // ------------------------------------------------------------------
+    // 偏移式阅读（适配单行点显器）
+    // ------------------------------------------------------------------
+
+    /**
+     * 把正文整理为连续阅读流：段落之间用 '\n' 分隔，空行已折叠、首尾空行已去除。
+     *
+     * 点显器是单行的，一次只能显示十几到几十个方，所以阅读位置必须以
+     * **字符偏移**表示，而不能以「屏幕页」为单位——屏幕一页可达数百方，
+     * 若按页步进，20 方的点显器只能读到每页开头的一小段，其余内容永远读不到。
+     */
+    fun toReadingStream(text: String): String =
+        collapseBlocks(text).joinToString("\n") { it.text }
+
+    /**
+     * 取从 [offset] 开始、发给点显器的一屏内容（最多 [count] 个方）。
+     * 段落换行按盲文空格 U+2800 展平：点显器是单行的，没有换行概念。
+     */
+    fun cellsAt(stream: String, offset: Int, count: Int): String {
+        if (offset < 0 || count <= 0 || offset >= stream.length) return ""
+        val end = min(offset + count, stream.length)
+        val sb = StringBuilder(end - offset)
+        for (i in offset until end) {
+            val c = stream[i]
+            sb.append(if (c == '\n') '\u2800' else c)
+        }
+        return sb.toString()
+    }
+
+    /**
+     * 取从 [offset] 开始的屏幕一屏内容：每行至多 [cellsPerLine] 方，
+     * 遇到段落边界提前换行，最多 [lines] 行。
+     *
+     * 屏幕只是上下文预览，其起点与点显器一致（同为 [offset]），
+     * 这样点显器读到哪里，屏幕上就能看到对应的位置及后续内容。
+     */
+    fun screenAt(stream: String, offset: Int, cellsPerLine: Int, lines: Int): String {
+        if (offset < 0 || offset >= stream.length || cellsPerLine <= 0 || lines <= 0) return ""
+        val out = ArrayList<String>()
+        var pos = offset
+        var remaining = lines
+        while (remaining > 0 && pos < stream.length) {
+            var newLine = stream.indexOf('\n', pos)
+            if (newLine < 0) newLine = stream.length
+            val end = min(pos + cellsPerLine, newLine)
+            out.add(stream.substring(pos, end))
+            // 到达段落边界就跳过分隔符；连续的空段落会在下一轮输出空行
+            pos = if (end >= newLine) newLine + 1 else end
+            remaining--
+        }
+        return out.joinToString("\n")
+    }
+
+    /** 按阅读单元 [unit]（点显器方数或屏幕一屏）换算的总页数。 */
+    fun unitCount(streamLength: Int, unit: Int): Int {
+        if (streamLength <= 0 || unit <= 0) return 1
+        return (streamLength + unit - 1) / unit
     }
 
     /**

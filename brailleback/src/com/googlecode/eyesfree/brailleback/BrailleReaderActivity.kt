@@ -1,9 +1,13 @@
 /*
  * Copyright (C) 2026 盲文服务 (Braille Service)
  *
- * 盲文阅读器：用系统文件选择器打开 BRF / 文本文件，
- * 自动识别编码（BOM / UTF-8 / GBK）并把 ASCII 盲文(0x20-0x5F)转为 Unicode 盲文，
- * 按点显器方数折行分页显示，可发送当前屏到点字显示器，并记忆阅读进度。
+ * 盲文阅读器：用系统文件选择器打开 BRF / BDO / 文本文件，
+ * 自动识别编码（BOM / UTF-8 / GBK）与格式（Bword 二进制 / ASCII 盲文），
+ * 按点显器一屏推进阅读，屏幕同步显示上下文，并记忆阅读进度。
+ *
+ * 阅读位置以**字符偏移**表示，而非「屏幕页」：点显器是单行的，
+ * 常见 20/30/40 方不等，若按屏幕页（可达数百方）步进，
+ * 20 方点显器每页只能读到开头一小段，其余内容永远读不到。
  */
 
 package com.googlecode.eyesfree.brailleback
@@ -37,8 +41,10 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
     private var mBtnBookmark: Button? = null
     private var mBtnGoto: Button? = null
 
-    private var mPages: List<String> = emptyList()
-    private var mPage = 0
+    /** 阅读流：段落以 '\n' 分隔，空行已折叠。 */
+    private var mStream = ""
+    /** 当前阅读位置（字符偏移）。 */
+    private var mOffset = 0
     private var mConnected = false
     private var mFileUri: Uri? = null
 
@@ -48,10 +54,30 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
      * 一页 20 行会被撑成 40 行，得滚动才能看完。
      */
     private var mCellsPerLine = DEFAULT_CELLS
-    /** 每页行数，由屏幕高度实测得出。 */
+    /** 屏幕每页显示的行数，由屏幕高度实测得出。 */
     private var mLinesPerPage = LINES_PER_PAGE
     /** 点显器每行方数，连接后由 getDisplayProperties() 更新；未连接用默认值。 */
     private var mDisplayCells = DEFAULT_CELLS
+
+    /**
+     * 阅读单元：一次前进多少个方。
+     *
+     * 连接点显器时按**点显器一屏**推进（20/30/40 方不等），
+     * 未连接时按屏幕一屏推进。这是适配不同方数点显器的关键。
+     */
+    private fun readingUnit(): Int =
+        if (mConnected && mDisplayCells > 0) {
+            mDisplayCells
+        } else {
+            (mCellsPerLine * mLinesPerPage).coerceAtLeast(1)
+        }
+
+    private fun totalUnits(): Int =
+        BrailleFileDecoder.unitCount(mStream.length, readingUnit())
+
+    private fun currentUnit(): Int = mOffset / readingUnit()
+
+    private fun maxOffset(): Int = (mStream.length - 1).coerceAtLeast(0)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -61,13 +87,13 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
         mBtnPrev = findViewById(R.id.btn_prev)
         mBtnNext = findViewById(R.id.btn_next)
         mBtnSend = findViewById(R.id.btn_send)
-
         mBtnToc = findViewById(R.id.btn_toc)
         mBtnBookmark = findViewById(R.id.btn_bookmark)
         mBtnGoto = findViewById(R.id.btn_goto)
+
         findViewById<Button>(R.id.btn_open).setOnClickListener { openFile() }
-        mBtnPrev?.setOnClickListener { gotoPage(mPage - 1) }
-        mBtnNext?.setOnClickListener { gotoPage(mPage + 1) }
+        mBtnPrev?.setOnClickListener { advance(-1) }
+        mBtnNext?.setOnClickListener { advance(1) }
         mBtnSend?.setOnClickListener { sendToDisplay() }
         mBtnToc?.setOnClickListener { showToc() }
         mBtnBookmark?.setOnClickListener { showBookmarks() }
@@ -85,7 +111,7 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
         display.setOnConnectionStateChangeListener(this)
         onConnectionStateChanged(Display.STATE_NOT_CONNECTED)
         // 首次进入且尚无内容时，尝试恢复上次阅读进度
-        if (mPages.isEmpty()) {
+        if (mStream.isEmpty()) {
             restoreProgress()
         }
     }
@@ -103,12 +129,18 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
         if (mConnected) {
             val cells = mDisplay?.displayProperties?.numTextCells ?: 0
             if (cells > 0) {
-                // 点显器方数只影响「发送一屏」的长度，不影响屏幕分页，
-                // 因此连接设备时不再触发重排（以前会导致页码跳变）。
+                // 点显器方数只影响「发送一屏」的长度与阅读步进，
+                // 不影响屏幕排版，因此不再触发重排（页码不会跳变）。
                 mDisplayCells = cells
             }
         }
-        runOnUiThread { updateUiState() }
+        runOnUiThread {
+            updateUiState()
+            // 连上点显器立即推送当前屏
+            if (mConnected && mStream.isNotEmpty()) {
+                sendToDisplay()
+            }
+        }
     }
 
     // ------------------------------------------------------------------
@@ -144,10 +176,10 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
 
     private fun loadFile(uri: Uri) {
         try {
-            loadBytes(uri, resetPage = true)
+            loadBytes(uri, resetPosition = true)
             showPage()
             Toast.makeText(this, getString(R.string.braille_reader_loaded,
-                mPages.size), Toast.LENGTH_SHORT).show()
+                totalUnits()), Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             Toast.makeText(this,
                 getString(R.string.braille_reader_load_fail, e.message),
@@ -156,24 +188,24 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
     }
 
     /**
-     * 读取并解码文件，重建分页。
+     * 读取并解码文件，重建阅读流。
      *
      * 按文件名后缀分派：`.bdo`/`.bdoc` 走二进制结构化解码，其余按文本解码。
      * bdo 解码失败（不是有效的结构化盲文文档）时抛异常，由调用方提示。
      */
-    private fun loadBytes(uri: Uri, resetPage: Boolean) {
+    private fun loadBytes(uri: Uri, resetPosition: Boolean) {
         val name = displayNameOf(uri)
         checkSupportedFormat(name)
         val bytes = readAllBytes(uri)
         val text = BrailleFileDecoder.decodeDocument(bytes, name)
             ?: throw IllegalStateException(getString(R.string.braille_reader_bdo_fail))
-        val oldCount = mPages.size
-        mPages = BrailleFileDecoder.buildPages(text, mCellsPerLine, mLinesPerPage)
-        if (resetPage) {
-            mPage = 0
-        } else if (oldCount > 0) {
-            mPage = min(mPage * mPages.size / oldCount, mPages.size - 1)
-            if (mPage < 0) mPage = 0
+        val oldLength = mStream.length
+        mStream = BrailleFileDecoder.toReadingStream(text)
+        if (resetPosition) {
+            mOffset = 0
+        } else if (oldLength > 0) {
+            // 屏幕尺寸或点显器方数变化后按位置比例还原，保持阅读进度
+            mOffset = (mOffset * mStream.length / oldLength).coerceIn(0, maxOffset())
         }
     }
 
@@ -218,10 +250,6 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
         throw IllegalStateException("cannot open $uri")
     }
 
-    // ------------------------------------------------------------------
-    // 分页（解析逻辑见 BrailleFileDecoder）
-    // ------------------------------------------------------------------
-
     /**
      * 按屏幕实测尺寸计算每行方数与每页行数。
      *
@@ -229,7 +257,7 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
      * （要滚动才能看完一页），大屏则留白；且行宽超出屏宽时 TextView 会自动换行，
      * 把一页 20 行撑成 40 行，排版完全乱掉。
      *
-     * 这里用 TextView 实测的字符宽度与行高推导，变化后按页数比例重排以保持位置。
+     * 这里用 TextView 实测的字符宽度与行高推导，变化后按比例保持阅读位置。
      */
     private fun updatePaginationMetrics() {
         val tv = mReaderText ?: return
@@ -255,18 +283,18 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
         }
         // 过滤异常值（布局未完成或极端小屏），避免把书切成上千页
         if (changed && mFileUri != null) {
-            reloadKeepingPage()
+            reloadKeepingPosition()
         }
     }
 
-    /** 屏幕分页指标（每行方数/每页行数）变化后重排，尽量停留在原来的阅读位置。 */
-    private fun reloadKeepingPage() {
+    /** 屏幕分页指标变化后重读并按比例保持阅读位置。 */
+    private fun reloadKeepingPosition() {
         val uri = mFileUri ?: return
         try {
-            loadBytes(uri, resetPage = false)
+            loadBytes(uri, resetPosition = false)
             showPage()
         } catch (e: Exception) {
-            // 重排失败保留原分页
+            // 重读失败保留原有内容
         }
     }
 
@@ -274,32 +302,46 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
     // 翻页 / 显示
     // ------------------------------------------------------------------
 
-    private fun gotoPage(page: Int) {
-        if (mPages.isEmpty()) return
-        if (page < 0 || page >= mPages.size) return
-        mPage = page
+    /** 前进/后退 [delta] 个阅读单元（点显器一屏或屏幕一屏）。 */
+    private fun advance(delta: Int) {
+        if (mStream.isEmpty()) return
+        mOffset = (mOffset + delta * readingUnit()).coerceIn(0, maxOffset())
+        showPage()
+    }
+
+    /** 跳到第 [unit] 个阅读单元（0 基）。 */
+    private fun gotoUnit(unit: Int) {
+        if (mStream.isEmpty()) return
+        mOffset = (unit.coerceIn(0, totalUnits() - 1) * readingUnit())
+            .coerceAtMost(maxOffset())
         showPage()
     }
 
     private fun showPage() {
-        if (mPages.isEmpty()) {
+        if (mStream.isEmpty()) {
             mReaderText?.setText(R.string.braille_reader_hint)
         } else {
-            mReaderText?.text = mPages[mPage]
+            mReaderText?.text = BrailleFileDecoder.screenAt(
+                mStream, mOffset, mCellsPerLine, mLinesPerPage)
+        }
+        // 翻页后自动同步点显器，省去盲文用户每次手动点「发送点显」
+        if (mConnected) {
+            sendToDisplay()
         }
         updateUiState()
     }
 
     private fun updateUiState() {
-        val hasContent = mPages.isNotEmpty()
-        mBtnPrev?.isEnabled = hasContent && mPage > 0
-        mBtnNext?.isEnabled = hasContent && mPage < mPages.size - 1
+        val hasContent = mStream.isNotEmpty()
+        val unit = readingUnit()
+        mBtnPrev?.isEnabled = hasContent && mOffset > 0
+        mBtnNext?.isEnabled = hasContent && mOffset + unit <= maxOffset()
         mBtnSend?.isEnabled = hasContent && mConnected
         mBtnToc?.isEnabled = hasContent
         mBtnBookmark?.isEnabled = hasContent
         mBtnGoto?.isEnabled = hasContent
         mPageInfo?.text = if (hasContent) {
-            getString(R.string.braille_reader_page, mPage + 1, mPages.size)
+            getString(R.string.braille_reader_page, currentUnit() + 1, totalUnits())
         } else {
             ""
         }
@@ -317,29 +359,31 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
      * 改为按页分组 + 首行预览，行为可预期。
      */
     private fun showToc() {
-        if (mPages.isEmpty()) {
+        if (mStream.isEmpty()) {
             toastNoContent()
             return
         }
+        val unit = readingUnit()
+        val total = totalUnits()
         val labels = ArrayList<String>()
         val targets = ArrayList<Int>()
-        var p = 0
-        while (p < mPages.size) {
-            val last = min(p + TOC_PAGE_STEP, mPages.size) - 1
-            val preview = BrailleFileDecoder.pagePreview(mPages, p, PREVIEW_CELLS)
-            labels.add(getString(R.string.braille_reader_toc_item, p + 1, last + 1, preview))
-            targets.add(p)
-            p = last + 1
+        var u = 0
+        while (u < total) {
+            val last = min(u + TOC_PAGE_STEP, total) - 1
+            labels.add(getString(R.string.braille_reader_toc_item,
+                u + 1, last + 1, previewAt(u * unit)))
+            targets.add(u)
+            u = last + 1
         }
         AlertDialog.Builder(this)
             .setTitle(R.string.braille_reader_toc_title)
-            .setItems(labels.toTypedArray()) { _, which -> gotoPage(targets[which]) }
+            .setItems(labels.toTypedArray()) { _, which -> gotoUnit(targets[which]) }
             .show()
     }
 
     /** 书签：尚无书签时直接把当前页加为书签，否则弹出列表供跳转/删除。 */
     private fun showBookmarks() {
-        if (mPages.isEmpty()) {
+        if (mStream.isEmpty()) {
             toastNoContent()
             return
         }
@@ -351,7 +395,7 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
         val labels = offsets.map { offsetLabel(it) }.toTypedArray()
         AlertDialog.Builder(this)
             .setTitle(R.string.braille_reader_bookmarks_title)
-            .setItems(labels) { _, which -> gotoPage(pageForOffset(offsets[which])) }
+            .setItems(labels) { _, which -> jumpToOffset(offsets[which]) }
             .setPositiveButton(R.string.braille_reader_bm_delete) { _, _ ->
                 showDeleteBookmark(offsets)
             }
@@ -377,23 +421,34 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
 
     private fun addBookmark() {
         val offsets = loadBookmarkOffsets()
-        val offset = pageStartOffset(mPage)
-        if (offsets.contains(offset)) {
-            Toast.makeText(this, getString(R.string.braille_reader_bm_exists, mPage + 1),
-                Toast.LENGTH_SHORT).show()
+        if (offsets.contains(mOffset)) {
+            Toast.makeText(this, getString(R.string.braille_reader_bm_exists,
+                currentUnit() + 1), Toast.LENGTH_SHORT).show()
             return
         }
-        offsets.add(offset)
+        offsets.add(mOffset)
         offsets.sort()
         saveBookmarkOffsets(offsets)
-        Toast.makeText(this, getString(R.string.braille_reader_bm_added, mPage + 1),
-            Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, getString(R.string.braille_reader_bm_added,
+            currentUnit() + 1), Toast.LENGTH_SHORT).show()
     }
 
-    private fun offsetLabel(offset: Int): String {
-        val p = pageForOffset(offset)
-        return getString(R.string.braille_reader_bm_item, p + 1,
-            BrailleFileDecoder.pagePreview(mPages, p, PREVIEW_CELLS))
+    /** 跳到书签位置：直接落到该偏移，不做单元对齐以精确保位。 */
+    private fun jumpToOffset(offset: Int) {
+        if (mStream.isEmpty()) return
+        mOffset = offset.coerceIn(0, maxOffset())
+        showPage()
+    }
+
+    private fun offsetLabel(offset: Int): String =
+        getString(R.string.braille_reader_bm_item,
+            offset / readingUnit() + 1, previewAt(offset))
+
+    /** 取某偏移处的一行预览（去掉首尾空白方）。 */
+    private fun previewAt(offset: Int): String {
+        val line = BrailleFileDecoder.screenAt(mStream, offset, mCellsPerLine, 1)
+            .trim('\u2800')
+        return if (line.length <= PREVIEW_CELLS) line else line.substring(0, PREVIEW_CELLS)
     }
 
     private fun clearBookmarks() {
@@ -402,23 +457,23 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
         Toast.makeText(this, R.string.braille_reader_bm_cleared, Toast.LENGTH_SHORT).show()
     }
 
-    /** 跳到指定页码。 */
+    /** 跳到指定页（阅读单元序号，从 1 开始）。 */
     private fun showGotoDialog() {
-        if (mPages.isEmpty()) {
+        if (mStream.isEmpty()) {
             toastNoContent()
             return
         }
         val input = EditText(this).apply {
             inputType = InputType.TYPE_CLASS_NUMBER
-            hint = getString(R.string.braille_reader_goto_hint, mPages.size)
+            hint = getString(R.string.braille_reader_goto_hint, totalUnits())
         }
         AlertDialog.Builder(this)
             .setTitle(R.string.braille_reader_goto_title)
             .setView(input)
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 val n = input.text.toString().toIntOrNull()
-                if (n != null && n in 1..mPages.size) {
-                    gotoPage(n - 1)
+                if (n != null && n in 1..totalUnits()) {
+                    gotoUnit(n - 1)
                 }
             }
             .setNegativeButton(android.R.string.cancel, null)
@@ -430,8 +485,8 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
     }
 
     /**
-     * 书签按文件 URI 隔离存储，值为页首字符在去换行正文中的**偏移**而非页码。
-     * 存偏移是为了让点显器方数变化引起重排后，书签仍能定位到大致位置。
+     * 书签按文件 URI 隔离存储，值为**字符偏移**。
+     * 存偏移是为了让屏幕尺寸或点显器方数变化引起重排后仍能定位到原处。
      */
     private fun bookmarkKey(): String = KEY_BM_PREFIX + (mFileUri?.toString() ?: "")
 
@@ -447,38 +502,19 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
             .apply()
     }
 
-    /** 第 [page] 页首字符在去换行正文中的偏移。 */
-    private fun pageStartOffset(page: Int): Int {
-        var offset = 0
-        for (i in 0 until min(page, mPages.size)) {
-            offset += mPages[i].count { it != '\n' }
-        }
-        return offset
-    }
-
-    /** 偏移落在哪一页。 */
-    private fun pageForOffset(offset: Int): Int {
-        var acc = 0
-        for (i in mPages.indices) {
-            val n = mPages[i].count { it != '\n' }
-            if (acc + n > offset) return i
-            acc += n
-        }
-        return (mPages.size - 1).coerceAtLeast(0)
-    }
-
     // ------------------------------------------------------------------
     // 发送到点显器
     // ------------------------------------------------------------------
 
     /**
-     * 发送当前屏到点显器：取当前页展平后的前 [mCellsPerLine] 个字符。
-     * （旧实现发送整页文本，长度可达数百，远超点显器方数，显示内容不正确。）
+     * 发送当前屏到点显器：取从 [mOffset] 开始的 [mDisplayCells] 个方。
+     * 旧实现发送「当前屏幕页的前 N 方」，一页可达数百方，
+     * 20 方点显器只能读到开头一小段，其余内容永远读不到。
      */
     private fun sendToDisplay() {
         val display = mDisplay ?: return
-        // 用点显器方数（而非屏幕每行方数）决定这一屏发多少个方
-        val cells = BrailleFileDecoder.pageToCells(mPages, mPage, mDisplayCells)
+        if (mStream.isEmpty()) return
+        val cells = BrailleFileDecoder.cellsAt(mStream, mOffset, mDisplayCells)
         if (cells.isEmpty()) return
         val len = cells.length
         val patterns = ByteArray(len)
@@ -495,10 +531,10 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
     // ------------------------------------------------------------------
 
     private fun saveProgress() {
-        if (mPages.isEmpty()) return
+        if (mStream.isEmpty()) return
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
             .putString(KEY_URI, mFileUri?.toString())
-            .putInt(KEY_PAGE, mPage)
+            .putInt(KEY_OFFSET, mOffset)
             .apply()
     }
 
@@ -511,15 +547,16 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
             return
         }
         try {
-            loadBytes(uri, resetPage = true)
+            loadBytes(uri, resetPosition = true)
             mFileUri = uri
-            mPage = prefs.getInt(KEY_PAGE, 0).coerceIn(0, (mPages.size - 1).coerceAtLeast(0))
+            mOffset = prefs.getInt(KEY_OFFSET, 0).coerceIn(0, maxOffset())
             showPage()
         } catch (e: Exception) {
             // 文件已被删除或权限失效：清空进度，回落到提示态
-            mPages = emptyList()
+            mStream = ""
+            mOffset = 0
             mFileUri = null
-            prefs.edit().remove(KEY_URI).remove(KEY_PAGE).apply()
+            prefs.edit().remove(KEY_URI).remove(KEY_OFFSET).apply()
         }
     }
 
@@ -534,7 +571,7 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
         private const val CELL_SAMPLE = "\u283F"
         private const val PREFS_NAME = "braille_reader"
         private const val KEY_URI = "last_uri"
-        private const val KEY_PAGE = "last_page"
+        private const val KEY_OFFSET = "last_offset"
         private const val KEY_BM_PREFIX = "bm_"
         /** 目录每 N 页一条。 */
         private const val TOC_PAGE_STEP = 10
