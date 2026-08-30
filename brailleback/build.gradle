@@ -44,6 +44,7 @@ android {
         test {
             java.srcDirs = ['test/java']
             kotlin.srcDirs = ['test/kotlin']
+            resources.srcDirs = ['test/resources']
         }
         debug.setRoot('build-types/debug')
         release.setRoot('build-types/release')

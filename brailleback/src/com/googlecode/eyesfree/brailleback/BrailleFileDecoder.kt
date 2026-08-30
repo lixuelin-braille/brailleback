@@ -148,6 +148,25 @@ object BrailleFileDecoder {
     }
 
     /**
+     * 按文件名后缀分派解码。
+     *
+     * - `.bdo` / `.bdoc`：Bword 二进制盲文文档，走 [BdoCArchiveParser] 结构化解码，
+     *   输出已是 Unicode 盲文（U+2800 系列），**不可**再做 ASCII 盲文转换。
+     *   这是国内盲文图书馆/出版社的主力格式。
+     * - 其余（`.brf` / `.txt` 等）：按文本解码，后续由 [toUnicodeBraille] 处理。
+     *
+     * @return 解码后的正文；bdo 解码失败时返回 null（交由调用方提示）。
+     */
+    fun decodeDocument(bytes: ByteArray, fileName: String?): String? {
+        val ext = fileName?.substringAfterLast('.', "")?.lowercase()
+        return if (ext == "bdo" || ext == "bdoc") {
+            BdoCArchiveParser.parse(bytes)
+        } else {
+            decode(bytes)
+        }
+    }
+
+    /**
      * 单行 ASCII 盲文(0x20-0x5F) 转 Unicode 盲文(U+2800-)。
      * 已是 Unicode 盲文或其他字符（中文、标点）原样保留。
      */

@@ -85,6 +85,8 @@
     <string name="braille_reader_next">Next</string>
     <string name="braille_reader_send">Send to display</string>
     <string name="braille_reader_load_fail">Failed to load file: %1$s</string>
+    <string name="braille_reader_bdo_fail">Not a valid Bword (.bdo/.bdoc) braille document</string>
+    <string name="braille_reader_unsupported_format">.%1$s is not supported. Please open a braille file (.bdo, .bdoc, .brf, .brl) or plain text (.txt)</string>
     <string name="braille_reader_page">Page %1$d / %2$d</string>
     <string name="braille_reader_loaded">Loaded, %1$d pages</string>
     <string name="pref_chinese_segmentation_title">Chinese word segmentation</string>

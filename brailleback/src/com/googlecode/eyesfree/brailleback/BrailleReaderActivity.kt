@@ -12,6 +12,7 @@ import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
@@ -94,11 +95,11 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
     // ------------------------------------------------------------------
 
     private fun openFile() {
+        // 不限定 MIME：.bdo/.bdoc/.brf 无标准 MIME 类型，
+        // 用 */* 才能在各家文件管理器中选中它们。格式校验放在读取时做。
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "*/*"
-            putExtra(Intent.EXTRA_MIME_TYPES,
-                arrayOf("text/plain", "application/octet-stream"))
         }
         startActivityForResult(intent, REQUEST_OPEN)
     }
@@ -122,10 +123,7 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
 
     private fun loadFile(uri: Uri) {
         try {
-            val bytes = readAllBytes(uri)
-            val text = BrailleFileDecoder.decode(bytes)
-            mPages = BrailleFileDecoder.buildPages(text, mCellsPerLine, mLinesPerPage)
-            mPage = 0
+            loadBytes(uri, resetPage = true)
             showPage()
             Toast.makeText(this, getString(R.string.braille_reader_loaded,
                 mPages.size), Toast.LENGTH_SHORT).show()
@@ -134,6 +132,55 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
                 getString(R.string.braille_reader_load_fail, e.message),
                 Toast.LENGTH_SHORT).show()
         }
+    }
+
+    /**
+     * 读取并解码文件，重建分页。
+     *
+     * 按文件名后缀分派：`.bdo`/`.bdoc` 走二进制结构化解码，其余按文本解码。
+     * bdo 解码失败（不是有效的结构化盲文文档）时抛异常，由调用方提示。
+     */
+    private fun loadBytes(uri: Uri, resetPage: Boolean) {
+        val name = displayNameOf(uri)
+        checkSupportedFormat(name)
+        val bytes = readAllBytes(uri)
+        val text = BrailleFileDecoder.decodeDocument(bytes, name)
+            ?: throw IllegalStateException(getString(R.string.braille_reader_bdo_fail))
+        val oldCount = mPages.size
+        mPages = BrailleFileDecoder.buildPages(text, mCellsPerLine, mLinesPerPage)
+        if (resetPage) {
+            mPage = 0
+        } else if (oldCount > 0) {
+            mPage = min(mPage * mPages.size / oldCount, mPages.size - 1)
+            if (mPage < 0) mPage = 0
+        }
+    }
+
+    /**
+     * 拒绝明确不支持的格式，避免用户打开 Word/PDF 等得到一堆乱码却以为是 bug。
+     * 未列出的后缀（含无后缀）一律放行，按文本尝试解码。
+     */
+    private fun checkSupportedFormat(name: String?) {
+        val ext = name?.substringAfterLast('.', "")?.lowercase() ?: return
+        if (ext in UNSUPPORTED_EXT) {
+            throw IllegalStateException(
+                getString(R.string.braille_reader_unsupported_format, ext))
+        }
+    }
+
+    /** 取文件显示名（用于按后缀判断格式）；查询失败时回落到 URI 末段。 */
+    private fun displayNameOf(uri: Uri): String? {
+        try {
+            contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                val idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (idx >= 0 && cursor.moveToFirst()) {
+                    return cursor.getString(idx)
+                }
+            }
+        } catch (e: Exception) {
+            // 部分 provider 不支持查询，回落到 URI 末段
+        }
+        return uri.lastPathSegment
     }
 
     private fun readAllBytes(uri: Uri): ByteArray {
@@ -157,18 +204,8 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
     /** 点显器宽度变化后按新宽度重排，尽量停留在原来的阅读位置。 */
     private fun reloadKeepingPage() {
         val uri = mFileUri ?: return
-        val oldPage = mPage
-        val oldCount = mPages.size
         try {
-            val text = BrailleFileDecoder.decode(readAllBytes(uri))
-            mPages = BrailleFileDecoder.buildPages(text, mCellsPerLine, mLinesPerPage)
-            // 按页数比例还原位置
-            mPage = if (oldCount > 0) {
-                min(oldPage * mPages.size / oldCount, mPages.size - 1)
-            } else {
-                0
-            }
-            if (mPage < 0) mPage = 0
+            loadBytes(uri, resetPage = false)
             showPage()
         } catch (e: Exception) {
             // 重排失败保留原分页
@@ -250,8 +287,7 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
             return
         }
         try {
-            val text = BrailleFileDecoder.decode(readAllBytes(uri))
-            mPages = BrailleFileDecoder.buildPages(text, mCellsPerLine, mLinesPerPage)
+            loadBytes(uri, resetPage = true)
             mFileUri = uri
             mPage = prefs.getInt(KEY_PAGE, 0).coerceIn(0, (mPages.size - 1).coerceAtLeast(0))
             showPage()
@@ -270,5 +306,17 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
         private const val PREFS_NAME = "braille_reader"
         private const val KEY_URI = "last_uri"
         private const val KEY_PAGE = "last_page"
+
+        /**
+         * 明确不支持的二进制/排版格式。盲文阅读器只处理盲文与纯文本：
+         * .bdo/.bdoc（Bword 二进制盲文）、.brf/.brl/.txt（文本类）。
+         * Word/PDF 等需先转成盲文，直接打开只会得到乱码。
+         */
+        private val UNSUPPORTED_EXT = setOf(
+            "doc", "docx", "wps", "rtf", "odt",
+            "pdf", "epub", "mobi", "azw3",
+            "rar", "zip", "7z",
+            "jpg", "jpeg", "png", "gif", "bmp", "webp"
+        )
     }
 }
