@@ -19,6 +19,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
 import android.text.InputType
+import android.util.Log
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ScrollView
@@ -127,12 +128,23 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
     override fun onConnectionStateChanged(state: Int) {
         mConnected = state == Display.STATE_CONNECTED
         if (mConnected) {
+            // 完全采用系统/驱动上报的方数（numTextCells），不做推测。
+            // 仅对明显异常的值兜底：0 表示尚未就绪，过大则是驱动误报，
+            // 若照单全收会让「一屏」变成整本书、步进失控。
             val cells = mDisplay?.displayProperties?.numTextCells ?: 0
-            if (cells > 0) {
-                // 点显器方数只影响「发送一屏」的长度与阅读步进，
-                // 不影响屏幕排版，因此不再触发重排（页码不会跳变）。
-                mDisplayCells = cells
+            mDisplayCells = when {
+                cells <= 0 -> {
+                    Log.w(LOG_TAG, "点显器方数未上报($cells)，暂用默认 $DEFAULT_CELLS")
+                    DEFAULT_CELLS
+                }
+                cells > MAX_DISPLAY_CELLS -> {
+                    Log.w(LOG_TAG, "点显器方数上报异常($cells)，回退默认 $DEFAULT_CELLS")
+                    DEFAULT_CELLS
+                }
+                else -> cells
             }
+            // 点显器方数只影响「发送一屏」的长度与阅读步进，
+            // 不影响屏幕排版，因此不再触发重排（页码不会跳变）。
         }
         runOnUiThread {
             updateUiState()
@@ -340,10 +352,15 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
         mBtnToc?.isEnabled = hasContent
         mBtnBookmark?.isEnabled = hasContent
         mBtnGoto?.isEnabled = hasContent
-        mPageInfo?.text = if (hasContent) {
-            getString(R.string.braille_reader_page, currentUnit() + 1, totalUnits())
-        } else {
+        mPageInfo?.text = if (!hasContent) {
             ""
+        } else if (mConnected) {
+            // 连上点显器时把驱动上报的方数一并显示，
+            // 万一某设备上报不准，一眼就能看出是驱动问题而非阅读器问题。
+            getString(R.string.braille_reader_page_cells,
+                currentUnit() + 1, totalUnits(), mDisplayCells)
+        } else {
+            getString(R.string.braille_reader_page, currentUnit() + 1, totalUnits())
         }
     }
 
@@ -561,9 +578,17 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
     }
 
     companion object {
+        private const val LOG_TAG = "BrailleReader"
+
         private const val REQUEST_OPEN = 1
         private const val DEFAULT_CELLS = 40
         private const val LINES_PER_PAGE = 20
+        /**
+         * 点显器方数上限，仅用于兜住驱动误报。
+         * 常见单行点显器为 12–80 方，多行显示器最多数百方；
+         * 超过此值基本可判定为上报异常（照单全收会让「一屏」变成整本书）。
+         */
+        private const val MAX_DISPLAY_CELLS = 4096
         /** 低于此值视为布局未完成或极端小屏，不据此重排。 */
         private const val MIN_LINES_PER_PAGE = 5
         private const val MIN_CELLS_PER_LINE = 8

@@ -88,6 +88,7 @@
     <string name="braille_reader_bdo_fail">Not a valid Bword (.bdo/.bdoc) braille document</string>
     <string name="braille_reader_unsupported_format">.%1$s is not supported. Please open a braille file (.bdo, .bdoc, .brf, .brl) or plain text (.txt)</string>
     <string name="braille_reader_page">Page %1$d / %2$d</string>
+    <string name="braille_reader_page_cells">Page %1$d / %2$d · %3$d cells</string>
     <string name="braille_reader_loaded">Loaded, %1$d pages</string>
     <string name="braille_reader_toc">Contents</string>
     <string name="braille_reader_bookmark">Bookmark</string>
