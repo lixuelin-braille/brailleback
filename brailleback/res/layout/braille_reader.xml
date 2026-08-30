@@ -61,4 +61,30 @@
             android:text="@string/braille_reader_send"
             android:enabled="false" />
     </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:layout_marginTop="4dp">
+
+        <Button
+            android:id="@+id/btn_toc"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/braille_reader_toc" />
+
+        <Button
+            android:id="@+id/btn_bookmark"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/braille_reader_bookmark" />
+
+        <Button
+            android:id="@+id/btn_goto"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/braille_reader_goto" />
+    </LinearLayout>
 </LinearLayout>

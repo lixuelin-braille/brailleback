@@ -203,7 +203,12 @@ object BrailleFileDecoder {
      *
      * - 先按 BRF 换页符 [FORM_FEED] 分段（尊重文件自带分页）
      * - 段内每行按 [cellsPerLine]（点显器方数）折行，长行不再溢出屏幕
-     * - 再按 [linesPerPage] 行切页
+     * - 再按 [linesPerPage] 行切页，并做孤行控制
+     *
+     * 排版优化（针对真实 bdo 文档实测，见 BdoCArchiveParserTest）：
+     * - **连续空行折叠为 1 个**：实测封面区存在连续 10 个空行，直接占掉半屏
+     * - **去除文档开头/结尾的空行**：首页不再空白
+     * - **widow 控制**：段落首行不孤立在页尾（该段还有后续行时，推到下一页）
      */
     fun buildPages(
         text: String,
@@ -212,30 +217,122 @@ object BrailleFileDecoder {
     ): List<String> {
         require(cellsPerLine > 0) { "cellsPerLine must be > 0" }
         require(linesPerPage > 0) { "linesPerPage must be > 0" }
-        val pages = ArrayList<String>()
-        for (section in text.split(FORM_FEED)) {
-            val lines = ArrayList<String>()
+        return paginate(buildRows(text, cellsPerLine), linesPerPage)
+    }
+
+    /**
+     * 折行后的一个物理行。
+     *
+     * @param paraStart 是否为段落首行（用于 widow 控制）
+     * @param paraEnd 是否为段落末行
+     * @param pageBreakBefore 本行之前是否必须另起一页（BRF 换页符 \f 产生）
+     */
+    private class Row(
+        val text: String,
+        val paraStart: Boolean,
+        val paraEnd: Boolean,
+        val pageBreakBefore: Boolean = false
+    )
+
+    /** 空行：既是段落结尾也是段落开头，不参与孤行判定。 */
+    private val BLANK_ROW = Row("", true, true)
+
+    /** 把正文折成物理行，并折叠空行、去掉首尾空行、标记换页点。 */
+    private fun buildRows(text: String, cellsPerLine: Int): List<Row> {
+        val rows = ArrayList<Row>()
+        var pendingBlank = false
+        val sections = text.split(FORM_FEED)
+        for (sectionIndex in sections.indices) {
+            val section = sections[sectionIndex]
+            // 换页符之后的第一行强制另起一页（首个分段除外）
+            var pendingBreak = sectionIndex > 0
             for (rawLine in section.split('\n')) {
                 val line = toUnicodeBraille(rawLine.trimEnd('\r'))
+                if (line.isEmpty()) {
+                    // 连续空行只记一次，等到遇到实际内容时才落到结果里，
+                    // 由此自然实现「折叠 + 不产生开头空行」。
+                    pendingBlank = true
+                    continue
+                }
+                if (pendingBlank) {
+                    if (rows.isNotEmpty()) {
+                        rows.add(BLANK_ROW)
+                    }
+                    pendingBlank = false
+                }
+                val breakBefore = pendingBreak
+                pendingBreak = false
                 if (line.length <= cellsPerLine) {
-                    lines.add(line)
+                    rows.add(Row(line, true, true, breakBefore))
                 } else {
                     var i = 0
+                    var first = true
                     while (i < line.length) {
                         val end = min(i + cellsPerLine, line.length)
-                        lines.add(line.substring(i, end))
+                        rows.add(Row(line.substring(i, end), first, end >= line.length,
+                            breakBefore && first))
+                        first = false
                         i = end
                     }
                 }
             }
-            if (lines.isEmpty()) {
-                lines.add("")
+        }
+        // 去掉结尾空行
+        while (rows.isNotEmpty() && rows[rows.size - 1] === BLANK_ROW) {
+            rows.removeAt(rows.size - 1)
+        }
+        return rows
+    }
+
+    /**
+     * 按 [linesPerPage] 切页。
+     *
+     * widow 控制：若某页最后一行是段落首行、且该段落还有后续内容，
+     * 说明把一个段落的开头单独甩在了页尾，将其推到下一页，让段落完整开始。
+     */
+    private fun paginate(rows: List<Row>, linesPerPage: Int): List<String> {
+        if (rows.isEmpty()) return listOf("")
+        val pages = ArrayList<String>()
+        var i = 0
+        while (i < rows.size) {
+            var end = min(i + linesPerPage, rows.size)
+            // 换页符优先：本页内若存在强制分页点，就在这里切断
+            for (k in i + 1 until end) {
+                if (rows[k].pageBreakBefore) {
+                    end = k
+                    break
+                }
             }
-            for (chunk in lines.chunked(linesPerPage)) {
-                pages.add(chunk.joinToString("\n"))
+            if (end < rows.size && end - i > 1 && !rows[end].pageBreakBefore) {
+                val last = rows[end - 1]
+                if (last.paraStart && !last.paraEnd) {
+                    end--
+                }
             }
+            val sb = StringBuilder()
+            for (k in i until end) {
+                if (k > i) sb.append('\n')
+                sb.append(rows[k].text)
+            }
+            pages.add(sb.toString())
+            i = end
         }
         return pages
+    }
+
+    /**
+     * 取第 [page] 页的首行预览（最多 [maxLen] 个字符，去掉首尾空白方）。
+     * 供目录、书签列表显示「这页讲的是什么」。
+     */
+    fun pagePreview(pages: List<String>, page: Int, maxLen: Int): String {
+        if (pages.isEmpty() || page < 0 || page >= pages.size) return ""
+        for (line in pages[page].split('\n')) {
+            val trimmed = line.trim('\u2800')
+            if (trimmed.isNotEmpty()) {
+                return if (trimmed.length <= maxLen) trimmed else trimmed.substring(0, maxLen)
+            }
+        }
+        return ""
     }
 
     /**
