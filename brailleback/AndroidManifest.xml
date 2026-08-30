@@ -22,6 +22,15 @@
       android:versionName="0.98.0">
 
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Foreground service keeps the braille display connection alive when
+         the accessibility service would otherwise be idle-processed away.
+         connectedDevice matches our use case (external braille displays). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <!-- Required on API 33+ for the foreground-service notification to be
+         visible. Without it the FGS still runs; only the notification is
+         hidden (it remains in Task Manager). Requested at runtime. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
     <!-- Android 12+ requires BLUETOOTH_CONNECT to enumerate bonded braille
@@ -53,12 +62,14 @@
     <application
         android:label="@string/brailleback_setup_title"
         android:icon="@drawable/ic_brailleback"
+        android:theme="@style/BraillebackTheme"
         tools:replace="android:icon, android:label"
         android:supportsRtl="true">
 
         <service android:name=".BrailleBackService"
                  android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
-                 android:settingsActivity=".BrailleBackPreferencesActivity" 
+                 android:settingsActivity=".BrailleBackPreferencesActivity"
+                 android:foregroundServiceType="connectedDevice"
                  android:exported="false">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
@@ -153,7 +164,10 @@
             </intent-filter>
         </activity>
 
-        <activity android:name="WebViewDialog" />
+        <!-- No intent-filter, so exported defaults to false. Stated explicitly
+             to make the intent non-exported-by-design, and to avoid forgetting
+             it should an intent-filter ever be added here. -->
+        <activity android:name="WebViewDialog" android:exported="false" />
 
         <activity
             android:name=".SearchTutorialActivity"

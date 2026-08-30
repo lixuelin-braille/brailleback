@@ -58,6 +58,7 @@ class BrailleBackPreferencesActivity : PreferenceActivity(),
         const val INTENT_REFRESH_DISPLAY =
             "com.googlecode.eyesfree.brailleback.REFRESH_DISPLAY"
         private const val REQUEST_BLUETOOTH_CONNECT = 1
+        private const val REQUEST_POST_NOTIFICATIONS = 2
         private const val LOG_TAG = "BrailleBackPrefs"
     }
 
@@ -451,6 +452,17 @@ class BrailleBackPreferencesActivity : PreferenceActivity(),
                     arrayOf(Manifest.permission.BLUETOOTH_CONNECT),
                     REQUEST_BLUETOOTH_CONNECT)
             }
+        }
+        // The connection stays alive as a foreground service whose
+        // notification is only visible with this grant (API 33+).
+        // Declined is fine: the FGS keeps running, the notification is
+        // just hidden behind the Task Manager entry.
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(
+                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                REQUEST_POST_NOTIFICATIONS)
         }
     }
 

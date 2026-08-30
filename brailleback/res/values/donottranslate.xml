@@ -112,5 +112,10 @@
         <item>3</item>
         <item>2</item>
     </string-array>
+
+    <!-- Foreground service notification (braille display connection) -->
+    <string name="braille_display_notif_channel">盲文点显器连接</string>
+    <string name="braille_display_notif_title">盲文点显器服务运行中</string>
+    <string name="braille_display_notif_text">保持点显器连接稳定。点按管理连接。</string>
 </resources>
 

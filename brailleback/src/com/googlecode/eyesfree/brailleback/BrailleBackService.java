@@ -18,9 +18,13 @@ package com.googlecode.eyesfree.brailleback;
 
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.AccessibilityServiceInfo;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.ServiceInfo;
 import android.content.res.Configuration;
 import android.os.Build;
 import android.os.Handler;
@@ -398,10 +402,62 @@ public class BrailleBackService
             return 3 * 60L * 1000L;
         }
     }
+
+    private static final String FGS_CHANNEL_ID = "braille_display_connection";
+    private static final int FGS_NOTIFICATION_ID = 1;
+
+    /**
+     * Promotes this accessibility service to a foreground service with a
+     * persistent, low-importance notification.  Uses the manifest-declared
+     * {@code connectedDevice} type on API 29+ (required subset check passes
+     * because FOREGROUND_SERVICE_TYPE_MANIFEST resolves to the manifest
+     * flags).  Callers must tolerate failure: on Android 14+ the platform
+     * validates the connectedDevice prerequisites (e.g. BLUETOOTH_CONNECT)
+     * and throws if they are unmet.
+     */
+    private void promoteToForeground() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                    FGS_CHANNEL_ID,
+                    getString(R.string.braille_display_notif_channel),
+                    NotificationManager.IMPORTANCE_LOW);
+            channel.setDescription(
+                    getString(R.string.braille_display_notif_title));
+            getSystemService(NotificationManager.class)
+                    .createNotificationChannel(channel);
+        }
+        Notification.Builder builder =
+                (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                        ? new Notification.Builder(this, FGS_CHANNEL_ID)
+                        : new Notification.Builder(this);
+        Notification notification = builder
+                .setContentTitle(getString(R.string.braille_display_notif_title))
+                .setContentText(getString(R.string.braille_display_notif_text))
+                .setSmallIcon(R.drawable.ic_brailleback)
+                .setOngoing(true)
+                .build();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(FGS_NOTIFICATION_ID, notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MANIFEST);
+        } else {
+            startForeground(FGS_NOTIFICATION_ID, notification);
+        }
+    }
+
     @Override
 
     public void onServiceConnected() {
     instance = this;
+    // Promote to a foreground service so the braille display connection
+    // survives idle pruning and aggressive OEM battery managers.  Best
+    // effort only: if the platform rejects the promotion (e.g. missing
+    // BLUETOOTH_CONNECT grant for the connectedDevice type on Android 14+)
+    // the service still runs, just with normal background priority.
+    try {
+      promoteToForeground();
+    } catch (RuntimeException e) {
+      Log.w("BrailleBack", "Foreground promotion failed: " + e);
+    }
     // Hand the BrailleDisplayController over to the display service
     // so it can drive Braille HID standard (usage page 0x41) displays.
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
@@ -433,6 +489,12 @@ public class BrailleBackService
     @Override
     public void onDestroy() {
     instance = null;
+    // Leave the foreground state explicitly; the notification is removed.
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+      stopForeground(STOP_FOREGROUND_REMOVE);
+    } else {
+      stopForeground(true);
+    }
     // Drop the static BrailleDisplayController reference held by HidBridge.
     // It must be cleared before shutdownDependencies(): otherwise the static
     // outlives this service, HidBridge.isAvailable() keeps returning true, and

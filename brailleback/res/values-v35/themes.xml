@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- API 35+ only. Android 15 enforces edge-to-edge for apps targeting
+     SDK 35, which can push content under the status/navigation bars.
+     This accessibility-first app relies on predictable screen bounds,
+     so we opt out for now. NOTE: windowOptOutEdgeToEdgeEnforcement is
+     deprecated in API 36; proper insets handling is the long-term fix
+     (tracked in docs/08-权限与系统版本适配.md). -->
+<resources>
+    <style name="BraillebackTheme" parent="@android:style/Theme.DeviceDefault">
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+    </style>
+</resources>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Base theme applied from the manifest. It mirrors the implicit
+     DeviceDefault styling the app has always used, so nothing changes
+     visually on API < 35. On API 35+ see values-v35/themes.xml. -->
+<resources>
+    <style name="BraillebackTheme" parent="@android:style/Theme.DeviceDefault" />
+</resources>
