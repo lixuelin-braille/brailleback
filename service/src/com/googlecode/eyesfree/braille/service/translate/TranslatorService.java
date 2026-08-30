@@ -18,8 +18,10 @@ package com.googlecode.eyesfree.braille.service.translate;
 
 import android.app.Service;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.IBinder;
 import android.os.RemoteException;
+import android.preference.PreferenceManager;
 import android.util.Log;
 import com.googlecode.eyesfree.braille.service.R;
 import com.googlecode.eyesfree.braille.translate.ITranslatorService;
@@ -61,20 +63,41 @@ public class TranslatorService extends Service {
     // while the segmenter is still loading.
     private volatile boolean mWarnedUnsegmented = false;
     private static final String SEG_TAG = "BrailleSegmenter";
+    /** Whether word segmentation is applied for Chinese tables. Controlled by
+     * the "chinese_segmentation" preference; defaults to on. */
+    private volatile boolean mChineseSegmentationEnabled = true;
 
     @Override
     public void onCreate() {
         super.onCreate();
         mTableList = new TableList(getResources());
         extractDataFiles();
+        SharedPreferences prefs =
+                PreferenceManager.getDefaultSharedPreferences(this);
+        mChineseSegmentationEnabled = prefs.getBoolean("chinese_segmentation", true);
+        prefs.registerOnSharedPreferenceChangeListener(mSegPrefListener);
         startSegmenterInit();
     }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
+        PreferenceManager.getDefaultSharedPreferences(this)
+                .unregisterOnSharedPreferenceChangeListener(mSegPrefListener);
         // TODO: Deallocate native data.
     }
+
+    private final SharedPreferences.OnSharedPreferenceChangeListener
+            mSegPrefListener =
+        new SharedPreferences.OnSharedPreferenceChangeListener() {
+            @Override
+            public void onSharedPreferenceChanged(
+                    SharedPreferences prefs, String key) {
+                if ("chinese_segmentation".equals(key)) {
+                    mChineseSegmentationEnabled = prefs.getBoolean(key, true);
+                }
+            }
+        };
 
     @Override
     public IBinder onBind(Intent intent) {
@@ -232,7 +255,8 @@ public class TranslatorService extends Service {
                 cellOffset += n;
             } else {
                 TranslationResult sub;
-                if (mSegmenterReady && isChineseTable(tableName)) {
+                if (mChineseSegmentationEnabled && mSegmenterReady
+                        && isChineseTable(tableName)) {
                     sub = translateWithSegment(run, tableName, -1,
                             computerBrailleAtCursor);
                 } else {
@@ -404,12 +428,13 @@ public class TranslatorService extends Service {
                     return passThrough;
                 }
             }
-            if (mSegmenterReady && isChineseTable(tableName)) {
+            if (mChineseSegmentationEnabled && mSegmenterReady
+                    && isChineseTable(tableName)) {
                 return translateWithSegment(text, tableName, cursorPosition,
                         computerBrailleAtCursor);
             }
-            if (isChineseTable(tableName) && !mSegmenterReady
-                    && !mWarnedUnsegmented) {
+            if (mChineseSegmentationEnabled && isChineseTable(tableName)
+                    && !mSegmenterReady && !mWarnedUnsegmented) {
                 // Chinese table but the segmenter is not up yet (dictionary
                 // still loading, or initialization failed).  Falling back to
                 // liblouis means NO word segmentation, so the braille degrades

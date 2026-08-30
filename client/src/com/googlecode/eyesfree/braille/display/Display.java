@@ -103,6 +103,16 @@ public interface Display {
     void poll();
 
     /**
+     * Asks the service to disconnect the currently connected braille display.
+     * This is intended to be used in response to an explicit user action, such
+     * as a customizable volume-key gesture that toggles the Bluetooth
+     * connection.  Unlike {@link #shutdown()}, this does not unbind from the
+     * service, so the display can be reconnected later via {@link #poll()}.
+     * @see IBrailleService#disconnect()
+     */
+    void disconnect();
+
+    /**
      * Unbinds from the braille display service and deallocates any
      * resources.  This method should be called when the braille display
      * is no longer in use by this client.

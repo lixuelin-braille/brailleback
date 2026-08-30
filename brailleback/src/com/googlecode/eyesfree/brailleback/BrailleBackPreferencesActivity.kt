@@ -12,6 +12,7 @@ import android.Manifest
 import android.app.AlertDialog
 import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.ComponentName
 import android.content.DialogInterface
 import android.content.Intent
 import android.content.IntentFilter
@@ -20,6 +21,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.preference.ListPreference
+import android.provider.Settings
 import android.preference.Preference
 import android.preference.PreferenceActivity
 import android.preference.PreferenceManager
@@ -75,6 +77,8 @@ class BrailleBackPreferencesActivity : PreferenceActivity(),
     private var mLicensesPreference: Preference? = null
     private var mLogLevelPreference: ListPreference? = null
     private var mSoundVolumePreference: Preference? = null
+    private var mSetupServicePreference: Preference? = null
+    private var mBrailleReaderPreference: Preference? = null
     private var mConnectionState = Display.STATE_NOT_CONNECTED
     private var mConnectionProgress: String? = null
     private var mTables: List<TableInfo> = emptyList()
@@ -121,6 +125,12 @@ class BrailleBackPreferencesActivity : PreferenceActivity(),
 
         mSoundVolumePreference = findPreferenceByResId(R.string.pref_sound_volume_key)
         mSoundVolumePreference?.setOnPreferenceClickListener(this)
+
+        mSetupServicePreference = findPreferenceByResId(R.string.pref_setup_service_key)
+        mSetupServicePreference?.setOnPreferenceClickListener(this)
+
+        mBrailleReaderPreference = findPreferenceByResId(R.string.pref_braille_reader_key)
+        mBrailleReaderPreference?.setOnPreferenceClickListener(this)
     }
 
     override fun onResume() {
@@ -145,6 +155,7 @@ class BrailleBackPreferencesActivity : PreferenceActivity(),
             registerReceiver(mRefreshReceiver, IntentFilter(INTENT_REFRESH_DISPLAY))
         }
         refreshSoundPreferences()
+        updateSetupServicePreference()
     }
 
     private val mRefreshReceiver: BroadcastReceiver = object : BroadcastReceiver() {
@@ -362,6 +373,14 @@ class BrailleBackPreferencesActivity : PreferenceActivity(),
                 showVolumeDialog()
                 return true
             }
+            mSetupServicePreference -> {
+                openAccessibilitySettings()
+                return true
+            }
+            mBrailleReaderPreference -> {
+                startActivity(Intent(this, BrailleReaderActivity::class.java))
+                return true
+            }
         }
         return false
     }
@@ -375,6 +394,34 @@ class BrailleBackPreferencesActivity : PreferenceActivity(),
         val manager = SoundSchemeManager.getInstance(this)
         val volumePreference = mSoundVolumePreference ?: return
         volumePreference.summary = getString(R.string.sound_editor_volume, manager.getVolume())
+    }
+
+    /**
+     * Shows or hides the service-setup guide at the top of the settings screen.
+     * The guide is only visible while the braille accessibility service is off,
+     * and reminds the user what to do if Android blocks enabling it ("Restricted
+     * settings" on Android 13+).
+     */
+    private fun updateSetupServicePreference() {
+        val pref = mSetupServicePreference ?: return
+        pref.summary = if (isServiceEnabled()) {
+            getString(R.string.pref_setup_service_enabled)
+        } else {
+            getString(R.string.pref_setup_service_summary)
+        }
+    }
+
+    /** Whether the BrailleBack accessibility service is currently enabled. */
+    private fun isServiceEnabled(): Boolean {
+        val expected = ComponentName(this, BrailleBackService::class.java).flattenToString()
+        val enabled = Settings.Secure.getString(
+            contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: ""
+        return enabled.split(':').contains(expected)
+    }
+
+    /** Open system Accessibility settings so the user can enable the service. */
+    private fun openAccessibilitySettings() {
+        startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
     }
 
     @Suppress("DEPRECATION")

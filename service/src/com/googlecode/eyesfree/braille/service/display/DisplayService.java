@@ -74,7 +74,7 @@ public class DisplayService extends Service
                     // after the service is started, it will be
                     // connected the next time the user unlocks the device.
                     mHandler.unscheduleDisconnect();
-                    connectBraille();
+                    autoConnectBraille();
                 } else if (Intent.ACTION_SCREEN_OFF.equals(action)) {
                     // Disconnect the display after the screen goes off, but
                     // wait a bit since it takes some time to reconnect, which
@@ -148,6 +148,23 @@ public class DisplayService extends Service
             }
         };
     /**
+     * Reacts to the auto-connect preference. When auto-connect is turned on,
+     * an immediate connect attempt is made (subject to the usual connection
+     * guards); turning it off does not tear down an existing connection, it
+     * only suppresses future implicit connects.
+     */
+    private final SharedPreferences.OnSharedPreferenceChangeListener
+            mAutoConnectPrefListener =
+        new SharedPreferences.OnSharedPreferenceChangeListener() {
+            @Override
+            public void onSharedPreferenceChanged(
+                    SharedPreferences prefs, String key) {
+                if ("auto_connect".equals(key) && prefs.getBoolean(key, true)) {
+                    autoConnectBraille();
+                }
+            }
+        };
+    /**
      * Invoked by {@link HidBridge} when the accessibility service obtains a
      * (new) BrailleDisplayController, e.g. after the HID link dropped and was
      * re-established. Reconnects the HID display with the fresh controller.
@@ -164,7 +181,7 @@ public class DisplayService extends Service
                     if (hidRequested && mConnectionState == STATE_DISCONNECTED
                             && mReadThread == null && mHidConnection == null) {
                         mHidTried = false;
-                        connectBraille();
+                        autoConnectBraille();
                     }
                 }
             });
@@ -179,6 +196,9 @@ public class DisplayService extends Service
         PreferenceManager.getDefaultSharedPreferences(this)
                 .registerOnSharedPreferenceChangeListener(
                         mProtocolPrefListener);
+        PreferenceManager.getDefaultSharedPreferences(this)
+                .registerOnSharedPreferenceChangeListener(
+                        mAutoConnectPrefListener);
         registerBroadcastReceiver();
         HidBridge.setControllerChangeListener(
                 mHidControllerChangeListener);
@@ -193,6 +213,9 @@ public class DisplayService extends Service
         PreferenceManager.getDefaultSharedPreferences(this)
                 .unregisterOnSharedPreferenceChangeListener(
                         mProtocolPrefListener);
+        PreferenceManager.getDefaultSharedPreferences(this)
+                .unregisterOnSharedPreferenceChangeListener(
+                        mAutoConnectPrefListener);
         HidBridge.setControllerChangeListener(null);
         disconnectBraille();
         if (mBroadcastReceiver != null) {
@@ -203,7 +226,7 @@ public class DisplayService extends Service
     @Override
     public IBinder onBind(Intent intent) {
         Log.v(LOG_TAG, "onBind");
-        connectBraille();
+        autoConnectBraille();
         return mServiceImpl;
     }
 
@@ -215,7 +238,7 @@ public class DisplayService extends Service
 
     @Override
     public void onRebind(Intent intent) {
-        connectBraille();
+        autoConnectBraille();
     }
 
     // NOTE: The methods in this class are invoked on threads created by the
@@ -270,6 +293,11 @@ public class DisplayService extends Service
         @Override
         public void poll() {
             mHandler.connectBraille();
+        }
+
+        @Override
+        public void disconnect() {
+            mHandler.disconnectBraille();
         }
     }
 
@@ -407,6 +435,21 @@ public class DisplayService extends Service
     }
 
     /**
+     * Tries to connect to the braille display, but only if automatic
+     * connection is enabled in the preferences. Used for implicit
+     * (non-user-initiated) connect triggers such as screen-on, (re)bind,
+     * device pairing and HID controller changes. Explicit connects via
+     * {@code poll()} / {@code disconnect()} always bypass this check so that
+     * the volume-key toggle keeps working regardless of the setting.
+     */
+    private void autoConnectBraille() {
+        if (PreferenceManager.getDefaultSharedPreferences(this)
+                .getBoolean("auto_connect", true)) {
+            connectBraille();
+        }
+    }
+
+    /**
      * Callbacks from the {@link HidDisplayConnection}.
      */
     private final HidDisplayConnection.Listener mHidListener =
@@ -454,7 +497,7 @@ public class DisplayService extends Service
             return;
         }
         mPendingBluetoothAddress = bthDev.getAddress();
-        connectBraille();
+        autoConnectBraille();
     }
 
     private void registerBroadcastReceiver() {
@@ -622,6 +665,10 @@ public class DisplayService extends Service
 
         public void connectBraille() {
             sendEmptyMessage(MSG_CONNECT_BRAILLE);
+        }
+
+        public void disconnectBraille() {
+            sendEmptyMessage(MSG_DISCONNECT_BRAILLE);
         }
 
         @Override

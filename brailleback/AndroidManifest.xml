@@ -121,6 +121,8 @@
 
         <activity
             android:name=".BrailleBackPreferencesActivity"
+            android:label="@string/brailleback_setup_title"
+            android:icon="@drawable/ic_brailleback"
             android:title="@string/preferences_title"
             android:launchMode="singleTop"
             tools:ignore="ManifestResource"
@@ -129,7 +131,18 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.accessibilityservice.SERVICE_SETTINGS" />
             </intent-filter>
+            <!-- Launcher entry so the app icon appears on the home screen and
+                 opens the BrailleBack settings directly. -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
         </activity>
+
+        <activity
+            android:name=".BrailleReaderActivity"
+            android:label="@string/pref_braille_reader_title"
+            android:exported="false" />
 
         <activity
             android:name=".KeyBindingsActivity"

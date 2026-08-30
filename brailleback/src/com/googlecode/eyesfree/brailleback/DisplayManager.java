@@ -420,9 +420,11 @@ public class DisplayManager
   private final PowerManager.WakeLock wakeLock;
   private final SharedPreferences sharedPreferences;
 
-  // Read and written in display handler thread only.
+  // Read and written across threads: written on the callback thread
+  // (onConnectionStateChanged) and read on the display handler thread
+  // (toggleBluetoothConnection) and the main thread (isDisplayConnected).
 
-  private boolean connected = false;
+  private volatile boolean connected = false;
   private volatile boolean isSimulatedDisplay = false;
   /**
    * Cursor position last passed to the translate method of the translator. We use this because it
@@ -1129,6 +1131,31 @@ public class DisplayManager
         final boolean nowFrozen = !mFrozen;
         setFrozen(nowFrozen);
         return nowFrozen;
+    }
+
+    /**
+     * Toggles the braille display's Bluetooth connection. If a display is
+     * currently connected, requests a disconnect; otherwise requests a
+     * (re)connect. Intended to be bound to a customizable volume-key gesture.
+     * The request is posted to the display handler thread, where the current
+     * connection state is read.
+     */
+    public void toggleBluetoothConnection() {
+        displayHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                if (connected) {
+                    display.disconnect();
+                } else {
+                    display.poll();
+                }
+            }
+        });
+    }
+
+    /** Returns {@code true} if a braille display is currently connected. */
+    public boolean isDisplayConnected() {
+        return connected;
     }
 
     /**

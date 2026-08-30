@@ -124,6 +124,11 @@ public final class OverlayDisplay implements Display,
     }
 
     @Override
+    public void disconnect() {
+        mBackingDisplay.disconnect();
+    }
+
+    @Override
     public void shutdown() {
         mShutdown = true;
         SharedPreferences prefs =

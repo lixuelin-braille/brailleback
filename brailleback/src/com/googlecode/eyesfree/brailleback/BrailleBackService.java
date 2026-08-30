@@ -391,6 +391,13 @@ public class BrailleBackService
             feedbackManager.emitFeedback(!contracted
                     ? FeedbackManager.TYPE_GRADE_8_DOT
                     : FeedbackManager.TYPE_GRADE_6_DOT);
+        } else if (getString(R.string.pref_volume_action_bluetooth_value)
+                .equals(action)) {
+            final boolean wasConnected = displayManager.isDisplayConnected();
+            displayManager.toggleBluetoothConnection();
+            feedbackManager.emitFeedback(wasConnected
+                    ? FeedbackManager.TYPE_DISPLAY_DISCONNECTED
+                    : FeedbackManager.TYPE_DISPLAY_CONNECTED);
         }
     }
 

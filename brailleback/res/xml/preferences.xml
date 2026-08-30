@@ -5,6 +5,17 @@
 -->
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android" >
 
+    <!-- 启用服务引导（受限设置引导）：服务未启用时显示，点击跳转系统无障碍设置 -->
+    <Preference
+         android:key="@string/pref_setup_service_key"
+         android:title="@string/pref_setup_service_title"
+         android:summary="@string/pref_setup_service_summary" />
+
+    <Preference
+         android:key="@string/pref_braille_reader_key"
+         android:title="@string/pref_braille_reader_title"
+         android:summary="@string/pref_braille_reader_summary" />
+
     <!-- 分类入口 1：设备与连接 -->
     <PreferenceScreen
          android:key="@string/pref_category_device_key"
@@ -16,13 +27,18 @@
         <Preference
              android:key="@string/pref_key_bindings_key"
              android:title="@string/pref_key_bindings_title" />
-        <ListPreference
-             android:key="@string/pref_connection_protocol_key"
-             android:title="@string/pref_connection_protocol_title"
-             android:summary="%1$s"
-             android:defaultValue="@string/pref_connection_protocol_default"
-             android:entries="@array/pref_connection_protocol_entries"
-             android:entryValues="@array/pref_connection_protocol_values" />
+            <ListPreference
+                 android:key="@string/pref_connection_protocol_key"
+                 android:title="@string/pref_connection_protocol_title"
+                 android:summary="%1$s"
+                 android:defaultValue="@string/pref_connection_protocol_default"
+                 android:entries="@array/pref_connection_protocol_entries"
+                 android:entryValues="@array/pref_connection_protocol_values" />
+            <SwitchPreference
+                 android:key="@string/pref_auto_connect_key"
+                 android:title="@string/pref_auto_connect_title"
+                 android:summary="@string/pref_auto_connect_summary"
+                 android:defaultValue="@bool/pref_auto_connect_default" />
     </PreferenceScreen>
 
     <!-- 分类入口 2：盲文显示 -->
@@ -63,6 +79,11 @@
                  android:summaryOn="@string/pref_braille_contracted_mode_summary_on"
                  android:summaryOff="@string/pref_braille_contracted_mode_summary_off"
                  android:defaultValue="false" />
+            <SwitchPreference
+                 android:key="@string/pref_chinese_segmentation_key"
+                 android:title="@string/pref_chinese_segmentation_title"
+                 android:summary="@string/pref_chinese_segmentation_summary"
+                 android:defaultValue="@bool/pref_chinese_segmentation_default" />
         </PreferenceCategory>
 
         <PreferenceCategory
@@ -71,18 +92,21 @@
             <ListPreference
                  android:key="@string/pref_volume_long_press_up_key"
                  android:title="@string/pref_volume_long_press_up_title"
+                 android:summary="%1$s"
                  android:entries="@array/pref_volume_action_entries"
                  android:entryValues="@array/pref_volume_action_values"
                  android:defaultValue="@string/pref_volume_action_pause_value" />
             <ListPreference
                  android:key="@string/pref_volume_long_press_down_key"
                  android:title="@string/pref_volume_long_press_down_title"
+                 android:summary="%1$s"
                  android:entries="@array/pref_volume_action_entries"
                  android:entryValues="@array/pref_volume_action_values"
                  android:defaultValue="@string/pref_volume_action_none_value" />
             <ListPreference
                  android:key="@string/pref_volume_double_press_key"
                  android:title="@string/pref_volume_double_press_title"
+                 android:summary="%1$s"
                  android:entries="@array/pref_volume_action_entries"
                  android:entryValues="@array/pref_volume_action_values"
                  android:defaultValue="@string/pref_volume_action_grade_value" />
@@ -94,12 +118,14 @@
             <ListPreference
                  android:key="@string/pref_pause_behavior_key"
                  android:title="@string/pref_pause_behavior_title"
+                 android:summary="%1$s"
                  android:entries="@array/pref_pause_behavior_entries"
                  android:entryValues="@array/pref_pause_behavior_values"
                  android:defaultValue="@string/pref_pause_behavior_clear_value" />
             <ListPreference
                  android:key="@string/pref_idle_clear_key"
                  android:title="@string/pref_idle_clear_title"
+                 android:summary="%1$s"
                  android:entries="@array/pref_idle_clear_entries"
                  android:entryValues="@array/pref_idle_clear_values"
                  android:defaultValue="@string/pref_idle_clear_3min_value" />

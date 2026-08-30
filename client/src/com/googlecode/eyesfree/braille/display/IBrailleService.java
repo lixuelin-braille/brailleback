@@ -38,6 +38,15 @@ public interface IBrailleService extends android.os.IInterface
     @Override public void poll() throws android.os.RemoteException
     {
     }
+    /**
+     * Asks the service to disconnect the currently connected braille display.
+     * Intended for an explicit user action (e.g. a volume-key gesture that
+     * toggles the Bluetooth connection).  The service stays bound, so a later
+     * {@code poll()} will reconnect.
+     */
+    @Override public void disconnect() throws android.os.RemoteException
+    {
+    }
     @Override
     public android.os.IBinder asBinder() {
       return null;
@@ -113,6 +122,11 @@ public interface IBrailleService extends android.os.IInterface
         case TRANSACTION_poll:
         {
           this.poll();
+          break;
+        }
+        case TRANSACTION_disconnect:
+        {
+          this.disconnect();
           break;
         }
         default:
@@ -210,11 +224,29 @@ public interface IBrailleService extends android.os.IInterface
           _data.recycle();
         }
       }
+      /**
+       * Asks the service to disconnect the currently connected braille display.
+       * Intended for an explicit user action (e.g. a volume-key gesture that
+       * toggles the Bluetooth connection).  The service stays bound, so a later
+       * {@code poll()} will reconnect.
+       */
+      @Override public void disconnect() throws android.os.RemoteException
+      {
+        android.os.Parcel _data = android.os.Parcel.obtain();
+        try {
+          _data.writeInterfaceToken(DESCRIPTOR);
+          boolean _status = mRemote.transact(Stub.TRANSACTION_disconnect, _data, null, android.os.IBinder.FLAG_ONEWAY);
+        }
+        finally {
+          _data.recycle();
+        }
+      }
     }
     static final int TRANSACTION_registerCallback = (android.os.IBinder.FIRST_CALL_TRANSACTION + 0);
     static final int TRANSACTION_unregisterCallback = (android.os.IBinder.FIRST_CALL_TRANSACTION + 1);
     static final int TRANSACTION_displayDots = (android.os.IBinder.FIRST_CALL_TRANSACTION + 2);
     static final int TRANSACTION_poll = (android.os.IBinder.FIRST_CALL_TRANSACTION + 3);
+    static final int TRANSACTION_disconnect = (android.os.IBinder.FIRST_CALL_TRANSACTION + 4);
   }
   public static final java.lang.String DESCRIPTOR = "com.googlecode.eyesfree.braille.display.IBrailleService";
   /**
@@ -237,5 +269,12 @@ public interface IBrailleService extends android.os.IInterface
    * on and whether there are connected clients.  This is intended to be
    * used in response to an explicit user action.
    */
-  public void poll() throws android.os.RemoteException;
-}
+    public void poll() throws android.os.RemoteException;
+    /**
+     * Asks the service to disconnect the currently connected braille display.
+     * Intended for an explicit user action (e.g. a volume-key gesture that
+     * toggles the Bluetooth connection).  The service stays bound, so a later
+     * {@code poll()} will reconnect.
+     */
+    public void disconnect() throws android.os.RemoteException;
+  }

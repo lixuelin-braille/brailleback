@@ -48,4 +48,12 @@ interface IBrailleService {
      * used in response to an explicit user action.
      */
     oneway void poll();
+
+    /**
+     * Asks the service to disconnect the currently connected braille display.
+     * Intended for an explicit user action (e.g. a volume-key gesture that
+     * toggles the Bluetooth connection).  The service stays bound, so a later
+     * {@code poll()} will reconnect.
+     */
+    oneway void disconnect();
 }

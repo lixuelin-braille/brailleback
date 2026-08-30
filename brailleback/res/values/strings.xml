@@ -72,6 +72,21 @@
     <string name="pref_category_device_title">Device</string>
     <string name="pref_category_device_summary">Connection status, protocol and keyboard help</string>
     <string name="pref_connection_protocol_title">Connection protocol</string>
+    <string name="pref_auto_connect_title">Auto-connect display</string>
+    <string name="pref_auto_connect_summary">Connect to the braille display automatically when the screen turns on or a device is paired</string>
+    <string name="pref_setup_service_title">Enable braille service</string>
+    <string name="pref_setup_service_summary">Service is off. Tap to open system Accessibility settings to enable it. If you see “Restricted settings”, tap “More” then “Allow restricted settings”.</string>
+    <string name="pref_setup_service_enabled">Service is enabled.</string>
+    <string name="pref_braille_reader_title">Braille reader</string>
+    <string name="pref_braille_reader_summary">Open a BRF / text file and read it on screen or on the braille display</string>
+    <string name="braille_reader_hint">Open a BRF or text file to start reading. ASCII braille is shown as Unicode braille.</string>
+    <string name="braille_reader_open">Open</string>
+    <string name="braille_reader_prev">Prev</string>
+    <string name="braille_reader_next">Next</string>
+    <string name="braille_reader_send">Send to display</string>
+    <string name="braille_reader_load_fail">Failed to load file: %1$s</string>
+    <string name="pref_chinese_segmentation_title">Chinese word segmentation</string>
+    <string name="pref_chinese_segmentation_summary">Split Chinese text into words before translating to braille (recommended)</string>
     <string name="pref_connection_protocol_default">auto</string>
     <string name="pref_connection_protocol_auto_label">Auto (HID first, then Bluetooth serial)</string>
     <string name="pref_connection_protocol_hid_label">HID (new protocol)</string>
@@ -118,6 +133,7 @@
     <string name="pref_volume_action_none_label">None</string>
     <string name="pref_volume_action_pause_label">Pause / resume display</string>
     <string name="pref_volume_action_grade_label">Toggle contracted braille</string>
+    <string name="pref_volume_action_bluetooth_label">Toggle braille display Bluetooth</string>
 
 
     <string name="pref_braille_contracted_mode_summary_on">Use contracted (grade 2) braille</string>

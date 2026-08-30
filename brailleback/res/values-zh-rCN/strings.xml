@@ -32,6 +32,21 @@
     <string name="pref_category_device_summary">"连接状态、协议与键盘帮助"</string>
     <string name="pref_connection_status_title" msgid="8350285056432214602">"状态"</string>
     <string name="pref_key_bindings_title" msgid="1228004448435300774">"键盘帮助"</string>
+    <string name="pref_auto_connect_title">"自动连接盲文显示器"</string>
+    <string name="pref_auto_connect_summary">"屏幕亮起或配对设备时自动连接盲文显示器"</string>
+    <string name="pref_setup_service_title">"启用盲文服务"</string>
+    <string name="pref_setup_service_summary">"服务未开启。点此打开系统无障碍设置启用；若提示“受限设置”，请点“更多”再点“允许受限设置”。"</string>
+    <string name="pref_setup_service_enabled">"服务已启用。"</string>
+    <string name="pref_braille_reader_title">"盲文阅读器"</string>
+    <string name="pref_braille_reader_summary">"打开 BRF / 文本文件，在屏幕或盲文点显上阅读"</string>
+    <string name="braille_reader_hint">"打开 BRF 或文本文件开始阅读。ASCII 盲文会显示为 Unicode 盲文。"</string>
+    <string name="braille_reader_open">"打开"</string>
+    <string name="braille_reader_prev">"上一页"</string>
+    <string name="braille_reader_next">"下一页"</string>
+    <string name="braille_reader_send">"发送点显"</string>
+    <string name="braille_reader_load_fail">"文件读取失败：%1$s"</string>
+    <string name="pref_chinese_segmentation_title">"中文分词"</string>
+    <string name="pref_chinese_segmentation_summary">"翻译前将中文文本按词拆分（推荐）"</string>
     <string name="pref_category_braille_title" msgid="2900211401917503360">"盲文"</string>
     <string name="pref_category_braille_summary">"盲文类型、表格与显示行为"</string>
     <string name="pref_category_braille_type_title">"盲文类型"</string>
@@ -61,6 +76,7 @@
     <string name="pref_volume_action_none_label">关闭</string>
     <string name="pref_volume_action_pause_label">暂停/继续点显</string>
     <string name="pref_volume_action_grade_label">切换缩写模式</string>
+    <string name="pref_volume_action_bluetooth_label">切换盲文显示器蓝牙连接</string>
     <string name="pref_sound_category_title">音效</string>
     <string name="pref_sound_category_summary">启用或关闭音效反馈</string>
 

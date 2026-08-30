@@ -127,6 +127,20 @@ public class DisplayClient implements Display {
     }
 
     @Override
+    public void disconnect() {
+        IBrailleService localService = getBrailleService();
+        if (localService != null) {
+            try {
+                localService.disconnect();
+            } catch (RemoteException ex) {
+                Log.e(LOG_TAG, "Error in disconnect", ex);
+            }
+        } else {
+            Log.v(LOG_TAG, "Error in disconnect: service not connected");
+        }
+    }
+
+    @Override
     public boolean isSimulated() {
         return false;
     }
