@@ -85,6 +85,8 @@
     <string name="braille_reader_next">Next</string>
     <string name="braille_reader_send">Send to display</string>
     <string name="braille_reader_load_fail">Failed to load file: %1$s</string>
+    <string name="braille_reader_page">Page %1$d / %2$d</string>
+    <string name="braille_reader_loaded">Loaded, %1$d pages</string>
     <string name="pref_chinese_segmentation_title">Chinese word segmentation</string>
     <string name="pref_chinese_segmentation_summary">Split Chinese text into words before translating to braille (recommended)</string>
     <string name="pref_connection_protocol_default">auto</string>

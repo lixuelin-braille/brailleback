@@ -41,6 +41,10 @@ android {
             res.srcDirs = ['res']
             assets.srcDirs = ['assets']
         }
+        test {
+            java.srcDirs = ['test/java']
+            kotlin.srcDirs = ['test/kotlin']
+        }
         debug.setRoot('build-types/debug')
         release.setRoot('build-types/release')
     }
@@ -57,5 +61,6 @@ dependencies {
     implementation project(':libraries:utils')
     implementation project(':libraries:compatutils')
     implementation 'androidx.legacy:legacy-support-v4:1.0.0'
+    testImplementation 'junit:junit:4.13.2'
 }
 
