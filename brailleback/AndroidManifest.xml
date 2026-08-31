@@ -127,12 +127,21 @@
             android:launchMode="singleTop"
             tools:ignore="ManifestResource"
             android:exported="true">
+            <!-- 无障碍服务「设置」入口（完整设置，老框架）。 -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.accessibilityservice.SERVICE_SETTINGS" />
             </intent-filter>
-            <!-- Launcher entry so the app icon appears on the home screen and
-                 opens the BrailleBack settings directly. -->
+        </activity>
+
+        <!-- 新框架设置页（androidx.preference，迁移 step 1）：桌面入口。 -->
+        <activity
+            android:name=".SettingsActivity"
+            android:label="@string/brailleback_setup_title"
+            android:icon="@drawable/ic_brailleback"
+            android:theme="@style/BraillebackSettingsTheme"
+            android:launchMode="singleTop"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

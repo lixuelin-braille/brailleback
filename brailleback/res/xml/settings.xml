@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    新框架设置页（androidx.preference，step 1 迁移范围）：
+    顶部快捷入口 + 「设备与连接」分类。其余分类（盲文/声音/高级）仍在
+    老框架设置页，通过底部「完整设置」入口进入，迁移过渡期不丢功能。
+    数据层与老页共用同一个 SharedPreferences（key 完全一致）。
+-->
+<PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <!-- 启用服务引导（受限设置引导）：服务未启用时显示引导，点击跳系统无障碍设置 -->
+    <Preference
+        app:key="@string/pref_setup_service_key"
+        app:title="@string/pref_setup_service_title"
+        app:summary="@string/pref_setup_service_summary" />
+
+    <Preference
+        app:key="@string/pref_braille_reader_key"
+        app:title="@string/pref_braille_reader_title"
+        app:summary="@string/pref_braille_reader_summary" />
+
+    <Preference
+        app:key="@string/pref_bookshelf_key"
+        app:title="@string/pref_bookshelf_title"
+        app:summary="@string/pref_bookshelf_summary" />
+
+    <!-- 迁移过渡期：完整设置（老框架页）入口 -->
+    <Preference
+        app:key="@string/pref_settings_full_key"
+        app:title="@string/pref_settings_full_title"
+        app:summary="@string/pref_settings_full_summary" />
+
+    <!-- 分类入口：设备与连接 -->
+    <PreferenceScreen
+        app:key="@string/pref_category_device_key"
+        app:title="@string/pref_category_device_title"
+        app:summary="@string/pref_category_device_summary">
+
+        <Preference
+            app:key="@string/pref_connection_status_key"
+            app:title="@string/pref_connection_status_title" />
+        <Preference
+            app:key="@string/pref_key_bindings_key"
+            app:title="@string/pref_key_bindings_title" />
+        <ListPreference
+            app:key="@string/pref_connection_protocol_key"
+            app:title="@string/pref_connection_protocol_title"
+            app:summary="%s"
+            app:defaultValue="@string/pref_connection_protocol_default"
+            app:entries="@array/pref_connection_protocol_entries"
+            app:entryValues="@array/pref_connection_protocol_values" />
+        <SwitchPreferenceCompat
+            app:key="@string/pref_auto_connect_key"
+            app:title="@string/pref_auto_connect_title"
+            app:summary="@string/pref_auto_connect_summary"
+            app:defaultValue="@bool/pref_auto_connect_default" />
+
+    </PreferenceScreen>
+
+</PreferenceScreen>

@@ -62,6 +62,9 @@ dependencies {
     implementation project(':libraries:utils')
     implementation project(':libraries:compatutils')
     implementation 'androidx.legacy:legacy-support-v4:1.0.0'
+    // 设置页框架迁移（step 1）：androidx.preference + appcompat
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.preference:preference-ktx:1.2.1'
     testImplementation 'junit:junit:4.13.2'
 }
 

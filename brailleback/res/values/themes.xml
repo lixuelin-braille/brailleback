@@ -4,4 +4,10 @@
      visually on API < 35. On API 35+ see values-v35/themes.xml. -->
 <resources>
     <style name="BraillebackTheme" parent="@android:style/Theme.DeviceDefault" />
+
+    <!-- 新框架设置页主题（androidx.preference）。使用 AppCompat DayNight 以
+         跟随系统深浅色；preferenceTheme 指向 PreferenceThemeOverlay。 -->
+    <style name="BraillebackSettingsTheme" parent="Theme.AppCompat.DayNight.DarkActionBar">
+        <item name="preferenceTheme">@style/PreferenceThemeOverlay</item>
+    </style>
 </resources>

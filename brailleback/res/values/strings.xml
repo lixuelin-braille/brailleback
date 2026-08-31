@@ -81,6 +81,8 @@
     <string name="pref_braille_reader_summary">Open a BRF / text file and read it on screen or on the braille display</string>
     <string name="pref_bookshelf_title">Bookshelf</string>
     <string name="pref_bookshelf_summary">Browse your braille books by folder and quickly reopen recent ones</string>
+    <string name="pref_settings_full_title">Full settings</string>
+    <string name="pref_settings_full_summary">Braille display, sound, and developer options (migration in progress)</string>
     <string name="bookshelf_title">Bookshelf</string>
     <string name="bookshelf_empty">Select a folder to start browsing, or use Recent</string>
     <string name="bookshelf_open_file">Open file</string>
