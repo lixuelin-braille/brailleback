@@ -114,12 +114,36 @@ class BrailleBoundarySteppingTest {
     }
 
     @Test
-    fun `nextOffset skips leading blank cells`() {
-        // 19 方字 + 5 个空方 + 10 方字；unit=20 时 end=20 正好落在第 1 个空方上，
-        // 属边界 -> 应跳过全部连续空方，下一屏从第 24 方（下一段文字）开始。
+    fun `nextOffset keeps leading indentation blanks`() {
+        // 行首缩进空方是排版信息（标题空一/两/四方、正文抬头空两方），
+        // 起点落在空方上时不得跳过：下一屏从该空方开始，缩进层次才保得住。
+        // 19 方字 + 5 个空方 + 10 方字，unit=20 时 end=20 正好落在第 1 个空方上，
+        // 应保持不动（返回 20），而非跳到 24 方之后的正文。
         val stream = "\u2801".repeat(19) + BLANK.toString().repeat(5) + "\u2803".repeat(10)
-        assertEquals(24, BrailleFileDecoder.nextOffset(stream, 0, 20))
-        assertEquals('\u2803', stream[BrailleFileDecoder.nextOffset(stream, 0, 20)])
+        val next = BrailleFileDecoder.nextOffset(stream, 0, 20)
+        assertEquals("起点落在空方上应原样保留（缩进是内容）", 20, next)
+        assertEquals('\u2800', stream[next])
+    }
+
+    @Test
+    fun `nextOffset skips paragraph newlines`() {
+        // 段落换行 \n 是纯结构边界，落在它上面说明上一段恰好读完：
+        // 跳过换行，下一屏从新段落开头开始（\n 在点显器上会被展平为空方）。
+        // 20 方字 + \n + 10 方字：end=20 正好落在 \n 上 -> 跳过到 21（新段首字）。
+        val stream = "\u2801".repeat(20) + "\n" + "\u2803".repeat(10)
+        val next = BrailleFileDecoder.nextOffset(stream, 0, 20)
+        assertEquals("应跳过段落换行", 21, next)
+        assertEquals('\u2803', stream[next])
+    }
+
+    @Test
+    fun `nextOffset skips consecutive paragraph newlines`() {
+        // 连续空段落产生的多个 \n（折叠后仍保留段落间空行）：应一并跳过，
+        // 避免下一屏以多个空方开头浪费整屏。
+        val stream = "\u2801".repeat(20) + "\n\n\n" + "\u2803".repeat(10)
+        val next = BrailleFileDecoder.nextOffset(stream, 0, 20)
+        assertEquals("连续换行应全部跳过", 23, next)
+        assertEquals('\u2803', stream[next])
     }
 
     @Test

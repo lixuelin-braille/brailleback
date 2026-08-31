@@ -463,7 +463,7 @@ object BrailleFileDecoder {
     private fun isBoundary(c: Char): Boolean = c == BLANK || c == '\n'
 
     /**
-     * 下一屏的起始偏移——**不把字切成两半**。
+     * 下一屏的起始偏移——**不把字切成两半，也不丢弃排版缩进**。
      *
      * 点显器是单行的，一屏就是连续若干方。若严格按 [unit] 步进，实测约
      * **74%** 的屏会把一个字从中间劈开（上一屏半个字、下一屏另外半个），
@@ -472,8 +472,13 @@ object BrailleFileDecoder {
      * 规则：
      * - 第 [unit] 方落在字中间 → 回退到该字的起点
      *   （代价：这一屏少显示 1–2 方，实测平均每屏少 3–5 方、总屏数多 15–20%）
-     * - 第 [unit] 方正好落在边界（空方/段落换行）→ 前进跳过连续空方，
-     *   避免下一屏以一堆空方开头而浪费整屏
+     * - 第 [unit] 方落在段落换行 `\n` → 前进跳过换行，下一屏从新段落开头开始。
+     *   `\n` 是纯结构边界，点显器上没有换行概念（[cellsAt] 会把它展平为空方），
+     *   落在它上面说明上一段恰好读完，跳过不丢任何信息。
+     * - 落在空方 U+2800 → **保持不动**，下一屏从该空方开始。
+     *   行首缩进（标题空一/两/四方、正文抬头空两方、诗歌空四方）正是靠空方
+     *   表达的，跳过会让缩进层次和标题层级丢失；字间空格同理。\n
+     *   代价是缩进较深时下一屏开头有几个空方，但这正是原书排版。
      * - 连续盲文串本身长于 [unit]（乐谱长音型等）→ 切不断，只能照常前进
      */
     fun nextOffset(stream: String, offset: Int, unit: Int): Int {
@@ -485,7 +490,8 @@ object BrailleFileDecoder {
             while (k > offset && !isBoundary(stream[k - 1])) k--
             end = if (k > offset) k else min(offset + unit, stream.length)
         } else {
-            while (end < stream.length && isBoundary(stream[end])) end++
+            // 只跳过段落换行，保留空方（缩进/字间空格是内容）
+            while (end < stream.length && stream[end] == '\n') end++
         }
         return end
     }
