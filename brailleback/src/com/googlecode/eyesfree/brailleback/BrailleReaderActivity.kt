@@ -27,6 +27,7 @@ import android.widget.TextView
 import android.widget.Toast
 import com.googlecode.eyesfree.braille.display.Display
 import com.googlecode.eyesfree.braille.display.DisplayClient
+import com.googlecode.eyesfree.braille.translate.BrailleTranslator
 import java.io.ByteArrayOutputStream
 import kotlin.math.min
 
@@ -48,6 +49,31 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
     private var mOffset = 0
     private var mConnected = false
     private var mFileUri: Uri? = null
+
+    /** 翻译服务（明眼 txt 电子书 → 盲文）。懒初始化：绑定 service 模块的翻译服务。 */
+    private val mTranslatorManager by lazy { TranslatorManager(this) }
+
+    /** 正在翻译标志，防止重复触发。 */
+    private var mTranslating = false
+
+    /** 当前流是否来自明眼 txt 翻译。翻译流与屏幕尺寸无关，重排时无需重翻。 */
+    private var mIsTranslated = false
+
+    /** 翻译服务未就绪时挂起的翻译请求，就绪后自动继续。 */
+    private var mPendingTranslation: PendingTranslation? = null
+
+    private val mTranslationReadyListener: TranslatorManager.OnTablesChangedListener =
+        object : TranslatorManager.OnTablesChangedListener {
+            override fun onTablesChanged() {
+                val pending = mPendingTranslation
+                if (pending != null) {
+                    mPendingTranslation = null
+                    mTranslatorManager.removeOnTablesChangedListener(mTranslationReadyListener)
+                    startTranslation(pending.text, pending.name, pending.uri,
+                        pending.resetPosition, pending.targetOffset)
+                }
+            }
+        }
 
     /**
      * 屏幕每行显示的方数，由屏幕宽度实测得出（见 [updatePaginationMetrics]）。
@@ -173,6 +199,12 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
         mConnected = false
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        mTranslatorManager.removeOnTablesChangedListener(mTranslationReadyListener)
+        mTranslatorManager.shutdown()
+    }
+
     override fun onConnectionStateChanged(state: Int) {
         val wasConnected = mConnected
         val oldDisplayCells = mDisplayCells
@@ -243,9 +275,6 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
     private fun loadFile(uri: Uri) {
         try {
             loadBytes(uri, resetPosition = true)
-            showPage()
-            Toast.makeText(this, getString(R.string.braille_reader_loaded,
-                totalUnits()), Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             Toast.makeText(this,
                 getString(R.string.braille_reader_load_fail, e.message),
@@ -257,26 +286,127 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
      * 读取并解码文件，重建阅读流。
      *
      * 按文件名后缀分派：`.bdo`/`.bdoc` 走二进制结构化解码，其余按文本解码。
-     * bdo 解码失败（不是有效的结构化盲文文档）时抛异常，由调用方提示。
+     * 解码后再做内容类型检测：已是盲文点位/ASCII 盲文的直接进入阅读流；
+     * 明眼文字（txt 电子书）则进入**翻译模式**——后台线程调用翻译服务
+     * 转成盲文点显（屏幕与点显器均显示盲文，与原书排版一致）。
+     *
+     * @param targetOffset 非 null 时流就绪后直接跳到该偏移（用于续读）；
+     *   null 则按 [resetPosition] 决定从 0 还是按比例保持。
      */
-    private fun loadBytes(uri: Uri, resetPosition: Boolean) {
+    private fun loadBytes(uri: Uri, resetPosition: Boolean, targetOffset: Int? = null) {
         val name = displayNameOf(uri)
         checkSupportedFormat(name)
         val bytes = readAllBytes(uri)
         val text = BrailleFileDecoder.decodeDocument(bytes, name)
             ?: throw IllegalStateException(getString(R.string.braille_reader_bdo_fail))
+        when (BrailleFileDecoder.detectKind(text)) {
+            BrailleFileDecoder.ContentKind.TEXT ->
+                startTranslation(text, name, uri, resetPosition, targetOffset)
+            else ->
+                setBrailleStream(text, name, uri, resetPosition, targetOffset)
+        }
+    }
+
+    /**
+     * 设置盲文阅读流并完成收尾：记录最近打开、重建页表、刷新屏幕与点显器。
+     * 翻译模式翻译完成后也走这里，与非翻译路径完全一致。
+     */
+    private fun setBrailleStream(
+        brailleText: String,
+        name: String?,
+        uri: Uri,
+        resetPosition: Boolean,
+        targetOffset: Int? = null,
+        isTranslated: Boolean = false
+    ) {
         val oldLength = mStream.length
-        mStream = BrailleFileDecoder.toReadingStream(text)
-        // 记录最近打开（书架「最近」列表数据源），解码成功才算一次真正打开
+        mStream = BrailleFileDecoder.toReadingStream(brailleText)
+        mIsTranslated = isTranslated
+        // 记录最近打开（书架「最近」列表数据源），解码/翻译成功才算真正打开
         BookshelfActivity.recordRecent(this, uri.toString(),
             name ?: uri.lastPathSegment ?: "file")
-        if (resetPosition) {
+        if (targetOffset != null) {
+            mOffset = targetOffset.coerceIn(0, maxOffset())
+        } else if (resetPosition) {
             mOffset = 0
         } else if (oldLength > 0) {
             // 屏幕尺寸或点显器方数变化后按位置比例还原，保持阅读进度
             mOffset = (mOffset * mStream.length / oldLength).coerceIn(0, maxOffset())
         }
         rebuildPageOffsets()
+        showPage()
+        Toast.makeText(this, getString(R.string.braille_reader_loaded,
+            totalUnits()), Toast.LENGTH_SHORT).show()
+    }
+
+    // ------------------------------------------------------------------
+    // 翻译模式：明眼 txt 电子书 -> 盲文
+    // ------------------------------------------------------------------
+
+    /**
+     * 启动翻译。翻译服务（TranslatorService）是异步绑定的，首次打开 txt
+     * 时可能尚未就绪；未就绪则挂起请求，服务就绪后由 [mTranslationReadyListener]
+     * 自动继续。
+     */
+    private fun startTranslation(
+        text: String,
+        name: String?,
+        uri: Uri,
+        resetPosition: Boolean,
+        targetOffset: Int? = null
+    ) {
+        if (mTranslating) return
+        val translator = mTranslatorManager.getTranslator()
+        if (translator == null) {
+            mPendingTranslation = PendingTranslation(text, name, uri, resetPosition, targetOffset)
+            mTranslatorManager.addOnTablesChangedListener(mTranslationReadyListener)
+            mReaderText?.text = getString(R.string.braille_reader_translator_waiting)
+            return
+        }
+        mTranslating = true
+        mReaderText?.text = getString(R.string.braille_reader_translating)
+        Thread {
+            val result = try {
+                translateParagraphs(text, translator)
+            } catch (e: Exception) {
+                Log.w(LOG_TAG, "翻译失败: ${e.message}")
+                null
+            }
+            runOnUiThread {
+                mTranslating = false
+                if (result != null) {
+                    setBrailleStream(result, name, uri, resetPosition, targetOffset,
+                        isTranslated = true)
+                } else {
+                    // 翻译失败：屏幕仍可看原文，点显器暂为空方，给出明确提示
+                    setBrailleStream(text, name, uri, resetPosition, targetOffset)
+                    Toast.makeText(this,
+                        getString(R.string.braille_reader_translate_fail),
+                        Toast.LENGTH_LONG).show()
+                }
+            }
+        }.start()
+    }
+
+    /**
+     * 逐段翻译：明眼文本按段（\n 分隔）翻译成盲文点位，段间保留换行
+     * （阅读流里段落边界仍在，点显器上体现为段间空方）。逐段调用
+     * 而非整本一次，避免一次跨进程 AIDL 传输/翻译超大文本。
+     */
+    private fun translateParagraphs(
+        text: String,
+        translator: BrailleTranslator
+    ): String? {
+        val sb = StringBuilder(text.length)
+        for (paragraph in text.split('\n')) {
+            if (paragraph.isBlank()) {
+                sb.append('\n')
+                continue
+            }
+            val res = translator.translate(paragraph, -1, false) ?: return null
+            sb.append(BrailleFileDecoder.cellsToUnicodeText(res.cells)).append('\n')
+        }
+        return sb.toString()
     }
 
     /**
@@ -384,9 +514,14 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
     /** 屏幕分页指标变化后重读并按比例保持阅读位置。 */
     private fun reloadKeepingPosition() {
         val uri = mFileUri ?: return
+        // 翻译流的段落结构已固定，与屏幕尺寸无关：只需按新阅读单元重建页表
+        if (mIsTranslated) {
+            rebuildPageOffsets(keepPosition = true)
+            showPage()
+            return
+        }
         try {
             loadBytes(uri, resetPosition = false)
-            showPage()
         } catch (e: Exception) {
             // 重读失败保留原有内容
         }
@@ -657,9 +792,9 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
             return
         }
         try {
-            loadBytes(uri, resetPosition = true)
+            val savedOffset = prefs.getInt(KEY_OFFSET, 0)
+            loadBytes(uri, resetPosition = true, targetOffset = savedOffset)
             mFileUri = uri
-            mOffset = prefs.getInt(KEY_OFFSET, 0).coerceIn(0, maxOffset())
             showPage()
         } catch (e: Exception) {
             // 文件已被删除或权限失效：清空进度，回落到提示态
@@ -698,7 +833,15 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
         /** 目录每 N 页一条。 */
         private const val TOC_PAGE_STEP = 10
         /** 目录/书签列表里预览用到的方数。 */
-        private const val PREVIEW_CELLS = 12
+        private const val PREVIEW_CELLS = 40
+        /** 翻译服务未就绪时挂起的翻译请求。 */
+        private data class PendingTranslation(
+            val text: String,
+            val name: String?,
+            val uri: Uri,
+            val resetPosition: Boolean,
+            val targetOffset: Int?
+        )
 
         /**
          * 明确不支持的二进制/排版格式。盲文阅读器只处理盲文与纯文本：

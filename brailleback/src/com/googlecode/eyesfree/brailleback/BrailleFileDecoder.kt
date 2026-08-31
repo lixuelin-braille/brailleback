@@ -171,6 +171,74 @@ object BrailleFileDecoder {
     }
 
     /**
+     * 正文内容类型。决定阅读器如何处理解码后的文本：
+     *
+     * - [ContentKind.BRAILLE]：已是 Unicode 盲文点位（U+2800 系列），直接读，不翻译。
+     * - [ContentKind.ASCII]：Braille ASCII（BRF 风格），按 NABCC 表转 Unicode 盲文。
+     * - [ContentKind.TEXT]：明眼文字（中文/英文），需调用翻译服务转成盲文才能点显。
+     */
+    enum class ContentKind { BRAILLE, ASCII, TEXT }
+
+    /**
+     * 检测解码后文本的内容类型。
+     *
+     * 判定顺序（都是保守启发式，UI 层另提供手动覆盖）：
+     * 1. Unicode 盲文点位 >50% → [BRAILLE]（主体已是盲文，直接读）
+     * 2. 汉字占非空白字符 >20% → 明眼中文 → [TEXT]
+     * 3. 其余（无汉字、无盲文点位）看 0x20-0x5F 的组成：
+     *    - 若该范围覆盖 >85% 且「非字母特殊符号」（数字/标点/符号）占比 >12%
+     *      → Braille ASCII → [ASCII]（盲文点数字均匀使用 64 个符号，且不含小写字母；
+     *        明眼英文正文几乎只有小写字母和空格）
+     * 4. 其余一律 [TEXT]
+     */
+    fun detectKind(text: String): ContentKind {
+        var braille = 0
+        var ascii = 0
+        var han = 0
+        var letters = 0
+        var special = 0
+        var n = 0
+        for (c in text) {
+            if (c == '\n' || c == '\r' || c == '\u000C') continue
+            n++
+            when {
+                c.code in 0x2800..0x28FF -> braille++
+                c in ' '..'_' -> {
+                    ascii++
+                    if (c in 'A'..'Z') letters++
+                    else if (c != ' ') special++
+                }
+                c.code in 0x4E00..0x9FFF -> han++
+            }
+        }
+        if (n == 0) return ContentKind.TEXT
+        val brailleRatio = braille.toDouble() / n
+        if (brailleRatio > 0.5) return ContentKind.BRAILLE
+        val hanRatio = han.toDouble() / n
+        if (hanRatio > 0.2) return ContentKind.TEXT
+        val asciiRatio = ascii.toDouble() / n
+        if (asciiRatio > 0.85 && braille == 0) {
+            // 字母 + 特殊符号构成：盲文点位字里符号/数字多，明眼英文几乎纯字母+空格
+            if (special.toDouble() / n > 0.12) return ContentKind.ASCII
+        }
+        return ContentKind.TEXT
+    }
+
+    /**
+     * 把翻译服务返回的点位数组转成 Unicode 盲文文本流。
+     *
+     * 点显器的「一个方」就是 0-255 的 bitmask；U+2800 + 点位即该方的
+     * Unicode 字符。转换后即可复用阅读器现有的阅读流/分页/点显逻辑。
+     */
+    fun cellsToUnicodeText(cells: ByteArray): String {
+        val sb = StringBuilder(cells.size)
+        for (b in cells) {
+            sb.append((0x2800 + (b.toInt() and 0xFF)).toChar())
+        }
+        return sb.toString()
+    }
+
+    /**
      * 单行 ASCII 盲文(0x20-0x5F) 转 Unicode 盲文(U+2800-)。
      * 已是 Unicode 盲文或其他字符（中文、标点）原样保留。
      */
