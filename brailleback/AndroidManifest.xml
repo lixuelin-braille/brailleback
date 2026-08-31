@@ -145,6 +145,11 @@
             android:exported="false" />
 
         <activity
+            android:name=".BookshelfActivity"
+            android:label="@string/bookshelf_title"
+            android:exported="false" />
+
+        <activity
             android:name=".KeyBindingsActivity"
             android:title="@string/key_bindings_title"
             tools:ignore="ManifestResource"

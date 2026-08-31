@@ -16,6 +16,11 @@
          android:title="@string/pref_braille_reader_title"
          android:summary="@string/pref_braille_reader_summary" />
 
+    <Preference
+         android:key="@string/pref_bookshelf_key"
+         android:title="@string/pref_bookshelf_title"
+         android:summary="@string/pref_bookshelf_summary" />
+
     <!-- 分类入口 1：设备与连接 -->
     <PreferenceScreen
          android:key="@string/pref_category_device_key"

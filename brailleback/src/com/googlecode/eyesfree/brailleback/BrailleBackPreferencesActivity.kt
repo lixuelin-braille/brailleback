@@ -79,6 +79,7 @@ class BrailleBackPreferencesActivity : PreferenceActivity(),
     private var mSoundVolumePreference: Preference? = null
     private var mSetupServicePreference: Preference? = null
     private var mBrailleReaderPreference: Preference? = null
+    private var mBookshelfPreference: Preference? = null
     private var mConnectionState = Display.STATE_NOT_CONNECTED
     private var mConnectionProgress: String? = null
     private var mTables: List<TableInfo> = emptyList()
@@ -131,6 +132,9 @@ class BrailleBackPreferencesActivity : PreferenceActivity(),
 
         mBrailleReaderPreference = findPreferenceByResId(R.string.pref_braille_reader_key)
         mBrailleReaderPreference?.setOnPreferenceClickListener(this)
+
+        mBookshelfPreference = findPreferenceByResId(R.string.pref_bookshelf_key)
+        mBookshelfPreference?.setOnPreferenceClickListener(this)
     }
 
     override fun onResume() {
@@ -379,6 +383,10 @@ class BrailleBackPreferencesActivity : PreferenceActivity(),
             }
             mBrailleReaderPreference -> {
                 startActivity(Intent(this, BrailleReaderActivity::class.java))
+                return true
+            }
+            mBookshelfPreference -> {
+                startActivity(Intent(this, BookshelfActivity::class.java))
                 return true
             }
         }

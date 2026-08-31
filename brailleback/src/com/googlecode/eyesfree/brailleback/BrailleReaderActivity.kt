@@ -135,6 +135,18 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
         mBtnToc?.setOnClickListener { showToc() }
         mBtnBookmark?.setOnClickListener { showBookmarks() }
         mBtnGoto?.setOnClickListener { showGotoDialog() }
+        // 书架/最近打开跳转而来：直接加载指定文件
+        intent.getStringExtra(EXTRA_URI)?.let { uriStr ->
+            try {
+                val uri = Uri.parse(uriStr)
+                mFileUri = uri
+                loadFile(uri)
+            } catch (e: Exception) {
+                Toast.makeText(this,
+                    getString(R.string.braille_reader_load_fail, e.message),
+                    Toast.LENGTH_SHORT).show()
+            }
+        }
         updateUiState()
         // 布局完成后按屏幕实测尺寸决定每页行数与每行方数，
         // 避免固定值在小屏显示不全（要滚动）或大屏留白。
@@ -255,6 +267,9 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
             ?: throw IllegalStateException(getString(R.string.braille_reader_bdo_fail))
         val oldLength = mStream.length
         mStream = BrailleFileDecoder.toReadingStream(text)
+        // 记录最近打开（书架「最近」列表数据源），解码成功才算一次真正打开
+        BookshelfActivity.recordRecent(this, uri.toString(),
+            name ?: uri.lastPathSegment ?: "file")
         if (resetPosition) {
             mOffset = 0
         } else if (oldLength > 0) {
@@ -658,6 +673,9 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
 
     companion object {
         private const val LOG_TAG = "BrailleReader"
+
+        /** 书架/最近打开跳转时携带待打开文件 uri（见 BookshelfActivity）。 */
+        const val EXTRA_URI = "com.googlecode.eyesfree.brailleback.extra.OPEN_URI"
 
         private const val REQUEST_OPEN = 1
         private const val DEFAULT_CELLS = 40
