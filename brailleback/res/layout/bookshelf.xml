@@ -22,10 +22,24 @@
         android:layout_marginTop="4dp">
 
         <Button
+            android:id="@+id/btn_bookshelf_open"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/bookshelf_open_file" />
+
+        <Button
             android:id="@+id/btn_bookshelf_pick"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/bookshelf_pick_folder" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:layout_marginTop="4dp">
 
         <Button
             android:id="@+id/btn_bookshelf_folders"

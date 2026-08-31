@@ -44,6 +44,7 @@ class BookshelfActivity : Activity() {
         mPathText = findViewById(R.id.bookshelf_path)
         mList = findViewById(R.id.bookshelf_list)
 
+        findViewById<Button>(R.id.btn_bookshelf_open).setOnClickListener { openFilePicker() }
         findViewById<Button>(R.id.btn_bookshelf_pick).setOnClickListener { pickFolder() }
         findViewById<Button>(R.id.btn_bookshelf_folders).setOnClickListener { showFolders() }
         findViewById<Button>(R.id.btn_bookshelf_recent).setOnClickListener { showRecent() }
@@ -85,18 +86,44 @@ class BookshelfActivity : Activity() {
         startActivityForResult(intent, REQUEST_TREE)
     }
 
+    /**
+     * 打开文件（正常导入流程）：系统标准文件选择器选单个盲文文件，
+     * 授权自动持久化，选完直接跳阅读器。与文件夹授权互补——
+     * 不记得书在哪个文件夹时，直接从书架导入即可。
+     */
+    private fun openFilePicker() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+        }
+        startActivityForResult(intent, REQUEST_OPEN)
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQUEST_TREE && resultCode == Activity.RESULT_OK) {
-            val treeUri = data?.data ?: return
-            try {
-                contentResolver.takePersistableUriPermission(treeUri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            } catch (e: Exception) {
-                // 部分 provider 不支持持久化，本次仍可浏览
+        if (resultCode != Activity.RESULT_OK) return
+        when (requestCode) {
+            REQUEST_TREE -> {
+                val treeUri = data?.data ?: return
+                try {
+                    contentResolver.takePersistableUriPermission(treeUri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                } catch (e: Exception) {
+                    // 部分 provider 不支持持久化，本次仍可浏览
+                }
+                addFolder(treeUri)
+                enterTree(treeUri)
             }
-            addFolder(treeUri)
-            enterTree(treeUri)
+            REQUEST_OPEN -> {
+                val uri = data?.data ?: return
+                try {
+                    contentResolver.takePersistableUriPermission(uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                } catch (e: Exception) {
+                    // 部分 provider 不支持持久化，本次仍可打开
+                }
+                openInReader(uri)
+            }
         }
     }
 
@@ -161,8 +188,13 @@ class BookshelfActivity : Activity() {
     private fun openFile(entry: Entry) {
         val treeUri = mTreeUri ?: return
         val docUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, entry.docId)
+        openInReader(docUri)
+    }
+
+    /** 带 URI 跳转阅读器（书架浏览、单文件导入、最近打开共用）。 */
+    private fun openInReader(uri: Uri) {
         val intent = Intent(this, BrailleReaderActivity::class.java).apply {
-            putExtra(BrailleReaderActivity.EXTRA_URI, docUri.toString())
+            putExtra(BrailleReaderActivity.EXTRA_URI, uri.toString())
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         startActivity(intent)
@@ -217,12 +249,7 @@ class BookshelfActivity : Activity() {
         AlertDialog.Builder(this)
             .setTitle(R.string.bookshelf_recent_title)
             .setItems(recent.map { it.second }.toTypedArray()) { _, which ->
-                val uri = Uri.parse(recent[which].first)
-                val intent = Intent(this, BrailleReaderActivity::class.java).apply {
-                    putExtra(BrailleReaderActivity.EXTRA_URI, uri.toString())
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                startActivity(intent)
+                openInReader(Uri.parse(recent[which].first))
             }
             .show()
     }
@@ -254,6 +281,7 @@ class BookshelfActivity : Activity() {
 
     companion object {
         private const val REQUEST_TREE = 2
+        private const val REQUEST_OPEN = 3
         private const val SEP = "\u0001"
 
         private const val PREFS_NAME = "bookshelf"

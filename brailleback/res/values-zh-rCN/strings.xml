@@ -47,6 +47,7 @@
     <string name="pref_bookshelf_summary">"按文件夹浏览盲文电子书，快速重开最近阅读"</string>
     <string name="bookshelf_title">"书架"</string>
     <string name="bookshelf_empty">"请选择文件夹开始浏览，或使用「最近」"</string>
+    <string name="bookshelf_open_file">"打开文件"</string>
     <string name="bookshelf_pick_folder">"选文件夹"</string>
     <string name="bookshelf_folders">"已收藏"</string>
     <string name="bookshelf_recent">"最近"</string>
