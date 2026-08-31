@@ -220,7 +220,7 @@ public class BrailleBackService
 
             // If showing preference screen... update displayed preference.
             Intent refreshPrefIntent =
-                new Intent(BrailleBackPreferencesActivity.INTENT_REFRESH_DISPLAY);
+                new Intent(SettingsActivity.INTENT_REFRESH_DISPLAY);
             sendBroadcast(refreshPrefIntent);
 
             return;

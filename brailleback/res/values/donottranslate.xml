@@ -29,7 +29,6 @@
     <string name="pref_setup_service_key">setup_service</string>
     <string name="pref_braille_reader_key">braille_reader</string>
     <string name="pref_bookshelf_key">bookshelf</string>
-    <string name="pref_settings_full_key">settings_full</string>
     <string-array name="pref_connection_protocol_values">
         <item>auto</item>
         <item>hid</item>
