@@ -61,6 +61,14 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
     private var mDisplayCells = DEFAULT_CELLS
 
     /**
+     * 每一屏的起始偏移。
+     *
+     * 采用边界对齐步进（[BrailleFileDecoder.nextOffset]）后步进长度不再固定，
+     * 页码无法再用「偏移 / 单元」换算，故预先算好页表（见 [rebuildPageOffsets]）。
+     */
+    private var mPageOffsets: IntArray = intArrayOf()
+
+    /**
      * 阅读单元：一次前进多少个方。
      *
      * 连接点显器时按**点显器一屏**推进（20/30/40 方不等），
@@ -73,10 +81,29 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
             (mCellsPerLine * mLinesPerPage).coerceAtLeast(1)
         }
 
-    private fun totalUnits(): Int =
-        BrailleFileDecoder.unitCount(mStream.length, readingUnit())
+    private fun totalUnits(): Int = mPageOffsets.size.coerceAtLeast(1)
 
-    private fun currentUnit(): Int = mOffset / readingUnit()
+    /** 当前屏序号：页表中不超过 [mOffset] 的最后一个页起点。 */
+    private fun currentUnit(): Int = unitForOffset(mOffset)
+
+    /** 页表中不超过 [offset] 的最后一个页起点序号（屏号）。 */
+    private fun unitForOffset(offset: Int): Int {
+        val a = mPageOffsets
+        if (a.isEmpty()) return 0
+        var lo = 0
+        var hi = a.size - 1
+        var ans = 0
+        while (lo <= hi) {
+            val mid = (lo + hi) ushr 1
+            if (a[mid] <= offset) {
+                ans = mid
+                lo = mid + 1
+            } else {
+                hi = mid - 1
+            }
+        }
+        return ans
+    }
 
     private fun maxOffset(): Int = (mStream.length - 1).coerceAtLeast(0)
 
@@ -95,6 +122,15 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
         findViewById<Button>(R.id.btn_open).setOnClickListener { openFile() }
         mBtnPrev?.setOnClickListener { advance(-1) }
         mBtnNext?.setOnClickListener { advance(1) }
+        // 长按 = 上一行/下一行（微调）。与翻页一样会同步点显器。
+        mBtnPrev?.setOnLongClickListener {
+            moveLine(-1)
+            true
+        }
+        mBtnNext?.setOnLongClickListener {
+            moveLine(1)
+            true
+        }
         mBtnSend?.setOnClickListener { sendToDisplay() }
         mBtnToc?.setOnClickListener { showToc() }
         mBtnBookmark?.setOnClickListener { showBookmarks() }
@@ -126,6 +162,8 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
     }
 
     override fun onConnectionStateChanged(state: Int) {
+        val wasConnected = mConnected
+        val oldDisplayCells = mDisplayCells
         mConnected = state == Display.STATE_CONNECTED
         if (mConnected) {
             // 完全采用系统/驱动上报的方数（numTextCells），不做推测。
@@ -143,8 +181,12 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
                 }
                 else -> cells
             }
-            // 点显器方数只影响「发送一屏」的长度与阅读步进，
-            // 不影响屏幕排版，因此不再触发重排（页码不会跳变）。
+        }
+        // 阅读单元随连接状态/方数变化：连接后按点显器一屏步进、断开后回屏幕一屏。
+        // 页表步进单位变了必须重建，但只换「翻页的格子」，不移动当前阅读位置。
+        if ((mConnected != wasConnected || mDisplayCells != oldDisplayCells)
+                && mStream.isNotEmpty()) {
+            rebuildPageOffsets(keepPosition = true)
         }
         runOnUiThread {
             updateUiState()
@@ -218,6 +260,31 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
         } else if (oldLength > 0) {
             // 屏幕尺寸或点显器方数变化后按位置比例还原，保持阅读进度
             mOffset = (mOffset * mStream.length / oldLength).coerceIn(0, maxOffset())
+        }
+        rebuildPageOffsets()
+    }
+
+    /**
+     * 按当前阅读单元重建页表。
+     *
+     * 采用边界对齐步进后步进长度不再固定，页码无法再用除法换算，
+     * 必须预先算出每一屏的起点；阅读单元变化（屏幕尺寸、点显器方数）
+     * 时也要重建。
+     *
+     * @param keepPosition 为 true 时保留当前 [mOffset] 不吸附到新页起点，
+     *   用于点显器连接/断开导致的页表重建——阅读位置不能跳。
+     *   为 false（默认）时把偏移吸附到最近的页起点，用于打开文件。
+     */
+    private fun rebuildPageOffsets(keepPosition: Boolean = false) {
+        val keep = keepPosition && mStream.isNotEmpty()
+            && mOffset >= 0 && mOffset <= maxOffset()
+        mPageOffsets = if (mStream.isEmpty()) {
+            intArrayOf()
+        } else {
+            BrailleFileDecoder.pageOffsets(mStream, readingUnit())
+        }
+        if (mPageOffsets.isNotEmpty() && !keep) {
+            mOffset = mPageOffsets[currentUnit()]
         }
     }
 
@@ -314,18 +381,30 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
     // 翻页 / 显示
     // ------------------------------------------------------------------
 
-    /** 前进/后退 [delta] 个阅读单元（点显器一屏或屏幕一屏）。 */
+    /** 前进/后退 [delta] 屏。 */
     private fun advance(delta: Int) {
-        if (mStream.isEmpty()) return
-        mOffset = (mOffset + delta * readingUnit()).coerceIn(0, maxOffset())
+        if (mPageOffsets.isEmpty()) return
+        gotoUnit(currentUnit() + delta)
+    }
+
+    /** 跳到第 [unit] 屏（0 基）。起点取自页表，故不会把字切成两半。 */
+    private fun gotoUnit(unit: Int) {
+        if (mPageOffsets.isEmpty()) return
+        mOffset = mPageOffsets[unit.coerceIn(0, mPageOffsets.size - 1)]
         showPage()
     }
 
-    /** 跳到第 [unit] 个阅读单元（0 基）。 */
-    private fun gotoUnit(unit: Int) {
+    /**
+     * 上一行/下一行（长按翻页键触发）。
+     *
+     * 翻页是一整屏（多行），逐行是微调：一次前进一行。行步进——
+     * 连接点显器时按**点显器一屏**（单行点显器的「一行」就是它的整屏），
+     * 未连接时按**屏幕一行**。两种操作经 [showPage] 都会自动同步点显器。
+     */
+    private fun moveLine(delta: Int) {
         if (mStream.isEmpty()) return
-        mOffset = (unit.coerceIn(0, totalUnits() - 1) * readingUnit())
-            .coerceAtMost(maxOffset())
+        val step = if (mConnected && mDisplayCells > 0) mDisplayCells else mCellsPerLine
+        mOffset = (mOffset + delta * step).coerceIn(0, maxOffset())
         showPage()
     }
 
@@ -458,7 +537,7 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
 
     private fun offsetLabel(offset: Int): String =
         getString(R.string.braille_reader_bm_item,
-            offset / readingUnit() + 1, previewAt(offset))
+            unitForOffset(offset) + 1, previewAt(offset))
 
     /** 取某偏移处的一行预览（去掉首尾空白方）。 */
     private fun previewAt(offset: Int): String {
@@ -571,6 +650,7 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
             // 文件已被删除或权限失效：清空进度，回落到提示态
             mStream = ""
             mOffset = 0
+            mPageOffsets = intArrayOf()
             mFileUri = null
             prefs.edit().remove(KEY_URI).remove(KEY_OFFSET).apply()
         }
