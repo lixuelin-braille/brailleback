@@ -31,6 +31,10 @@
     <string name="pref_category_device_title" msgid="8644919099122845217">"设备"</string>
     <string name="pref_category_device_summary">"连接状态、协议与键盘帮助"</string>
     <string name="pref_connection_status_title" msgid="8350285056432214602">"状态"</string>
+    <string name="pref_connection_protocol_title">"连接协议"</string>
+    <string name="pref_connection_protocol_auto_label">"自动（先 HID，再蓝牙串口）"</string>
+    <string name="pref_connection_protocol_hid_label">"HID（新协议）"</string>
+    <string name="pref_connection_protocol_rfcomm_label">"蓝牙串口（旧协议）"</string>
     <string name="pref_key_bindings_title" msgid="1228004448435300774">"键盘帮助"</string>
     <string name="pref_auto_connect_title">"自动连接盲文显示器"</string>
     <string name="pref_auto_connect_summary">"屏幕亮起或配对设备时自动连接盲文显示器"</string>
@@ -43,6 +47,7 @@
     <string name="braille_reader_open">"打开"</string>
     <string name="braille_reader_prev">"上一页"</string>
     <string name="braille_reader_next">"下一页"</string>
+    <string name="braille_reader_nav_hint">"长按「上一页/下一页」可逐行移动"</string>
     <string name="braille_reader_send">"发送点显"</string>
     <string name="braille_reader_load_fail">"文件读取失败：%1$s"</string>
     <string name="braille_reader_bdo_fail">"不是有效的 Bword（.bdo/.bdoc）盲文文档"</string>

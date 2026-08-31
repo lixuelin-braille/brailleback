@@ -83,6 +83,7 @@
     <string name="braille_reader_open">Open</string>
     <string name="braille_reader_prev">Prev</string>
     <string name="braille_reader_next">Next</string>
+    <string name="braille_reader_nav_hint">Long-press Prev / Next to move one line</string>
     <string name="braille_reader_send">Send to display</string>
     <string name="braille_reader_load_fail">Failed to load file: %1$s</string>
     <string name="braille_reader_bdo_fail">Not a valid Bword (.bdo/.bdoc) braille document</string>
