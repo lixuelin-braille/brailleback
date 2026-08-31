@@ -185,6 +185,16 @@
                 android:summary="%s"
                 android:title="@string/pref_log_level_label" />
 
+            <Preference
+                android:key="@string/pref_view_log_key"
+                android:title="@string/pref_view_log_title"
+                android:summary="@string/pref_view_log_summary" />
+
+            <Preference
+                android:key="@string/pref_clear_log_key"
+                android:title="@string/pref_clear_log_title"
+                android:summary="@string/pref_clear_log_summary" />
+
             <PreferenceCategory
                 android:key="@string/pref_category_braille_overlay_key"
                 android:title="@string/pref_category_braille_overlay_title">

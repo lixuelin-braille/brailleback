@@ -104,6 +104,8 @@
     <!-- Log level preference -->
     <string name="pref_log_level_key">log_level</string>
     <string name="pref_log_level_default">5</string>
+    <string name="pref_view_log_key">view_log</string>
+    <string name="pref_clear_log_key">clear_log</string>
     <string-array name="pref_log_level_entries">
         <item>NONE</item>
         <item>ASSERT</item>

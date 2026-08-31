@@ -28,6 +28,7 @@ import android.widget.Toast
 import com.googlecode.eyesfree.braille.display.Display
 import com.googlecode.eyesfree.braille.display.DisplayClient
 import com.googlecode.eyesfree.braille.translate.BrailleTranslator
+import com.googlecode.eyesfree.brailleback.utils.LogFileWriter
 import java.io.ByteArrayOutputStream
 import kotlin.math.min
 
@@ -135,6 +136,8 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 阅读器可独立于无障碍服务使用，单独初始化文件日志
+        LogFileWriter.init(this)
         setContentView(R.layout.braille_reader)
         mReaderText = findViewById(R.id.reader_text)
         mPageInfo = findViewById(R.id.reader_page_info)

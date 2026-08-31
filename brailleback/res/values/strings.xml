@@ -215,6 +215,18 @@
     <!-- Label for the developer "log output" level preference. [CHAR_LIMIT=45] -->
     <string name="pref_log_level_label">Log output level</string>
 
+    <!-- Developer options: view / export the file log. -->
+    <string name="pref_view_log_title">View debug log</string>
+    <string name="pref_view_log_summary">Show the log file; share or copy it to report a problem</string>
+    <string name="pref_clear_log_title">Clear debug log</string>
+    <string name="pref_clear_log_summary">Delete all saved log files</string>
+    <string name="debug_log_view_title">Debug log</string>
+    <string name="debug_log_empty">No log entries yet.</string>
+    <string name="debug_log_share">Share</string>
+    <string name="debug_log_clear_confirm">Clear all debug log files?</string>
+    <string name="debug_log_cleared">Debug log cleared</string>
+    <string name="debug_log_share_fail">No app available to share the log</string>
+
     <!-- Title for the Key Bindings activity, which shows the user key bindings for their device. [CHAR_LIMIT=35] -->
     <string name="key_bindings_title">BrailleBack Keyboard help</string>
 

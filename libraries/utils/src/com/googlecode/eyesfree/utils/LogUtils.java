@@ -31,6 +31,28 @@ public class LogUtils {
   private static int sLogLevel = Log.ERROR;
 
   /**
+   * Optional file-log sink. When set, every log entry (subject to {@link #sLogLevel})
+   * is additionally forwarded to this listener, e.g. to persist to a file so the user
+   * can export it without a debugger attached.
+   */
+  @Nullable private static FileLogListener sFileLogListener;
+
+  /** Receives log entries for persistence (file logging). */
+  public interface FileLogListener {
+    /**
+     * @param priority The log priority, see {@link Log#println(int, String, String)}.
+     * @param tag The source class simple name (or {@link LogUtils#TAG} when source is null).
+     * @param message The fully formatted log message (may contain a stack trace).
+     */
+    void onLog(int priority, String tag, String message);
+  }
+
+  /** Registers a listener that receives all logged entries (or null to disable). */
+  public static void setFileLogListener(@Nullable FileLogListener listener) {
+    sFileLogListener = listener;
+  }
+
+  /**
    * Logs a formatted string to the console using the source object's name as the log tag. If the
    * source object is null, the default tag (see {@link LogUtils#TAG}) is used.
    *
@@ -70,10 +92,12 @@ public class LogUtils {
       if (throwable == null) {
         Log.println(priority, sourceClass, message);
       } else {
-        Log.println(
-            priority,
-            sourceClass,
-            String.format("%s\n%s", message, Log.getStackTraceString(throwable)));
+        message = String.format("%s\n%s", message, Log.getStackTraceString(throwable));
+        Log.println(priority, sourceClass, message);
+      }
+      FileLogListener listener = sFileLogListener;
+      if (listener != null) {
+        listener.onLog(priority, sourceClass, message);
       }
     } catch (IllegalFormatException e) {
       Log.e(TAG, "Bad formatting string: \"" + format + "\"", e);

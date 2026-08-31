@@ -27,11 +27,15 @@ import android.preference.PreferenceActivity
 import android.preference.PreferenceManager
 import android.text.TextUtils
 import android.util.Log
+import android.widget.ScrollView
 import android.widget.SeekBar
+import android.widget.TextView
+import android.widget.Toast
 import com.googlecode.eyesfree.braille.display.Display
 import com.googlecode.eyesfree.braille.display.DisplayClient
 import com.googlecode.eyesfree.braille.translate.TableInfo
 import com.googlecode.eyesfree.brailleback.sound.SoundSchemeManager
+import com.googlecode.eyesfree.brailleback.utils.LogFileWriter
 import com.googlecode.eyesfree.brailleback.utils.PreferenceUtils
 import com.googlecode.eyesfree.utils.LogUtils
 import java.text.CollationKey
@@ -80,6 +84,8 @@ class BrailleBackPreferencesActivity : PreferenceActivity(),
     private var mSetupServicePreference: Preference? = null
     private var mBrailleReaderPreference: Preference? = null
     private var mBookshelfPreference: Preference? = null
+    private var mViewLogPreference: Preference? = null
+    private var mClearLogPreference: Preference? = null
     private var mConnectionState = Display.STATE_NOT_CONNECTED
     private var mConnectionProgress: String? = null
     private var mTables: List<TableInfo> = emptyList()
@@ -88,6 +94,8 @@ class BrailleBackPreferencesActivity : PreferenceActivity(),
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestBluetoothPermissions()
+        // 文件日志：无 adb 环境也能导出日志反馈问题
+        LogFileWriter.init(this)
 
         addPreferencesFromResource(R.xml.preferences)
 
@@ -135,6 +143,12 @@ class BrailleBackPreferencesActivity : PreferenceActivity(),
 
         mBookshelfPreference = findPreferenceByResId(R.string.pref_bookshelf_key)
         mBookshelfPreference?.setOnPreferenceClickListener(this)
+
+        mViewLogPreference = findPreferenceByResId(R.string.pref_view_log_key)
+        mViewLogPreference?.setOnPreferenceClickListener(this)
+
+        mClearLogPreference = findPreferenceByResId(R.string.pref_clear_log_key)
+        mClearLogPreference?.setOnPreferenceClickListener(this)
     }
 
     override fun onResume() {
@@ -389,9 +403,71 @@ class BrailleBackPreferencesActivity : PreferenceActivity(),
                 startActivity(Intent(this, BookshelfActivity::class.java))
                 return true
             }
+            mViewLogPreference -> {
+                showDebugLogDialog()
+                return true
+            }
+            mClearLogPreference -> {
+                AlertDialog.Builder(this)
+                    .setMessage(R.string.debug_log_clear_confirm)
+                    .setPositiveButton(android.R.string.ok) { _, _ ->
+                        LogFileWriter.clear(this)
+                        Toast.makeText(this, R.string.debug_log_cleared,
+                            Toast.LENGTH_SHORT).show()
+                    }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
+                return true
+            }
         }
         return false
     }
+
+    // ------------------------------------------------------------------
+    // Debug log view / export
+    // ------------------------------------------------------------------
+
+    /** 弹出调试日志对话框：ScrollView 展示 + 分享按钮。 */
+    @Suppress("DEPRECATION")
+    private fun showDebugLogDialog() {
+        val log = LogFileWriter.readAll(this)
+        val body = if (log.isBlank()) getString(R.string.debug_log_empty) else log
+        val textView = TextView(this).apply {
+            text = body
+            textSize = 11f
+            typeface = android.graphics.Typeface.MONOSPACE
+            setTextIsSelectable(true)
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+        }
+        val scroll = ScrollView(this).apply {
+            addView(textView)
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.debug_log_view_title)
+            .setView(scroll)
+            .setPositiveButton(R.string.debug_log_share) { _, _ ->
+                shareLog(body)
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun shareLog(text: String) {
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, text)
+        }
+        try {
+            startActivity(Intent.createChooser(intent,
+                getString(R.string.debug_log_share)))
+        } catch (e: Exception) {
+            Toast.makeText(this, R.string.debug_log_share_fail,
+                Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun dp(v: Int): Int =
+        (v * resources.displayMetrics.density).toInt()
 
     // ------------------------------------------------------------------
     // Sound preferences (master switch + volume only)

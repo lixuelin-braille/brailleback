@@ -145,6 +145,16 @@
     <string name="pref_braille_overlay_tutorial_title" msgid="6443284526953091708">"发布教程"</string>
     <string name="pref_os_license_title" msgid="1569318864930820110">"开放源代码许可"</string>
     <string name="pref_log_level_label" msgid="3161296593165404029">"日志输出级别"</string>
+    <string name="pref_view_log_title">"查看调试日志"</string>
+    <string name="pref_view_log_summary">"显示日志文件，可分享或复制以反馈问题"</string>
+    <string name="pref_clear_log_title">"清除调试日志"</string>
+    <string name="pref_clear_log_summary">"删除已保存的全部日志文件"</string>
+    <string name="debug_log_view_title">"调试日志"</string>
+    <string name="debug_log_empty">"暂无日志记录"</string>
+    <string name="debug_log_share">"分享"</string>
+    <string name="debug_log_clear_confirm">"确定清除全部调试日志？"</string>
+    <string name="debug_log_cleared">"调试日志已清除"</string>
+    <string name="debug_log_share_fail">"没有可用的应用分享日志"</string>
     <string name="key_bindings_title" msgid="7481545872884477026">"盲文提示键盘帮助"</string>
     <string name="display_connected" msgid="2008600513914815101">"BrlBack 已打开"</string>
     <string name="shutting_down" msgid="1303701310644298807">"BrlBack 已关闭"</string>

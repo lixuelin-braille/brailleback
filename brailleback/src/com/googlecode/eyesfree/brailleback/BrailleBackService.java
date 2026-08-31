@@ -42,6 +42,7 @@ import com.googlecode.eyesfree.braille.display.Display;
 import com.googlecode.eyesfree.braille.service.display.HidBridge;
 import com.googlecode.eyesfree.brailleback.rule.BrailleRuleRepository;
 import com.googlecode.eyesfree.brailleback.utils.PreferenceUtils;
+import com.googlecode.eyesfree.brailleback.utils.LogFileWriter;
 import com.googlecode.eyesfree.labeling.CustomLabelManager;
 import com.googlecode.eyesfree.labeling.PackageRemovalReceiver;
 import com.googlecode.eyesfree.utils.LogUtils;
@@ -484,6 +485,7 @@ public class BrailleBackService
         PreferenceManager.getDefaultSharedPreferences(this)
                 .registerOnSharedPreferenceChangeListener(mPreferenceListener);
         PreferenceUtils.initLogLevel(this);
+        LogFileWriter.init(this);
         if (isInfrastructureInitialized) {
             return;
         }
