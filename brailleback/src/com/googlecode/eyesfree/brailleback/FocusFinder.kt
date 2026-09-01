@@ -47,7 +47,7 @@ class FocusFinder(context: Context) {
         }
 
         // Clear the list of seen nodes.
-        AccessibilityNodeInfoUtils.recycleNodes(seenNodes)
+        AccessibilityNodeInfoUtils.recycleNodes(*seenNodes.toTypedArray())
 
         if (next == null) {
             LogUtils.log(this, Log.VERBOSE, "Failed to find the next node")
@@ -73,7 +73,7 @@ class FocusFinder(context: Context) {
                 return findFirstFocusableDescendantInternal(root, context, seenNodes)
             } finally {
                 seenNodes.remove(root) // Not owned by us.
-                AccessibilityNodeInfoUtils.recycleNodes(seenNodes)
+                AccessibilityNodeInfoUtils.recycleNodes(*seenNodes.toTypedArray())
             }
         }
 
@@ -116,7 +116,7 @@ class FocusFinder(context: Context) {
                 return findLastFocusableDescendantInternal(root, context, seenNodes)
             } finally {
                 seenNodes.remove(root) // Not owned by us.
-                AccessibilityNodeInfoUtils.recycleNodes(seenNodes)
+                AccessibilityNodeInfoUtils.recycleNodes(*seenNodes.toTypedArray())
             }
         }
 

@@ -13,7 +13,7 @@ class WordWrapStrategy : WrapStrategy() {
 
     override fun calculateBreakPoints() {
         val translation = mTranslation ?: return
-        val cells = translation.getCells()
+        val cells = translation.cells
         var lastCellEmpty = false
         for (i in cells.indices) {
             val currentCellEmpty = cells[i] == 0.toByte()

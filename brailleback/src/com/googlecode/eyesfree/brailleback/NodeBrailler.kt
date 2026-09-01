@@ -47,7 +47,7 @@ class NodeBrailler(
             content = DisplayManager.Content(sb)
             content.setFirstNode(toFormat[0])
                 .setLastNode(toFormat[toFormat.size - 1])
-            AccessibilityNodeInfoUtils.recycleNodes(toFormat)
+            AccessibilityNodeInfoUtils.recycleNodes(*toFormat.toTypedArray())
         }
         return content
     }
@@ -111,13 +111,13 @@ class NodeBrailler(
     ) {
         val nodeRect = Rect()
         node.getBoundsInScreen(nodeRect)
-        val current = AccessibilityNodeInfoRef.unOwned(node)
-        var currentIncludesChildren = includesChildren(current.get())
+        val current = AccessibilityNodeInfoRef.unOwned(node)!!
+        var currentIncludesChildren = includesChildren(current.get()!!!!)
         // Walk up the node tree as long as all siblings overlap the original
         // node vertically on screen.
         do {
             if (currentIncludesChildren) {
-                if (!findOverlappingRange(current.get(), nodeRect, outLeft, outRight)) {
+                if (!findOverlappingRange(current.get()!!!!, nodeRect, outLeft, outRight)) {
                     break
                 }
             } else {
@@ -133,7 +133,7 @@ class NodeBrailler(
             }
             // TODO: why not format bottom-up and avoid having to lookup the
             // rule twice?  Consider that at some point.
-            currentIncludesChildren = includesChildren(current.get())
+            currentIncludesChildren = includesChildren(current.get()!!)
             // Don't let any parent prevent us from getting onto the display,
             // *we* contain the focused node.
         } while (currentIncludesChildren)
@@ -149,8 +149,8 @@ class NodeBrailler(
         val right = AccessibilityNodeInfoRef()
         findDisplayExtentFromNode(node, left, right)
         do {
-            outResult.add(left.makeOwned().release())
-        } while (!left.get().equals(right.get()) && left.nextSibling())
+            outResult.add(left.makeOwned().release()!!)
+        } while (!left.get()!!.equals(right.get()!!) && left.nextSibling())
     }
 
     /**
@@ -168,21 +168,21 @@ class NodeBrailler(
     ): Boolean {
         val tmpRect = Rect()
         var ret = true
-        val left = AccessibilityNodeInfoRef.unOwned(startFrom)
+        val left = AccessibilityNodeInfoRef.unOwned(startFrom)!!
         outLeft.reset(left)
         while (left.previousSibling()) {
-            left.get().getBoundsInScreen(tmpRect)
-            if (!includesChildren(left.get()) || !shouldPutOnSameLine(tmpRect, rect)) {
+            left.get()!!.getBoundsInScreen(tmpRect)
+            if (!includesChildren(left.get()!!) || !shouldPutOnSameLine(tmpRect, rect)) {
                 ret = false
                 break
             }
             outLeft.reset(left)
         }
-        val right = AccessibilityNodeInfoRef.unOwned(startFrom)
+        val right = AccessibilityNodeInfoRef.unOwned(startFrom)!!
         outRight.reset(right)
         while (right.nextSibling()) {
-            right.get().getBoundsInScreen(tmpRect)
-            if (!includesChildren(right.get()) || !shouldPutOnSameLine(tmpRect, rect)) {
+            right.get()!!.getBoundsInScreen(tmpRect)
+            if (!includesChildren(right.get()!!) || !shouldPutOnSameLine(tmpRect, rect)) {
                 ret = false
                 break
             }

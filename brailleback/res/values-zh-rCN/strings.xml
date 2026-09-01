@@ -41,24 +41,24 @@
     <string name="pref_setup_service_title">"启用盲文服务"</string>
     <string name="pref_setup_service_summary">"服务未开启。点此打开系统无障碍设置启用；若提示“受限设置”，请点“更多”再点“允许受限设置”。"</string>
     <string name="pref_setup_service_enabled">"服务已启用。"</string>
-    <string name="pref_braille_reader_title">"盲文阅读器"</string>
-    <string name="pref_braille_reader_summary">"打开 BRF / 文本文件，在屏幕或盲文点显上阅读"</string>
+    
+    
     <string name="pref_bookshelf_title">"书架"</string>
-    <string name="pref_bookshelf_summary">"按文件夹浏览盲文电子书，快速重开最近阅读"</string>
+    
     <string name="bookshelf_title">"书架"</string>
-    <string name="bookshelf_empty">"请选择文件夹开始浏览，或使用「最近」"</string>
-    <string name="bookshelf_open_file">"打开文件"</string>
-    <string name="bookshelf_pick_folder">"选文件夹"</string>
-    <string name="bookshelf_folders">"已收藏"</string>
-    <string name="bookshelf_recent">"最近"</string>
-    <string name="bookshelf_up">"..（返回上级）"</string>
-    <string name="bookshelf_list_fail">"文件夹读取失败：%1$s"</string>
-    <string name="bookshelf_no_folders">"还没有收藏的文件夹。点「选文件夹」添加。"</string>
-    <string name="bookshelf_folders_title">"已收藏的文件夹"</string>
-    <string name="bookshelf_clear_folders">"清除全部"</string>
-    <string name="bookshelf_folders_cleared">"已清除全部收藏"</string>
-    <string name="bookshelf_no_recent">"还没有最近阅读的书"</string>
-    <string name="bookshelf_recent_title">"最近打开"</string>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     <string name="braille_reader_hint">"打开 BRF 或文本文件开始阅读。ASCII 盲文会显示为 Unicode 盲文。"</string>
     <string name="braille_reader_open">"打开"</string>
     <string name="braille_reader_prev">"上一页"</string>
@@ -185,4 +185,24 @@
     <string name="menu_item_label_edit" msgid="3009644363444552176">"修改自定义标签"</string>
     <string name="menu_item_label_remove" msgid="6836749636921226607">"删除自定义标签"</string>
     <string name="menu_item_update_talkback" msgid="5549071241261625208">"不支持自定义标签，请更新话语 TalkBack"</string>
+
+    <string name="bookshelf_empty">书架为空，点「导入」添加盲文书</string>
+
+    <string name="pref_bookshelf_summary">导入并管理盲文电子书</string>
+
+    <string name="bookshelf_import">导入</string>
+
+    <string name="bookshelf_open">打开</string>
+
+    <string name="bookshelf_rename">重命名</string>
+
+    <string name="bookshelf_delete">删除</string>
+
+    <string name="bookshelf_clear">清空书架</string>
+
+    <string name="bookshelf_cleared">已清空书架</string>
+
+    <string name="bookshelf_deleted">已从书架移除</string>
+
+    <string name="pref_braille_reader_title">盲文阅读器</string>
 </resources>

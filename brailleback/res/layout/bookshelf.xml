@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 盲文书架：只做「导入 + 书籍管理」。 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -6,53 +7,21 @@
     android:padding="16dp">
 
     <TextView
-        android:id="@+id/bookshelf_path"
+        android:id="@+id/bookshelf_empty"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:textSize="16sp"
-        android:paddingTop="4dp"
-        android:paddingBottom="4dp"
+        android:gravity="center"
+        android:padding="24dp"
+        android:visibility="gone"
         android:text="@string/bookshelf_empty" />
 
-    <LinearLayout
-        android:layout_width="match_parent"
+    <Button
+        android:id="@+id/btn_bookshelf_open"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center"
-        android:layout_marginTop="4dp">
-
-        <Button
-            android:id="@+id/btn_bookshelf_open"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/bookshelf_open_file" />
-
-        <Button
-            android:id="@+id/btn_bookshelf_pick"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/bookshelf_pick_folder" />
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center"
-        android:layout_marginTop="4dp">
-
-        <Button
-            android:id="@+id/btn_bookshelf_folders"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/bookshelf_folders" />
-
-        <Button
-            android:id="@+id/btn_bookshelf_recent"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/bookshelf_recent" />
-    </LinearLayout>
+        android:layout_gravity="center"
+        android:text="@string/bookshelf_import" />
 
     <ListView
         android:id="@+id/bookshelf_list"

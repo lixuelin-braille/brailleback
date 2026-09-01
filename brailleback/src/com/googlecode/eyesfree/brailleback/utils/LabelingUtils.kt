@@ -36,7 +36,7 @@ object LabelingUtils {
             return text
         }
 
-        if (labelManager != null && labelManager.isInitialized()) {
+        if (labelManager != null && labelManager.isInitialized) {
             // TODO: Don't need to do this when support libs fixed.
             val unwrapped = node.info as? android.view.accessibility.AccessibilityNodeInfo
             val label: Label? = labelManager.getLabelForViewIdFromCache(

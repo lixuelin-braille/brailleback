@@ -27,7 +27,7 @@
     <string name="pref_category_developer_key">category_developer</string>    <string name="pref_connection_protocol_key">connection_protocol</string>
     <string name="pref_auto_connect_key">auto_connect</string>
     <string name="pref_setup_service_key">setup_service</string>
-    <string name="pref_braille_reader_key">braille_reader</string>
+    
     <string name="pref_bookshelf_key">bookshelf</string>
     <string-array name="pref_connection_protocol_values">
         <item>auto</item>

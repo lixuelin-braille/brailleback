@@ -33,6 +33,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.preference.ListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
+import androidx.preference.PreferenceScreen
 import com.googlecode.eyesfree.braille.display.Display
 import com.googlecode.eyesfree.braille.display.DisplayClient
 import com.googlecode.eyesfree.braille.translate.TableInfo
@@ -47,7 +48,8 @@ import java.util.Collections
 import java.util.Comparator
 import java.util.HashMap
 
-class SettingsActivity : AppCompatActivity() {
+class SettingsActivity : AppCompatActivity(),
+    PreferenceFragmentCompat.OnPreferenceStartScreenCallback {
 
     /** Message from BrailleBackService, indicating that grade pref changed. */
     companion object {
@@ -60,6 +62,30 @@ class SettingsActivity : AppCompatActivity() {
         supportFragmentManager.beginTransaction()
             .replace(android.R.id.content, SettingsFragment())
             .commit()
+    }
+
+    /**
+     * 嵌套分类（PreferenceScreen）导航：androidx.preference 的
+     * PreferenceFragmentCompat 默认不会自行推入子屏，必须由宿主 Activity
+     * 实现 OnPreferenceStartScreenCallback 并在返回时 push 一个以该分类为
+     * rootKey 的新 fragment（加进返回栈，返回键可回上一级）。
+     */
+    override fun onPreferenceStartScreen(
+        caller: PreferenceFragmentCompat,
+        preferenceScreen: PreferenceScreen
+    ): Boolean {
+        val args = Bundle().apply {
+            putString(
+                PreferenceFragmentCompat.ARG_PREFERENCE_ROOT,
+                preferenceScreen.key
+            )
+        }
+        val fragment = SettingsFragment().apply { arguments = args }
+        caller.parentFragmentManager.beginTransaction()
+            .replace(android.R.id.content, fragment)
+            .addToBackStack(null)
+            .commit()
+        return true
     }
 
     class SettingsFragment : PreferenceFragmentCompat(),
@@ -147,12 +173,6 @@ class SettingsActivity : AppCompatActivity() {
             mSetupServicePreference =
                 findPreference<Preference>(getString(R.string.pref_setup_service_key))
             mSetupServicePreference?.setOnPreferenceClickListener(this)
-
-            findPreference<Preference>(getString(R.string.pref_braille_reader_key))
-                ?.setOnPreferenceClickListener {
-                    startActivity(Intent(requireActivity(), BrailleReaderActivity::class.java))
-                    true
-                }
 
             findPreference<Preference>(getString(R.string.pref_bookshelf_key))
                 ?.setOnPreferenceClickListener {
@@ -283,7 +303,7 @@ class SettingsActivity : AppCompatActivity() {
             }
             val tables = ArrayList<TableInfo>()
             for (info in mTables) {
-                if (eightDot == info.isEightDot()) {
+                if (eightDot == info.isEightDot) {
                     tables.add(info)
                 }
             }
@@ -304,7 +324,7 @@ class SettingsActivity : AppCompatActivity() {
             ++index
             for (info in tables) {
                 entries[index] = createTableDisplayName(info)
-                entryValues[index] = info.getId()
+                entryValues[index] = info.id
                 ++index
             }
             pref.entries = entries
@@ -320,41 +340,41 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         private fun createTableDisplayName(tableInfo: TableInfo): String {
-            val localeDisplayName = tableInfo.getLocale().getDisplayName()
-            if (tableInfo.isEightDot()) {
+            val localeDisplayName = tableInfo.locale.getDisplayName()
+            if (tableInfo.isEightDot) {
                 // Computer braille is obvious from context.
                 return localeDisplayName
             }
             // Chinese braille is referred to by its system name (e.g. 国家通用盲文方案).
-            if ("zh".equals(tableInfo.getLocale().getLanguage(), ignoreCase = true)) {
-                if (TextUtils.isEmpty(tableInfo.getVariant())) {
+            if ("zh".equals(tableInfo.locale.getLanguage(), ignoreCase = true)) {
+                if (TextUtils.isEmpty(tableInfo.variant)) {
                     return localeDisplayName
                 }
                 return getString(
-                    R.string.table_name_variant, localeDisplayName, tableInfo.getVariant())
+                    R.string.table_name_variant, localeDisplayName, tableInfo.variant)
             }
             val related = mTranslatorManager!!.getRelatedTables(tableInfo)
             var gradeCount = 0
             for (relatedInfo in related) {
-                if (relatedInfo.isEightDot()) {
+                if (relatedInfo.isEightDot) {
                     continue
                 }
                 ++gradeCount
             }
             return if (gradeCount <= 1) {
-                if (TextUtils.isEmpty(tableInfo.getVariant())) {
+                if (TextUtils.isEmpty(tableInfo.variant)) {
                     localeDisplayName
                 } else {
                     getString(R.string.table_name_variant,
-                        localeDisplayName, tableInfo.getVariant())
+                        localeDisplayName, tableInfo.variant)
                 }
             } else {
-                if (TextUtils.isEmpty(tableInfo.getVariant())) {
+                if (TextUtils.isEmpty(tableInfo.variant)) {
                     getString(R.string.table_name_grade,
-                        localeDisplayName, tableInfo.getGrade())
+                        localeDisplayName, tableInfo.grade)
                 } else {
                     getString(R.string.table_name_variant_grade,
-                        localeDisplayName, tableInfo.getVariant(), tableInfo.getGrade())
+                        localeDisplayName, tableInfo.variant, tableInfo.grade)
                 }
             }
         }
@@ -617,18 +637,18 @@ class SettingsActivity : AppCompatActivity() {
                     return 0
                 }
                 var ret = getCollationKey(first).compareTo(getCollationKey(second))
-                if (ret == 0 && first.isEightDot() != second.isEightDot()) {
-                    ret = if (first.isEightDot()) 1 else -1
+                if (ret == 0 && first.isEightDot != second.isEightDot) {
+                    ret = if (first.isEightDot) 1 else -1
                 }
                 if (ret == 0) {
-                    ret = first.getGrade() - second.getGrade()
+                    ret = first.grade - second.grade
                 }
                 return ret
             }
 
             private fun getCollationKey(tableInfo: TableInfo): CollationKey {
                 return mCollationKeyMap.getOrPut(tableInfo) {
-                    mCollator.getCollationKey(tableInfo.getLocale().getDisplayName())
+                    mCollator.getCollationKey(tableInfo.locale.getDisplayName())
                 }
             }
 

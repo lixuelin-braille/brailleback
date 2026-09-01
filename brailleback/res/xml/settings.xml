@@ -13,11 +13,6 @@
         app:summary="@string/pref_setup_service_summary" />
 
     <Preference
-        app:key="@string/pref_braille_reader_key"
-        app:title="@string/pref_braille_reader_title"
-        app:summary="@string/pref_braille_reader_summary" />
-
-    <Preference
         app:key="@string/pref_bookshelf_key"
         app:title="@string/pref_bookshelf_title"
         app:summary="@string/pref_bookshelf_summary" />

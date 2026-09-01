@@ -41,3 +41,6 @@ temp/
 # --- NDK build output ---
 service/jni/obj/
 **/jni/obj/
+
+# liblouis host-side test artifact (not part of the app)
+.lou_host_test/

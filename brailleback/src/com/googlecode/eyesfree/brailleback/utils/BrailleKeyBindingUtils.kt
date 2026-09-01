@@ -23,7 +23,7 @@ object BrailleKeyBindingUtils {
      */
     @JvmStatic
     fun getSortedBindingsForDisplay(props: BrailleDisplayProperties): ArrayList<BrailleKeyBinding> {
-        val bindings = props.getKeyBindings()
+        val bindings = props.keyBindings
         val sortedBindings = ArrayList<BrailleKeyBinding>(bindings.toList())
         Collections.sort(sortedBindings, COMPARE_BINDINGS)
         return sortedBindings
@@ -37,12 +37,12 @@ object BrailleKeyBindingUtils {
     fun getBrailleKeyBindingForCommand(
         command: Int, sortedBindings: ArrayList<BrailleKeyBinding>): BrailleKeyBinding? {
         val dummyBinding = BrailleKeyBinding()
-        dummyBinding.setCommand(command)
+        dummyBinding.command = command
         var index = Collections.binarySearch(sortedBindings, dummyBinding, COMPARE_BINDINGS_BY_COMMAND)
         if (index < 0) {
             return null
         }
-        while (index > 0 && sortedBindings[index - 1].getCommand() == command) {
+        while (index > 0 && sortedBindings[index - 1].command == command) {
             index -= 1
         }
         return sortedBindings[index]
@@ -57,8 +57,8 @@ object BrailleKeyBindingUtils {
         friendlyKeyNames: Map<String, String>,
         context: Context): String {
         val delimiter = context.getString(R.string.help_keyBindingDelimiter)
-        var keys = TextUtils.join(delimiter, getFriendlyKeyNames(binding.getKeyNames(), friendlyKeyNames))
-        if (binding.isLongPress()) {
+        var keys = TextUtils.join(delimiter, getFriendlyKeyNames(binding.keyNames, friendlyKeyNames))
+        if (binding.isLongPress) {
             keys = context.getString(R.string.help_longPressTemplate, keys)
         }
         return keys
@@ -91,19 +91,19 @@ object BrailleKeyBindingUtils {
     @JvmField
     val COMPARE_BINDINGS: Comparator<BrailleKeyBinding> =
         Comparator<BrailleKeyBinding> { lhs, rhs ->
-            val command1 = lhs.getCommand()
-            val command2 = rhs.getCommand()
+            val command1 = lhs.command
+            val command2 = rhs.command
             if (command1 != command2) {
                 command1 - command2
             } else {
                 // Prefer a binding without long press.
-                val longPress1 = lhs.isLongPress()
-                val longPress2 = rhs.isLongPress()
+                val longPress1 = lhs.isLongPress
+                val longPress2 = rhs.isLongPress
                 if (longPress1 != longPress2) {
                     if (longPress1) 1 else -1
                 } else {
-                    val names1 = lhs.getKeyNames()
-                    val names2 = rhs.getKeyNames()
+                    val names1 = lhs.keyNames
+                    val names2 = rhs.keyNames
                     // Prefer fewer keys.
                     if (names1.size != names2.size) {
                         names1.size - names2.size
@@ -127,6 +127,6 @@ object BrailleKeyBindingUtils {
     @JvmField
     val COMPARE_BINDINGS_BY_COMMAND: Comparator<BrailleKeyBinding> =
         Comparator<BrailleKeyBinding> { lhs, rhs ->
-            lhs.getCommand() - rhs.getCommand()
+            lhs.command - rhs.command
         }
 }

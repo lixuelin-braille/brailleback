@@ -136,8 +136,8 @@ abstract class WrapStrategy {
             return
         }
         val text = content.getText()
-        val textToCell = translation.getTextToBraillePositions()
-        val numCells = translation.getCells().size
+        val textToCell = translation.textToBraillePositions
+        val numCells = translation.cells.size
         for (i in 0 until text.length - 1) {
             if (text[i] == '\n') {
                 val cell = if (i + 1 < textToCell.size) textToCell[i + 1] else numCells
@@ -177,7 +177,7 @@ abstract class WrapStrategy {
     private fun findRightLimit(points: SparseIntArray, start: Int): Int {
         val index = findPointIndex(points, start) + 1
         if (index >= points.size()) {
-            return mTranslation?.getCells()?.size ?: 0
+            return mTranslation?.cells?.size ?: 0
         }
         return points.keyAt(index)
     }
@@ -205,11 +205,11 @@ abstract class WrapStrategy {
         // to (or before) the start, which would spin this loop forever and
         // starve the display of updates.
         var current = pivot
-        while (current < translation.getCells().size) {
+        while (current < translation.cells.size) {
             val next = calculateDisplayEnd(current)
             current = if (next > current) next else current + 1
-            if (current > translation.getCells().size) {
-                current = translation.getCells().size
+            if (current > translation.cells.size) {
+                current = translation.cells.size
             }
             mLineBreaks.append(current, LINE_BREAK)
         }
@@ -231,8 +231,8 @@ abstract class WrapStrategy {
         val translation = mTranslation ?: return 0
         if (position <= 0) {
             return 0
-        } else if (position >= translation.getCells().size - 1) {
-            return translation.getCells().size - 1
+        } else if (position >= translation.cells.size - 1) {
+            return translation.cells.size - 1
         } else {
             return position
         }
@@ -325,7 +325,7 @@ abstract class WrapStrategy {
             // Extend the breakLimit until it reaches a character that is not a
             // removable break (whitespace padding is OK at end).
             var limit = breakLimit
-            while (limit < translation.getCells().size
+            while (limit < translation.cells.size
                 && mBreakPoints.get(limit) == REMOVABLE_BREAK_POINT) {
                 limit++
             }
@@ -378,10 +378,10 @@ abstract class WrapStrategy {
      */
     private fun avoidOpeningPunctuationAtLineEnd(lineEnd: Int): Int {
         val translation = mTranslation ?: return lineEnd
-        if (lineEnd <= 1 || lineEnd > translation.getCells().size) {
+        if (lineEnd <= 1 || lineEnd > translation.cells.size) {
             return lineEnd
         }
-        val btt = translation.getBrailleToTextPositions()
+        val btt = translation.brailleToTextPositions
         if (btt == null) {
             return lineEnd
         }
@@ -441,10 +441,10 @@ abstract class WrapStrategy {
      */
     private fun avoidPunctuationAtLineStart(lineStart: Int): Int {
         val translation = mTranslation ?: return lineStart
-        if (lineStart <= 0 || lineStart >= translation.getCells().size) {
+        if (lineStart <= 0 || lineStart >= translation.cells.size) {
             return lineStart
         }
-        val btt = translation.getBrailleToTextPositions()
+        val btt = translation.brailleToTextPositions
         if (btt == null) {
             return lineStart
         }
@@ -456,7 +456,7 @@ abstract class WrapStrategy {
         var pos = lineStart
         var skipped = 0
         val maxSkip = mDisplayWidth
-        while (pos < translation.getCells().size && skipped < maxSkip) {
+        while (pos < translation.cells.size && skipped < maxSkip) {
             val textPos = btt[pos]
             if (textPos < 0 || textPos >= text.length) {
                 break
@@ -467,7 +467,7 @@ abstract class WrapStrategy {
             }
             // Skip all cells that belong to this punctuation character.
             var next = pos
-            while (next < translation.getCells().size && btt[next] == textPos) {
+            while (next < translation.cells.size && btt[next] == textPos) {
                 next++
             }
             skipped += (next - pos)
@@ -478,7 +478,7 @@ abstract class WrapStrategy {
         }
         // Also skip any removable whitespace after the punctuation so the
         // new line does not begin with a blank cell.
-        while (pos < translation.getCells().size
+        while (pos < translation.cells.size
             && mBreakPoints.get(pos) == REMOVABLE_BREAK_POINT) {
             pos++
         }

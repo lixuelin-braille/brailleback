@@ -126,7 +126,7 @@ class TranslatorManager(context: Context) :
 
     /** Returns all braille tables for the same locale as `tableInfo`. */
     fun getRelatedTables(tableInfo: TableInfo): List<TableInfo> {
-        return Collections.unmodifiableList(mLocalesToTables[tableInfo.getLocale()])
+        return Collections.unmodifiableList(mLocalesToTables[tableInfo.locale])
     }
 
     /** Reevaluates what should be the current translation table based on the
@@ -150,7 +150,7 @@ class TranslatorManager(context: Context) :
     private fun updateLocalesToTables() {
         mLocalesToTables.clear()
         mTables?.forEach { info ->
-            val locale = info.getLocale()
+            val locale = info.locale
             val list = mLocalesToTables.getOrPut(locale) { ArrayList() }
             list.add(info)
         }
@@ -194,7 +194,7 @@ class TranslatorManager(context: Context) :
         }
         var best: TableInfo? = null
         mTables?.forEach { info ->
-            if (eightDot != info.isEightDot()) {
+            if (eightDot != info.isEightDot) {
                 return@forEach
             }
             if (betterTable(info, best, preferContracted)) {
@@ -227,14 +227,14 @@ class TranslatorManager(context: Context) :
             info = findFallbackTableInfo()
         }
         if (info != null) {
-            translator = mTranslatorClient.getTranslator(info.getId())
+            translator = mTranslatorClient.getTranslator(info.id)
         }
         return translator
     }
 
     private fun findFallbackTableInfo(): TableInfo? {
         mTables?.forEach { table ->
-            if (table.getLocale() == Locale.US) {
+            if (table.locale == Locale.US) {
                 return table
             }
         }
@@ -245,8 +245,8 @@ class TranslatorManager(context: Context) :
         if (second == null) {
             return true
         }
-        val firstLocale = first.getLocale()
-        val secondLocale = second.getLocale()
+        val firstLocale = first.locale
+        val secondLocale = second.locale
         val firstRank = matchRank(firstLocale, mLocale)
         val secondRank = matchRank(secondLocale, mLocale)
         if (firstRank != secondRank) {
@@ -254,9 +254,9 @@ class TranslatorManager(context: Context) :
         }
         // Same locale match: prefer grade according to contracted mode.
         return if (preferContracted) {
-            first.getGrade() > second.getGrade()
+            first.grade > second.grade
         } else {
-            first.getGrade() < second.getGrade()
+            first.grade < second.grade
         }
     }
 

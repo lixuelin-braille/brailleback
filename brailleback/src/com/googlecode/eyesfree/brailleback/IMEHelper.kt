@@ -23,7 +23,7 @@ class IMEHelper(private val context: Context) {
      * the [IMESetupWizardActivity].
      */
     fun onInputEvent(event: BrailleInputEvent): Boolean {
-        val cmd = event.getCommand()
+        val cmd = event.command
         if (cmd == BrailleInputEvent.CMD_BRAILLE_KEY
             || cmd == BrailleInputEvent.CMD_KEY_DEL
             || cmd == BrailleInputEvent.CMD_KEY_FORWARD_DEL) {
