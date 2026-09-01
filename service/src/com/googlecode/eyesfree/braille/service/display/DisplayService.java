@@ -232,7 +232,15 @@ public class DisplayService extends Service
 
     @Override
     public boolean onUnbind(Intent intent) {
-        disconnectBraille();
+        // 多客户端场景：仅当最后一个客户端解绑时才断开点显器。
+        // 否则（设置页/阅读器/键盘帮助等临时客户端切走时）点显器会被
+        // 断开再重连，每次切换界面都触发 BrailleBackService 的
+        // "断开 + 连接" 提示音（DisplayService 仍被主客户端绑定着）。
+        int clientCount = mClients.beginBroadcast();
+        mClients.finishBroadcast();
+        if (clientCount <= 0) {
+            disconnectBraille();
+        }
         return true;
     }
 
