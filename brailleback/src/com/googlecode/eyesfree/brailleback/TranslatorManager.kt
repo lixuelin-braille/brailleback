@@ -210,7 +210,7 @@ class TranslatorManager(context: Context) :
         if (mTableValueDefault == value) {
             return null
         }
-        return mTranslatorClient.getTranslator(value)
+        return mTranslatorClient.getTranslator(value ?: return null)
     }
 
     /**
@@ -227,7 +227,7 @@ class TranslatorManager(context: Context) :
             info = findFallbackTableInfo()
         }
         if (info != null) {
-            translator = mTranslatorClient.getTranslator(info.id)
+            translator = mTranslatorClient.getTranslator(info.id ?: return null)
         }
         return translator
     }

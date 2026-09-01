@@ -110,8 +110,8 @@ class BrailleView(context: Context, attrs: AttributeSet) : View(context, attrs) 
     }
 
     fun setDisplayProperties(displayProperties: BrailleDisplayProperties) {
-        if (displayProperties.getNumTextCells() != mNumTextCells) {
-            mNumTextCells = displayProperties.getNumTextCells()
+        if (displayProperties.numTextCells != mNumTextCells) {
+            mNumTextCells = displayProperties.numTextCells
             requestLayout()
         }
     }

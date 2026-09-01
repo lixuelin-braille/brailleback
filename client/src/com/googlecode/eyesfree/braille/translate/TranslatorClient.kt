@@ -124,7 +124,7 @@ class TranslatorClient(context: Context, onInitListener: OnInitListener?) {
                     val tables = getTables()
                     if (tables != null) {
                         for (table in tables) {
-                            if (table.getId() == tableId) {
+                            if (table.id == tableId) {
                                 return BrailleTranslatorImpl(table)
                             }
                         }
@@ -213,7 +213,7 @@ class TranslatorClient(context: Context, onInitListener: OnInitListener?) {
             if (localService != null) {
                 try {
                     return localService.translate(
-                        text, mTableInfo.getId(), cursorPosition, computerBrailleAtCursor)
+                        text, mTableInfo.id, cursorPosition, computerBrailleAtCursor)
                 } catch (ex: RemoteException) {
                     Log.e(LOG_TAG, "Error in translate", ex)
                 }
@@ -229,7 +229,7 @@ class TranslatorClient(context: Context, onInitListener: OnInitListener?) {
             val localService = translatorService
             if (localService != null) {
                 try {
-                    return localService.backTranslate(cells, mTableInfo.getId())
+                    return localService.backTranslate(cells, mTableInfo.id)
                 } catch (ex: RemoteException) {
                     Log.e(LOG_TAG, "Error in backTranslate", ex)
                 }
@@ -245,17 +245,17 @@ class TranslatorClient(context: Context, onInitListener: OnInitListener?) {
                 return true
             }
             if (other is BrailleTranslatorImpl) {
-                return mTableInfo.getId() == other.mTableInfo.getId()
+                return mTableInfo.id == other.mTableInfo.id
             }
             return false
         }
 
         override fun hashCode(): Int {
-            return mTableInfo.getId().hashCode()
+            return mTableInfo.id.hashCode()
         }
 
         override fun toString(): String {
-            return String.format("{BrailleTranslatorImpl %s}", mTableInfo.getId())
+            return String.format("{BrailleTranslatorImpl %s}", mTableInfo.id)
         }
     }
 

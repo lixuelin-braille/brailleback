@@ -48,15 +48,15 @@ class DisplayClient(context: Context) : Display {
     }
 
     @Volatile
-    private var mConnectionStateChangeListener: OnConnectionStateChangeListener? = null
+    private var mConnectionStateChangeListener: Display.OnConnectionStateChangeListener? = null
     @Volatile
-    private var mConnectionChangeProgressListener: OnConnectionChangeProgressListener? = null
+    private var mConnectionChangeProgressListener: Display.OnConnectionChangeProgressListener? = null
     @Volatile
-    private var mInputEventListener: OnInputEventListener? = null
+    private var mInputEventListener: Display.OnInputEventListener? = null
     private val mContext: Context = context
     private val mHandler = DisplayHandler()
     private var mConnection: Connection? = null
-    private var mCurrentConnectionState = STATE_UNKNOWN
+    private var mCurrentConnectionState = Display.STATE_UNKNOWN
     private var mDisplayProperties: BrailleDisplayProperties? = null
     private val mServiceCallback = ServiceCallback()
 
@@ -69,15 +69,15 @@ class DisplayClient(context: Context) : Display {
         doBindService()
     }
 
-    override fun setOnConnectionStateChangeListener(listener: OnConnectionStateChangeListener?) {
+    override fun setOnConnectionStateChangeListener(listener: Display.OnConnectionStateChangeListener?) {
         mConnectionStateChangeListener = listener
     }
 
-    override fun setOnConnectionChangeProgressListener(listener: OnConnectionChangeProgressListener?) {
+    override fun setOnConnectionChangeProgressListener(listener: Display.OnConnectionChangeProgressListener?) {
         mConnectionChangeProgressListener = listener
     }
 
-    override fun setOnInputEventListener(listener: OnInputEventListener?) {
+    override fun setOnInputEventListener(listener: Display.OnInputEventListener?) {
         mInputEventListener = listener
     }
 
@@ -162,7 +162,7 @@ class DisplayClient(context: Context) : Display {
             Log.e(LOG_TAG, "Disconnected from braille service")
             // Report display disconnected for now, this will turn into a
             // connected state or error state depending on how the retrying goes.
-            mHandler.reportConnectionState(STATE_NOT_CONNECTED, null)
+            mHandler.reportConnectionState(Display.STATE_NOT_CONNECTED, null)
             mHandler.scheduleRebind()
         }
     }
@@ -171,11 +171,11 @@ class DisplayClient(context: Context) : Display {
     // and not on the main application thread.
     private inner class ServiceCallback : IBrailleServiceCallback.Stub() {
         override fun onDisplayConnected(displayProperties: BrailleDisplayProperties?) {
-            mHandler.reportConnectionState(STATE_CONNECTED, displayProperties)
+            mHandler.reportConnectionState(Display.STATE_CONNECTED, displayProperties)
         }
 
         override fun onDisplayDisconnected() {
-            mHandler.reportConnectionState(STATE_NOT_CONNECTED, null)
+            mHandler.reportConnectionState(Display.STATE_NOT_CONNECTED, null)
         }
 
         override fun onInput(inputEvent: BrailleInputEvent?) {
@@ -256,7 +256,7 @@ class DisplayClient(context: Context) : Display {
                     Log.w(LOG_TAG, String.format(
                         "Will rebind to braille service in %d ms.", delay))
                 } else {
-                    reportConnectionState(STATE_ERROR, null)
+                    reportConnectionState(Display.STATE_ERROR, null)
                 }
             }
         }
@@ -297,7 +297,7 @@ class DisplayClient(context: Context) : Display {
         private fun handleReportInputEvent(event: BrailleInputEvent?) {
             val localListener = mInputEventListener
             if (localListener != null) {
-                localListener.onInputEvent(event)
+                localListener.onInputEvent(event!!)
             }
         }
 
