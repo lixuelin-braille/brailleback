@@ -119,6 +119,9 @@ class SettingsActivity : AppCompatActivity(),
         private var mClearLogPreference: Preference? = null
         private var mConnectionState = Display.STATE_NOT_CONNECTED
         private var mConnectionProgress: String? = null
+        /** 首次连接状态回调只更新 UI、不播报——避免切换分类时（新 fragment 收到
+         *  真实状态）重复播报"已连接"。真实变化才播报。 */
+        private var mFirstConnectionState = true
         private var mTables: List<TableInfo> = emptyList()
 
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
@@ -201,7 +204,8 @@ class SettingsActivity : AppCompatActivity(),
             mTranslatorManager = translatorManager
             translatorManager.addOnTablesChangedListener(this)
 
-            onConnectionStateChanged(Display.STATE_NOT_CONNECTED)
+            // 不在此处无条件重置连接状态：DisplayClient 注册后会自动回调真实状态，
+            // 无条件播报"未连接"会在切换分类时（fragment 反复 resume）造成虚假提示。
             refreshBrailleTypeSummary()
             if (Build.VERSION.SDK_INT >= 33) {
                 requireContext().registerReceiver(
@@ -261,7 +265,12 @@ class SettingsActivity : AppCompatActivity(),
                 ?.isEnabled = enableBindings
             if (mConnectionProgress == null) {
                 mStatusPreference?.summary = summary
-                announceConnectionState(summary)
+                if (mFirstConnectionState) {
+                    // 首次（fragment 重建后收到真实状态）只更新 UI，不播报
+                    mFirstConnectionState = false
+                } else {
+                    announceConnectionState(summary)
+                }
             }
         }
 
