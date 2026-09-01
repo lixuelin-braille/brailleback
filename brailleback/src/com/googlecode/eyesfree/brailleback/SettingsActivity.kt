@@ -49,7 +49,9 @@ import java.util.Comparator
 import java.util.HashMap
 
 class SettingsActivity : AppCompatActivity(),
-    PreferenceFragmentCompat.OnPreferenceStartScreenCallback {
+    PreferenceFragmentCompat.OnPreferenceStartScreenCallback,
+    Display.OnConnectionStateChangeListener,
+    Display.OnConnectionChangeProgressListener {
 
     /** Message from BrailleBackService, indicating that grade pref changed. */
     companion object {
@@ -57,11 +59,93 @@ class SettingsActivity : AppCompatActivity(),
             "com.googlecode.eyesfree.brailleback.REFRESH_DISPLAY"
     }
 
+    /**
+     * 当前可见设置 fragment 的接口：Activity 把点显器连接状态推给当前
+     * fragment 渲染 UI（分类切换会重建 fragment，但连接状态只保存在 Activity）。
+     */
+    interface ConnectionStatusUi {
+        fun onConnectionStatusChanged(state: Int, progress: String?)
+    }
+
+    /** 点显器客户端：Activity 级持有。分类切换/返回只重建 fragment，
+     *  不再 bind/unbind 点显器服务，避免连接抖动与断开感。 */
+    private var mDisplay: DisplayClient? = null
+    private var mConnectionState = Display.STATE_NOT_CONNECTED
+    private var mConnectionProgress: String? = null
+    /** 首次连接状态回调只更新 UI、不播报——避免每次打开设置都重复播报"已连接"。
+     *  真实变化才播报（Activity 级客户端在分类切换时不会产生状态回调）。 */
+    private var mFirstConnectionState = true
+
+    /** 当前可见 fragment（用于推送连接状态渲染 UI）。 */
+    var mConnectionStatusUi: ConnectionStatusUi? = null
+
+    /** 当前点显器客户端（fragment 通过它 poll 等）。 */
+    val displayClient: DisplayClient?
+        get() = mDisplay
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 点显器客户端在 Activity 级创建：分类切换/返回只重建 fragment，
+        // 不会再触发 bind/unbind 与服务端的连接状态抖动。
+        val display = DisplayClient(this)
+        mDisplay = display
+        display.setOnConnectionStateChangeListener(this)
+        display.setOnConnectionChangeProgressListener(this)
         supportFragmentManager.beginTransaction()
             .replace(android.R.id.content, SettingsFragment())
             .commit()
+    }
+
+    override fun onDestroy() {
+        mDisplay?.shutdown()
+        mDisplay = null
+        mConnectionStatusUi = null
+        super.onDestroy()
+    }
+
+    // ------------------------------------------------------------------
+    // 点显器连接状态（Activity 级）
+    // ------------------------------------------------------------------
+
+    override fun onConnectionStateChanged(state: Int) {
+        mConnectionState = state
+        mConnectionStatusUi?.onConnectionStatusChanged(state, mConnectionProgress)
+        if (mConnectionProgress == null) {
+            val summary = connectionStateSummary(state)
+            if (mFirstConnectionState) {
+                // 首次（打开设置时收到真实状态）只更新 UI，不播报
+                mFirstConnectionState = false
+            } else {
+                announceConnectionState(summary)
+            }
+        }
+    }
+
+    override fun onConnectionChangeProgress(description: String?) {
+        mConnectionProgress = description
+        mConnectionStatusUi?.onConnectionStatusChanged(mConnectionState, description)
+        if (description == null) {
+            // 进度结束：回到真实连接状态渲染
+            onConnectionStateChanged(mConnectionState)
+        } else {
+            // The description is localized by the server.
+            announceConnectionState(description)
+        }
+    }
+
+    /** 把当前连接状态推给当前可见 fragment（fragment onResume 时调用）。 */
+    fun refreshConnectionStatusUi() {
+        mConnectionStatusUi?.onConnectionStatusChanged(mConnectionState, mConnectionProgress)
+    }
+
+    private fun connectionStateSummary(state: Int): CharSequence = when (state) {
+        Display.STATE_CONNECTED -> getText(R.string.connstate_connected)
+        Display.STATE_NOT_CONNECTED -> getText(R.string.connstate_not_connected)
+        else -> getText(R.string.connstate_error)
+    }
+
+    private fun announceConnectionState(state: CharSequence) {
+        window.decorView.announceForAccessibility(state)
     }
 
     /**
@@ -89,8 +173,7 @@ class SettingsActivity : AppCompatActivity(),
     }
 
     class SettingsFragment : PreferenceFragmentCompat(),
-        Display.OnConnectionStateChangeListener,
-        Display.OnConnectionChangeProgressListener,
+        ConnectionStatusUi,
         TranslatorManager.OnTablesChangedListener,
         Preference.OnPreferenceChangeListener,
         Preference.OnPreferenceClickListener {
@@ -103,7 +186,6 @@ class SettingsActivity : AppCompatActivity(),
 
         private val mTableInfoComparator = TableInfoComparator()
 
-        private var mDisplay: DisplayClient? = null
         private var mTranslatorManager: TranslatorManager? = null
         private var mStatusPreference: Preference? = null
         private var mBrailleTypePreference: ListPreference? = null
@@ -117,11 +199,6 @@ class SettingsActivity : AppCompatActivity(),
         private var mSetupServicePreference: Preference? = null
         private var mViewLogPreference: Preference? = null
         private var mClearLogPreference: Preference? = null
-        private var mConnectionState = Display.STATE_NOT_CONNECTED
-        private var mConnectionProgress: String? = null
-        /** 首次连接状态回调只更新 UI、不播报——避免切换分类时（新 fragment 收到
-         *  真实状态）重复播报"已连接"。真实变化才播报。 */
-        private var mFirstConnectionState = true
         private var mTables: List<TableInfo> = emptyList()
 
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
@@ -195,17 +272,16 @@ class SettingsActivity : AppCompatActivity(),
             super.onResume()
             requestBluetoothPermissions()
 
-            val display = DisplayClient(requireActivity())
-            mDisplay = display
-            display.setOnConnectionStateChangeListener(this)
-            display.setOnConnectionChangeProgressListener(this)
+            // 点显器客户端在 Activity 级持有（onCreate 创建、onDestroy 关闭）。
+            // 这里只把自己注册为当前 UI 渲染目标，并渲染一次当前状态。
+            val activity = requireActivity() as SettingsActivity
+            activity.mConnectionStatusUi = this
+            activity.refreshConnectionStatusUi()
 
             val translatorManager = TranslatorManager(requireActivity())
             mTranslatorManager = translatorManager
             translatorManager.addOnTablesChangedListener(this)
 
-            // 不在此处无条件重置连接状态：DisplayClient 注册后会自动回调真实状态，
-            // 无条件播报"未连接"会在切换分类时（fragment 反复 resume）造成虚假提示。
             refreshBrailleTypeSummary()
             if (Build.VERSION.SDK_INT >= 33) {
                 requireContext().registerReceiver(
@@ -229,11 +305,13 @@ class SettingsActivity : AppCompatActivity(),
             } catch (e: IllegalArgumentException) {
                 // Receiver was not registered (e.g. onPause without onResume).
             }
+            val activity = requireActivity() as SettingsActivity
+            if (activity.mConnectionStatusUi === this) {
+                activity.mConnectionStatusUi = null
+            }
             mTranslatorManager?.removeOnTablesChangedListener(this)
             mTranslatorManager?.shutdown()
             mTranslatorManager = null
-            mDisplay?.shutdown()
-            mDisplay = null
         }
 
         private val mRefreshReceiver: BroadcastReceiver = object : BroadcastReceiver() {
@@ -245,48 +323,24 @@ class SettingsActivity : AppCompatActivity(),
         }
 
         // ------------------------------------------------------------------
-        // 连接状态
+        // 连接状态（UI 渲染；真实状态与播报由 Activity 级 DisplayClient 提供）
         // ------------------------------------------------------------------
 
-        override fun onConnectionStateChanged(state: Int) {
-            mConnectionState = state
+        override fun onConnectionStatusChanged(state: Int, progress: String?) {
             val summary: CharSequence
-            var enableBindings = false
-            when (state) {
-                Display.STATE_CONNECTED -> {
-                    summary = getText(R.string.connstate_connected)
-                    enableBindings = true
-                }
-                Display.STATE_NOT_CONNECTED ->
-                    summary = getText(R.string.connstate_not_connected)
-                else -> summary = getText(R.string.connstate_error)
-            }
-            findPreference<Preference>(getString(R.string.pref_key_bindings_key))
-                ?.isEnabled = enableBindings
-            if (mConnectionProgress == null) {
-                mStatusPreference?.summary = summary
-                if (mFirstConnectionState) {
-                    // 首次（fragment 重建后收到真实状态）只更新 UI，不播报
-                    mFirstConnectionState = false
-                } else {
-                    announceConnectionState(summary)
-                }
-            }
-        }
-
-        override fun onConnectionChangeProgress(description: String?) {
-            mConnectionProgress = description
-            if (description == null) {
-                onConnectionStateChanged(mConnectionState)
-            } else {
+            if (progress != null) {
                 // The description is localized by the server.
-                mStatusPreference?.summary = description
-                announceConnectionState(description)
+                summary = progress
+            } else {
+                summary = when (state) {
+                    Display.STATE_CONNECTED -> getText(R.string.connstate_connected)
+                    Display.STATE_NOT_CONNECTED -> getText(R.string.connstate_not_connected)
+                    else -> getText(R.string.connstate_error)
+                }
             }
-        }
-
-        private fun announceConnectionState(state: CharSequence) {
-            activity?.window?.decorView?.announceForAccessibility(state)
+            mStatusPreference?.summary = summary
+            findPreference<Preference>(getString(R.string.pref_key_bindings_key))
+                ?.isEnabled = state == Display.STATE_CONNECTED
         }
 
         // ------------------------------------------------------------------
@@ -424,7 +478,7 @@ class SettingsActivity : AppCompatActivity(),
         override fun onPreferenceClick(preference: Preference): Boolean {
             when (preference) {
                 mStatusPreference -> {
-                    mDisplay?.poll()
+                    (requireActivity() as SettingsActivity).displayClient?.poll()
                     return true
                 }
                 mOverlayTutorialPreference -> {
@@ -602,7 +656,7 @@ class SettingsActivity : AppCompatActivity(),
                     grantResults[0] == PackageManager.PERMISSION_GRANTED
                 if (granted) {
                     // Permission just granted: re-scan for connected displays.
-                    mDisplay?.poll()
+                    (requireActivity() as SettingsActivity).displayClient?.poll()
                 }
             }
         }
