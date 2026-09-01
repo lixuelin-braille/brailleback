@@ -297,17 +297,41 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
      *   null 则按 [resetPosition] 决定从 0 还是按比例保持。
      */
     private fun loadBytes(uri: Uri, resetPosition: Boolean, targetOffset: Int? = null) {
-        val name = displayNameOf(uri)
-        checkSupportedFormat(name)
-        val bytes = readAllBytes(uri)
-        val text = BrailleFileDecoder.decodeDocument(bytes, name)
-            ?: throw IllegalStateException(getString(R.string.braille_reader_bdo_fail))
-        when (BrailleFileDecoder.detectKind(text)) {
-            BrailleFileDecoder.ContentKind.TEXT ->
-                startTranslation(text, name, uri, resetPosition, targetOffset)
-            else ->
-                setBrailleStream(text, name, uri, resetPosition, targetOffset)
-        }
+        // 读文件 + 解码是 IO/CPU 密集操作（txt/bdo 可能数 MB），放在后台线程，
+        // 避免阻塞主线程导致打开大书时卡顿/ANR；UI 更新（startTranslation /
+        // setBrailleStream）回到主线程执行。失败时在主线程 Toast 提示。
+        Thread {
+            val decoded: Pair<String, String?>? = try {
+                val name = displayNameOf(uri)
+                checkSupportedFormat(name)
+                val bytes = readAllBytes(uri)
+                val text = BrailleFileDecoder.decodeDocument(bytes, name)
+                    ?: throw IllegalStateException(getString(R.string.braille_reader_bdo_fail))
+                text to name
+            } catch (e: Exception) {
+                if (!isFinishing) {
+                    runOnUiThread {
+                        Toast.makeText(this,
+                            getString(R.string.braille_reader_load_fail, e.message),
+                            Toast.LENGTH_SHORT).show()
+                    }
+                }
+                null
+            }
+            if (decoded == null || isFinishing) {
+                return@Thread
+            }
+            val text = decoded.first
+            val name = decoded.second
+            runOnUiThread {
+                when (BrailleFileDecoder.detectKind(text)) {
+                    BrailleFileDecoder.ContentKind.TEXT ->
+                        startTranslation(text, name, uri, resetPosition, targetOffset)
+                    else ->
+                        setBrailleStream(text, name, uri, resetPosition, targetOffset)
+                }
+            }
+        }.start()
     }
 
     /**
