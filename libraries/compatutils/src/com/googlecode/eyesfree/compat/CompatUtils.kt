@@ -37,7 +37,7 @@ object CompatUtils {
             Class.forName(className)
         } catch (e: ClassNotFoundException) {
             if (DEBUG) {
-                e.printStackTrace()
+                Log.e(TAG, "Failed to load class: $className", e)
             }
             null
         }
@@ -57,7 +57,7 @@ object CompatUtils {
             targetClass.getDeclaredMethod(name, *parameterTypes as Array<Class<*>>)
         } catch (e: Exception) {
             if (DEBUG) {
-                e.printStackTrace()
+                Log.e(TAG, "Failed to get method: $name", e)
             }
             null
         }
@@ -72,7 +72,7 @@ object CompatUtils {
             targetClass.getDeclaredField(name)
         } catch (e: Exception) {
             if (DEBUG) {
-                e.printStackTrace()
+                Log.e(TAG, "Failed to get field: $name", e)
             }
             null
         }
@@ -88,7 +88,7 @@ object CompatUtils {
             targetClass.getConstructor(*types as Array<Class<*>>)
         } catch (e: Exception) {
             if (DEBUG) {
-                e.printStackTrace()
+                Log.e(TAG, "Failed to get constructor", e)
             }
             null
         }
@@ -102,10 +102,7 @@ object CompatUtils {
         return try {
             constructor.newInstance(*args)
         } catch (e: Exception) {
-            Log.e(TAG, "Exception in newInstance: " + e.javaClass.simpleName)
-            if (DEBUG) {
-                e.printStackTrace()
-            }
+            Log.e(TAG, "Exception in newInstance: " + e.javaClass.simpleName, e)
             null
         }
     }
@@ -123,10 +120,7 @@ object CompatUtils {
         return try {
             method.invoke(receiver, *args)
         } catch (e: Exception) {
-            Log.e(TAG, "Exception in invoke: " + e.javaClass.simpleName)
-            if (DEBUG) {
-                e.printStackTrace()
-            }
+            Log.e(TAG, "Exception in invoke: " + e.javaClass.simpleName, e)
             defaultReturnValue
         }
     }
@@ -140,7 +134,7 @@ object CompatUtils {
             field.get(receiver)
         } catch (e: Exception) {
             if (DEBUG) {
-                e.printStackTrace()
+                Log.e(TAG, "Failed to get field value", e)
             }
             defaultReturnValue
         }
@@ -155,7 +149,7 @@ object CompatUtils {
             field.set(receiver, value)
         } catch (e: Exception) {
             if (DEBUG) {
-                e.printStackTrace()
+                Log.e(TAG, "Failed to set field value", e)
             }
         }
     }

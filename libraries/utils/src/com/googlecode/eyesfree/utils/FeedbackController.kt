@@ -259,7 +259,7 @@ class FeedbackController(context: Context) {
             mp.setVolume(volume, volume)
             mp.prepareAsync()
         } catch (e: IOException) {
-            e.printStackTrace()
+            LogUtils.log(this, Log.ERROR, e, "加载音效资源失败: resId=%d", resId)
             return false
         }
 
@@ -299,11 +299,11 @@ class FeedbackController(context: Context) {
             mp.prepareAsync()
             return true
         } catch (e: IOException) {
-            e.printStackTrace()
+            LogUtils.log(this, Log.ERROR, e, "播放音频文件失败: %s", path)
         } catch (e: IllegalArgumentException) {
-            e.printStackTrace()
+            LogUtils.log(this, Log.ERROR, e, "音频文件路径非法: %s", path)
         } catch (e: SecurityException) {
-            e.printStackTrace()
+            LogUtils.log(this, Log.ERROR, e, "无权限播放音频文件: %s", path)
         }
 
         mp.release()

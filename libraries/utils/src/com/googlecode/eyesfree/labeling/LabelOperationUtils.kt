@@ -7,7 +7,9 @@ package com.googlecode.eyesfree.labeling
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import android.view.accessibility.AccessibilityNodeInfo
+import com.googlecode.eyesfree.utils.LogUtils
 
 /**
  * Convenience utilities and constants for invoking operations related to label
@@ -44,7 +46,7 @@ object LabelOperationUtils {
             context.startActivity(addIntent)
             true
         } catch (e: Exception) {
-            e.printStackTrace()
+            LogUtils.log(LabelOperationUtils::class.java, Log.ERROR, e, "启动添加标签界面失败：%s", ACTION_ADD_LABEL)
             false
         }
     }
@@ -66,7 +68,7 @@ object LabelOperationUtils {
             context.startActivity(editIntent)
             true
         } catch (e: Exception) {
-            e.printStackTrace()
+            LogUtils.log(LabelOperationUtils::class.java, Log.ERROR, e, "启动编辑标签界面失败：%s", ACTION_EDIT_LABEL)
             false
         }
     }
@@ -88,7 +90,7 @@ object LabelOperationUtils {
             context.startActivity(removeIntent)
             true
         } catch (e: Exception) {
-            e.printStackTrace()
+            LogUtils.log(LabelOperationUtils::class.java, Log.ERROR, e, "启动删除标签界面失败：%s", ACTION_REMOVE_LABEL)
             false
         }
     }

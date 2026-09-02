@@ -2,6 +2,7 @@ package com.googlecode.eyesfree.braille.utils
 
 import android.content.Context
 import android.os.AsyncTask
+import android.util.Log
 import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileOutputStream
@@ -24,6 +25,8 @@ open class ZipResourceExtractor(context: Context, private val mRawResId: Int, pr
     companion object {
         const val RESULT_ERROR = -1
         const val RESULT_OK = 0
+
+        private const val TAG = "ZipResourceExtractor"
     }
 
     private val mContext: Context = context
@@ -37,12 +40,12 @@ open class ZipResourceExtractor(context: Context, private val mRawResId: Int, pr
             extractEntries(zipStream)
             successful = true
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "解压资源失败: rawResId=$mRawResId", e)
         } finally {
             try {
                 zipStream.close()
             } catch (e: IOException) {
-                e.printStackTrace()
+                Log.e(TAG, "关闭 zip 流失败", e)
             }
         }
         if (isCancelled || !successful) {
