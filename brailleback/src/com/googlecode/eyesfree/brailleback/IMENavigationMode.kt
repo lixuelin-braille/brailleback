@@ -301,7 +301,9 @@ class IMENavigationMode @JvmOverloads constructor(
         }
     }
 
-    internal fun isImeOpen(): Boolean {
+    // 注意：必须声明为 public。Kotlin 的 internal 函数在 JVM 字节码中会被名字改写
+    // （name mangling），DisplayManager.java 将无法按 isImeOpen() 调用。
+    fun isImeOpen(): Boolean {
         return mInputStarted && mInputViewStarted
     }
 
