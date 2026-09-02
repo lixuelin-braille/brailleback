@@ -67,7 +67,7 @@ class FeedbackController(context: Context) {
     /** Parent context. Required for mapping resource IDs to resources. */
     private val mContext: Context
 
-    /** Parent resources. Used to distinguish raw and MIDI resources. */
+    /** Parent resources. Used to load raw sound resources. */
     private val mResources: android.content.res.Resources
 
     /** Vibration service used to play vibration patterns. */
@@ -115,7 +115,7 @@ class FeedbackController(context: Context) {
 
         mResourceIdToSoundMap.clear()
         mResourceIdToVibrationPatternMap.clear()
-        MidiUtils.purgeMidiTempFiles(context)
+        purgeMidiTempFiles(context)
     }
 
     /**
@@ -161,7 +161,7 @@ class FeedbackController(context: Context) {
     fun shutdown() {
         mVibrator.cancel()
         mSoundPool.release()
-        MidiUtils.purgeMidiTempFiles(mContext)
+        purgeMidiTempFiles(mContext)
     }
 
     /**
@@ -180,11 +180,8 @@ class FeedbackController(context: Context) {
         val soundPoolId: Int
         val resType = mResources.getResourceTypeName(resId)
 
-        soundPoolId = if ("raw" == resType) {
-            mSoundPool.load(mContext, resId, 1)
-        } else if ("array" == resType) {
-            val notes = mResources.getIntArray(resId)
-            loadMidiSoundFromArray(notes, false)
+        if ("raw" == resType) {
+            soundPoolId = mSoundPool.load(mContext, resId, 1)
         } else {
             LogUtils.log(this, Log.ERROR, "Failed to load sound: Unknown resource type")
             return -1
@@ -384,37 +381,6 @@ class FeedbackController(context: Context) {
     }
 
     /**
-     * Generates and plays a MIDI scale.
-     *
-     * @param program The MIDI program ID to use
-     * @param velocity The MIDI velocity to use for each note
-     * @param duration The duration in milliseconds of each note
-     * @param startingPitch The MIDI pitch value on which the scale should begin
-     * @param pitchesToPlay The number of pitches to play. 7 pitches (or 5
-     * pentatonic) is a complete scale. 8 (or 6 pentatonic) for a resolved scale.
-     * @param scaleType The MIDI_SCALE_TYPE_* constant associated with the type
-     * of scale to play as defined in [MidiUtils].
-     * @return `true` if successful, `false` otherwise.
-     */
-    fun playMidiScale(
-        program: Int,
-        velocity: Int,
-        duration: Int,
-        startingPitch: Int,
-        pitchesToPlay: Int,
-        scaleType: Int
-    ): Boolean {
-        if (!mAuditoryEnabled) {
-            return false
-        }
-
-        return MidiUtils.playMidiScale(
-            program, velocity, duration, startingPitch, pitchesToPlay,
-            scaleType, mContext
-        )
-    }
-
-    /**
      * Plays the vibration pattern specified by the given resource identifier.
      *
      * @param resId The vibration pattern's resource identifier.
@@ -489,31 +455,21 @@ class FeedbackController(context: Context) {
         return pattern
     }
 
-    fun playMidiSoundFromPool(soundID: Int) {
-        mSoundPool.play(soundID, DEFAULT_VOLUME, DEFAULT_VOLUME, 1, 0, DEFAULT_RATE)
-    }
-
     /**
-     * Generates a MIDI file and loads it into the sound pool.
-     *
-     * @param notes The MIDI track sequence to load
-     * @param playOnLoad `true` to play the sound immediately after it
-     * loads.
-     * @return the sound ID for this sound, or `-1` on error.
+     * Deletes leftover MIDI temp files from older app versions. Kept as
+     * hygiene after the MIDI generation code was removed.
      */
-    fun loadMidiSoundFromArray(notes: IntArray, playOnLoad: Boolean): Int {
-        val midiFile = MidiUtils.generateMidiFileFromArray(mContext, notes)
-
-        if (midiFile == null) {
-            return -1
+    private fun purgeMidiTempFiles(context: Context) {
+        val midiDir = File(context.cacheDir, "midi")
+        if (midiDir.exists()) {
+            val tempMidiFiles = midiDir.listFiles()
+            if (tempMidiFiles != null) {
+                for (f in tempMidiFiles) {
+                    f.delete()
+                }
+            }
         }
-
-        val soundId = mSoundPool.load(midiFile.path, 1)
-        if (playOnLoad) {
-            mPostLoadPlayables.add(soundId)
-        }
-
-        return soundId
+        midiDir.delete()
     }
 
     /**
