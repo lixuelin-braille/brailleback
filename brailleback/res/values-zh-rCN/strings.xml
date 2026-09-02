@@ -205,4 +205,42 @@
     <string name="bookshelf_deleted">已从书架移除</string>
 
     <string name="pref_braille_reader_title">盲文阅读器</string>
+    <string name="pref_sound_enabled_summary_off">已关闭音效反馈</string>
+    <string name="pref_sound_enabled_summary_on">已开启音效反馈</string>
+    <string name="pref_sound_enabled_title">启用音效</string>
+    <string name="pref_sound_volume_summary">50</string>
+    <string name="pref_sound_volume_title">音效音量</string>
+    <string name="sound_editor_volume">音效音量：%1$d</string>
+    <string name="sound_name_actionable_focus">可点击焦点</string>
+    <string name="sound_name_add_success">追加复制</string>
+    <string name="sound_name_chime_down">结束使用系统手势</string>
+    <string name="sound_name_chime_up">暂时使用系统手势</string>
+    <string name="sound_name_complete">执行失败</string>
+    <string name="sound_name_copy_success">复制</string>
+    <string name="sound_name_custom_actions">操作</string>
+    <string name="sound_name_ding_focus">叮-聚焦</string>
+    <string name="sound_name_double_click">双击</string>
+    <string name="sound_name_emoji">Emoji表情</string>
+    <string name="sound_name_focus">不可点击焦点</string>
+    <string name="sound_name_gesture_begin">手势开始</string>
+    <string name="sound_name_gesture_end">手势完成</string>
+    <string name="sound_name_hyperlink">文本链接</string>
+    <string name="sound_name_image_caption">图标识别</string>
+    <string name="sound_name_key">键盘</string>
+    <string name="sound_name_loading">识别中</string>
+    <string name="sound_name_long_clicked">长按</string>
+    <string name="sound_name_recognize_complete">识别完成</string>
+    <string name="sound_name_screen_lock">锁屏</string>
+    <string name="sound_name_screenshot">截屏</string>
+    <string name="sound_name_scroll_tone">滚动</string>
+    <string name="sound_name_silence">静音</string>
+    <string name="sound_name_tick">点击</string>
+    <string name="sound_name_toast">气泡通知</string>
+    <string name="sound_name_view_entered">无焦点框</string>
+    <string name="sound_name_window_navigation">窗口导航</string>
+    <string name="sound_name_window_state">窗口改变</string>
+    <string name="sound_scheme_apple">苹果</string>
+    <string name="sound_scheme_default">天坦默认</string>
+    <string name="sound_scheme_tatans">天坦</string>
+
 </resources>

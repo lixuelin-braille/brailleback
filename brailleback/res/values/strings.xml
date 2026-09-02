@@ -129,7 +129,7 @@
     <string name="braille_reader_goto_hint">1 - %1$d</string>
     <string name="pref_chinese_segmentation_title">Chinese word segmentation</string>
     <string name="pref_chinese_segmentation_summary">Split Chinese text into words before translating to braille (recommended)</string>
-    <string name="pref_connection_protocol_default">auto</string>
+    <string name="pref_connection_protocol_default" translatable="false">auto</string>
     <string name="pref_connection_protocol_auto_label">Auto (HID first, then Bluetooth serial)</string>
     <string name="pref_connection_protocol_hid_label">HID (new protocol)</string>
     <string name="pref_connection_protocol_rfcomm_label">Bluetooth serial (old protocol)</string>
