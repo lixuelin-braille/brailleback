@@ -296,7 +296,7 @@ class BrailleIME : InputMethodService {
 
     fun route(position: Int, content: DisplayManager.Content): Boolean {
         val ic = getCurrentInputConnection()
-        val text: Spanned? = content.spanned
+        val text: Spanned? = content.getSpanned()
         if (ic != null && text != null) {
             val spans = text.getSpans(position, position, MarkingSpan::class.java)
             if (spans.size == 1) {

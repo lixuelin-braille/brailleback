@@ -424,7 +424,7 @@ internal class SearchNavigationMode @JvmOverloads constructor(
         }
         val content = mNodeBrailler.brailleNode(node) ?: return null
 
-        val spanned = content.spanned
+        val spanned = content.getSpanned()
         if (spanned == null) {
             LogUtils.log(this, Log.ERROR, "No text for node")
             return null

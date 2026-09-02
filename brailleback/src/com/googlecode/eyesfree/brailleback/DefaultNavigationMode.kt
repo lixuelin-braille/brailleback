@@ -393,14 +393,14 @@ internal class DefaultNavigationMode(
             }
             BrailleInputEvent.CMD_ROUTE -> {
                 val node = DisplaySpans.getAccessibilityNodeFromPosition(
-                        event.argument, content.getText())
+                        event.argument, content.getText() ?: "")
                 return mFeedbackManager.emitOnFailure(
                         activateNode(node, event.argument),
                         FeedbackManager.TYPE_COMMAND_FAILED)
             }
             BrailleInputEvent.CMD_LONG_PRESS_ROUTE -> {
                 val node = DisplaySpans.getAccessibilityNodeFromPosition(
-                        event.argument, content.getText())
+                        event.argument, content.getText() ?: "")
                 return mFeedbackManager.emitOnFailure(
                         longClickNode(node),
                         FeedbackManager.TYPE_COMMAND_FAILED)

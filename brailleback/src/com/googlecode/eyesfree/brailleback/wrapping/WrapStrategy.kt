@@ -98,7 +98,7 @@ abstract class WrapStrategy {
      */
     fun setContent(content: Content?, translation: TranslationResult?, displayWidth: Int) {
         if (content == null || translation == null || displayWidth <= 0
-            || content.getText().length == 0) {
+            || content.getText().isNullOrEmpty()) {
             mContent = null
             mTranslation = null
             mDisplayStart = 0
@@ -135,7 +135,7 @@ abstract class WrapStrategy {
         if (!content.isSplitParagraphs()) {
             return
         }
-        val text = content.getText()
+        val text = content.getText() ?: return
         val textToCell = translation.textToBraillePositions
         val numCells = translation.cells.size
         for (i in 0 until text.length - 1) {

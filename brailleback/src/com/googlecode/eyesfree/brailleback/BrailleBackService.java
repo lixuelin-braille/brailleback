@@ -109,7 +109,9 @@ public class BrailleBackService
   private ModeSwitcher modeSwitcher;
   private SearchNavigationMode searchNavigationMode;
   private BrailleMenuNavigationMode brailleMenuNavigationMode;
-  protected IMENavigationMode imeNavigationMode;
+  // Package-private so that Kotlin code in the same package (DisplayManager.kt)
+  // can read it; Kotlin cannot access Java protected members from a non-subclass.
+  IMENavigationMode imeNavigationMode;
   private CustomLabelManager labelManager;
   private PackageRemovalReceiver packageReceiver;
 
