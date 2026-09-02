@@ -329,12 +329,60 @@ abstract class WrapStrategy {
                 && mBreakPoints.get(limit) == REMOVABLE_BREAK_POINT) {
                 limit++
             }
-            return avoidOpeningPunctuationAtLineEnd(
-                avoidPunctuationAtLineStart(limit))
+            return clampLineEndToWidth(
+                start,
+                avoidOpeningPunctuationAtLineEnd(avoidPunctuationAtLineStart(limit)))
         }
 
-        return avoidOpeningPunctuationAtLineEnd(
-            avoidPunctuationAtLineStart(displayLimit))
+        return clampLineEndToWidth(
+            start,
+            avoidOpeningPunctuationAtLineEnd(avoidPunctuationAtLineStart(displayLimit)))
+    }
+
+    /**
+     * Keeps a computed line end inside the display width unless the extra
+     * cells are elidable whitespace.
+     *
+     * 避头点（行首不得留标点）的做法是把标点收进上一行的行尾，这会让行尾
+     * 越过显示宽度；而 [getDisplayEnd] 会按宽度截断、[panRight] 却跳到未
+     * 截断的行尾，于是被推出宽度的标点永远不会被显示（内容丢失）。
+     *
+     * 行已排满时改用「回退断点」：让标点连同它前面的字符一起落到下一行。
+     * 这样既不会丢内容，也保证下一行行首不是标点（国标排版：标点与前一
+     * 字符一起下移），代价是该行少显示若干方。
+     */
+    private fun clampLineEndToWidth(start: Int, lineEnd: Int): Int {
+        val translation = mTranslation ?: return lineEnd
+        val numCells = translation.cells.size
+        val displayLimit = Math.min(start + mDisplayWidth, numCells)
+        if (lineEnd <= displayLimit) {
+            return lineEnd
+        }
+        // 找出被推出显示范围的第一个闭标点；若只有空白被推出，
+        // 属于可省略的尾随空白（removable break point），保持原值。
+        var punct = displayLimit
+        while (punct < lineEnd && !isCellClosingPunctuation(punct)) {
+            punct++
+        }
+        if (punct >= lineEnd) {
+            return lineEnd
+        }
+        // 回退到标点之前最近的非标点位置，使下一行行首是真实字符。
+        var candidate = punct - 1
+        while (candidate > start && isCellClosingPunctuation(candidate)) {
+            candidate--
+        }
+        // 吸收回退后落在行尾的可省略空白。
+        while (candidate > start
+            && mBreakPoints.get(candidate - 1) == REMOVABLE_BREAK_POINT) {
+            candidate--
+        }
+        if (candidate <= start) {
+            // 极端情况（整行几乎全是标点）：保证算法推进，宁可让下一行
+            // 以标点开头，也不能不前进或吞掉内容。
+            candidate = Math.min(start + 1, numCells)
+        }
+        return candidate
     }
 
     private fun calculateDisplayStart(end: Int): Int {
@@ -485,6 +533,21 @@ abstract class WrapStrategy {
         Log.d("HeadPunct", "avoided line-start punct: cell "
             + lineStart + " -> " + pos + " skippedCells=" + skipped)
         return pos
+    }
+
+    /** Returns `true` if the given braille cell maps to a closing punctuation. */
+    private fun isCellClosingPunctuation(cell: Int): Boolean {
+        val translation = mTranslation ?: return false
+        val btt = translation.brailleToTextPositions ?: return false
+        val text = mContent?.getText() ?: return false
+        if (cell < 0 || cell >= translation.cells.size) {
+            return false
+        }
+        val textPos = btt[cell]
+        if (textPos < 0 || textPos >= text.length) {
+            return false
+        }
+        return isClosingPunctuation(text[textPos])
     }
 
     /** Returns `true` if the character is a closing punctuation mark that

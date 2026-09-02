@@ -228,10 +228,9 @@ class WordWrapStrategyTest {
         assertEquals("开括号不应留在行尾", 4, strategy.getDisplayEnd())
     }
 
-    // ---------- 已知问题（待修复）----------
+    // ---------- 满宽避头点：回退断点，不得吞字符 ----------
 
     @Test
-    @org.junit.Ignore("已知 bug：满宽时避头点丢字符。见下方注释，待确认修复方案后启用")
     fun `full-width line must not skip punctuation pulled into line end`() {
         // 现场（已用探针实证，5 方点显器、一字一方映射）：
         //   text = "AAAAA，B"
@@ -267,6 +266,173 @@ class WordWrapStrategyTest {
         // 3) 行首不得是标点
         for ((s, _) in windows) {
             assertTrue("行首 $s 不应是标点", !text[s].isClosingPunctForTest())
+        }
+    }
+
+    @Test
+    fun `punctuation-heavy chinese text pans without losing cells`() {
+        val text = ("你好，世界。这是一段用于验证避头点规则的中文文本，" +
+            "它足够长，会跨越多行；其中包括逗号、句号！还有问号？" +
+            "分号；冒号：顿号、以及括号（）等等，用来覆盖各种标点场景。")
+        val width = 12
+        val strategy = WordWrapStrategy()
+        strategy.setContent(content(text), translation(text), width)
+        strategy.panTo(0, false)
+        val windows = mutableListOf<Pair<Int, Int>>()
+        while (true) {
+            windows.add(strategy.getDisplayStart() to strategy.getDisplayEnd())
+            if (!strategy.panRight()) break
+        }
+        // 1) 行与行之间不得出现空洞（后一行起点不得越过前一行显示终点）
+        for (i in 1 until windows.size) {
+            assertTrue(
+                "第 $i 行起点 ${windows[i].first} 越过了第 ${i - 1} 行显示终点 ${windows[i - 1].second}",
+                windows[i].first <= windows[i - 1].second
+            )
+        }
+        // 2) 覆盖到文末
+        assertEquals("最后一行应到达文末", text.length, windows.last().second)
+        // 3) 窗口不越界
+        for ((s, e) in windows) {
+            assertTrue("窗口宽度 $s..$e 超过点显器 $width", e - s <= width)
+        }
+        // 4) 行首不得是闭标点
+        for ((s, _) in windows) {
+            assertTrue("行首 $s 是标点 '${text[s]}'", !text[s].isClosingPunctForTest())
+        }
+    }
+
+    @Test
+    fun `panning left from the end keeps the same invariants`() {
+        // 注意：行划分以 pivot 为中心双向计算，向左与向右的具体断点可以
+        // 不同（Java 版同样如此，属设计特性）。这里只校验不变量：
+        // 无空洞、覆盖全文、窗口不越界。
+        val text = "abcdefg，hijklmn。opqrst，uvwxyz！"
+        val width = 7
+        val left = WordWrapStrategy()
+        left.setContent(content(text), translation(text), width)
+        left.panTo(text.length - 1, false)
+        val backward = mutableListOf<Pair<Int, Int>>()
+        while (true) {
+            backward.add(left.getDisplayStart() to left.getDisplayEnd())
+            if (!left.panLeft()) break
+        }
+        backward.reverse()
+
+        for (i in 1 until backward.size) {
+            assertTrue(
+                "向左：第 $i 行起点 ${backward[i].first} 越过上一行终点 ${backward[i - 1].second}",
+                backward[i].first <= backward[i - 1].second
+            )
+        }
+        assertEquals("向左：首行应从 0 开始", 0, backward.first().first)
+        assertEquals("向左：末行应到达文末", text.length, backward.last().second)
+        for ((s, e) in backward) {
+            assertTrue("向左：窗口 $s..$e 超宽", e - s <= width)
+        }
+    }
+
+    @Test
+    fun `randomized text keeps all invariants at any width`() {
+        val random = java.util.Random(20260902L)
+        val chars = "汉字词语段落显示平移测试内容盲文点位".toCharArray()
+        val puncts = "，。！？；：、".toCharArray()
+        repeat(300) { iteration ->
+            val n = 12 + random.nextInt(70)
+            val sb = StringBuilder()
+            for (i in 0 until n) {
+                when {
+                    random.nextInt(100) < 22 -> sb.append(puncts[random.nextInt(puncts.size)])
+                    random.nextInt(100) < 8 -> sb.append(' ')
+                    else -> sb.append(chars[random.nextInt(chars.size)])
+                }
+            }
+            var text = sb.toString().trim()
+            if (text.isEmpty()) return@repeat
+            // 首字符若是标点，第一行仍从 0 开始，属不可避免情况，排除掉
+            if (text[0].isClosingPunctForTest()) {
+                text = text.dropWhile { it.isClosingPunctForTest() || it == ' ' }
+            }
+            if (text.isEmpty()) return@repeat
+            val width = 3 + random.nextInt(13)
+
+            // ---- 向右平移 ----
+            val right = WordWrapStrategy()
+            right.setContent(content(text), translation(text), width)
+            right.panTo(0, false)
+            var prevDisplayedEnd = -1
+            var prevStart = -1
+            var lines = 0
+            while (true) {
+                val s = right.getDisplayStart()
+                val e = right.getDisplayEnd()
+                assertTrue("#$iteration 窗口非空 ($s..$e, n=${text.length})", e > s)
+                assertTrue("#$iteration 窗口越右界 ($e > ${text.length})", e <= text.length)
+                assertTrue("#$iteration 窗口超宽 (${e - s} > $width)", e - s <= width)
+                assertTrue("#$iteration 起点不后退", s > prevStart)
+                if (prevDisplayedEnd >= 0 && s > prevDisplayedEnd) {
+                    // 允许省略行尾空白（removable break point，盲文空方在行尾
+                    // 不可见），但绝不允许跳过实字符。
+                    val skipped = (prevDisplayedEnd until s).map { text[it] }
+                    assertTrue(
+                        "#$iteration 丢失内容：[$prevDisplayedEnd,$s) = \"${skipped.joinToString("")}\"" +
+                            " (width=$width, text=\"$text\")",
+                        skipped.all { it == ' ' }
+                    )
+                }
+                // 病理豁免：若上一行可选的断点范围(start, start+width] 内全是
+                // 闭标点（如连着 "；、：："），则任何断点都会让下一行以标点开头，
+                // 此时算法按「不吞字优先」处理，属正确取舍。
+                if (s > 0 && prevStart >= 0) {
+                    val candidates =
+                        (prevStart + 1..minOf(prevStart + width, text.length - 1)).map { text[it] }
+                    val unavoidable =
+                        candidates.isNotEmpty() && candidates.all { it.isClosingPunctForTest() }
+                    if (!unavoidable) {
+                        assertTrue(
+                            "#$iteration 行首 $s 是标点 '${text[s]}' (width=$width, text=\"$text\")",
+                            !text[s].isClosingPunctForTest()
+                        )
+                    }
+                }
+                prevStart = s
+                prevDisplayedEnd = e
+                lines++
+                assertTrue("#$iteration 平移未终止（死循环？已 $lines 行）", lines < text.length + 5)
+                if (!right.panRight()) break
+            }
+            assertEquals("#$iteration 最后一行应到达文末", text.length, prevDisplayedEnd)
+
+            // ---- 向左平移（反向行划分，同样不得丢内容）----
+            val left = WordWrapStrategy()
+            left.setContent(content(text), translation(text), width)
+            left.panTo(text.length - 1, false)
+            var prevStartBack = text.length
+            var firstStartBack = -1
+            var linesBack = 0
+            while (true) {
+                val s = left.getDisplayStart()
+                val e = left.getDisplayEnd()
+                assertTrue("#$iteration(左) 窗口非空 ($s..$e)", e > s)
+                assertTrue("#$iteration(左) 窗口超宽 (${e - s} > $width)", e - s <= width)
+                if (e < prevStartBack) {
+                    val skipped = (e until prevStartBack).map { text[it] }
+                    assertTrue(
+                        "#$iteration(左) 丢失内容：[$e,$prevStartBack) = \"${skipped.joinToString("")}\"" +
+                            " (width=$width, text=\"$text\")",
+                        skipped.all { it == ' ' }
+                    )
+                }
+                firstStartBack = s
+                prevStartBack = s
+                linesBack++
+                assertTrue(
+                    "#$iteration(左) 平移未终止（死循环？已 $linesBack 行）",
+                    linesBack < text.length + 5
+                )
+                if (!left.panLeft()) break
+            }
+            assertEquals("#$iteration(左) 首行应从 0 开始", 0, firstStartBack)
         }
     }
 
