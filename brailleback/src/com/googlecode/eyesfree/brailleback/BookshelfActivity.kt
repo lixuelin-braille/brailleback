@@ -4,8 +4,8 @@
  * 盲文书架：只做「导入 + 书籍管理（增删改查）」，不做文件夹树浏览/收藏。
  *
  * - 增：导入文件（系统选择器），或阅读器里打开过的书自动进书架
- * - 查：书架列表展示全部藏书，点击直接阅读
- * - 删：长按条目删除单本；菜单「清空书架」清空全部
+ * - 查：书架列表展示全部藏书，点击直接阅读；TalkBack 朗读书名 + 格式 + 上次打开时间
+ * - 删：长按条目删除单本（带确认）；菜单「清空书架」清空全部（带确认）
  * - 改：长按条目重命名显示名
  */
 
@@ -18,6 +18,9 @@ import android.net.Uri
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
+import android.text.format.DateUtils
+import android.view.View
+import android.view.ViewGroup
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
@@ -32,8 +35,52 @@ class BookshelfActivity : Activity() {
     private var mList: ListView? = null
     private var mBooks: List<Book> = emptyList()
 
-    /** 一本书：uri 唯一标识，name 为显示名（可重命名）。 */
-    private class Book(val uri: String, var name: String)
+    /**
+     * 一本书：uri 唯一标识，name 为显示名（可重命名）。
+     * ext/openedAt 用于列表朗读（书名 + 格式 + 上次打开时间）；
+     * 旧版存储无这两个字段，[decode] 自动回退为「按 uri 推断 + 未知时间」。
+     */
+    private class Book(
+        val uri: String,
+        var name: String,
+        val ext: String,
+        val openedAt: Long) {
+        /** ArrayAdapter 默认用 toString 渲染可见文本，必须返回书名。 */
+        override fun toString(): String = name
+    }
+
+    /** ListView 条目：视觉显示书名，TalkBack 朗读完整上下文。 */
+    private inner class BookAdapter(books: List<Book>)
+        : ArrayAdapter<Book>(this@BookshelfActivity,
+            android.R.layout.simple_list_item_1, books) {
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+            val view = super.getView(position, convertView, parent) as TextView
+            val book = getItem(position) ?: return view
+            view.contentDescription = describe(book)
+            return view
+        }
+    }
+
+    /** 朗读文本：书名 + 类型 + 上次打开时间（旧数据无时间则省略）。 */
+    private fun describe(book: Book): String {
+        val type = typeLabel(book.ext)
+        return if (book.openedAt > 0) {
+            val when_ = DateUtils.getRelativeTimeSpanString(
+                book.openedAt, System.currentTimeMillis(),
+                DateUtils.MINUTE_IN_MILLIS)
+            getString(R.string.bookshelf_item_desc, book.name, type, when_)
+        } else {
+            getString(R.string.bookshelf_item_desc_no_time, book.name, type)
+        }
+    }
+
+    private fun typeLabel(ext: String): String = when (ext) {
+        "brf" -> getString(R.string.bookshelf_type_brf)
+        "bdo" -> getString(R.string.bookshelf_type_bdo)
+        "txt" -> getString(R.string.bookshelf_type_txt)
+        "" -> getString(R.string.bookshelf_type_unknown)
+        else -> ext.uppercase()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -99,8 +146,7 @@ class BookshelfActivity : Activity() {
         val savedPosition = list?.firstVisiblePosition ?: 0
         mBooks = loadBooks()
         mEmptyText?.visibility = if (mBooks.isEmpty()) TextView.VISIBLE else TextView.GONE
-        list?.adapter = ArrayAdapter(
-            this, android.R.layout.simple_list_item_1, mBooks.map { it.name })
+        list?.adapter = BookAdapter(mBooks)
         if (list != null && mBooks.isNotEmpty()) {
             list.setSelection(savedPosition.coerceAtMost(mBooks.size - 1))
         }
@@ -162,13 +208,12 @@ class BookshelfActivity : Activity() {
     // 存储（SharedPreferences：uri\u0001name 集合）
     // ------------------------------------------------------------------
 
-    private fun loadBooks(): List<Book> =
-        decode(getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-            .getStringSet(KEY_BOOKS, null)).map { Book(it.first, it.second) }
+    private fun loadBooks(): List<Book> = decode(getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        .getStringSet(KEY_BOOKS, null))
 
     private fun saveBooks(books: List<Book>) {
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-            .putStringSet(KEY_BOOKS, encode(books.map { it.uri to it.name })).apply()
+            .putStringSet(KEY_BOOKS, encode(books)).apply()
     }
 
     /** 导入后加入书架：去重置顶、上限 [BOOK_LIMIT]。 */
@@ -180,7 +225,7 @@ class BookshelfActivity : Activity() {
     private fun addBook(uri: String, name: String) {
         val books = loadBooks().toMutableList()
         books.removeAll { it.uri == uri }
-        books.add(0, Book(uri, name))
+        books.add(0, Book(uri, name, extOf(uri), System.currentTimeMillis()))
         while (books.size > BOOK_LIMIT) books.removeAt(books.size - 1)
         saveBooks(books)
     }
@@ -193,7 +238,7 @@ class BookshelfActivity : Activity() {
     }
 
     private fun renameBook(uri: String, newName: String) {
-        val books = loadBooks().map { if (it.uri == uri) Book(it.uri, newName) else it }
+        val books = loadBooks().map { if (it.uri == uri) Book(it.uri, newName, it.ext, it.openedAt) else it }
         saveBooks(books)
         refreshList()
     }
@@ -236,14 +281,19 @@ class BookshelfActivity : Activity() {
         return super.onOptionsItemSelected(item)
     }
 
-    private fun encode(pairs: List<Pair<String, String>>): Set<String> =
-        pairs.map { it.first + SEP + it.second }.toSet()
+    private fun encode(books: List<Book>): Set<String> =
+        books.map { "${it.uri}$SEP${it.name}$SEP${it.ext}$SEP${it.openedAt}" }.toSet()
 
-    private fun decode(set: Set<String>?): List<Pair<String, String>> {
+    /** 兼容旧存储：2 段格式（uri+name）自动回退为「按 uri 推断格式、无时间」。 */
+    private fun decode(set: Set<String>?): List<Book> {
         if (set == null) return emptyList()
         return set.mapNotNull { s ->
-            val i = s.indexOf(SEP)
-            if (i <= 0) null else s.substring(0, i) to s.substring(i + 1)
+            val p = s.split(SEP)
+            when {
+                p.size >= 4 -> Book(p[0], p[1], p[2], p[3].toLongOrNull() ?: 0L)
+                p.size == 2 -> Book(p[0], p[1], extOf(p[0]), 0L)
+                else -> null
+            }
         }
     }
 
@@ -256,23 +306,34 @@ class BookshelfActivity : Activity() {
         private const val KEY_BOOKS = "books"
         private const val BOOK_LIMIT = 200
 
+        /** 从 uri 推断文件扩展名（小写，无扩展名返回空串）。 */
+        private fun extOf(uri: String): String =
+            Uri.parse(uri).lastPathSegment
+                ?.substringAfterLast('.', "")?.lowercase() ?: ""
+
         /**
          * 记录一本打开过的书进书架（阅读器解码/翻译成功后调用）。
-         * 去重置顶、上限 [BOOK_LIMIT]。
+         * 去重置顶、上限 [BOOK_LIMIT]；同时刷新格式与打开时间供列表朗读。
          */
         fun recordRecent(context: Activity, uri: String, name: String) {
             val prefs = context.getSharedPreferences(PREFS_NAME, Activity.MODE_PRIVATE)
             val set = prefs.getStringSet(KEY_BOOKS, null) ?: emptySet()
             val list = set.mapNotNull { s ->
-                val i = s.indexOf(SEP)
-                if (i <= 0) null else s.substring(0, i) to s.substring(i + 1)
-            }.toMutableList()
-            list.removeAll { it.first == uri }
-            list.add(0, uri to name)
+                val p = s.split(SEP)
+                when {
+                    p.size >= 4 -> Triple(p[0], p[1], p[2] to (p[3].toLongOrNull() ?: 0L))
+                    p.size == 2 -> Triple(p[0], p[1], "" to 0L)
+                    else -> null
+                }
+            }.map { Book(it.first, it.second, it.third.first, it.third.second) }
+                .toMutableList()
+            list.removeAll { it.uri == uri }
+            list.add(0, Book(uri, name, extOf(uri), System.currentTimeMillis()))
             while (list.size > BOOK_LIMIT) list.removeAt(list.size - 1)
             prefs.edit()
                 .putStringSet(KEY_BOOKS,
-                    list.map { it.first + SEP + it.second }.toSet())
+                    list.map { "${it.uri}$SEP${it.name}$SEP${it.ext}$SEP${it.openedAt}" }
+                        .toSet())
                 .apply()
         }
     }

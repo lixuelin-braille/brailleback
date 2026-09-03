@@ -435,5 +435,17 @@
 
     <string name="bookshelf_clear_confirm">Remove all %1$d books from the bookshelf? This cannot be undone.</string>
 
+    <string name="bookshelf_type_brf">BRF braille file</string>
+
+    <string name="bookshelf_type_bdo">BDO braille file</string>
+
+    <string name="bookshelf_type_txt">plain text file</string>
+
+    <string name="bookshelf_type_unknown">file</string>
+
+    <string name="bookshelf_item_desc">%1$s, %2$s, last opened %3$s</string>
+
+    <string name="bookshelf_item_desc_no_time">%1$s, %2$s</string>
+
     <string name="pref_braille_reader_title">Braille reader</string>
 </resources>

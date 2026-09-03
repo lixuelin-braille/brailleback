@@ -208,6 +208,18 @@
 
     <string name="bookshelf_clear_confirm">确定清空书架全部 %1$d 本书吗？此操作不可恢复。</string>
 
+    <string name="bookshelf_type_brf">BRF 盲文文件</string>
+
+    <string name="bookshelf_type_bdo">BDO 盲文文件</string>
+
+    <string name="bookshelf_type_txt">文本文档</string>
+
+    <string name="bookshelf_type_unknown">文件</string>
+
+    <string name="bookshelf_item_desc">%1$s，%2$s，上次打开 %3$s</string>
+
+    <string name="bookshelf_item_desc_no_time">%1$s，%2$s</string>
+
     <string name="pref_braille_reader_title">盲文阅读器</string>
     <string name="pref_sound_enabled_summary_off">已关闭音效反馈</string>
     <string name="pref_sound_enabled_summary_on">已开启音效反馈</string>
