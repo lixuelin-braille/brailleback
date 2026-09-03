@@ -61,7 +61,11 @@ dependencies {
     implementation project(':service')
     implementation project(':libraries:utils')
     implementation project(':libraries:compatutils')
-    implementation 'androidx.legacy:legacy-support-v4:1.0.0'
+    // 只用到 androidx.core 的 AccessibilityNodeInfoCompat。
+    // 原 legacy-support-v4 会额外拖入 androidx.media 整包，已摘除。
+    // 版本必须锁 1.9.0：这是 appcompat:1.6.1 / preference-ktx:1.2.1 传递解析出的最高版本，
+    // 显式声明更高的（如 1.13.1）会把整个依赖图的 core 一起抬上去，实测反而 +0.87MB。
+    implementation 'androidx.core:core:1.9.0'
     // 设置页框架迁移（step 1）：androidx.preference + appcompat
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'androidx.preference:preference-ktx:1.2.1'

@@ -37,5 +37,8 @@ android {
 }
 
 dependencies {
-    implementation 'androidx.legacy:legacy-support-v4:1.0.0'
+    // 用到 androidx.core 的 AccessibilityNodeInfoCompat（AccessibilityServiceCompatUtils）。
+    // 原 legacy-support-v4 会额外拖入 androidx.media 整包，已摘除。
+    // 版本与 brailleback 模块保持一致（1.9.0），避免抬升整个依赖图的 core 版本。
+    implementation 'androidx.core:core:1.9.0'
 }

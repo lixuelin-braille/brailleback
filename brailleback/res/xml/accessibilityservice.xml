@@ -7,6 +7,7 @@
   android:canRequestFilterKeyEvents="true"
   android:canRetrieveWindowContent="true"
   android:canRequestEnhancedWebAccessibility="true"
+  android:isAccessibilityTool="true"
   android:description="@string/service_description"
   android:summary="@string/service_summary"
   android:settingsActivity="com.googlecode.eyesfree.brailleback.SettingsActivity" />

@@ -38,6 +38,9 @@ android {
 
 dependencies {
     implementation project(':libraries:compatutils')
-    implementation 'androidx.legacy:legacy-support-v4:1.0.0'
+    // 用到 androidx.core 的 AccessibilityNodeInfoCompat（6 个文件：AccessibilityNodeInfoRef /
+    // AccessibilityNodeInfoUtils / NodeFilter / NodeFocusFinder / TreeDebug / WebInterfaceUtils）。
+    // 原 legacy-support-v4 会额外拖入 androidx.media 整包，已摘除。
+    implementation 'androidx.core:core:1.9.0'
     testImplementation 'junit:junit:4.13.2'
 }
