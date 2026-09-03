@@ -7,7 +7,7 @@ package com.googlecode.eyesfree.brailleback
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.provider.Settings
+import android.view.inputmethod.InputMethodManager
 import com.googlecode.eyesfree.braille.display.BrailleInputEvent
 
 /**
@@ -42,39 +42,35 @@ class IMEHelper(private val context: Context) {
     }
 
     companion object {
+        private fun inputMethodManager(contextArg: Context): InputMethodManager =
+            contextArg.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+
         /**
          * Determines from system settings if `imeClass` is an enabled input
          * method.
+         *
+         * 注意：不能用 Settings.Secure.ENABLED_INPUT_METHODS——targetSdk 34+
+         * 在 Android 14+ 上读取该键直接抛 SecurityException（向导启动即崩），
+         * 必须走公开 API InputMethodManager.enabledInputMethodList。
          */
         @JvmStatic
         fun isInputMethodEnabled(contextArg: Context, imeClass: Class<*>): Boolean {
             val imeComponentName = ComponentName(contextArg, imeClass)
-            val enabledIMEIds = Settings.Secure.getString(
-                contextArg.contentResolver, Settings.Secure.ENABLED_INPUT_METHODS)
-            if (enabledIMEIds == null) {
-                return false
+            return inputMethodManager(contextArg).enabledInputMethodList.any {
+                imeComponentName == ComponentName.unflattenFromString(it.id)
             }
-
-            for (enabledIMEId in enabledIMEIds.split(":")) {
-                if (imeComponentName == ComponentName.unflattenFromString(enabledIMEId)) {
-                    return true
-                }
-            }
-            return false
         }
 
         /**
          * Determines, from system settings, if `imeClass` is the default input
-         * method.
+         * method（同理走公开 API，见 [isInputMethodEnabled] 注释）。
          */
         @JvmStatic
         fun isInputMethodDefault(contextArg: Context, imeClass: Class<*>): Boolean {
             val imeComponentName = ComponentName(contextArg, imeClass)
-            val defaultIMEId = Settings.Secure.getString(
-                contextArg.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
-
-            return defaultIMEId != null
-                && imeComponentName == ComponentName.unflattenFromString(defaultIMEId)
+            val current = inputMethodManager(contextArg).currentInputMethodInfo
+                ?: return false
+            return imeComponentName == current.component
         }
     }
 }
