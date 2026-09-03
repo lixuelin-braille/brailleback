@@ -272,7 +272,10 @@ class TranslatorManager(context: Context) :
     }
 
     private fun callOnTablesChangedListeners() {
-        for (listener in mOnTablesChangedListeners) {
+        // 快照遍历：监听器回调里可能把自己 remove 掉（如阅读器的
+        // 「翻译器就绪后自动续翻」一次性监听器），直接遍历原列表
+        // 会 ConcurrentModificationException 导致阅读器崩溃。
+        for (listener in mOnTablesChangedListeners.toList()) {
             listener.onTablesChanged()
         }
     }
