@@ -194,8 +194,11 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
         mDisplay = display
         display.setOnConnectionStateChangeListener(this)
         onConnectionStateChanged(Display.STATE_NOT_CONNECTED)
-        // 首次进入且尚无内容时，尝试恢复上次阅读进度
-        if (mStream.isEmpty()) {
+        // 首次进入且尚无内容时，尝试恢复上次阅读进度。
+        // mFileUri != null 说明本次是书架/最近打开明确指定的书（onCreate 已同步
+        // 设置并触发加载），绝不能再用 last_uri 恢复上一本——否则挂起的
+        // 加载请求会被旧书覆盖，用户要开 B 书实际打开的却是 A 书。
+        if (mStream.isEmpty() && mFileUri == null) {
             restoreProgress()
         }
     }
