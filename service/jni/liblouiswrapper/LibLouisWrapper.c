@@ -88,11 +88,18 @@ Java_com_googlecode_eyesfree_braille_service_translate_LibLouisWrapper_translate
     inused = inlen;
     outused = outlen;
 
-    outbuf = realloc(outbuf, sizeof(jchar) * outlen);
-    inputpos = realloc(inputpos, sizeof(int) * outlen);
-    if (outbuf == NULL || outputpos == NULL || inputpos == NULL) {
+    // realloc 失败时原指针仍然有效，所以用临时指针接收：
+    // 既不把 NULL 传给 lou_translate（会段错误），也不丢掉原有内存块（交给 freebufs 释放）。
+    jchar* new_outbuf = realloc(outbuf, sizeof(jchar) * outlen);
+    int* new_inputpos = realloc(inputpos, sizeof(int) * outlen);
+    if (new_outbuf == NULL || outputpos == NULL || new_inputpos == NULL) {
+      free(new_outbuf);
+      free(new_inputpos);
       (*env)->ThrowNew(env, class_OutOfMemoryError, NULL);
+      goto freebufs;
     }
+    outbuf = new_outbuf;
+    inputpos = new_inputpos;
 
     int result = lou_translate(tableNameUtf8, textUtf16, &inused,
         outbuf, &outused,
@@ -192,10 +199,14 @@ Java_com_googlecode_eyesfree_braille_service_translate_LibLouisWrapper_backTrans
     inused = inlen;
     outused = outlen;
 
-    outbuf = realloc(outbuf, sizeof(jchar) * outlen);
-    if (outbuf == NULL) {
+    // 同上：realloc 失败时保留原指针交由 freebufs 释放，
+    // 避免把 NULL 传给 lou_backTranslateString。
+    jchar* new_outbuf = realloc(outbuf, sizeof(jchar) * outlen);
+    if (new_outbuf == NULL) {
       (*env)->ThrowNew(env, class_OutOfMemoryError, NULL);
+      goto freebufs;
     }
+    outbuf = new_outbuf;
 
     int result = lou_backTranslateString(tableNameUtf8, inbuf, &inused,
         outbuf, &outused,

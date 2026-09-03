@@ -17,6 +17,9 @@ service/temp/
 # --- Duplicate prebuilt native libs (canonical copy lives in service/jniLibs) ---
 service/libs/
 
+# --- 预编译 .so 的本地备份（重编前留档，便于回滚；不入库） ---
+.so_backup_*/
+
 # --- IDE ---
 .idea/
 *.iml
