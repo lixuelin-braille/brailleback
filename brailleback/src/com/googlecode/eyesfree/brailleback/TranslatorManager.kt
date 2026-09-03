@@ -164,9 +164,24 @@ class TranslatorManager(context: Context) :
                 "Couldn't find braille translator for %s", mLocale)
             return
         }
-        // TODO: For six dot braille, get the table with smallest grade.
-        // This requires IME changes.
-        var newUncontractedTranslator = findBrailleTranslator(true /*eightDot*/, true /*fallback*/)
+        // 无缩写（uncontracted）翻译器用于编辑/搜索的逐键反译，必须是 grade 最小的表：
+        // 六点模式下取六点 grade 最小表（原逻辑强制八点表——中文等六点语种没有八点表，
+        // 会静默回退到英文表，逐键反译全错）。上游 TODO 称需改 IME，但本项目 IME
+        // 已改用 getTranslator()（文学盲文），不再依赖八点表，故可安全消项。
+        // 八点模式保留旧路径作后备。
+        var newUncontractedTranslator: BrailleTranslator? = null
+        if (!eightDot) {
+            val info = findDefaultTableInfo(false /*eightDot*/, false /*prefer uncontracted*/)
+            val id = info?.id
+            if (id != null) {
+                newUncontractedTranslator = mTranslatorClient.getTranslator(id)
+            }
+            LogUtils.log(this, Log.DEBUG,
+                "Uncontracted table for %s: %s", mLocale, info?.id)
+        }
+        if (newUncontractedTranslator == null) {
+            newUncontractedTranslator = findBrailleTranslator(true /*eightDot*/, true /*fallback*/)
+        }
         if (newUncontractedTranslator == null) {
             newUncontractedTranslator = newTranslator
         }
