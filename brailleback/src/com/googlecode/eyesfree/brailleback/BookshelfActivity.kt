@@ -93,10 +93,17 @@ class BookshelfActivity : Activity() {
     // ------------------------------------------------------------------
 
     private fun refreshList() {
+        // 保留滚动位置：从阅读器返回时无条件重建 adapter 会让盲人用户
+        // 丢失在长列表里的位置，重新定位成本很高。
+        val list = mList
+        val savedPosition = list?.firstVisiblePosition ?: 0
         mBooks = loadBooks()
         mEmptyText?.visibility = if (mBooks.isEmpty()) TextView.VISIBLE else TextView.GONE
-        mList?.adapter = ArrayAdapter(
+        list?.adapter = ArrayAdapter(
             this, android.R.layout.simple_list_item_1, mBooks.map { it.name })
+        if (list != null && mBooks.isNotEmpty()) {
+            list.setSelection(savedPosition.coerceAtMost(mBooks.size - 1))
+        }
     }
 
     // ------------------------------------------------------------------
@@ -115,9 +122,21 @@ class BookshelfActivity : Activity() {
                 when (which) {
                     0 -> openInReader(Uri.parse(book.uri))
                     1 -> showRenameDialog(book)
-                    2 -> removeBook(book.uri)
+                    2 -> showDeleteConfirm(book)
                 }
             }
+            .show()
+    }
+
+    /** 删除前确认：盲人用户误触长按菜单的代价高，直接删不可接受。 */
+    private fun showDeleteConfirm(book: Book) {
+        AlertDialog.Builder(this)
+            .setTitle(book.name)
+            .setMessage(getString(R.string.bookshelf_delete_confirm, book.name))
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                removeBook(book.uri)
+            }
+            .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
 
@@ -204,7 +223,13 @@ class BookshelfActivity : Activity() {
             if (mBooks.isEmpty()) {
                 Toast.makeText(this, R.string.bookshelf_empty, Toast.LENGTH_SHORT).show()
             } else {
-                clearBooks()
+                // 清空一次最多丢 200 本书的记录，必须二次确认。
+                AlertDialog.Builder(this)
+                    .setTitle(R.string.bookshelf_clear)
+                    .setMessage(getString(R.string.bookshelf_clear_confirm, mBooks.size))
+                    .setPositiveButton(android.R.string.ok) { _, _ -> clearBooks() }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
             }
             return true
         }

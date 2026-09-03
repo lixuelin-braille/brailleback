@@ -204,6 +204,10 @@
 
     <string name="bookshelf_deleted">已从书架移除</string>
 
+    <string name="bookshelf_delete_confirm">确定从书架删除《%1$s》吗？</string>
+
+    <string name="bookshelf_clear_confirm">确定清空书架全部 %1$d 本书吗？此操作不可恢复。</string>
+
     <string name="pref_braille_reader_title">盲文阅读器</string>
     <string name="pref_sound_enabled_summary_off">已关闭音效反馈</string>
     <string name="pref_sound_enabled_summary_on">已开启音效反馈</string>

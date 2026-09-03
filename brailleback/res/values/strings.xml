@@ -431,5 +431,9 @@
 
     <string name="bookshelf_deleted">Removed from bookshelf</string>
 
+    <string name="bookshelf_delete_confirm">Delete “%1$s” from the bookshelf?</string>
+
+    <string name="bookshelf_clear_confirm">Remove all %1$d books from the bookshelf? This cannot be undone.</string>
+
     <string name="pref_braille_reader_title">Braille reader</string>
 </resources>
