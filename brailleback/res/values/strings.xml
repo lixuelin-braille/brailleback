@@ -13,6 +13,9 @@
     <!-- Name of the input method for typing using the braille keys on the display. -->
     <string name="braille_ime_name">Braille hardware keyboard</string>
 
+    <!-- Separator between the edit field label/hint and its content on the braille display. -->
+    <string name="ime_label_separator">": "</string>
+
     <!-- Title for the wizard that guides the user through the process of setting up the braille hardware keyboard. -->
     <string name="ime_setup_wizard_name">Braille Hardware Keyboard Wizard</string>
     <!-- Title for the step of the braille hardware keyboard wizard that lets the user know to enable the input method. -->

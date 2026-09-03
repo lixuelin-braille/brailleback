@@ -428,7 +428,7 @@ class BrailleIME : InputMethodService {
         val text = SpannableStringBuilder()
         if (!TextUtils.isEmpty(label)) {
             text.append(label)
-            text.append(": ") // TODO: Put in a resource.
+            text.append(getString(R.string.ime_label_separator))
         }
         val editStart = text.length
         text.append(mCurrentText)
@@ -531,9 +531,6 @@ class BrailleIME : InputMethodService {
     }
 
     private fun handleBrailleKeyInternal(dots: Int): Boolean {
-        // TODO: Support more than computer braille.  This means that
-        // there's not a 1:1 correspondence between a cell and a character,
-        // so requires more book-keeping.
         val translator = getCurrentBrailleTranslator()
         val ic = getCurrentInputConnection()
         if (translator == null || ic == null) {
@@ -542,23 +539,49 @@ class BrailleIME : InputMethodService {
             return false
         }
 
-        // TODO: Handle unknown dots (e.g. liblouis gives "\4568/").
         val tableInfo = translator.tableInfo ?: return false
         return if (doesTableNeedComposition(tableInfo)) {
-            mComposingBraille.put(dots.toByte())
-            // TODO: Handle word breaks properly for non-English,
-            // where there might not be spaces (empty cell) between words.
-            if (dots == 0 || mComposingBraille.position() == MAX_COMPOSE_DOTS) {
-                // Finish composition (error if cannot translate).
+            // 中文/日文/韩文：标点键应即时上屏，而不是混进组词缓冲区等空格。
+            if (isCjkTable(tableInfo) && mComposingBraille.position() > 0
+                    && isPunctuationCell(dots, translator)) {
                 finishComposingText(translator, ic)
-            } else {
-                // Continue composing (OK if cannot translate).
-                updateComposingText(translator, ic)
+                val punct = translator.backTranslate(byteArrayOf(dots.toByte()))
+                if (!TextUtils.isEmpty(punct) && !hasUnknownDots(punct)) {
+                    ic.commitText(punct, 1)
+                }
                 true
+            } else {
+                mComposingBraille.put(dots.toByte())
+                if (dots == 0 || mComposingBraille.position() == MAX_COMPOSE_DOTS) {
+                    // Finish composition (error if cannot translate).
+                    finishComposingText(translator, ic)
+                } else {
+                    // Continue composing (OK if cannot translate).
+                    updateComposingText(translator, ic)
+                    true
+                }
             }
         } else {
             handleBrailleKeySimple(dots, translator, ic)
         }
+    }
+
+    /** 中文/日文/韩文表：词间不以空格分隔，标点不适合参与组词。 */
+    private fun isCjkTable(info: TableInfo): Boolean =
+        info.locale.language in CJK_LANGUAGES
+
+    /**
+     * 单点位试探回译：判断该点位是否为标点（非字母/数字/空白，且不是
+     * 未知点位标记）。回译为空（上下文相关表常见）则按普通点位处理。
+     */
+    private fun isPunctuationCell(dots: Int,
+                                  translator: BrailleTranslator): Boolean {
+        if (dots == 0) return false
+        val text = translator.backTranslate(byteArrayOf(dots.toByte()))
+            ?: return false
+        if (TextUtils.isEmpty(text) || hasUnknownDots(text)) return false
+        val c = text[0]
+        return !Character.isLetterOrDigit(c) && !Character.isWhitespace(c)
     }
 
     private fun handleBrailleKeySimple(dots: Int,
@@ -566,10 +589,13 @@ class BrailleIME : InputMethodService {
                                        ic: InputConnection): Boolean {
         val text = translator.backTranslate(
                 byteArrayOf(dots.toByte()))
-        if (!TextUtils.isEmpty(text)) {
-            return ic.commitText(text, 1)
+        return when {
+            TextUtils.isEmpty(text) -> true // 空白点位，静默忽略（原行为）
+            // 未知点位（liblouis 输出 "\4568/" 形式的点号标记）：
+            // 不把标记当正文提交，返回 false 让外层给失败反馈。
+            hasUnknownDots(text) -> false
+            else -> ic.commitText(text, 1)
         }
-        return true
     }
 
     /**
@@ -585,7 +611,8 @@ class BrailleIME : InputMethodService {
         }
 
         val text = translator.backTranslate(getComposingBrailleArray())
-        return if (TextUtils.isEmpty(text)) {
+        return if (TextUtils.isEmpty(text) || hasUnknownDots(text)) {
+            // 空或含未知点位：用不换行空格占位，保持组词状态。
             ic.setComposingText("\u00A0", 1)
         } else {
             ic.setComposingText(text, 1)
@@ -608,7 +635,7 @@ class BrailleIME : InputMethodService {
 
         // Commit the final text if we could translate; otherwise, clear the
         // composing text.
-        return if (TextUtils.isEmpty(text)) {
+        return if (TextUtils.isEmpty(text) || hasUnknownDots(text)) {
             ic.commitText("", 1)
             false
         } else {
@@ -723,6 +750,8 @@ class BrailleIME : InputMethodService {
         const val DIRECTION_BACKWARD = -1
         private const val MAX_REQUEST_CHARS = 1000
         private const val MAX_COMPOSE_DOTS = 1000
+        /** 无词间空格书写的语言（表 locale.language）。 */
+        private val CJK_LANGUAGES = setOf("zh", "ja", "ko")
         /** Marks the extent of the editable text.  */
         private val EDIT_TEXT_SPAN = MarkingSpan()
         /** Marks the extent of the action button.  */
@@ -748,3 +777,12 @@ class BrailleIME : InputMethodService {
         }
     }
 }
+
+/**
+ * liblouis 对未定义点位的回译输出点号标记（utils.c _lou_unknownDots），
+ * 形如 "\4568/"；绝不能当正文提交给编辑器或搜索框。
+ */
+private val UNKNOWN_DOTS_PATTERN = Regex("\\\\[0-8]+/")
+
+internal fun hasUnknownDots(text: CharSequence?): Boolean =
+    text != null && UNKNOWN_DOTS_PATTERN.containsMatchIn(text)

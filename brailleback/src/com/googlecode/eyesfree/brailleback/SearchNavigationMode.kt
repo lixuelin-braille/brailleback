@@ -255,7 +255,8 @@ internal class SearchNavigationMode @JvmOverloads constructor(
         }
 
         val text = translator.backTranslate(byteArrayOf(dots.toByte()))
-        if (!TextUtils.isEmpty(text) && text != null) {
+        // 未知点位标记（"\4568/"）不能混进搜索词。
+        if (!TextUtils.isEmpty(text) && text != null && !hasUnknownDots(text)) {
             return mFeedbackManager.emitOnFailure(tryAddQueryText(text),
                     FeedbackManager.TYPE_NAVIGATE_OUT_OF_BOUNDS)
         }
