@@ -109,6 +109,7 @@
     <string name="braille_reader_translating">Translating to braille…</string>
     <string name="braille_reader_translator_waiting">Starting braille translation service…</string>
     <string name="braille_reader_translate_fail">Translation failed. Showing original text; connect a display for braille output.</string>
+    <string name="braille_reader_table_mismatch">The current braille table (%1$s) may not support this book\'s language. Pick a Chinese braille table in Settings for proper output.</string>
     <string name="braille_reader_unsupported_format">.%1$s is not supported. Please open a braille file (.bdo, .bdoc, .brf, .brl) or plain text (.txt)</string>
     <string name="braille_reader_page">Page %1$d / %2$d</string>
     <string name="braille_reader_page_cells">Page %1$d / %2$d · %3$d cells</string>

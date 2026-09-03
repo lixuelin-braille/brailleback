@@ -169,7 +169,13 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
             try {
                 val uri = Uri.parse(uriStr)
                 mFileUri = uri
-                loadFile(uri)
+                // 同一本书续读上次进度；换了一本书从第 1 页开始。
+                // 否则盲人用户从书架重开书永远回到第 1 页，长书重新定位成本高。
+                val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                val savedOffset = if (prefs.getString(KEY_URI, null) == uriStr) {
+                    prefs.getInt(KEY_OFFSET, 0)
+                } else 0
+                loadFile(uri, savedOffset)
             } catch (e: Exception) {
                 Toast.makeText(this,
                     getString(R.string.braille_reader_load_fail, e.message),
@@ -275,9 +281,9 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
         }
     }
 
-    private fun loadFile(uri: Uri) {
+    private fun loadFile(uri: Uri, targetOffset: Int? = null) {
         try {
-            loadBytes(uri, resetPosition = true)
+            loadBytes(uri, resetPosition = true, targetOffset = targetOffset)
         } catch (e: Exception) {
             Toast.makeText(this,
                 getString(R.string.braille_reader_load_fail, e.message),
@@ -392,6 +398,7 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
         }
         mTranslating = true
         mReaderText?.text = getString(R.string.braille_reader_translating)
+        warnIfTableMismatch(text, translator)
         Thread {
             val result = try {
                 translateParagraphs(text, translator)
@@ -413,6 +420,23 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
                 }
             }
         }.start()
+    }
+
+    /**
+     * 内容语言与盲文表不匹配检测：中文/日文/韩文内容配非 CJK 表时，
+     * liblouis 对表内无定义的字符会输出 \xNNNN/ 转义，屏幕成串乱码且
+     * 无任何提示（与 S7 分词降级同款静默降级）。这里给出明确提示；
+     * 是否切换盲文表属用户决策，不擅自改设置。
+     */
+    private fun warnIfTableMismatch(text: String, translator: BrailleTranslator) {
+        if (!CJK_CONTENT.containsMatchIn(text)) return
+        val tableLang = translator.tableInfo?.locale?.language
+        if (tableLang in CJK_TABLE_LANGUAGES) return
+        Toast.makeText(this,
+            getString(R.string.braille_reader_table_mismatch,
+                translator.tableInfo?.locale?.displayLanguage ?: "?"),
+            Toast.LENGTH_LONG).show()
+        Log.w(LOG_TAG, "表不匹配：CJK 内容配 $tableLang 表，翻译可能输出转义乱码")
     }
 
     /**
@@ -534,7 +558,12 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
         }
         // 过滤异常值（布局未完成或极端小屏），避免把书切成上千页
         if (changed && mFileUri != null) {
-            reloadKeepingPosition()
+            // 内容尚未就绪（如首次翻译中）时无需重读：就绪后的 setBrailleStream
+            // 本来就会用最新指标重建分页；此时重读会以 targetOffset=null 覆盖
+            // mPendingTranslation，把书架续读的偏移冲掉（实测致永远回第 1 页）。
+            if (mStream.isNotEmpty()) {
+                reloadKeepingPosition()
+            }
         }
     }
 
@@ -835,6 +864,12 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
 
     companion object {
         private const val LOG_TAG = "BrailleReader"
+
+        /** CJK 字符（汉字扩展 A 区+基本区/假名/谚文），用于内容语言检测。 */
+        private val CJK_CONTENT = Regex("[\\u3400-\\u4DBF\\u4E00-\\u9FFF\\u3040-\\u30FF\\uAC00-\\uD7AF]")
+
+        /** 以 CJK 为主要书写语言的表 locale.language 集合。 */
+        private val CJK_TABLE_LANGUAGES = setOf("zh", "ja", "ko")
 
         /** 书架/最近打开跳转时携带待打开文件 uri（见 BookshelfActivity）。 */
         const val EXTRA_URI = "com.googlecode.eyesfree.brailleback.extra.OPEN_URI"
