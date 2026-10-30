@@ -39,6 +39,7 @@ import com.googlecode.eyesfree.brailleback.wrapping.WrapStrategy
 import com.googlecode.eyesfree.utils.AccessibilityNodeInfoUtils
 import com.googlecode.eyesfree.utils.LogUtils
 import com.googlecode.eyesfree.utils.SharedPreferencesUtils
+import java.lang.ref.WeakReference
 import java.util.Arrays
 import java.util.Comparator
 
@@ -465,6 +466,12 @@ class DisplayManager(
     private var displayedText: CharSequence = ""
     private var displayedBrailleToTextPositions: IntArray = IntArray(0)
     private var blinkNeeded = false
+    /**
+     * 选区/光标覆盖到的盲文格下标，每次重算覆盖点前清空。
+     *
+     * 只有它们参与闪烁判定：焦点标记不该闪（详见 [BlinkPolicy]）。
+     */
+    private val selectionCells = HashSet<Int>()
 
     /** Idle time after which the display is cleared; 0 disables idle clearing. */
     @Volatile
@@ -506,7 +513,7 @@ class DisplayManager(
             }
         handlerThread.start()
         displayHandler = DisplayHandler(handlerThread.looper)
-        callbackHandler = CallbackHandler()
+        callbackHandler = CallbackHandler(this)
 
         sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
         sharedPreferences.registerOnSharedPreferenceChangeListener(this)
@@ -516,6 +523,8 @@ class DisplayManager(
     fun shutdown() {
         sharedPreferences.unregisterOnSharedPreferenceChangeListener(this)
         displayHandler.stop()
+        // Discard callbacks that were queued before shutdown.
+        callbackHandler.removeCallbacksAndMessages(null)
         // Block on display shutdown. We need to make sure this finishes before
         // we can consider DisplayManager to be shut down.
         try {
@@ -577,6 +586,7 @@ class DisplayManager(
             var i = start
             while (i < end && i < overlaidBrailleContent.size) {
                 overlaidBrailleContent[i] = (overlaidBrailleContent[i].toInt() or SELECTION_DOTS).toByte()
+                selectionCells.add(i)
                 ++i
             }
             if (selectionStart == -1) {
@@ -833,23 +843,32 @@ class DisplayManager(
         val content: Content
     )
 
-    private inner class CallbackHandler : Handler() {
+    /**
+     * Static so queued callbacks do not retain the DisplayManager (and its
+     * accessibility service) through the main Looper.
+     */
+    private class CallbackHandler(manager: DisplayManager) : Handler(Looper.getMainLooper()) {
+        private val managerRef = WeakReference(manager)
+
         fun onConnectionStateChanged(state: Int) {
             obtainMessage(MSG_ON_CONNECTION_STATE_CHANGED, state, 0)
                     .sendToTarget()
         }
 
         fun onMappedInputEvent(event: BrailleInputEvent) {
-            val args = OnMappedInputEventArgs(event, currentContent)
+            val manager = managerRef.get() ?: return
+            val args = OnMappedInputEventArgs(event, manager.currentContent)
             obtainMessage(MSG_ON_MAPPED_INPUT_EVENT, args).sendToTarget()
         }
 
         fun onPanLeftOverflow() {
-            obtainMessage(MSG_ON_PAN_LEFT_OVERFLOW, currentContent).sendToTarget()
+            val manager = managerRef.get() ?: return
+            obtainMessage(MSG_ON_PAN_LEFT_OVERFLOW, manager.currentContent).sendToTarget()
         }
 
         fun onPanRightOverflow() {
-            obtainMessage(MSG_ON_PAN_RIGHT_OVERFLOW, currentContent).sendToTarget()
+            val manager = managerRef.get() ?: return
+            obtainMessage(MSG_ON_PAN_RIGHT_OVERFLOW, manager.currentContent).sendToTarget()
         }
 
         fun recycleContent(content: Content) {
@@ -877,20 +896,20 @@ class DisplayManager(
         }
 
         private fun handleOnConnectionStateChanged(state: Int) {
-            connectionStateChangeListener.onConnectionStateChanged(state)
+            managerRef.get()?.connectionStateChangeListener?.onConnectionStateChanged(state)
         }
 
         private fun handleOnMappedInputEvent(event: BrailleInputEvent,
                                              content: Content) {
-            mappedInputEventListener.onMappedInputEvent(event, content)
+            managerRef.get()?.mappedInputEventListener?.onMappedInputEvent(event, content)
         }
 
         private fun handleOnPanLeftOverflow(content: Content) {
-            panOverflowListener.onPanLeftOverflow(content)
+            managerRef.get()?.panOverflowListener?.onPanLeftOverflow(content)
         }
 
         private fun handleOnPanRightOverflow(content: Content) {
-            panOverflowListener.onPanRightOverflow(content)
+            managerRef.get()?.panOverflowListener?.onPanRightOverflow(content)
         }
 
         private fun handleRecycleContent(content: Content) {
@@ -919,6 +938,8 @@ class DisplayManager(
      * selection or focus cursor exists, then returns -1.
      */
     private fun markCursor(): Int {
+        // 每次重算覆盖点前先清空：选区被取消后残留的格会让屏上白白多闪
+        selectionCells.clear()
         val spanned = currentContent.getSpanned() ?: return -1
         val selectionPosition = markSelection(spanned)
         if (selectionPosition != -1) {
@@ -1123,7 +1144,14 @@ class DisplayManager(
 
     private fun doRefresh() {
         resetIdleTimer()
-        val toDisplay = if (overlaysOn) displayedOverlaidBraille else displayedBraille
+        // 不闪的时候必须发叠加版：pulse 可能正停在 overlaysOn=false 那一刻，
+        // 取消闪烁后沿用 false，焦点/选区点会凭空消失到下次内容变化
+        val toDisplay =
+            if (BlinkPolicy.showOverlays(blinkNeeded, overlaysOn)) {
+                displayedOverlaidBraille
+            } else {
+                displayedBraille
+            }
         display?.displayDots(toDisplay, displayedText, displayedBrailleToTextPositions)
         if (blinkNeeded) {
             displayHandler.schedulePulse()
@@ -1133,27 +1161,20 @@ class DisplayManager(
     }
 
     /**
-     * Returns `true` if the current display content is such that it
-     * requires blinking.
+     * 显示区里是否有需要明灭的点（选区/光标）。
+     *
+     * 判定只看选区，不看焦点：焦点标记同样会改写叠加内容，按「字节有没有差异」
+     * 判断的话，只要屏上有焦点就会无限闪（详见 [BlinkPolicy]）。
      */
-    private fun blinkNeeded(): Boolean {
-        if (brailleContent === overlaidBrailleContent) {
-            return false
-        }
-        val start = wrapStrategy.getDisplayStart()
-        val end = wrapStrategy.getDisplayEnd()
-        for (i in start until end) {
-            if (brailleContent[i] != overlaidBrailleContent[i]) {
-                return true
-            }
-        }
-        return false
-    }
+    private fun blinkNeeded(): Boolean =
+        BlinkPolicy.shouldBlink(
+            selectionCells, wrapStrategy.getDisplayStart(), wrapStrategy.getDisplayEnd())
 
     /**
      * Keeps the phone awake as if there was a 'user activity' registered
      * by the system.
      */
+    @SuppressLint("WakelockTimeout")
     private fun keepAwake() {
         // Acquiring the lock and immediately releasing it keesp the phone
         // awake.  We don't use aqcuire() with a timeout because it just
