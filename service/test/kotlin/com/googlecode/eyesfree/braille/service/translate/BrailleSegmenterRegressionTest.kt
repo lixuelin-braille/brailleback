@@ -192,6 +192,43 @@ class BrailleSegmenterRegressionTest {
         assertTrue("H2O should be kept together, got: ${r.text}", r.text.contains("H2O"))
     }
 
+    @Test
+    fun testAsciiAlnumIdentifiersNotSplit() {
+        for (word in listOf("MP3", "B2B", "C3PO", "COVID-19")) {
+            assertEquals(word, segmenter.segment(word).text)
+        }
+        assertTrue(segmenter.segment("A4纸").text.startsWith("A4 "))
+        assertTrue(segmenter.segment("3D打印").text.startsWith("3D "))
+    }
+
+    @Test
+    fun testFullWidthNumbersNotSplit() {
+        assertEquals("１２３", segmenter.segment("１２３").text)
+        assertEquals("－５", segmenter.segment("－５").text)
+        assertTrue(segmenter.segment("价格是１，２３４．５％元").text
+            .contains("１，２３４．５％"))
+    }
+
+    @Test
+    fun testUrlAndEmailNotSplit() {
+        assertEquals(
+            "https://example.com/a?b=1",
+            segmenter.segment("https://example.com/a?b=1").text
+        )
+        assertEquals(
+            "support@example.com",
+            segmenter.segment("support@example.com").text
+        )
+        assertEquals(
+            "www.example.com",
+            segmenter.segment("www.example.com").text
+        )
+        assertTrue(
+            segmenter.segment("访问https://example.com/a?b=1后").text
+                .contains("https://example.com/a?b=1")
+        )
+    }
+
     // ------------------------------------------------------------------
     // 专名词表强制成词
     // ------------------------------------------------------------------
@@ -216,6 +253,16 @@ class BrailleSegmenterRegressionTest {
         assertTrue("图书馆 should be one word, got: ${r.text}", r.text.contains("图书馆"))
         // "很好" 也强制成词
         assertTrue(r.text.contains("很好"))
+    }
+
+    @Test
+    fun testVeryGoodBeforeAdjective() {
+        val localDict = JiebaDict()
+        localDict.init(ByteArrayInputStream(
+            "很 700\n好 800\n看 800\n好看 900\n".toByteArray(Charsets.UTF_8)))
+        val localSegmenter = BrailleSegmenter(localDict)
+        assertEquals("很好", localSegmenter.segment("很好").text)
+        assertEquals("很 好看", localSegmenter.segment("很好看").text)
     }
 
     // ------------------------------------------------------------------
@@ -263,6 +310,42 @@ class BrailleSegmenterRegressionTest {
         assertEquals("一丘 之 貉", r.text)
     }
 
+    @Test
+    fun testSplitDictRejectsMismatchedParts() {
+        val localDict = JiebaDict()
+        localDict.init(ByteArrayInputStream(
+            "甲乙丙丁 1000\n".toByteArray(Charsets.UTF_8)))
+        val localSegmenter = BrailleSegmenter(localDict)
+        localSegmenter.loadSplitDict(ByteArrayInputStream(
+            "甲乙丙丁\t甲乙 丙\n".toByteArray(Charsets.UTF_8)))
+        assertEquals("甲乙丙丁", localSegmenter.segment("甲乙丙丁").text)
+    }
+
+    @Test
+    fun testSplitDictMatchesAcrossJiebaTokens() {
+        // jieba 会切成「一看」+「就」+「懂」，规则词不出现在任何单个 token 中。
+        // 旧实现只在单个 token 上查 splitDict，规则会静默失效。
+        val localDict = JiebaDict()
+        localDict.init(ByteArrayInputStream(
+            "一 500\n看 500\n一看 900\n就 800\n懂 800\n".toByteArray(Charsets.UTF_8)))
+        val localSegmenter = BrailleSegmenter(localDict)
+        localSegmenter.loadSplitDict(ByteArrayInputStream(
+            "一看就懂\t一 看 就 懂\n".toByteArray(Charsets.UTF_8)))
+        assertEquals("一 看 就 懂", localSegmenter.segment("一看就懂").text)
+    }
+
+    @Test
+    fun testConnectOverridesSplitDict() {
+        // CONNECT 是内置强制连写白名单，优先级高于阳光分写规则。
+        val localDict = JiebaDict()
+        localDict.init(ByteArrayInputStream(
+            "脚踏实地 1000\n".toByteArray(Charsets.UTF_8)))
+        val localSegmenter = BrailleSegmenter(localDict)
+        localSegmenter.loadSplitDict(ByteArrayInputStream(
+            "脚踏实地\t脚 踏 实地\n".toByteArray(Charsets.UTF_8)))
+        assertEquals("脚踏实地", localSegmenter.segment("脚踏实地").text)
+    }
+
     // ------------------------------------------------------------------
     // 后附成分合并（孩子们 <- 孩子 + 们）
     // ------------------------------------------------------------------
@@ -273,6 +356,18 @@ class BrailleSegmenterRegressionTest {
         assertNotNull(r)
         // 孩子们 应作为一个整体（孩子 + 们 合并）
         assertTrue(r.text.contains("孩子们"))
+    }
+
+    @Test
+    fun testSuffixNotMergedAfterFunctionWord() {
+        // 虚词/助词不能充当后附成分的词根：
+        // 「的 + 头」必须分写，不能连成「的头」。
+        assertEquals("的 头", segmenter.segment("的头").text)
+        assertEquals("的 手", segmenter.segment("的手").text)
+        assertEquals("在 家", segmenter.segment("在家").text)
+        // 实义词根仍正常合并
+        assertEquals("石头", segmenter.segment("石头").text)
+        assertEquals("他们", segmenter.segment("他们").text)
     }
 
     // ------------------------------------------------------------------

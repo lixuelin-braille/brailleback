@@ -16,6 +16,8 @@ class BrailleSegmenter(private val dict: JiebaDict) {
 
     // 阳光读屏强制分写词库（对标：一丘之貉 -> 一丘 之 貉）
     private val splitDict = HashMap<String, Array<String>>()
+    // 规则词最大长度，限制相邻 token 拼接匹配的窗口。
+    private var splitDictMaxLen = 0
 
     init {
         for (w in SPLIT4) {
@@ -51,9 +53,15 @@ class BrailleSegmenter(private val dict: JiebaDict) {
                     continue
                 }
                 val word = l.substring(0, tab)
-                val parts = l.substring(tab + 1).trim().split(" ").toTypedArray()
-                if (parts.size >= 2 && !splitDict.containsKey(word)) {
+                val parts = l.substring(tab + 1).trim()
+                    .split(" ").filter { it.isNotEmpty() }.toTypedArray()
+                // 分写结果必须能无损拼回原词，否则会让位置映射整体错位。
+                if (parts.size >= 2 && parts.joinToString("") == word
+                    && !splitDict.containsKey(word)) {
                     splitDict[word] = parts
+                    if (word.length > splitDictMaxLen) {
+                        splitDictMaxLen = word.length
+                    }
                 }
             }
             br.close()
@@ -161,8 +169,58 @@ class BrailleSegmenter(private val dict: JiebaDict) {
         toks.addAll(merged)
     }
 
-    /** 普通段：数字分段后，非数字段走 jieba + 规则。 */
+    /**
+     * 合并相邻的 ASCII/全角字母数字 token，保证 MP3、A4、3D、COVID-19、
+     * C3PO 这类标识符不会被拆成多个盲文词。只合并原文中真正相邻的 token，
+     * 因此不会跨标点或空格粘连。
+     */
+    private fun mergeAsciiAlnum(toks: MutableList<Tok>, text: String) {
+        if (toks.size < 2) {
+            return
+        }
+        val merged = ArrayList<Tok>(toks.size)
+        var i = 0
+        while (i < toks.size) {
+            val first = toks[i]
+            if (!ALNUM_RE.matches(text.substring(first.start, first.end))) {
+                merged.add(first)
+                i++
+                continue
+            }
+            var end = first.end
+            var j = i + 1
+            while (j < toks.size && toks[j].start == end
+                && ALNUM_RE.matches(text.substring(toks[j].start, toks[j].end))) {
+                end = toks[j].end
+                j++
+            }
+            merged.add(Tok(first.start, end, false))
+            i = j
+        }
+        toks.clear()
+        toks.addAll(merged)
+    }
+
+    /** 普通段：先保护 URL/邮箱，再做数字/字母分段与 jieba。 */
     private fun addPlainTokens(toks: MutableList<Tok>, text: String, from: Int, to: Int) {
+        if (from >= to) {
+            return
+        }
+        val seg = text.substring(from, to)
+        val pm = PROTECTED_RE.matcher(seg)
+        var last = 0
+        while (pm.find()) {
+            addNumberAndLetterTokens(toks, text, from + last, from + pm.start())
+            toks.add(Tok(from + pm.start(), from + pm.end(), false))
+            last = pm.end()
+        }
+        addNumberAndLetterTokens(toks, text, from + last, to)
+    }
+
+    /** 数字整体保护后，非数字段走字母保护与 jieba。 */
+    private fun addNumberAndLetterTokens(
+        toks: MutableList<Tok>, text: String, from: Int, to: Int
+    ) {
         if (from >= to) {
             return
         }
@@ -204,48 +262,46 @@ class BrailleSegmenter(private val dict: JiebaDict) {
         }
         val words = dict.segmentWithPos(seg)
         val merged = ArrayList<Array<String>>()
-        for (w in words) {
-            val word = w[0]
-            val ws = w[1].toInt()
-            val we = w[2].toInt()
-            // 阳光强制分写词库命中：直接按词库切分
-            if (splitDict.containsKey(word) && word.length >= 2) {
-                val parts = splitDict[word]!!
-                var pos = ws
+        var wi = 0
+        while (wi < words.size) {
+            // 阳光强制分写词库命中：jieba 可能把规则词切成多个 token，
+            // 因此按相邻 token 拼接后再匹配，避免规则因前期切分不同而失效。
+            val splitMatch = matchSplitRule(words, wi)
+            if (splitMatch != null) {
+                val (parts, consumed) = splitMatch
+                var pos = words[wi][1].toInt()
                 for (part in parts) {
                     val next = pos + part.length
                     merged.add(arrayOf(part, pos.toString(), next.toString()))
                     pos = next
                 }
+                wi += consumed
                 continue
+            }
+            val w = words[wi]
+            wi++
+            val word = w[0]
+            val ws = w[1].toInt()
+            val we = w[2].toInt()
+            // jieba 把「很 好」切成两个词，而 CONNECT 又不应强行把「很好」
+            // 并在「很 好看」里（否则会得到「很好 看」）。只在「很」+「好」
+            // 真正相邻时合并，保留「很好」连写，同时不误伤「很好看」。
+            if (word == "好" && merged.isNotEmpty()) {
+                val prev = merged[merged.size - 1]
+                if (prev[0] == "很" && prev[2].toInt() == ws) {
+                    merged[merged.size - 1] =
+                        arrayOf("很好", prev[1], we.toString())
+                    continue
+                }
             }
             // 后附成分合并（孩子们 <- 孩子 + 们）
             if (word.length == 1 && SUFFIX.contains(word) && merged.isNotEmpty()
-                && !isPunct(merged[merged.size - 1][0])) {
+                && !isPunct(merged[merged.size - 1][0])
+                && !NON_STEM.contains(merged[merged.size - 1][0])) {
                 val prev = merged[merged.size - 1]
                 merged[merged.size - 1] =
                     arrayOf(prev[0] + word, prev[1], we.toString())
                 continue
-            }
-            // 数理化/虚词分写：4字结构中强虚词(之/而/所/如/即/若...)在第2/3位时独立成段
-            if (word.length == 4 && !CONNECT.contains(word) && !SPLIT4.contains(word)
-                && !NAMESET.contains(word)) {
-                val c1 = word.substring(1, 2)
-                val c2 = word.substring(2, 3)
-                if (FUNC.contains(c1)) {
-                    // 1+1+2：一丘之貉 -> 一丘 之 貉
-                    merged.add(arrayOf(word.substring(0, 1), ws.toString(), (ws + 1).toString()))
-                    merged.add(arrayOf(c1, (ws + 1).toString(), (ws + 2).toString()))
-                    merged.add(arrayOf(word.substring(2, 4), (ws + 2).toString(), we.toString()))
-                    continue
-                }
-                if (FUNC.contains(c2)) {
-                    // 2+1+1：一挥而就 -> 一挥 而 就
-                    merged.add(arrayOf(word.substring(0, 2), ws.toString(), (ws + 2).toString()))
-                    merged.add(arrayOf(c2, (ws + 2).toString(), (ws + 3).toString()))
-                    merged.add(arrayOf(word.substring(3, 4), (ws + 3).toString(), we.toString()))
-                    continue
-                }
             }
             // 四字词 2+2 语节分写（不在黑白名单/专名，且前2后2各自成词）
             if (word.length == 4 && !CONNECT.contains(word) && !SPLIT4.contains(word)
@@ -273,6 +329,35 @@ class BrailleSegmenter(private val dict: JiebaDict) {
         }
     }
 
+    /**
+     * 从 jieba 的第 start 个 token 起，按相邻 token 拼接匹配阳光分写规则。
+     * 返回命中的规则分段和消耗的 token 数；多个候选取最长匹配。
+     * CONNECT 中的连写词优先，不允许被阳光规则拆开。
+     */
+    private fun matchSplitRule(
+        words: List<Array<String>>, start: Int
+    ): Pair<Array<String>, Int>? {
+        if (splitDict.isEmpty() || splitDictMaxLen <= 0) {
+            return null
+        }
+        val sb = StringBuilder()
+        var end = start
+        var best: Pair<Array<String>, Int>? = null
+        while (end < words.size && sb.length < splitDictMaxLen) {
+            sb.append(words[end][0])
+            if (sb.length > splitDictMaxLen) {
+                break
+            }
+            val cand = sb.toString()
+            val parts = splitDict[cand]
+            if (parts != null && !CONNECT.contains(cand)) {
+                best = Pair(parts, end - start + 1)
+            }
+            end++
+        }
+        return best
+    }
+
     /** 主入口：分词并生成带空格文本 + 位置映射。 */
     fun segment(text: String?): Result {
         val r = Result()
@@ -295,7 +380,8 @@ class BrailleSegmenter(private val dict: JiebaDict) {
         }
         addPlainTokens(toks, text, last, text.length)
 
-        // 化学式保护：合并 H2O/CO2/H2SO4 等
+        // 字母数字标识符（MP3/A4/3D/COVID-19）与化学式保护
+        mergeAsciiAlnum(toks, text)
         mergeChemFormulas(toks, text)
 
         // 拼装带空格文本 + 映射
@@ -354,8 +440,10 @@ class BrailleSegmenter(private val dict: JiebaDict) {
         )
         // 应连写的词（12.2.1/2.2/2.4/2.5/2.6）—— 强制成词
         private val CONNECT_ARR = arrayOf(
-            "孩子们", "艺术家", "科学性", "超声波", "很好", "山上", "每年", "对不起", "一刀切",
+            "孩子们", "艺术家", "科学性", "超声波", "好用", "山上", "每年", "对不起", "一刀切",
             "中小学", "图书馆", "大红花", "研究生院", "高锰酸钾", "古生物学家",
+            // 点显器/无障碍领域常用词
+            "点显器", "盲文点显器", "视障", "视障人士", "读屏", "读屏软件", "老人们",
             "秋高气爽", "山清水秀", "风和日丽", "兴高采烈", "实事求是", "脚踏实地",
             "层出不穷", "鸟语花香", "万紫千红", "欣欣向荣", "蒸蒸日上", "络绎不绝",
             // 数理化: 分数连写 + 复合单位整体（电脑版已验证）
@@ -364,6 +452,13 @@ class BrailleSegmenter(private val dict: JiebaDict) {
             "五分之三", "五分之四", "六分之五",
             "米每秒", "千米每小时", "克每升", "千克每立方米", "牛每米", "焦耳每千克", "安培每米",
             "伏特每米", "弧度每秒", "平方米每秒", "千克每平方米", "摩尔每升", "瓦特每平方米"
+        )
+        // 多音字读音优先：这些词被阳光分写规则拆开后，liblouis 无法跨空格
+        // 命中整词 always 规则，会退回单字默认读音（重 zhòng / 为 wèi /
+        // 当 dāng / 处 chù / 占 zhān / 地 dì），因此必须保持连写。
+        private val POLYPHONE_CONNECT_ARR = arrayOf(
+            "地处", "甘当", "每当", "敢当", "只当", "该当", "正当", "霍地",
+            "为生", "为主", "为重", "为伍", "独占", "重返", "重建"
         )
         // 分写内部词（12.2.3 分写后需要的内部双字词）
         private val SPLIT4_INNER_ARR = arrayOf(
@@ -378,9 +473,14 @@ class BrailleSegmenter(private val dict: JiebaDict) {
             "莫扎特", "达芬奇", "亚里士多德", "柏拉图", "苏格拉底", "汉斯利克", "贾宝玉", "林黛玉",
             "中国共产党", "人民代表大会", "无界点显器", "无界点显器(HID)"
         )
-        private const val SUFFIX_STR = "们子儿头性者员家手化度法学论品"
-        // 强虚词（4字结构分写，借鉴阳光读屏 rules.conf 虚词分写）
-        private const val FUNC_STR = "之而所如即若亦俱尚犹且及焉哉乎耳"
+        // 只保留高产后缀。性/者/员/家/手/化/度/法/学/论/品 作为构词成分
+        // 已由词典覆盖，动态合并会把「待 + 学」「会 + 学」「近 + 家」等
+        // 跨词边界错误粘连，因此不再参与后缀合并。
+        private const val SUFFIX_STR = "们子儿头"
+        // 不能充当后缀词根的单字虚词/助词/介词。后附成分（们/头/手/家…）
+        // 只应与实义词根合并，否则会把「的 + 头」并成「的头」这类跨词连写。
+        private const val NON_STEM_STR =
+            "的了着过是在和与及或把被让给对从向于而且并但然如若因所之也都就才又还再很更最不没吗呢吧啊呀哦嗯"
         // 化学元素表（118 常用元素，用于化学式校验）
         private val ELEMENTS_ARR = arrayOf(
             "H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne", "Na", "Mg", "Al", "Si", "P", "S", "Cl", "Ar",
@@ -396,28 +496,33 @@ class BrailleSegmenter(private val dict: JiebaDict) {
             "，。、；：？！“”‘’（）《》〈〉—…··,.;:!?()[]{} "
 
         private val SPLIT4 = HashSet<String>(listOf(*SPLIT4_ARR))
-        private val CONNECT = HashSet<String>(listOf(*CONNECT_ARR))
+        private val CONNECT = HashSet<String>(listOf(*CONNECT_ARR, *POLYPHONE_CONNECT_ARR))
         private val SUFFIX = HashSet<String>()
+        private val NON_STEM = HashSet<String>()
         private val PUNCT = HashSet<String>()
         private val NAMESET = HashSet<String>(listOf(*NAMES_ARR))
         private val SPLIT4_INNER = HashSet<String>(listOf(*SPLIT4_INNER_ARR))
-        private val FUNC = HashSet<String>()
         private val ELEMENTS = HashSet<String>(listOf(*ELEMENTS_ARR))
 
         private val NUM_PAT = Pattern.compile(
-            "(-?\\d{1,3}(?:,\\d{3})+(?:\\.\\d+)?%?|-?\\d+(?:\\.\\d+)?%?)")
+            "([-－]?[0-9０-９]{1,3}(?:[,，][0-9０-９]{3})+(?:[.．][0-9０-９]+)?[%％]?|[-－]?[0-9０-９]+(?:[.．][0-9０-９]+)?[%％]?)")
         private val BOOK_RE = Pattern.compile("(《[^》]*》)")
-        private val LETTER_RE = Pattern.compile("[A-Za-z]+")
+        private val LETTER_RE = Pattern.compile("[A-Za-zＡ-Ｚａ-ｚ]+")
+        private val PROTECTED_RE = Pattern.compile(
+            "(?i)(?:(?:https?|ftp)://|www\\.)[A-Za-z0-9._~:/?#\\[\\]@!&'()*+,;=%-]+" +
+                "|[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}")
+        private val ALNUM_RE = Regex(
+            "[A-Za-z0-9０-９Ａ-Ｚａ-ｚ\\u2080-\\u2089－-]+")
 
         init {
             for (c in SUFFIX_STR.toCharArray()) {
                 SUFFIX.add(c.toString())
             }
+            for (c in NON_STEM_STR.toCharArray()) {
+                NON_STEM.add(c.toString())
+            }
             for (c in PUNCT_STR.toCharArray()) {
                 PUNCT.add(c.toString())
-            }
-            for (c in FUNC_STR.toCharArray()) {
-                FUNC.add(c.toString())
             }
         }
     }

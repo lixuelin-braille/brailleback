@@ -83,6 +83,79 @@ class JiebaDict {
         }
     }
 
+    /**
+     * 加载补充词库（每行：词 词频，支持 # 注释）。
+     * 只添加主词典中不存在的完整词，不覆盖主词典词频，也不改变主词典的全局词频总量。
+     * 用于低频补充阳光读屏词库中的缺失词。
+     *
+     * @return 实际新增的词数
+     */
+    @Synchronized
+    fun loadSupplement(supplementStream: InputStream): Int {
+        if (!initialized) {
+            Log.w(LOG_TAG, "supplement ignored: main dict not initialized")
+            return 0
+        }
+        return loadWordList(supplementStream, false, "supplement")
+    }
+
+    /**
+     * 加载高优先级覆盖词表（每行：词 词频，支持 # 注释）。
+     * 与补充词库不同：同名主词典词会被覆盖词频，用于纠正明显偏低的词频，
+     * 或补充专名/领域固定搭配。不改变主词典的全局词频总量。
+     *
+     * @return 实际加载的词数
+     */
+    @Synchronized
+    fun loadOverrides(overrideStream: InputStream): Int {
+        if (!initialized) {
+            Log.w(LOG_TAG, "overrides ignored: main dict not initialized")
+            return 0
+        }
+        return loadWordList(overrideStream, true, "overrides")
+    }
+
+    private fun loadWordList(stream: InputStream, overrideExisting: Boolean, label: String): Int {
+        var added = 0
+        try {
+            BufferedReader(InputStreamReader(stream, "UTF-8")).use { br ->
+                while (true) {
+                    val line = br.readLine() ?: break
+                    val l = line.trim()
+                    if (l.isEmpty() || l.startsWith("#")) {
+                        continue
+                    }
+                    val p = l.split("\\s+".toRegex()).toTypedArray()
+                    if (p.size < 2) {
+                        continue
+                    }
+                    val w = p[0]
+                    val f = p[1].toIntOrNull() ?: continue
+                    if (w.isEmpty() || f <= 0 || w.any { it.code !in 0x4E00..0x9FFF }) {
+                        continue
+                    }
+                    val existing = freqMap[w]
+                    if (!overrideExisting && existing != null && existing > 0) {
+                        continue
+                    }
+                    freqMap[w] = f
+                    for (i in 1 until w.length) {
+                        val pre = w.substring(0, i)
+                        if (!freqMap.containsKey(pre)) {
+                            freqMap[pre] = 0
+                        }
+                    }
+                    added++
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(LOG_TAG, label + " load failed", e)
+            return added
+        }
+        Log.i(LOG_TAG, label + " loaded, count=" + added)
+        return added
+    }
+
     /** 删除词（用于应分写的整体词），使其被切分。 */
     @Synchronized
     fun delWord(word: String) {

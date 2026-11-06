@@ -33,11 +33,14 @@ import com.googlecode.eyesfree.braille.utils.ZipResourceExtractor;
 import java.io.File;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
+import timber.log.Timber;
 
 /**
  * The service for the {@link TranslatorClient} client.
@@ -120,6 +123,38 @@ public class TranslatorService extends Service {
                         }
                     }
                     if (mJiebaDict.isInitialized()) {
+                        // 加载阳光读屏补充词库（主词典缺失的低频词，不覆盖主词典）
+                        try {
+                            InputStream ss = getAssets().open("sunshine_supplement.txt");
+                            try {
+                                int added = mJiebaDict.loadSupplement(ss);
+                                Log.i(LOG_TAG, "Supplement dict loaded, added=" + added);
+                            } finally {
+                                try {
+                                    ss.close();
+                                } catch (Exception e) {
+                                    Log.w(LOG_TAG, "Failed to close supplement dict stream", e);
+                                }
+                            }
+                        } catch (Exception e) {
+                            Log.w(LOG_TAG, "Supplement dict load failed", e);
+                        }
+                        // 加载高优先级覆盖词表（专名/领域词 + 主词典词频纠正）
+                        try {
+                            InputStream os = getAssets().open("zh_segment_overrides.txt");
+                            try {
+                                int applied = mJiebaDict.loadOverrides(os);
+                                Log.i(LOG_TAG, "Segment overrides loaded, count=" + applied);
+                            } finally {
+                                try {
+                                    os.close();
+                                } catch (Exception e) {
+                                    Log.w(LOG_TAG, "Failed to close override stream", e);
+                                }
+                            }
+                        } catch (Exception e) {
+                            Log.w(LOG_TAG, "Segment overrides load failed", e);
+                        }
                         mSegmenter = new BrailleSegmenter(mJiebaDict);
                         // 加载阳光强制分写词库
                         try {
@@ -151,7 +186,7 @@ public class TranslatorService extends Service {
         if (tableName == null) {
             return false;
         }
-        String n = tableName.toLowerCase();
+        String n = tableName.toLowerCase(Locale.ROOT);
         return n.startsWith("zh");
     }
 
@@ -159,8 +194,8 @@ public class TranslatorService extends Service {
             int cursorPosition, boolean computerBrailleAtCursor) {
         try {
             BrailleSegmenter.Result seg = mSegmenter.segment(text);
-            Log.d("SegDebug", "IN : [" + text + "] L=" + text.length());
-            Log.d("SegDebug", "OUT: [" + seg.text + "] segL=" + seg.text.length());
+            Timber.tag("SegDebug").d("IN : [%s] L=%d", text, text.length());
+            Timber.tag("SegDebug").d("OUT: [%s] segL=%d", seg.text, seg.text.length());
             int segCursor = cursorPosition;
             if (cursorPosition >= 0 && cursorPosition < seg.origToSeg.length) {
                 segCursor = seg.origToSeg[cursorPosition];
@@ -303,22 +338,33 @@ public class TranslatorService extends Service {
     private void extractDataFiles() {
         File tablesDir = getDir("translator", MODE_PRIVATE);
         LibLouisWrapper.setTablesDir(tablesDir.getPath());
-        ZipResourceExtractor extractor = new ZipResourceExtractor(
-            this, R.raw.translationtables, tablesDir) {
-            @Override
-            protected void onPostExecute(Integer result) {
-                synchronized (TranslatorService.this) {
-                    if (result == RESULT_OK) {
-                        mDataFileState = FILES_EXTRACTED;
-                    } else {
-                        Log.e(LOG_TAG, "Couldn't extract data files");
-                        mDataFileState = FILES_ERROR;
-                    }
-                }
-                callPendingOnInits();
+        new TranslatorDataFileExtractor(this, tablesDir).execute();
+    }
+
+    private static class TranslatorDataFileExtractor extends ZipResourceExtractor {
+        private final WeakReference<TranslatorService> mService;
+
+        TranslatorDataFileExtractor(TranslatorService service, File tablesDir) {
+            super(service.getApplicationContext(), R.raw.translationtables, tablesDir);
+            mService = new WeakReference<>(service);
+        }
+
+        @Override
+        protected void onPostExecute(Integer result) {
+            TranslatorService service = mService.get();
+            if (service == null) {
+                return;
             }
-        };
-        extractor.execute();
+            synchronized (service) {
+                if (result == RESULT_OK) {
+                    service.mDataFileState = FILES_EXTRACTED;
+                } else {
+                    Log.e(LOG_TAG, "Couldn't extract data files");
+                    service.mDataFileState = FILES_ERROR;
+                }
+            }
+            service.callPendingOnInits();
+        }
     }
 
     private synchronized boolean checkDataFiles() {
