@@ -1,6 +1,7 @@
 package com.googlecode.eyesfree.braille.utils
 
 import android.content.Context
+import android.content.res.Resources
 import android.os.AsyncTask
 import android.util.Log
 import java.io.BufferedInputStream
@@ -29,11 +30,11 @@ open class ZipResourceExtractor(context: Context, private val mRawResId: Int, pr
         private const val TAG = "ZipResourceExtractor"
     }
 
-    private val mContext: Context = context
+    private val mResources: Resources = context.applicationContext.resources
     private val mExtractedFiles = LinkedList<File>()
 
     override fun doInBackground(vararg params: Void?): Int {
-        val stream = mContext.resources.openRawResource(mRawResId)
+        val stream = mResources.openRawResource(mRawResId)
         val zipStream = ZipInputStream(BufferedInputStream(stream))
         var successful = false
         try {

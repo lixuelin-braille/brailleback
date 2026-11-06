@@ -16,10 +16,11 @@
 
 package com.googlecode.eyesfree.braille.service.display;
 
+import android.annotation.SuppressLint;
 import android.accessibilityservice.BrailleDisplayController;
-import android.util.Log;
 import java.io.IOException;
 import java.util.ArrayDeque;
+import timber.log.Timber;
 
 /**
  * A Helper class helps hid_android.c in brltty access BrailleDisplayController APIs.
@@ -29,6 +30,7 @@ import java.util.ArrayDeque;
  * {@link #getReportDescriptor()}, {@link #writeBrailleDisplay(byte[])} and
  * {@link #readBrailleDisplay()} methods over JNI.
  */
+@SuppressLint("NewApi") // Only called from the API 35+ HID connection path.
 public final class BrlttyHidNativeHelper {
   private static final String TAG = "HidAndroidHelper";
   private static final Object lock = new Object();
@@ -36,14 +38,23 @@ public final class BrlttyHidNativeHelper {
 
   private static byte[] reportDescriptor;
 
+  /** Input report shape derived from {@link #reportDescriptor}. */
+  private static HidInputReportNormalizer.InputReport inputReport;
+
   private static BrailleDisplayController brailleDisplayController;
 
   private BrlttyHidNativeHelper() {}
 
   /** Prepares a report descriptor for BRLTTY to interpret the format of incoming reports. */
   public static void setup(BrailleDisplayController controller, byte[] descriptor) {
-    brailleDisplayController = controller;
-    reportDescriptor = descriptor;
+    synchronized (lock) {
+      brailleDisplayController = controller;
+      reportDescriptor = descriptor == null ? null : descriptor.clone();
+      inputReport = HidInputReportNormalizer.singleInputReport(reportDescriptor);
+    }
+    Timber.tag(TAG).i("HID input report: %s",
+        inputReport == null ? "unnumbered/ambiguous"
+            : "id=" + inputReport.id + " payload=" + inputReport.payloadBytes + "B");
   }
 
   /**
@@ -51,13 +62,23 @@ public final class BrlttyHidNativeHelper {
    * when hid_android.c is notified that some input is available and it calls readBrailleDisplay.
    */
   public static void onInput(byte[] input) {
+    if (input == null) {
+      return;
+    }
+    byte[] normalized = HidInputReportNormalizer.normalize(input, inputReport);
     synchronized (lock) {
-      StringBuilder sb = new StringBuilder();
-      for (byte b : input) {
-        sb.append(String.format("%02X ", b & 0xFF));
+      if (normalized != input) {
+        // Log at warn level: the display is sending reports that violate
+        // its own descriptor, and BRLTTY would otherwise drop every key.
+        Timber.tag("HidInput").w("restored report id: %dB %s -> %dB %s",
+            input.length, HidInputReportNormalizer.toHex(input),
+            normalized.length, HidInputReportNormalizer.toHex(normalized));
+      } else {
+        Timber.tag("HidInput").v("normalized %dB: %s",
+            input.length, HidInputReportNormalizer.toHex(input));
       }
-      android.util.Log.d("HidInput", "input(" + input.length + "): " + sb.toString().trim());
-      inputReports.add(input);
+      // The caller may reuse its buffer after this callback returns.
+      inputReports.add(normalized.clone());
     }
   }
 
@@ -66,6 +87,7 @@ public final class BrlttyHidNativeHelper {
     synchronized (lock) {
       brailleDisplayController = null;
       reportDescriptor = null;
+      inputReport = null;
       inputReports.clear();
     }
   }
@@ -75,25 +97,35 @@ public final class BrlttyHidNativeHelper {
    * the report descriptor is not setup in {@link #setup}.
    */
   public static byte[] getReportDescriptor() {
-    return reportDescriptor;
+    synchronized (lock) {
+      return reportDescriptor;
+    }
   }
 
   /** Outputs text to the braille display. */
   public static void writeBrailleDisplay(byte[] buffer) {
-    if (brailleDisplayController == null) {
-      Log.e(TAG, "write while BrailleDisplayController is null (connection torn down?)");
+    BrailleDisplayController controller;
+    synchronized (lock) {
+      controller = brailleDisplayController;
+    }
+    if (controller == null) {
+      Timber.tag(TAG).e("write while BrailleDisplayController is null (connection torn down?)");
       return;
     }
-    Log.d(TAG, "write " + buffer.length + " bytes");
+    Timber.tag(TAG).d("write %d bytes", buffer.length);
     try {
-      brailleDisplayController.write(buffer);
+      controller.write(buffer);
     } catch (IOException e) {
-      Log.e(TAG, "Error writing to BrailleDisplayController: " + e);
-      brailleDisplayController.disconnect();
+      Timber.tag(TAG).e(e, "Error writing to BrailleDisplayController");
+      try {
+        controller.disconnect();
+      } catch (RuntimeException ignored) {
+        // The connection is already gone; nothing else to release.
+      }
     } catch (RuntimeException e) {
       // e.g. IllegalArgumentException for an over-sized buffer (bad report
       // layout): report it but keep the connection alive.
-      Log.e(TAG, "BrailleDisplayController.write rejected the report: " + e);
+      Timber.tag(TAG).e(e, "BrailleDisplayController.write rejected the report");
     }
   }
 

@@ -16,11 +16,15 @@
 
 package com.googlecode.eyesfree.braille.service.display;
 
+import android.Manifest;
+import android.annotation.SuppressLint;
 import android.accessibilityservice.BrailleDisplayController;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.content.res.Resources;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
@@ -29,6 +33,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.concurrent.Executor;
+import timber.log.Timber;
 
 /**
  * Drives a Braille HID standard (usage page 0x41) display through the system
@@ -40,20 +45,21 @@ import java.util.concurrent.Executor;
  * (Drivers/Braille/HID + hid_android.c, from Google's TalkBack brltty 6.7 port)
  * decodes the reports into braille cells and key events.
  */
+@SuppressLint("NewApi") // Only created by DisplayService on API 35+.
 public class HidDisplayConnection implements DriverThread.OnInitListener {
 
   /** Callbacks to the DisplayService. */
   public interface Listener {
-    void onHidConnected(BrailleDisplayProperties properties);
-    void onHidDisconnected();
-    void onHidConnectFailed(int error);
+    void onHidConnected(
+        HidDisplayConnection source, BrailleDisplayProperties properties);
+    void onHidDisconnected(HidDisplayConnection source);
+    void onHidConnectFailed(HidDisplayConnection source, int error);
   }
 
   private static final String LOG_TAG = HidDisplayConnection.class.getSimpleName();
 
-  private static final int STATE_IDLE = 0;
-  private static final int STATE_CONNECTING = 1;
-  private static final int STATE_CONNECTED = 2;
+  private static final long DISCONNECT_TIMEOUT_MS = 2000;
+  private static final int FAILURE_NONE = Integer.MIN_VALUE;
 
   private final Context mContext;
   private final Resources mResources;
@@ -61,11 +67,28 @@ public class HidDisplayConnection implements DriverThread.OnInitListener {
   private final Listener mListener;
   private final DriverThread.OnInputEventListener mInputEventListener;
   private final Executor mExecutor;
+  private final Handler mMainHandler = new Handler(Looper.getMainLooper());
+  private final HidConnectionLifecycle mLifecycle = new HidConnectionLifecycle();
 
-  private BrailleDisplayController mController;
-  private BluetoothDevice mDevice;
-  private DriverThread mDriverThread;
-  private int mState = STATE_IDLE;
+  private volatile BrailleDisplayController mController;
+  private volatile BluetoothDevice mDevice;
+  private volatile DriverThread mDriverThread;
+  private volatile int mPendingFailure = FAILURE_NONE;
+
+  private final Runnable mDisconnectTimeout = new Runnable() {
+    @Override
+    public void run() {
+      if (!mLifecycle.finishDisconnectTimeout()) {
+        return;
+      }
+      Timber.w("HID disconnect timed out after %d ms; completing teardown",
+          DISCONNECT_TIMEOUT_MS);
+      // Best effort: there is no callback to wait for any more, but asking the
+      // controller to release again may help the next attempt.
+      requestControllerDisconnect();
+      completeDisconnected();
+    }
+  };
 
   public HidDisplayConnection(Context context, Resources resources, File tablesDir,
       Listener listener, DriverThread.OnInputEventListener inputEventListener) {
@@ -79,41 +102,53 @@ public class HidDisplayConnection implements DriverThread.OnInitListener {
 
   /** Connects to the HID braille display with the given bluetooth address. */
   public void connect(BrailleDisplayController controller, String deviceAddress) {
-    if (mState != STATE_IDLE) {
+    if (controller == null || deviceAddress == null) {
+      Log.e(LOG_TAG, "Cannot connect: missing controller or device address");
+      notifyConnectFailed(-1);
+      return;
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+        && mContext.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)
+            != PackageManager.PERMISSION_GRANTED) {
+      Log.e(LOG_TAG, "BLUETOOTH_CONNECT permission not granted");
+      notifyConnectFailed(-6);
+      return;
+    }
+    BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+    if (adapter == null) {
+      notifyConnectFailed(-1);
+      return;
+    }
+    BluetoothDevice device;
+    try {
+      device = adapter.getRemoteDevice(deviceAddress);
+    } catch (IllegalArgumentException | SecurityException e) {
+      Log.e(LOG_TAG, "Invalid HID braille display address "
+          + deviceAddress + ": " + e);
+      notifyConnectFailed(-5);
+      return;
+    }
+    if (!mLifecycle.beginConnect()) {
+      Timber.w("Ignoring HID connect request in state %s", mLifecycle.getState());
       return;
     }
     mController = controller;
-    BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
-    if (adapter == null) {
-      mListener.onHidConnectFailed(-1);
-      return;
-    }
-    mDevice = adapter.getRemoteDevice(deviceAddress);
-    mState = STATE_CONNECTING;
+    mDevice = device;
     Log.i(LOG_TAG, "Connecting to HID braille display " + deviceAddress);
+    Timber.i("Starting HID connection to %s", deviceAddress);
     try {
-      mController.connect(mDevice, mExecutor, mCallback);
+      controller.connect(device, mExecutor, mCallback);
     } catch (IllegalStateException e) {
       // The system already holds a Braille display connection for this
       // accessibility service (e.g. a previous connection that has not been
       // fully torn down yet, or the display is held by another service).
-      // Release it and report a clean failure so the service can retry/fall
-      // back instead of crashing.
+      // Release it and wait for the controller to settle before reporting a
+      // clean failure, so the service does not race the system teardown.
       Log.e(LOG_TAG, "BrailleDisplayController already connected: " + e);
-      mState = STATE_IDLE;
-      try {
-        mController.disconnect();
-      } catch (RuntimeException ignored) {
-      }
-      stopDriver();
-      BrlttyHidNativeHelper.reset();
-      mListener.onHidConnectFailed(-3);
+      startTeardown(-3);
     } catch (RuntimeException e) {
       Log.e(LOG_TAG, "BrailleDisplayController.connect() failed: " + e);
-      mState = STATE_IDLE;
-      stopDriver();
-      BrlttyHidNativeHelper.reset();
-      mListener.onHidConnectFailed(-4);
+      startTeardown(-4);
     }
   }
 
@@ -132,69 +167,149 @@ public class HidDisplayConnection implements DriverThread.OnInitListener {
     }
   }
 
-  /**
-   * Tears down the HID connection and the native driver. Always notifies the
-   * listener synchronously so a pending protocol-switch reconnect is not left
-   * hanging waiting for an asynchronous callback that may never arrive.
-   */
+  /** Tears down the HID connection after the system releases the controller. */
   public void disconnect() {
-    if (mState == STATE_IDLE) {
+    startTeardown(FAILURE_NONE);
+  }
+
+  /** True while the system controller is being released asynchronously. */
+  public boolean isDisconnecting() {
+    return mLifecycle.isDisconnecting();
+  }
+
+  private synchronized void startTeardown(int failure) {
+    boolean started = mLifecycle.beginDisconnect();
+    if (!started && !mLifecycle.isDisconnecting()) {
       return;
     }
-    mState = STATE_IDLE;
-    if (mController != null && mController.isConnected()) {
-      // Asynchronous; the late onDisconnected callback is ignored because
-      // mState is already STATE_IDLE (no double notification).
-      mController.disconnect();
+    if (!started) {
+      Timber.i("HID teardown already in progress");
+      return;
     }
+    if (failure != FAILURE_NONE) {
+      mPendingFailure = failure;
+    }
+    Timber.i("Requesting HID teardown (failure=%d, controllerConnected=%s)",
+        mPendingFailure, isControllerConnected());
+    mMainHandler.removeCallbacks(mDisconnectTimeout);
     stopDriver();
     BrlttyHidNativeHelper.reset();
-    mListener.onHidDisconnected();
+    requestControllerDisconnect();
+    mMainHandler.postDelayed(mDisconnectTimeout, DISCONNECT_TIMEOUT_MS);
+  }
+
+  private void requestControllerDisconnect() {
+    BrailleDisplayController controller = mController;
+    if (controller == null) {
+      return;
+    }
+    try {
+      // Do not gate this on isConnected(): a connect request may still be in
+      // flight, and it must be cancelled before the next protocol starts.
+      controller.disconnect();
+    } catch (RuntimeException e) {
+      Log.w(LOG_TAG, "Releasing BrailleDisplayController failed: " + e);
+      Timber.w(e, "Releasing BrailleDisplayController failed");
+    }
+  }
+
+  private boolean isControllerConnected() {
+    BrailleDisplayController controller = mController;
+    try {
+      return controller != null && controller.isConnected();
+    } catch (RuntimeException e) {
+      return false;
+    }
+  }
+
+  private synchronized void completeDisconnected() {
+    mMainHandler.removeCallbacks(mDisconnectTimeout);
+    stopDriver();
+    BrlttyHidNativeHelper.reset();
+    int failure = mPendingFailure;
+    mPendingFailure = FAILURE_NONE;
+    if (failure != FAILURE_NONE) {
+      Timber.e("HID teardown finished with failure %d", failure);
+      mListener.onHidConnectFailed(this, failure);
+    } else {
+      Timber.i("HID teardown complete");
+      mListener.onHidDisconnected(this);
+    }
+  }
+
+  private void notifyConnectFailed(int error) {
+    Timber.e("HID connection could not start (%d)", error);
+    mListener.onHidConnectFailed(this, error);
   }
 
   private final BrailleDisplayController.BrailleDisplayCallback mCallback =
       new BrailleDisplayController.BrailleDisplayCallback() {
         @Override
         public void onConnected(byte[] descriptor) {
-          if (mState != STATE_CONNECTING) {
+          if (mLifecycle.isDisconnecting()) {
+            // The connection completed while a local teardown was already in
+            // progress. Ask the controller to release again and wait for the
+            // real callback (or the watchdog).
+            Timber.w("HID connected during local teardown; releasing again");
+            requestControllerDisconnect();
             return;
           }
-          mState = STATE_CONNECTED;
+          if (!mLifecycle.markConnected()) {
+            Timber.w("Ignoring stale HID connected callback in state %s",
+                mLifecycle.getState());
+            return;
+          }
+          if (descriptor == null) {
+            Log.e(LOG_TAG, "HID connection returned no report descriptor");
+            startTeardown(-5);
+            return;
+          }
           Log.i(LOG_TAG, "HID braille display connected, descriptor("
               + descriptor.length + "): " + toHex(descriptor));
+          Timber.i("HID controller connected, descriptor length %d",
+              descriptor.length);
           BrlttyHidNativeHelper.setup(mController, descriptor);
           startDriver();
         }
 
         @Override
         public void onConnectionFailed(int error) {
-          if (mState != STATE_CONNECTING) {
+          if (mLifecycle.isDisconnecting()) {
+            if (mLifecycle.markDisconnected()) {
+              Timber.i("HID teardown completed by connection failure %d", error);
+              completeDisconnected();
+            }
+            return;
+          }
+          if (!mLifecycle.markConnectFailed()) {
+            Timber.w("Ignoring stale HID failure callback %d in state %s",
+                error, mLifecycle.getState());
             return;
           }
           Log.e(LOG_TAG, "HID connection failed: " + error);
-          mState = STATE_IDLE;
           stopDriver();
           BrlttyHidNativeHelper.reset();
-          mListener.onHidConnectFailed(error);
+          mListener.onHidConnectFailed(HidDisplayConnection.this, error);
         }
 
         @Override
         public void onDisconnected() {
-          if (mState == STATE_IDLE) {
+          if (!mLifecycle.markDisconnected()) {
+            Timber.w("Ignoring duplicate/late HID disconnected callback in state %s",
+                mLifecycle.getState());
             return;
           }
           Log.i(LOG_TAG, "HID braille display disconnected");
-          mState = STATE_IDLE;
-          stopDriver();
-          BrlttyHidNativeHelper.reset();
-          mListener.onHidDisconnected();
+          completeDisconnected();
         }
 
         @Override
         public void onInput(byte[] input) {
-          if (mState != STATE_CONNECTED) {
+          if (!mLifecycle.isConnected()) {
             return;
           }
+          Timber.tag("HidInput").v("callback %dB: %s", input == null ? 0 : input.length,
+              HidInputReportNormalizer.toHex(input));
           BrlttyHidNativeHelper.onInput(input);
           DriverThread dt = mDriverThread;
           if (dt != null) {
@@ -217,18 +332,15 @@ public class HidDisplayConnection implements DriverThread.OnInitListener {
     // We're in the driver thread.
     if (displayProperties == null) {
       Log.e(LOG_TAG, "HID driver failed to initialize");
-      mState = STATE_IDLE;
-      if (mController != null && mController.isConnected()) {
-        // Release the system connection; the late onDisconnected callback
-        // is ignored because mState is already STATE_IDLE.
-        mController.disconnect();
-      }
-      stopDriver();
-      BrlttyHidNativeHelper.reset();
-      mListener.onHidConnectFailed(-2);
+      startTeardown(-2);
       return;
     }
-    mListener.onHidConnected(displayProperties);
+    if (!mLifecycle.isConnected()) {
+      Timber.w("Ignoring stale HID driver init in state %s",
+          mLifecycle.getState());
+      return;
+    }
+    mListener.onHidConnected(this, displayProperties);
   }
   private void stopDriver() {
     if (mDriverThread != null) {

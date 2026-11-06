@@ -15,30 +15,43 @@
  */
 
 package com.googlecode.eyesfree.braille.service.display;
+import android.Manifest;
+import android.accessibilityservice.BrailleDisplayController;
+import android.annotation.SuppressLint;
 import android.os.Build;
 
 import android.app.Service;
+import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.hardware.usb.UsbManager;
 import android.preference.PreferenceManager;
 import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.os.Message;
+import android.os.PowerManager;
 import android.os.RemoteCallbackList;
 import android.os.RemoteException;
+import android.os.SystemClock;
 import android.util.Log;
 import com.googlecode.eyesfree.braille.display.BrailleDisplayProperties;
 import com.googlecode.eyesfree.braille.display.BrailleInputEvent;
 import com.googlecode.eyesfree.braille.display.IBrailleService;
 import com.googlecode.eyesfree.braille.display.IBrailleServiceCallback;
+import com.googlecode.eyesfree.braille.service.BuildConfig;
 import com.googlecode.eyesfree.braille.service.R;
 import com.googlecode.eyesfree.braille.utils.ZipResourceExtractor;
 import java.io.File;
+import java.lang.ref.WeakReference;
 import java.util.List;
+import java.util.Set;
+import timber.log.Timber;
 
 /**
  * An Andorid service that connects to braille displays and exposes a unified
@@ -80,17 +93,74 @@ public class DisplayService extends Service
                     // wait a bit since it takes some time to reconnect, which
                     // is going to be frustrating if the screen went off
                     // accidentally.
+                    stopDiscoverySession("screen off");
                     mHandler.scheduleDisconnect(SCREEN_OFF_DISCONNECT_DELAY);
                 } else if (BluetoothDevice.ACTION_BOND_STATE_CHANGED.equals(
                                 action)) {
                     connectFromBroadcastIntent(intent);
+                } else if (BluetoothDevice.ACTION_ACL_CONNECTED.equals(
+                                action)) {
+                    // The display may come back after being switched on or
+                    // after the Bluetooth link was re-established. Retry
+                    // without waiting for the next scheduled attempt.
+                    retryWhenBluetoothDeviceAppears(intent);
+                } else if (BluetoothDevice.ACTION_FOUND.equals(action)) {
+                    handleDiscoveredDevice(intent);
+                } else if (BluetoothAdapter.ACTION_DISCOVERY_FINISHED.equals(
+                                action)) {
+                    handleDiscoveryFinished();
+                } else if (BluetoothAdapter.ACTION_DISCOVERY_STARTED.equals(
+                                action)) {
+                    Timber.d("Bluetooth discovery started");
+                } else if (BluetoothAdapter.ACTION_STATE_CHANGED.equals(
+                                action)) {
+                    int state = intent.getIntExtra(
+                            BluetoothAdapter.EXTRA_STATE,
+                            BluetoothAdapter.ERROR);
+                    if (state == BluetoothAdapter.STATE_ON) {
+                        Timber.i("Bluetooth enabled; connecting braille display");
+                        autoConnectBraille();
+                    } else if (state == BluetoothAdapter.STATE_OFF
+                            || state == BluetoothAdapter.STATE_TURNING_OFF) {
+                        stopDiscoverySession("Bluetooth disabled");
+                        cancelAutoReconnect();
+                    }
+                } else if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(action)) {
+                    // Wired displays only: a USB stick or keyboard must not
+                    // disturb a working Bluetooth connection.
+                    if ("usb".equals(getConnectionProtocol())
+                            && !isConnectionActive()) {
+                        Timber.i("USB device attached; trying wired connection");
+                        autoConnectBraille();
+                    }
+                } else if (UsbManager.ACTION_USB_DEVICE_DETACHED.equals(action)) {
+                    if (mUsbConnection != null) {
+                        Timber.i("USB device detached; disconnecting display");
+                        disconnectBraille();
+                    }
                 } else {
                     Log.w(LOG_TAG, "Unexpected broadcast " + action);
             }
         }
     };
 
-    private MainHandler mHandler = new MainHandler();
+    /**
+     * Hidden input-stack broadcast. Kept in a separate non-exported receiver
+     * because Bluetooth broadcasts are sent by the Bluetooth process rather
+     * than the system UID; those must be registered as exported, while this
+     * one does not need to accept broadcasts from other apps.
+     */
+    private final BroadcastReceiver mInputDeviceReceiver =
+            new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (ACTION_INPUT_DEVICE_ADDED.equals(intent.getAction())) {
+                retryHidWhenInputDeviceAppears();
+            }
+        }
+    };
+
+    private final MainHandler mHandler = new MainHandler(this);
 
     private static final int STATE_DISCONNECTED = 0;
     private static final int STATE_CONNECTED = 1;
@@ -101,6 +171,37 @@ public class DisplayService extends Service
      * disconnected.
      */
     private static final long SCREEN_OFF_DISCONNECT_DELAY = 7000;
+    private static final long HID_RETRY_DELAY = 300;
+    /**
+     * Delays for background reconnects after the display drops or a
+     * connection attempt fails. The delay doubles on each consecutive
+     * failure, up to the maximum, so a sleeping or out-of-range display is
+     * not polled aggressively.
+     */
+    private static final long AUTO_RECONNECT_INITIAL_DELAY = 3000;
+    private static final long AUTO_RECONNECT_MAX_DELAY = 30000;
+    /**
+     * TalkBack-like discovery window. A bonded display is normally connected
+     * directly, but while it is switched off that attempt fails. Keeping a
+     * short scan open afterwards lets a display that has just been powered on
+     * be found immediately, without leaving Bluetooth inquiry running all day.
+     */
+    private static final long DISCOVERY_SESSION_DURATION = 30000;
+    private static final long DISCOVERY_RESTART_DELAY = 300;
+    /**
+     * Hidden but stable system broadcast sent when the input stack registers a
+     * new device. A Braille HID display shows up here after the Bluetooth HID
+     * profile connects, which is usually later than the user's protocol choice.
+     */
+    private static final String ACTION_INPUT_DEVICE_ADDED =
+            "android.hardware.input.action.INPUT_DEVICE_ADDED";
+    /**
+     * How long to wait for the accessibility service to publish a
+     * BrailleDisplayController before reporting it as unavailable. The
+     * controller is briefly absent whenever the accessibility service is
+     * rebound, so an immediate error is usually misleading.
+     */
+    private static final long HID_CONTROLLER_WAIT_TIMEOUT = 2500;
     private BrailleDisplayProperties mDisplayProperties;
     private File mTablesDir;
     private static final int FILES_ERROR = -1;
@@ -116,12 +217,51 @@ public class DisplayService extends Service
     /**
      * HID connection (Braille HID standard via BrailleDisplayController).
      */
-    private HidDisplayConnection mHidConnection;
+    private volatile HidDisplayConnection mHidConnection;
+    /**
+     * Custom BLE GATT connection used by the Wujie / Orbit 30-cell display.
+     */
+    private volatile WujieGattConnection mWujieConnection;
+    /** Wired USB connection (brltty USB backend), null unless selected. */
+    private volatile UsbDisplayConnection mUsbConnection;
     /**
      * True after an HID connection attempt, to avoid retrying HID in a loop
      * when the connected display only supports classic RFCOMM.
      */
-    private boolean mHidTried;
+    private volatile boolean mHidTried;
+    /** Number of HID retries already used by the current connection cycle. */
+    private int mHidRetryCount;
+    /**
+     * True while waiting for the accessibility service to publish the HID
+     * controller. {@link HidBridge} notifies us as soon as it appears.
+     */
+    private boolean mWaitingForHidController;
+    /**
+     * Error returned by the last HID attempt, or {@code 0} if no attempt has
+     * failed yet. Used to replace the generic failure message with an
+     * actionable one (for example, "display is not in Braille HID mode").
+     */
+    private int mLastHidError;
+    /** Number of consecutive automatic reconnect attempts. */
+    private int mAutoReconnectAttempt;
+    /**
+     * True after the user explicitly disconnected the display. Automatic
+     * retries stay off until the next explicit connect trigger (opening the
+     * app, requesting a connect, or turning the screen on).
+     */
+    private boolean mAutoReconnectSuppressed;
+    /**
+     * True while the current explicit automatic-connect trigger is still
+     * allowed to open its one discovery window. It is cleared as soon as that
+     * window starts, so periodic safety retries do not turn into continuous
+     * scanning.
+     */
+    private boolean mDiscoveryAllowedForCycle;
+    /** True while this service owns the current Bluetooth discovery session. */
+    private boolean mDiscoverySessionActive;
+    /** True when this service, rather than another app, started discovery. */
+    private boolean mDiscoveryStartedByUs;
+    private long mDiscoverySessionDeadline;
 
     /** Reconnects with a different protocol when the setting changes. */
     private final SharedPreferences.OnSharedPreferenceChangeListener
@@ -131,8 +271,14 @@ public class DisplayService extends Service
             public void onSharedPreferenceChanged(
                     SharedPreferences prefs, String key) {
                 if ("connection_protocol".equals(key)) {
+                    String protocol = prefs.getString(key, "auto");
+                    mHandler.cancelHidRetry();
+                    mHidRetryCount = 0;
+                    Timber.i("Connection protocol changed to %s", protocol);
                     if (mConnectionState == STATE_CONNECTED
-                            || mReadThread != null || mHidConnection != null) {
+                            || mReadThread != null || mHidConnection != null
+                            || mWujieConnection != null
+                            || mUsbConnection != null) {
                         // Reconnect with the new protocol only after the current
                         // connection has been fully torn down. HID disconnect is
                         // asynchronous (BrailleDisplayController.disconnect()), so
@@ -161,6 +307,9 @@ public class DisplayService extends Service
                     SharedPreferences prefs, String key) {
                 if ("auto_connect".equals(key) && prefs.getBoolean(key, true)) {
                     autoConnectBraille();
+                } else if ("auto_connect".equals(key)) {
+                    stopDiscoverySession("auto-connect disabled");
+                    cancelAutoReconnect();
                 }
             }
         };
@@ -178,8 +327,18 @@ public class DisplayService extends Service
                     String protocol = getConnectionProtocol();
                     boolean hidRequested = "hid".equals(protocol)
                             || "auto".equals(protocol);
+                    if (hidRequested && mWaitingForHidController) {
+                        mWaitingForHidController = false;
+                        mHandler.cancelHidControllerTimeout();
+                        mHidTried = false;
+                        Timber.i("HID controller published; resuming pending connection");
+                        connectBraille();
+                        return;
+                    }
                     if (hidRequested && mConnectionState == STATE_DISCONNECTED
-                            && mReadThread == null && mHidConnection == null) {
+                            && mReadThread == null && mHidConnection == null
+                            && mWujieConnection == null
+                            && mUsbConnection == null) {
                         mHidTried = false;
                         autoConnectBraille();
                     }
@@ -192,6 +351,9 @@ public class DisplayService extends Service
     @Override
     public void onCreate() {
         super.onCreate();
+        if (BuildConfig.DEBUG && Timber.treeCount() == 0) {
+            Timber.plant(new Timber.DebugTree());
+        }
         mTablesDir = getDir("keytables", Context.MODE_PRIVATE);
         PreferenceManager.getDefaultSharedPreferences(this)
                 .registerOnSharedPreferenceChangeListener(
@@ -201,8 +363,13 @@ public class DisplayService extends Service
                         mAutoConnectPrefListener);
         registerBroadcastReceiver();
         HidBridge.setControllerChangeListener(
-                mHidControllerChangeListener);
+                this, mHidControllerChangeListener);
         ensureDataFiles();
+        // P0 probe (debug builds only): confirm the prebuilt .so still exports
+        // the USB driver table JNI entry point. Does not touch connection logic.
+        if (BuildConfig.DEBUG) {
+            BrlttyWrapper.logUsbDriverTableProbe();
+        }
         Log.i(LOG_TAG, "Service started.");
     }
 
@@ -216,10 +383,20 @@ public class DisplayService extends Service
         PreferenceManager.getDefaultSharedPreferences(this)
                 .unregisterOnSharedPreferenceChangeListener(
                         mAutoConnectPrefListener);
-        HidBridge.setControllerChangeListener(null);
+        HidBridge.setControllerChangeListener(this, null);
+        mHandler.unscheduleDisconnect();
+        cancelPendingReconnect();
+        mAutoReconnectSuppressed = true;
+        stopDiscoverySession("service destroyed");
+        cancelAutoReconnect();
         disconnectBraille();
+        // Drop callbacks queued by a display that may already be torn down.
+        mHandler.removeCallbacksAndMessages(null);
         if (mBroadcastReceiver != null) {
             unregisterReceiver(mBroadcastReceiver);
+        }
+        if (mInputDeviceReceiver != null) {
+            unregisterReceiver(mInputDeviceReceiver);
         }
     }
 
@@ -239,6 +416,7 @@ public class DisplayService extends Service
         int clientCount = mClients.beginBroadcast();
         mClients.finishBroadcast();
         if (clientCount <= 0) {
+            cancelPendingReconnect();
             disconnectBraille();
         }
         return true;
@@ -282,11 +460,21 @@ public class DisplayService extends Service
             }
             // Route output to the HID connection when it is the active path
             // (HID uses HidDisplayConnection instead of ReadThread).
+            UsbDisplayConnection usbConnection = mUsbConnection;
+            if (usbConnection != null) {
+                usbConnection.writeWindow(patterns);
+                return;
+            }
             HidDisplayConnection hidConnection = mHidConnection;
             if (hidConnection != null) {
                 hidConnection.writeWindow(patterns);
                 return;
             }
+        WujieGattConnection wujieConnection = mWujieConnection;
+        if (wujieConnection != null) {
+            wujieConnection.writeWindow(patterns);
+            return;
+        }
             ReadThread localReadThread = mReadThread;
             if (localReadThread == null) {
                 return;
@@ -300,7 +488,7 @@ public class DisplayService extends Service
 
         @Override
         public void poll() {
-            mHandler.connectBraille();
+            mHandler.connectBrailleExplicit();
         }
 
         @Override
@@ -336,7 +524,27 @@ public class DisplayService extends Service
      * sends notification to the clients about the state change.
      */
     private void disconnectBraille() {
+        disconnectBraille(false);
+    }
+
+    /**
+     * Disconnects the display. A user-initiated disconnect suppresses the
+     * background reconnect loop until the next explicit connect trigger.
+     */
+    private void disconnectBraille(boolean userInitiated) {
+        if (userInitiated) {
+            mAutoReconnectSuppressed = true;
+            mAutoReconnectAttempt = 0;
+            cancelAutoReconnect();
+        }
+        // Unexpected drops may be the display being switched off and back on;
+        // allow one discovery window when the teardown completes. A user
+        // initiated disconnect stays suppressed.
+        mDiscoveryAllowedForCycle = !userInitiated;
+        stopDiscoverySession("disconnecting display");
         Log.i(LOG_TAG, "Disconnecting braille display");
+        Timber.i("Disconnecting braille display (pending=%s)", mConnectPending);
+        clearHidControllerWait();
         clearConnectionProgress();
         mConnectionState = STATE_DISCONNECTED;
         mDisplayProperties = null;
@@ -345,10 +553,30 @@ public class DisplayService extends Service
             mReadThread.disconnect();
         }
         if (mHidConnection != null) {
+            // Keep the reference until HidDisplayConnection reports that the
+            // system controller has really been released. Clearing it here
+            // lets a new connection race the asynchronous teardown.
             mHidConnection.disconnect();
-            mHidConnection = null;
+        }
+        if (mWujieConnection != null) {
+            mWujieConnection.disconnect();
+        }
+        if (mUsbConnection != null) {
+            // Like HID, this reports back asynchronously once the native
+            // driver has actually stopped.
+            mUsbConnection.disconnect();
         }
         mHidTried = false;
+        // An explicit disconnect starts a new connection cycle, so a
+        // controller release conflict may be retried once in that cycle.
+        mHidRetryCount = 0;
+    }
+
+    /** Cancels a reconnect requested by an earlier transition. */
+    private void cancelPendingReconnect() {
+        mConnectPending = false;
+        mHidRetryCount = 0;
+        mHandler.cancelHidRetry();
     }
 
     /**
@@ -360,6 +588,33 @@ public class DisplayService extends Service
         if (mConnectionProgress != null) {
             mConnectionProgress = null;
             broadcastConnectionProgress();
+        }
+    }
+
+    /**
+     * Waits for the accessibility service to publish a
+     * BrailleDisplayController. The controller is transiently absent whenever
+     * the service is rebound, so the UI shows a neutral waiting message and
+     * {@link HidBridge} resumes the connection as soon as it appears. If the
+     * controller never arrives, the bounded timeout reports the real error.
+     */
+    private void waitForHidController() {
+        if (mWaitingForHidController) {
+            return;
+        }
+        mWaitingForHidController = true;
+        Timber.i("Waiting up to %d ms for the HID controller",
+                HID_CONTROLLER_WAIT_TIMEOUT);
+        mHandler.setConnectionProgress(
+                getString(R.string.connprog_hid_waiting_controller));
+        mHandler.scheduleHidControllerTimeout(HID_CONTROLLER_WAIT_TIMEOUT);
+    }
+
+    /** Cancels a pending wait for the HID controller. */
+    private void clearHidControllerWait() {
+        if (mWaitingForHidController) {
+            mWaitingForHidController = false;
+            mHandler.cancelHidControllerTimeout();
         }
     }
 
@@ -376,29 +631,61 @@ public class DisplayService extends Service
             return;
         }
 
-        if (mReadThread != null || mHidConnection != null) {
+        if (mReadThread != null || mHidConnection != null
+                || mWujieConnection != null || mUsbConnection != null) {
             // We must wait until the previous attempt is done before
             // retrying a connect, so just set the flag here.
             mConnectPending = true;
             return;
         }
 
+        // RFCOMM/HID connections are faster and more reliable when Bluetooth
+        // inquiry is not competing with them.
+        stopDiscoverySession("connecting display");
         String protocol = getConnectionProtocol();
+        Timber.i("Starting connection with protocol %s", protocol);
+        if ("wujie".equals(protocol)) {
+            connectWujie();
+            return;
+        }
+        if ("usb".equals(protocol)) {
+            connectUsb();
+            return;
+        }
         if ("auto".equals(protocol) || "hid".equals(protocol)) {
             if (tryConnectHid()) {
                 // A Braille HID connection attempt was started (async).
+                return;
+            }
+            if (!mHidTried && Build.VERSION.SDK_INT
+                    >= Build.VERSION_CODES.VANILLA_ICE_CREAM
+                    && !HidBridge.isAvailable()) {
+                // BrailleDisplayController is briefly null while the
+                // accessibility service is being rebound. Wait for it instead
+                // of showing "enable the accessibility service" or falling
+                // back to RFCOMM for a HID-only display.
+                waitForHidController();
                 return;
             }
             if ("hid".equals(protocol)) {
                 // The user forced HID but it could not be used; do not fall
                 // back to classic RFCOMM silently.
                 if (mHidTried) {
-                    mHandler.setConnectionProgress(
-                            getString(R.string.connprog_hid_failed));
-                } else {
+                    mHandler.setConnectionProgress(getHidFailureMessage());
+                } else if (Build.VERSION.SDK_INT
+                        < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
                     mHandler.setConnectionProgress(
                             getString(R.string.connprog_hid_unavailable));
+                } else if (!HidBridge.isAvailable()) {
+                    waitForHidController();
+                } else {
+                    // Controller is fine: the attempt stopped because no
+                    // matching paired display was found. Saying "enable the
+                    // accessibility service" here is misleading.
+                    mHandler.setConnectionProgress(
+                            getString(R.string.connprog_hid_not_found));
                 }
+                scheduleAutoReconnectIfNeeded();
                 return;
             }
         }
@@ -414,8 +701,34 @@ public class DisplayService extends Service
      * Returns true if an HID attempt was started (asynchronously), false to
      * fall back to classic RFCOMM.
      */
+    // BrailleDisplayController and HidBridge require API 35; callers reach
+    // this method only after HidBridge.isAvailable() has checked the SDK level.
+    @SuppressLint("NewApi")
     private boolean tryConnectHid() {
+        if (mHidTried) {
+            return false;
+        }
+        if (!HidBridge.isAvailable()) {
+            Timber.w("HID requested but BrailleDisplayController is unavailable (sdk=%d)",
+                    Build.VERSION.SDK_INT);
+            return false;
+        }
+        return startHidAttempt();
+    }
+
+    /** Retries an HID attempt after the controller release conflict. */
+    private boolean retryHidConnect() {
         if (mHidTried || !HidBridge.isAvailable()) {
+            return false;
+        }
+        return startHidAttempt();
+    }
+
+    @SuppressLint("NewApi")
+    private boolean startHidAttempt() {
+        BrailleDisplayController controller = HidBridge.getController();
+        if (controller == null) {
+            Timber.w("Aborting HID attempt: controller became null");
             return false;
         }
         String address = mPendingBluetoothAddress;
@@ -425,21 +738,60 @@ public class DisplayService extends Service
             if (devices.isEmpty()) {
                 return false;
             }
-            address = devices.get(0).getBluetoothDevice().getAddress();
+            try {
+                address = devices.get(0).getBluetoothDevice().getAddress();
+            } catch (SecurityException e) {
+                Log.w(LOG_TAG,
+                        "BLUETOOTH_CONNECT permission denied reading address",
+                        e);
+                return false;
+            }
+            if (address == null) {
+                return false;
+            }
         }
         mHidTried = true;
+        mLastHidError = 0;
         mPendingBluetoothAddress = null;
         mHandler.setConnectionProgress(getString(R.string.connprog_trying_hid));
-        mHidConnection = new HidDisplayConnection(this, getResources(),
-                mTablesDir, mHidListener, this);
-        mHidConnection.connect(HidBridge.getController(), address);
+        HidDisplayConnection connection = new HidDisplayConnection(this,
+                getResources(), mTablesDir, mHidListener, this);
+        mHidConnection = connection;
+        Timber.i("Creating HID connection attempt for %s", address);
+        connection.connect(controller, address);
         return true;
+    }
+
+    /**
+     * Returns a message that explains why the last HID attempt failed.
+     *
+     * <p>The platform reports a bit mask from
+     * {@code BrailleDisplayController}: bit 1 means that the HIDRAW nodes could
+     * not be inspected, and bit 2 means that no uniquely matching Braille HID
+     * display was found. The latter is by far the most common case and means
+     * the display is still in Bluetooth serial (SPP/RFCOMM) mode, or was
+     * paired while in that mode, so the system has no Braille HID node for it.
+     */
+    private String getHidFailureMessage() {
+        if ((mLastHidError & 2) != 0) {
+            return getString(R.string.connprog_hid_not_found);
+        }
+        if (mLastHidError != 0) {
+            return getString(R.string.connprog_hid_failed_code,
+                    mLastHidError);
+        }
+        return getString(R.string.connprog_hid_failed);
     }
 
     /** Returns the user-selected connection protocol: auto, hid or rfcomm. */
     private String getConnectionProtocol() {
         return PreferenceManager.getDefaultSharedPreferences(this)
                 .getString("connection_protocol", "auto");
+    }
+
+    private boolean isHidRequested() {
+        String protocol = getConnectionProtocol();
+        return "hid".equals(protocol) || "auto".equals(protocol);
     }
 
     /**
@@ -451,10 +803,316 @@ public class DisplayService extends Service
      * the volume-key toggle keeps working regardless of the setting.
      */
     private void autoConnectBraille() {
+        mAutoReconnectSuppressed = false;
+        mAutoReconnectAttempt = 0;
+        mHandler.cancelAutoReconnect();
         if (PreferenceManager.getDefaultSharedPreferences(this)
                 .getBoolean("auto_connect", true)) {
+            mDiscoveryAllowedForCycle = true;
             connectBraille();
+        } else {
+            mDiscoveryAllowedForCycle = false;
+            stopDiscoverySession("auto-connect disabled");
         }
+    }
+
+    /** Starts a connection explicitly requested by a client. */
+    private void startExplicitConnect() {
+        mAutoReconnectSuppressed = false;
+        mAutoReconnectAttempt = 0;
+        mHandler.cancelAutoReconnect();
+        mDiscoveryAllowedForCycle = true;
+        connectBraille();
+    }
+
+    /**
+     * Retries when a known braille display establishes its Bluetooth link.
+     * Only acts while nothing is connected or connecting, so unrelated
+     * devices (headsets, mice, ...) cannot disturb an established display
+     * connection.
+     */
+    private void retryWhenBluetoothDeviceAppears(Intent intent) {
+        if (isConnectionActive()) {
+            return;
+        }
+        BluetoothDevice device = intent.getParcelableExtra(
+                BluetoothDevice.EXTRA_DEVICE);
+        if (device != null) {
+            String address = null;
+            try {
+                address = device.getAddress();
+            } catch (SecurityException e) {
+                Timber.w(e,
+                        "BLUETOOTH_CONNECT permission denied reading address");
+            }
+            if (address != null
+                    && !new DeviceFinder(this).isKnownDevice(address)) {
+                Timber.i("Ignoring Bluetooth link for unrelated device %s",
+                        address);
+                return;
+            }
+        }
+        prepareAutomaticRetry("Bluetooth link appeared");
+    }
+
+    /** Retries an HID attempt when a new input device is registered. */
+    private void retryHidWhenInputDeviceAppears() {
+        if (!isHidRequested() || isConnectionActive()) {
+            return;
+        }
+        prepareAutomaticRetry("HID input device appeared");
+    }
+
+    private void prepareAutomaticRetry(String reason) {
+        if (isConnectionActive()) {
+            return;
+        }
+        mHandler.cancelHidControllerTimeout();
+        mWaitingForHidController = false;
+        if (isHidRequested()) {
+            mHidTried = false;
+            mHidRetryCount = 0;
+        }
+        Timber.i("%s; retrying display connection", reason);
+        autoConnectBraille();
+    }
+
+    private boolean isConnectionActive() {
+        return mConnectionState == STATE_CONNECTED
+                || mReadThread != null
+                || mHidConnection != null
+                || mWujieConnection != null
+                || mUsbConnection != null;
+    }
+
+    /**
+     * Schedules the next background reconnect attempt after a failed or
+     * dropped connection. Retrying is intentionally tied to the lifecycle of
+     * the service: it only runs while a client is bound, the screen is
+     * interactive, auto-connect is enabled and the user has not explicitly
+     * disconnected the display.
+     */
+    private void scheduleAutoReconnectIfNeeded() {
+        if (!shouldAutoReconnect()) {
+            Timber.v("Not scheduling auto reconnect (not eligible)");
+            return;
+        }
+        if (mHandler.hasAutoReconnectScheduled()) {
+            return;
+        }
+        boolean discoveryStarted = false;
+        if (mDiscoveryAllowedForCycle) {
+            mDiscoveryAllowedForCycle = false;
+            discoveryStarted = startDiscoveryWindow(
+                    "connection attempt failed");
+        }
+        int attempt = mAutoReconnectAttempt++;
+        // While the discovery window is open, wait for a device to appear
+        // instead of cancelling the scan with an RFCOMM page three seconds
+        // later. The ordinary backoff resumes once the window closes.
+        mHandler.scheduleAutoReconnect(attempt,
+                discoveryStarted ? DISCOVERY_SESSION_DURATION : -1);
+    }
+
+    private boolean shouldAutoReconnect() {
+        if (!PreferenceManager.getDefaultSharedPreferences(this)
+                .getBoolean("auto_connect", true)) {
+            return false;
+        }
+        if (mAutoReconnectSuppressed || !haveClients()) {
+            return false;
+        }
+        if (mDataFileState != FILES_EXTRACTED) {
+            return false;
+        }
+        if (isConnectionActive() || mConnectPending
+                || mWaitingForHidController) {
+            return false;
+        }
+        if (!isScreenInteractive()) {
+            return false;
+        }
+        BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+        try {
+            return adapter != null && adapter.isEnabled();
+        } catch (SecurityException e) {
+            Timber.w(e,
+                    "BLUETOOTH_CONNECT permission denied checking adapter");
+            return false;
+        }
+    }
+
+    private boolean isScreenInteractive() {
+        PowerManager powerManager =
+                (PowerManager) getSystemService(Context.POWER_SERVICE);
+        return powerManager == null || powerManager.isInteractive();
+    }
+
+    private boolean hasBluetoothScanPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            return true;
+        }
+        return checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN)
+                == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private boolean shouldStartDiscovery() {
+        BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+        boolean adapterEnabled = false;
+        if (adapter != null) {
+            try {
+                adapterEnabled = adapter.isEnabled();
+            } catch (SecurityException e) {
+                Timber.w(e, "BLUETOOTH_CONNECT permission denied checking adapter");
+            }
+        }
+        return BluetoothDiscoveryPolicy.shouldStartDiscovery(
+                PreferenceManager.getDefaultSharedPreferences(this)
+                        .getBoolean("auto_connect", true),
+                mAutoReconnectSuppressed,
+                haveClients(),
+                mDataFileState == FILES_EXTRACTED,
+                isConnectionActive(),
+                mConnectPending,
+                mWaitingForHidController,
+                isScreenInteractive(),
+                adapterEnabled,
+                hasBluetoothScanPermission());
+    }
+
+    /** Opens (or extends) the short discovery window used after a failed connect. */
+    private boolean startDiscoveryWindow(String reason) {
+        if (!shouldStartDiscovery()) {
+            Timber.v("Not starting discovery (%s): not eligible", reason);
+            return false;
+        }
+        long now = SystemClock.uptimeMillis();
+        if (mDiscoverySessionActive && now < mDiscoverySessionDeadline) {
+            mDiscoverySessionDeadline = now + DISCOVERY_SESSION_DURATION;
+            mHandler.scheduleDiscoveryTimeout(DISCOVERY_SESSION_DURATION);
+            Timber.d("Extending Bluetooth discovery window (%s)", reason);
+            startDiscoveryInternal(reason);
+            return true;
+        }
+        mDiscoverySessionActive = true;
+        mDiscoveryStartedByUs = false;
+        mDiscoverySessionDeadline = now + DISCOVERY_SESSION_DURATION;
+        mHandler.scheduleDiscoveryTimeout(DISCOVERY_SESSION_DURATION);
+        Timber.i("Starting %d ms Bluetooth discovery window (%s)",
+                DISCOVERY_SESSION_DURATION / 1000, reason);
+        startDiscoveryInternal(reason);
+        return mDiscoverySessionActive;
+    }
+
+    private void startDiscoveryInternal(String reason) {
+        if (!mDiscoverySessionActive) {
+            return;
+        }
+        if (!shouldStartDiscovery()) {
+            stopDiscoverySession("discovery no longer eligible");
+            return;
+        }
+        BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+        if (adapter == null) {
+            stopDiscoverySession("no Bluetooth adapter");
+            return;
+        }
+        try {
+            if (adapter.isDiscovering()) {
+                Timber.d("Bluetooth discovery already active (%s)", reason);
+                return;
+            }
+            if (adapter.startDiscovery()) {
+                mDiscoveryStartedByUs = true;
+                Timber.i("Bluetooth discovery started (%s)", reason);
+            } else {
+                mDiscoveryStartedByUs = false;
+                Timber.w("Bluetooth discovery was not started (%s)", reason);
+            }
+        } catch (SecurityException e) {
+            Timber.w(e, "BLUETOOTH_SCAN permission denied; stopping discovery");
+            stopDiscoverySession("scan permission denied");
+        }
+    }
+
+    private void handleDiscoveryFinished() {
+        if (!mDiscoverySessionActive) {
+            return;
+        }
+        mDiscoveryStartedByUs = false;
+        long now = SystemClock.uptimeMillis();
+        if (now >= mDiscoverySessionDeadline) {
+            stopDiscoverySession("discovery window expired");
+            return;
+        }
+        if (!shouldStartDiscovery()) {
+            stopDiscoverySession("discovery no longer eligible");
+            return;
+        }
+        Timber.d("Discovery cycle finished; restarting within window");
+        mHandler.scheduleDiscoveryRestart(DISCOVERY_RESTART_DELAY);
+    }
+
+    private void handleDiscoveredDevice(Intent intent) {
+        if (!mDiscoverySessionActive || isConnectionActive()) {
+            return;
+        }
+        BluetoothDevice device = intent.getParcelableExtra(
+                BluetoothDevice.EXTRA_DEVICE);
+        if (device == null) {
+            return;
+        }
+        String address = null;
+        String name = null;
+        try {
+            address = device.getAddress();
+            name = device.getName();
+        } catch (SecurityException e) {
+            Timber.w(e, "BLUETOOTH_CONNECT permission denied reading discovery result");
+        }
+        if (address == null || !new DeviceFinder(this).isKnownDevice(address)) {
+            Timber.v("Discovery found unrelated device %s (%s)", name, address);
+            return;
+        }
+        Timber.i("Discovered known braille display %s (%s); connecting",
+                name, address);
+        stopDiscoverySession("known display discovered");
+        mPendingBluetoothAddress = address;
+        mHidTried = false;
+        mHidRetryCount = 0;
+        mLastHidError = 0;
+        autoConnectBraille();
+        // If this attempt fails, wait for the next lifecycle event or the
+        // periodic safety retry instead of immediately scanning again.
+        mDiscoveryAllowedForCycle = false;
+    }
+
+    private void stopDiscoverySession(String reason) {
+        mDiscoverySessionActive = false;
+        mDiscoverySessionDeadline = 0;
+        mHandler.cancelDiscoveryTimeout();
+        mHandler.cancelDiscoveryRestart();
+        boolean owned = mDiscoveryStartedByUs;
+        mDiscoveryStartedByUs = false;
+        if (!owned) {
+            return;
+        }
+        BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+        if (adapter == null || !hasBluetoothScanPermission()) {
+            return;
+        }
+        try {
+            if (adapter.isDiscovering()) {
+                adapter.cancelDiscovery();
+                Timber.i("Bluetooth discovery stopped (%s)", reason);
+            }
+        } catch (SecurityException e) {
+            Timber.w(e, "BLUETOOTH_SCAN permission denied cancelling discovery");
+        }
+    }
+
+    private void cancelAutoReconnect() {
+        mHandler.cancelAutoReconnect();
     }
 
     /**
@@ -463,27 +1121,172 @@ public class DisplayService extends Service
     private final HidDisplayConnection.Listener mHidListener =
             new HidDisplayConnection.Listener() {
         @Override
-        public void onHidConnected(BrailleDisplayProperties properties) {
+        public void onHidConnected(HidDisplayConnection source,
+                BrailleDisplayProperties properties) {
             // Do NOT clear mConnectionProgress here: it must be broadcast to
             // clients so the settings UI re-renders the connected state.
             // handleOnDisplayConnected -> clearConnectionProgress() does that.
+            mHandler.onHidConnected(source, properties);
+        }
+
+        @Override
+        public void onHidDisconnected(HidDisplayConnection source) {
+            mHandler.onHidDisconnected(source);
+        }
+
+        @Override
+        public void onHidConnectFailed(HidDisplayConnection source, int error) {
+            mHandler.onHidConnectFailed(source, error);
+        }
+    };
+
+    private final WujieGattConnection.Listener mWujieListener =
+            new WujieGattConnection.Listener() {
+        @Override
+        public void onWujieConnected(WujieGattConnection source,
+                BrailleDisplayProperties properties) {
+            mHandler.onWujieConnected(source, properties);
+        }
+
+        @Override
+        public void onWujieInputEvent(WujieGattConnection source,
+                BrailleInputEvent event) {
+            mHandler.onWujieInputEvent(source, event);
+        }
+
+        @Override
+        public void onWujieDisconnected(WujieGattConnection source) {
+            mHandler.onWujieDisconnected(source);
+        }
+
+        @Override
+        public void onWujieConnectFailed(WujieGattConnection source,
+                int error) {
+            mHandler.onWujieConnectFailed(source, error);
+        }
+    };
+
+    /** Callbacks from the wired USB connection. */
+    private final UsbDisplayConnection.Listener mUsbListener =
+            new UsbDisplayConnection.Listener() {
+        @Override
+        public void onUsbConnected(UsbDisplayConnection source,
+                BrailleDisplayProperties properties) {
+            if (source != mUsbConnection) {
+                Timber.w("Ignoring stale USB connected callback");
+                return;
+            }
             mHandler.onDisplayConnected(properties);
         }
 
         @Override
-        public void onHidDisconnected() {
-            mHidConnection = null;
-            mHidTried = false;
+        public void onUsbDisconnected(UsbDisplayConnection source) {
+            if (source != mUsbConnection) {
+                Timber.w("Ignoring stale USB disconnected callback");
+                return;
+            }
             mHandler.onDisplayDisconnected();
         }
 
         @Override
-        public void onHidConnectFailed(int error) {
-            Log.e(LOG_TAG, "HID connect failed (" + error + "), falling back to RFCOMM");
-            mHidConnection = null;
-            connectBraille();
+        public void onUsbConnectFailed(UsbDisplayConnection source,
+                String reason) {
+            if (source != mUsbConnection) {
+                Timber.w("Ignoring stale USB failure callback");
+                return;
+            }
+            mUsbConnection = null;
+            mConnectPending = false;
+            Timber.w("USB connection failed: %s", reason);
+            mHandler.setConnectionProgress(
+                    getString(R.string.connprog_usb_failed, reason));
+            scheduleAutoReconnectIfNeeded();
         }
     };
+
+    /**
+     * Starts the wired USB connection path (brltty's Android USB backend).
+     * Device enumeration, permission and the actual transfers are handled by
+     * {@link UsbDisplayConnection}; this method only wires it into the service
+     * state machine.
+     */
+    private void connectUsb() {
+        mHandler.setConnectionProgress(
+                getString(R.string.connprog_trying_usb));
+        UsbDisplayConnection connection = new UsbDisplayConnection(
+                this, mTablesDir, mUsbListener, this);
+        mUsbConnection = connection;
+        Timber.i("Starting wired USB connection");
+        connection.connect();
+    }
+
+    /**
+     * Starts the private BLE GATT connection used by the Wujie display.
+     * Unlike the HID path this does not depend on the system braille HID
+     * service, so the display can stay in its vendor BLE mode.
+     */
+    private void connectWujie() {
+        String address = mPendingBluetoothAddress;
+        if (address == null) {
+            address = findWujieAddress();
+        }
+        if (address == null) {
+            Timber.w("No bonded Wujie display found");
+            mHandler.setConnectionProgress(
+                    getString(R.string.connprog_no_devices));
+            scheduleAutoReconnectIfNeeded();
+            return;
+        }
+        mPendingBluetoothAddress = null;
+        mHandler.setConnectionProgress(
+                getString(R.string.connprog_trying_wujie));
+        WujieGattConnection connection =
+                new WujieGattConnection(this, mWujieListener);
+        mWujieConnection = connection;
+        Timber.i("Creating custom GATT connection for %s", address);
+        connection.connect(address);
+    }
+
+    /**
+     * Returns the address of a bonded Wujie / Orbit display. Name matching is
+     * deliberately broad because the display advertises as "Orbit wujie 30"
+     * and the user may have renamed it.
+     */
+    private String findWujieAddress() {
+        BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+        if (adapter == null) {
+            return null;
+        }
+        String lastAddress = PreferenceManager
+                .getDefaultSharedPreferences(this)
+                .getString("lastBluetoothDevice", null);
+        try {
+            Set<BluetoothDevice> bonded = adapter.getBondedDevices();
+            if (bonded == null) {
+                return lastAddress;
+            }
+            for (BluetoothDevice device : bonded) {
+                if (device == null) {
+                    continue;
+                }
+                String name = device.getName();
+                if (name == null) {
+                    continue;
+                }
+                String lower = name.toLowerCase(java.util.Locale.US);
+                if (lower.contains("orbit") || lower.contains("wujie")
+                        || name.contains("无界")) {
+                    return device.getAddress();
+                }
+            }
+        } catch (SecurityException e) {
+            Log.w(LOG_TAG,
+                    "BLUETOOTH_CONNECT permission denied finding Wujie device",
+                    e);
+            return null;
+        }
+        return lastAddress;
+    }
 
 
     /**
@@ -491,20 +1294,49 @@ public class DisplayService extends Service
      * paired, try to connect to it.
      */
     private void connectFromBroadcastIntent(Intent intent) {
-        if (mConnectionState == STATE_CONNECTED) {
-            return;
-        }
-        int bondState = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE,
-                BluetoothDevice.BOND_NONE);
-        if (bondState != BluetoothDevice.BOND_BONDED) {
-            return;
-        }
         BluetoothDevice bthDev = intent.getParcelableExtra(
                 BluetoothDevice.EXTRA_DEVICE);
         if (bthDev == null) {
             return;
         }
-        mPendingBluetoothAddress = bthDev.getAddress();
+        String address;
+        try {
+            address = bthDev.getAddress();
+        } catch (SecurityException e) {
+            Log.w(LOG_TAG,
+                    "BLUETOOTH_CONNECT permission denied; ignoring bonded device",
+                    e);
+            return;
+        }
+        if (address == null) {
+            return;
+        }
+        int bondState = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE,
+                BluetoothDevice.BOND_NONE);
+        if (bondState == BluetoothDevice.BOND_NONE) {
+            if (address.equals(mPendingBluetoothAddress)) {
+                mPendingBluetoothAddress = null;
+                Timber.i("Cleared pending Bluetooth device after unpair");
+            }
+            return;
+        }
+        if (bondState != BluetoothDevice.BOND_BONDED) {
+            return;
+        }
+        if (mConnectionState == STATE_CONNECTED) {
+            return;
+        }
+        if (!new DeviceFinder(this).isKnownDevice(address)) {
+            Timber.i("Ignoring unrelated bonded Bluetooth device %s", address);
+            return;
+        }
+        mPendingBluetoothAddress = address;
+        // A fresh bond starts a new connection attempt. Without this reset a
+        // failed HID attempt from before the device was unpaired would make
+        // tryConnectHid() return false forever and replay the stale error.
+        mHidTried = false;
+        mHidRetryCount = 0;
+        mLastHidError = 0;
         autoConnectBraille();
     }
 
@@ -513,17 +1345,35 @@ public class DisplayService extends Service
             Intent.ACTION_SCREEN_ON,
             Intent.ACTION_SCREEN_OFF,
             BluetoothDevice.ACTION_BOND_STATE_CHANGED,
+            BluetoothDevice.ACTION_ACL_CONNECTED,
+            BluetoothDevice.ACTION_FOUND,
+            BluetoothAdapter.ACTION_DISCOVERY_STARTED,
+            BluetoothAdapter.ACTION_DISCOVERY_FINISHED,
+            BluetoothAdapter.ACTION_STATE_CHANGED,
+            UsbManager.ACTION_USB_DEVICE_ATTACHED,
+            UsbManager.ACTION_USB_DEVICE_DETACHED,
         };
         IntentFilter filter = new IntentFilter();
         for (String action : actions) {
             filter.addAction(action);
         }
         if (Build.VERSION.SDK_INT >= 33) {
-    registerReceiver(mBroadcastReceiver, filter, null, null,
-            Context.RECEIVER_NOT_EXPORTED);
-} else {
-    registerReceiver(mBroadcastReceiver, filter, null, null);
-}
+            // Bluetooth broadcasts come from the Bluetooth process, not the
+            // system UID, so a NOT_EXPORTED receiver does not reliably see
+            // ACTION_FOUND/ACTION_ACL_CONNECTED on Android 13+.
+            registerReceiver(mBroadcastReceiver, filter, null, null,
+                    Context.RECEIVER_EXPORTED);
+        } else {
+            registerReceiver(mBroadcastReceiver, filter, null, null);
+        }
+
+        IntentFilter inputFilter = new IntentFilter(ACTION_INPUT_DEVICE_ADDED);
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(mInputDeviceReceiver, inputFilter, null, null,
+                    Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(mInputDeviceReceiver, inputFilter, null, null);
+        }
     }
 
     private void sendConnectionState(IBrailleServiceCallback callback) {
@@ -612,28 +1462,83 @@ public class DisplayService extends Service
         // TODO: When the zip file is larger than a few kilobytes, detect if
         // the data was already extracted and don't do this every time the
         // service starts.
-        ZipResourceExtractor extractor = new ZipResourceExtractor(
-            this, R.raw.keytables, mTablesDir) {
-            @Override
-            protected void onPostExecute(Integer result) {
-                if (result == RESULT_OK) {
-                    mDataFileState = FILES_EXTRACTED;
-                    if (haveClients()) {
-                        connectBraille();
-                    }
-                } else {
-                    Log.e(LOG_TAG, "Couldn't extract data files");
-                    // TODO: figure out a way to deal with this so a user
-                    // doesn't get stuck in this state.
-                    mDataFileState = FILES_ERROR;
-                    broadcastConnectionState();
-                }
-            }
-        };
-        extractor.execute();
+        new DataFileExtractor(this, R.raw.keytables, mTablesDir).execute();
     }
 
-    private class MainHandler extends Handler {
+    private static class DataFileExtractor extends ZipResourceExtractor {
+        private final WeakReference<DisplayService> mService;
+
+        DataFileExtractor(DisplayService service, int rawResId, File outputDir) {
+            super(service.getApplicationContext(), rawResId, outputDir);
+            mService = new WeakReference<>(service);
+        }
+
+        @Override
+        protected void onPostExecute(Integer result) {
+            DisplayService service = mService.get();
+            if (service == null) {
+                return;
+            }
+            if (result == RESULT_OK) {
+                service.mDataFileState = FILES_EXTRACTED;
+                if (service.haveClients()) {
+                    service.connectBraille();
+                }
+                // The initial bind can arrive before data extraction
+                // finishes, and the client callback may not be registered
+                // yet. Check again shortly so startup never leaves the
+                // display disconnected until the user taps "Status".
+                service.mHandler.scheduleAutoReconnect(0);
+            } else {
+                Log.e(LOG_TAG, "Couldn't extract data files");
+                // TODO: figure out a way to deal with this so a user
+                // doesn't get stuck in this state.
+                service.mDataFileState = FILES_ERROR;
+                service.broadcastConnectionState();
+            }
+        }
+    }
+
+    private static final class HidEvent {
+        final HidDisplayConnection connection;
+        final BrailleDisplayProperties properties;
+        final int error;
+
+        HidEvent(HidDisplayConnection connection,
+                BrailleDisplayProperties properties, int error) {
+            this.connection = connection;
+            this.properties = properties;
+            this.error = error;
+        }
+    }
+
+    private static final class WujieEvent {
+        final WujieGattConnection connection;
+        final BrailleDisplayProperties properties;
+        final int error;
+
+        WujieEvent(WujieGattConnection connection,
+                BrailleDisplayProperties properties, int error) {
+            this.connection = connection;
+            this.properties = properties;
+            this.error = error;
+        }
+    }
+
+    private static final class WujieInputEvent {
+        final WujieGattConnection connection;
+        final BrailleInputEvent event;
+
+        WujieInputEvent(WujieGattConnection connection,
+                BrailleInputEvent event) {
+            this.connection = connection;
+            this.event = event;
+        }
+    }
+
+    private static class MainHandler extends Handler {
+        private final WeakReference<DisplayService> mService;
+
         private static final int MSG_REGISTER_CALLBACK = 1;
         private static final int MSG_ON_DISPLAY_CONNECTED = 2;
         private static final int MSG_ON_DISPLAY_DISCONNECTED = 3;
@@ -641,6 +1546,23 @@ public class DisplayService extends Service
         private static final int MSG_ON_INPUT_EVENT = 5;
         private static final int MSG_CONNECT_BRAILLE = 6;
         private static final int MSG_DISCONNECT_BRAILLE = 7;
+        private static final int MSG_ON_HID_CONNECTED = 8;
+        private static final int MSG_ON_HID_DISCONNECTED = 9;
+        private static final int MSG_ON_HID_CONNECT_FAILED = 10;
+        private static final int MSG_RETRY_HID = 11;
+        private static final int MSG_ON_WUJIE_CONNECTED = 12;
+        private static final int MSG_ON_WUJIE_DISCONNECTED = 13;
+        private static final int MSG_ON_WUJIE_CONNECT_FAILED = 14;
+        private static final int MSG_ON_WUJIE_INPUT_EVENT = 15;
+        private static final int MSG_HID_CONTROLLER_TIMEOUT = 16;
+        private static final int MSG_AUTO_RECONNECT = 17;
+        private static final int MSG_DISCOVERY_TIMEOUT = 18;
+        private static final int MSG_DISCOVERY_RESTART = 19;
+
+        MainHandler(DisplayService service) {
+            super(Looper.getMainLooper());
+            mService = new WeakReference<>(service);
+        }
 
         public void registerCallback(IBrailleServiceCallback callback) {
             obtainMessage(MSG_REGISTER_CALLBACK, callback).sendToTarget();
@@ -652,6 +1574,45 @@ public class DisplayService extends Service
 
         public void onDisplayDisconnected() {
             sendEmptyMessage(MSG_ON_DISPLAY_DISCONNECTED);
+        }
+
+        public void onHidConnected(HidDisplayConnection source,
+                BrailleDisplayProperties properties) {
+            obtainMessage(MSG_ON_HID_CONNECTED,
+                    new HidEvent(source, properties, 0)).sendToTarget();
+        }
+
+        public void onHidDisconnected(HidDisplayConnection source) {
+            obtainMessage(MSG_ON_HID_DISCONNECTED,
+                    new HidEvent(source, null, 0)).sendToTarget();
+        }
+
+        public void onHidConnectFailed(HidDisplayConnection source, int error) {
+            obtainMessage(MSG_ON_HID_CONNECT_FAILED,
+                    new HidEvent(source, null, error)).sendToTarget();
+        }
+
+        public void onWujieConnected(WujieGattConnection source,
+                BrailleDisplayProperties properties) {
+            obtainMessage(MSG_ON_WUJIE_CONNECTED,
+                    new WujieEvent(source, properties, 0)).sendToTarget();
+        }
+
+        public void onWujieDisconnected(WujieGattConnection source) {
+            obtainMessage(MSG_ON_WUJIE_DISCONNECTED,
+                    new WujieEvent(source, null, 0)).sendToTarget();
+        }
+
+        public void onWujieInputEvent(WujieGattConnection source,
+                BrailleInputEvent event) {
+            obtainMessage(MSG_ON_WUJIE_INPUT_EVENT,
+                    new WujieInputEvent(source, event)).sendToTarget();
+        }
+
+        public void onWujieConnectFailed(WujieGattConnection source,
+                int error) {
+            obtainMessage(MSG_ON_WUJIE_CONNECT_FAILED,
+                    new WujieEvent(source, null, error)).sendToTarget();
         }
 
         public void setConnectionProgress(String description) {
@@ -668,101 +1629,424 @@ public class DisplayService extends Service
         }
 
         public void scheduleDisconnect(long delayMillis) {
-            sendEmptyMessageDelayed(MSG_DISCONNECT_BRAILLE, delayMillis);
+            sendMessageDelayed(obtainMessage(MSG_DISCONNECT_BRAILLE, 0, 0),
+                    delayMillis);
         }
 
         public void connectBraille() {
-            sendEmptyMessage(MSG_CONNECT_BRAILLE);
+            obtainMessage(MSG_CONNECT_BRAILLE, 0, 0).sendToTarget();
+        }
+
+        public void connectBrailleExplicit() {
+            obtainMessage(MSG_CONNECT_BRAILLE, 1, 0).sendToTarget();
         }
 
         public void disconnectBraille() {
-            sendEmptyMessage(MSG_DISCONNECT_BRAILLE);
+            obtainMessage(MSG_DISCONNECT_BRAILLE, 1, 0).sendToTarget();
+        }
+
+        public void scheduleAutoReconnect(int attempt) {
+            scheduleAutoReconnect(attempt, -1);
+        }
+
+        public void scheduleAutoReconnect(int attempt, long overrideDelay) {
+            long delay = AUTO_RECONNECT_INITIAL_DELAY
+                    << Math.min(attempt, 4);
+            delay = Math.min(delay, AUTO_RECONNECT_MAX_DELAY);
+            if (overrideDelay >= 0) {
+                delay = overrideDelay;
+            }
+            removeMessages(MSG_AUTO_RECONNECT);
+            sendEmptyMessageDelayed(MSG_AUTO_RECONNECT, delay);
+            Timber.i("Scheduling automatic reconnect attempt %d in %d ms",
+                    attempt + 1, delay);
+        }
+
+        public void cancelAutoReconnect() {
+            removeMessages(MSG_AUTO_RECONNECT);
+        }
+
+        public boolean hasAutoReconnectScheduled() {
+            return hasMessages(MSG_AUTO_RECONNECT);
+        }
+
+        public void scheduleDiscoveryTimeout(long delayMillis) {
+            removeMessages(MSG_DISCOVERY_TIMEOUT);
+            sendEmptyMessageDelayed(MSG_DISCOVERY_TIMEOUT, delayMillis);
+        }
+
+        public void cancelDiscoveryTimeout() {
+            removeMessages(MSG_DISCOVERY_TIMEOUT);
+        }
+
+        public void scheduleDiscoveryRestart(long delayMillis) {
+            removeMessages(MSG_DISCOVERY_RESTART);
+            sendEmptyMessageDelayed(MSG_DISCOVERY_RESTART, delayMillis);
+        }
+
+        public void cancelDiscoveryRestart() {
+            removeMessages(MSG_DISCOVERY_RESTART);
+        }
+
+        public void scheduleHidRetry() {
+            sendEmptyMessageDelayed(MSG_RETRY_HID, HID_RETRY_DELAY);
+        }
+
+        public void cancelHidRetry() {
+            removeMessages(MSG_RETRY_HID);
+        }
+
+        public void scheduleHidControllerTimeout(long delayMillis) {
+            removeMessages(MSG_HID_CONTROLLER_TIMEOUT);
+            sendEmptyMessageDelayed(MSG_HID_CONTROLLER_TIMEOUT, delayMillis);
+        }
+
+        public void cancelHidControllerTimeout() {
+            removeMessages(MSG_HID_CONTROLLER_TIMEOUT);
         }
 
         @Override
         public void handleMessage(Message msg) {
+            DisplayService service = mService.get();
+            if (service == null) {
+                return;
+            }
             switch (msg.what) {
                 case MSG_REGISTER_CALLBACK:
-                    handleRegisterCallback((IBrailleServiceCallback) msg.obj);
+                    handleRegisterCallback(service,
+                            (IBrailleServiceCallback) msg.obj);
                     break;
                 case MSG_ON_DISPLAY_CONNECTED:
-                    handleOnDisplayConnected(
+                    handleOnDisplayConnected(service,
                         (BrailleDisplayProperties) msg.obj);
                     break;
                 case MSG_ON_DISPLAY_DISCONNECTED:
-                    handleOnDisplayDisconnected();
+                    handleOnDisplayDisconnected(service);
                     break;
                 case MSG_SET_CONNECTION_PROGRESS:
-                    handleSetConnectionProgress((String) msg.obj);
+                    handleSetConnectionProgress(service, (String) msg.obj);
                     break;
                 case MSG_ON_INPUT_EVENT:
-                    handleOnInputEvent((BrailleInputEvent) msg.obj);
+                    handleOnInputEvent(service, (BrailleInputEvent) msg.obj);
                     break;
                 case MSG_CONNECT_BRAILLE:
-                    DisplayService.this.connectBraille();
+                    if (msg.arg1 != 0) {
+                        service.startExplicitConnect();
+                    } else {
+                        service.connectBraille();
+                    }
                     break;
                 case MSG_DISCONNECT_BRAILLE:
-                    disconnectBraille();
+                    service.cancelPendingReconnect();
+                    service.disconnectBraille(msg.arg1 != 0);
+                    break;
+                case MSG_ON_HID_CONNECTED:
+                    handleOnHidConnected(service, (HidEvent) msg.obj);
+                    break;
+                case MSG_ON_HID_DISCONNECTED:
+                    handleOnHidDisconnected(service, (HidEvent) msg.obj);
+                    break;
+                case MSG_ON_HID_CONNECT_FAILED:
+                    handleOnHidConnectFailed(service, (HidEvent) msg.obj);
+                    break;
+                case MSG_RETRY_HID:
+                    handleRetryHid(service);
+                    break;
+                case MSG_ON_WUJIE_CONNECTED:
+                    handleOnWujieConnected(service, (WujieEvent) msg.obj);
+                    break;
+                case MSG_ON_WUJIE_DISCONNECTED:
+                    handleOnWujieDisconnected(service, (WujieEvent) msg.obj);
+                    break;
+                case MSG_ON_WUJIE_CONNECT_FAILED:
+                    handleOnWujieConnectFailed(service, (WujieEvent) msg.obj);
+                    break;
+                case MSG_ON_WUJIE_INPUT_EVENT:
+                    handleOnWujieInputEvent(service,
+                            (WujieInputEvent) msg.obj);
+                    break;
+                case MSG_HID_CONTROLLER_TIMEOUT:
+                    handleHidControllerTimeout(service);
+                    break;
+                case MSG_AUTO_RECONNECT:
+                    handleAutoReconnect(service);
+                    break;
+                case MSG_DISCOVERY_TIMEOUT:
+                    service.stopDiscoverySession("discovery window expired");
+                    break;
+                case MSG_DISCOVERY_RESTART:
+                    service.startDiscoveryInternal("discovery cycle restart");
                     break;
         default: // fall out
       }
         }
 
-        private void handleRegisterCallback(IBrailleServiceCallback callback) {
-            mClients.register(callback);
-            if (mConnectionProgress != null) {
-                sendConnectionProgress(callback);
+        private void handleRegisterCallback(
+                DisplayService service, IBrailleServiceCallback callback) {
+            service.mClients.register(callback);
+            if (service.mDataFileState == FILES_EXTRACTED
+                    && service.mConnectionState == STATE_DISCONNECTED
+                    && !service.isConnectionActive()
+                    && !service.mConnectPending
+                    && !service.mWaitingForHidController) {
+                // onBind() runs before the client has registered, so its
+                // failed attempt cannot open a discovery window yet. Fill that
+                // gap now that haveClients() is true.
+                service.mDiscoveryAllowedForCycle = true;
+                service.startDiscoveryWindow("client registered");
             }
-            if (mDataFileState == FILES_NOT_EXTRACTED ||
-                    (mConnectionState == STATE_DISCONNECTED
-                            && (mReadThread != null || mHidConnection != null))) {
+            if (service.mConnectionProgress != null) {
+                service.sendConnectionProgress(callback);
+            }
+            if (service.mDataFileState == FILES_NOT_EXTRACTED
+                    || (service.mConnectionState == STATE_DISCONNECTED
+                            && (service.mReadThread != null
+                                    || (service.mHidConnection != null
+                                            && !service.mHidConnection
+                                                    .isDisconnecting())
+                                    || service.mWujieConnection != null
+                                    || service.mUsbConnection != null))) {
                 // Extraction or connection in progress, there will be a
                 // broadcast of the state when it either succeeds or fails.
                 return;
             }
-            sendConnectionState(callback);
+            service.sendConnectionState(callback);
         }
 
         private void handleOnDisplayConnected(
-        BrailleDisplayProperties properties) {
-            mConnectionState = STATE_CONNECTED;
+                DisplayService service, BrailleDisplayProperties properties) {
+            handleConnectionEstablished(service, properties);
+        }
+
+        private void handleOnHidConnected(
+                DisplayService service, HidEvent event) {
+            if (event.connection != service.mHidConnection) {
+                Timber.w("Ignoring stale HID connected callback");
+                return;
+            }
+            handleConnectionEstablished(service, event.properties);
+        }
+
+        private void handleConnectionEstablished(
+                DisplayService service, BrailleDisplayProperties properties) {
+            service.clearHidControllerWait();
+            service.mConnectionState = STATE_CONNECTED;
             // Also broadcast the progress clear, so clients do not keep
             // showing a stale "connecting..." message and suppress the
             // connected state.
-            clearConnectionProgress();
-            mDisplayProperties = properties;
-            mConnectPending = false;
-            broadcastConnectionState();
+            service.clearConnectionProgress();
+            service.mDisplayProperties = properties;
+            service.mConnectPending = false;
+            service.mHidTried = false;
+            service.mHidRetryCount = 0;
+            service.mAutoReconnectAttempt = 0;
+            service.mAutoReconnectSuppressed = false;
+            service.mDiscoveryAllowedForCycle = false;
+            service.stopDiscoverySession("display connected");
+            service.cancelAutoReconnect();
+            cancelHidRetry();
+            service.broadcastConnectionState();
         }
 
-        private void handleOnDisplayDisconnected() {
-            mReadThread = null;
-            mHidConnection = null;
-            mHidTried = false;
-            clearConnectionProgress();
-            if (mConnectionState != STATE_DISCONNECTED) {
-                mConnectionState = STATE_DISCONNECTED;
-                broadcastConnectionState();
-            }
-            if (mConnectPending) {
-                // Don't get stuck retrying if connecting fails.
-                mConnectPending = false;
-                connectBraille();
-            }
+        private void handleOnDisplayDisconnected(DisplayService service) {
+            service.mReadThread = null;
+            // Also released by the wired path (which has no ReadThread).
+            service.mUsbConnection = null;
+            handleConnectionReleased(service);
         }
 
-        private void handleSetConnectionProgress(String description) {
-            if ((description == null && mConnectionProgress == null)
-                    || (description != null && description.equals(
-                                    mConnectionProgress))) {
+        private void handleOnHidDisconnected(
+                DisplayService service, HidEvent event) {
+            if (event.connection != service.mHidConnection) {
+                Timber.w("Ignoring stale HID disconnected callback");
                 return;
             }
-            mConnectionProgress = description;
-            broadcastConnectionProgress();
+            service.mHidConnection = null;
+            handleConnectionReleased(service);
         }
 
-        private void handleOnInputEvent(BrailleInputEvent event) {
-            broadcastInputEvent(event);
+        private void handleConnectionReleased(DisplayService service) {
+            service.mHidTried = false;
+            service.mHidRetryCount = 0;
+            cancelHidRetry();
+            service.clearConnectionProgress();
+            if (service.mConnectionState != STATE_DISCONNECTED) {
+                service.mConnectionState = STATE_DISCONNECTED;
+                service.broadcastConnectionState();
+            }
+            if (service.mConnectPending) {
+                // Don't get stuck retrying if connecting fails.
+                service.mConnectPending = false;
+                Timber.i("Previous connection released; reconnecting once");
+                service.connectBraille();
+                return;
+            }
+            service.scheduleAutoReconnectIfNeeded();
+        }
+
+        private void handleOnHidConnectFailed(
+                DisplayService service, HidEvent event) {
+            if (event.connection != service.mHidConnection) {
+                Timber.w("Ignoring stale HID failure callback %d", event.error);
+                return;
+            }
+            service.mHidConnection = null;
+            service.mConnectPending = false;
+            service.mLastHidError = event.error;
+            String protocol = service.getConnectionProtocol();
+            boolean hidRequested = "hid".equals(protocol)
+                    || "auto".equals(protocol);
+            if (event.error == -3 && service.mHidRetryCount == 0
+                    && hidRequested && service.mReadThread == null) {
+                service.mHidRetryCount = 1;
+                service.mHidTried = false;
+                Timber.i("Retrying HID once after controller release conflict");
+                scheduleHidRetry();
+                return;
+            }
+            Timber.e("HID connect failed (%d), protocol=%s", event.error,
+                    protocol);
+            // mHidTried remains true so auto mode falls through to RFCOMM and
+            // forced HID reports the existing failure message.
+            service.connectBraille();
+            service.scheduleAutoReconnectIfNeeded();
+        }
+
+        private void handleOnWujieConnected(
+                DisplayService service, WujieEvent event) {
+            if (event.connection != service.mWujieConnection) {
+                Timber.w("Ignoring stale Wujie connected callback");
+                return;
+            }
+            handleConnectionEstablished(service, event.properties);
+        }
+
+        private void handleOnWujieDisconnected(
+                DisplayService service, WujieEvent event) {
+            if (event.connection != service.mWujieConnection) {
+                Timber.w("Ignoring stale Wujie disconnected callback");
+                return;
+            }
+            service.mWujieConnection = null;
+            handleConnectionReleased(service);
+        }
+
+        private void handleOnWujieConnectFailed(
+                DisplayService service, WujieEvent event) {
+            if (event.connection != service.mWujieConnection) {
+                Timber.w("Ignoring stale Wujie failure callback %d",
+                        event.error);
+                return;
+            }
+            service.mWujieConnection = null;
+            service.mConnectPending = false;
+            Timber.e("Wujie GATT connect failed (%d)", event.error);
+            int message;
+            switch (event.error) {
+                case WujieGattConnection.ERROR_PERMISSION:
+                    message = R.string.connprog_wujie_permission;
+                    break;
+                case WujieGattConnection.ERROR_SERVICE:
+                    message = R.string.connprog_wujie_service_missing;
+                    break;
+                case WujieGattConnection.ERROR_MTU:
+                    message = R.string.connprog_wujie_mtu;
+                    break;
+                case WujieGattConnection.ERROR_NO_WRITE:
+                    message = R.string.connprog_wujie_no_write;
+                    break;
+                default:
+                    service.mHandler.setConnectionProgress(
+                            service.getString(
+                                    R.string.connprog_wujie_failed_code,
+                                    event.error));
+                    service.scheduleAutoReconnectIfNeeded();
+                    return;
+            }
+            service.mHandler.setConnectionProgress(
+                    service.getString(message));
+            service.scheduleAutoReconnectIfNeeded();
+        }
+
+        private void handleOnWujieInputEvent(
+                DisplayService service, WujieInputEvent input) {
+            if (input.connection != service.mWujieConnection
+                    || input.event == null) {
+                Timber.w("Ignoring stale Wujie input event");
+                return;
+            }
+            service.broadcastInputEvent(input.event);
+        }
+
+        private void handleRetryHid(DisplayService service) {
+            if (service.mHidConnection != null || service.mReadThread != null
+                    || service.mUsbConnection != null) {
+                return;
+            }
+            if (!service.isHidRequested()) {
+                return;
+            }
+            service.mHidTried = false;
+            if (!service.retryHidConnect()) {
+                service.mHidTried = true;
+                service.connectBraille();
+            }
+        }
+
+        private void handleHidControllerTimeout(DisplayService service) {
+            if (!service.mWaitingForHidController) {
+                return;
+            }
+            service.mWaitingForHidController = false;
+            String protocol = service.getConnectionProtocol();
+            boolean hidRequested = "hid".equals(protocol)
+                    || "auto".equals(protocol);
+            if (!hidRequested) {
+                return;
+            }
+            if (HidBridge.isAvailable()) {
+                // The controller arrived just before the timeout fired.
+                service.mHidTried = false;
+                service.connectBraille();
+                return;
+            }
+            if ("hid".equals(protocol)) {
+                service.mHandler.setConnectionProgress(service.getString(
+                        R.string.connprog_hid_controller_unavailable));
+                service.scheduleAutoReconnectIfNeeded();
+            } else {
+                // Auto mode: HID is not available in this cycle, so use the
+                // classic RFCOMM path instead of waiting forever.
+                service.mHidTried = true;
+                service.connectBraille();
+                service.scheduleAutoReconnectIfNeeded();
+            }
+        }
+
+        private void handleAutoReconnect(DisplayService service) {
+            if (!service.shouldAutoReconnect()) {
+                Timber.i("Skipping automatic reconnect (no longer eligible)");
+                return;
+            }
+            Timber.i("Automatic reconnect attempt %d",
+                    service.mAutoReconnectAttempt);
+            service.connectBraille();
+        }
+
+        private void handleSetConnectionProgress(
+                DisplayService service, String description) {
+            if ((description == null && service.mConnectionProgress == null)
+                    || (description != null && description.equals(
+                                    service.mConnectionProgress))) {
+                return;
+            }
+            service.mConnectionProgress = description;
+            service.broadcastConnectionProgress();
+        }
+
+        private void handleOnInputEvent(
+                DisplayService service, BrailleInputEvent event) {
+            service.broadcastInputEvent(event);
         }
     }
 }

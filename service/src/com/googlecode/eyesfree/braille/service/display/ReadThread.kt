@@ -52,14 +52,15 @@ class ReadThread(
      * before dying.
      */
     fun disconnect() {
-        closeSocket()
         mDisconnecting = true
+        closeSocket()
     }
 
     private fun connect(): Boolean {
         mDisplayService.setConnectionProgress(
             mResources.getString(R.string.connprog_trying_rfcomm)
         )
+        @Suppress("UNCHECKED_CAST")
         val bonded = mDeviceFinder.findDevices() as List<DeviceFinder.DeviceInfo>
         if (bonded.isNotEmpty()) {
             tryToConnect(bonded)
@@ -68,11 +69,14 @@ class ReadThread(
                 mResources.getString(R.string.connprog_no_devices)
             )
         }
-        if (mSocket != null) {
+        if (mDisconnecting) {
+            return false
+        }
+        if (mSocket != null && mConnectedDeviceInfo != null) {
             val info = mConnectedDeviceInfo!!
             val bthDev = info.bluetoothDevice
             mDisplayService.setConnectionProgress(
-                mResources.getString(R.string.connprog_initializing, bthDev.name)
+                mResources.getString(R.string.connprog_initializing, deviceName(bthDev))
             )
             try {
                 mDriverThread = DriverThread(
@@ -117,29 +121,46 @@ class ReadThread(
                     return
                 }
                 val bthDev = dev.bluetoothDevice
+                val address = try {
+                    bthDev.address
+                } catch (ex: SecurityException) {
+                    Log.w(LOG_TAG, "BLUETOOTH_CONNECT permission denied", ex)
+                    continue
+                }
                 if (mBluetoothAddressToConnectTo != null &&
-                    mBluetoothAddressToConnectTo != bthDev.address
+                    mBluetoothAddressToConnectTo != address
                 ) {
                     continue
                 }
+                val name = deviceName(bthDev)
                 mDisplayService.setConnectionProgress(
-                    mResources.getString(R.string.connprog_trying, bthDev.name)
+                    mResources.getString(R.string.connprog_trying, name)
                 )
-                Log.d(LOG_TAG, "Trying to connect to braille device: " + bthDev.name)
+                Log.d(LOG_TAG, "Trying to connect to braille device: $name")
+                var socket: BluetoothSocket? = null
                 try {
-                    val socket: BluetoothSocket? = if (dev.connectSecurely) {
+                    val newSocket = if (dev.connectSecurely) {
                         bthDev.createRfcommSocketToServiceRecord(dev.sdpUuid)
                     } else {
                         bthDev.createInsecureRfcommSocketToServiceRecord(dev.sdpUuid)
                     }
-                    if (socket != null) {
-                        socket.connect()
-                        mSocket = socket
-                        mConnectedDeviceInfo = dev
+                    socket = newSocket
+                    newSocket.connect()
+                    if (mDisconnecting) {
+                        return
                     }
+                    mSocket = newSocket
+                    mConnectedDeviceInfo = dev
                     return
                 } catch (ex: IOException) {
                     Log.e(LOG_TAG, "Error opening a socket: " + ex.toString())
+                } catch (ex: SecurityException) {
+                    Log.e(LOG_TAG,
+                        "BLUETOOTH_CONNECT permission denied opening socket", ex)
+                } finally {
+                    if (mSocket == null) {
+                        closeQuietly(socket)
+                    }
                 }
             }
         } finally {
@@ -150,12 +171,27 @@ class ReadThread(
     }
 
     private fun closeSocket() {
-        if (mSocket != null) {
-            try {
-                mSocket!!.close()
-            } catch (ex: IOException) {
-                Log.d(LOG_TAG, "Error closing socket: ", ex)
-            }
+        closeQuietly(mSocket)
+    }
+
+    private fun closeQuietly(socket: BluetoothSocket?) {
+        if (socket == null) {
+            return
+        }
+        try {
+            socket.close()
+        } catch (ex: IOException) {
+            Log.d(LOG_TAG, "Error closing socket: ", ex)
+        }
+    }
+
+    private fun deviceName(device: BluetoothDevice): String {
+        return try {
+            device.name ?: device.address ?: "?"
+        } catch (ex: SecurityException) {
+            Log.w(LOG_TAG,
+                "BLUETOOTH_CONNECT permission denied reading device name", ex)
+            "?"
         }
     }
 
@@ -170,17 +206,24 @@ class ReadThread(
         Log.i(LOG_TAG, "Display disconnected")
     }
 
-    override fun onInit(properties: BrailleDisplayProperties?) {
-        if (properties != null) {
-            mDeviceFinder.rememberSuccessfulConnection(mConnectedDeviceInfo)
+    override fun onInit(displayProperties: BrailleDisplayProperties?) {
+        if (displayProperties != null) {
+            mConnectedDeviceInfo?.let {
+                mDeviceFinder.rememberSuccessfulConnection(it)
+            }
             mDisplayService.setConnectionProgress(null)
-            mDisplayService.onDisplayConnected(properties)
+            mDisplayService.onDisplayConnected(displayProperties)
         } else {
-            val bthDev = mConnectedDeviceInfo!!.bluetoothDevice
+            val info = mConnectedDeviceInfo
+            if (info == null) {
+                disconnect()
+                return
+            }
+            val bthDev = info.bluetoothDevice
             mDisplayService.setConnectionProgress(
                 mResources.getString(
                     R.string.connprog_failed_to_initialize,
-                    bthDev.name
+                    deviceName(bthDev)
                 )
             )
             disconnect()

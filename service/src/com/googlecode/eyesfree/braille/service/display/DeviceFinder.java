@@ -154,6 +154,42 @@ public class DeviceFinder {
                             .build(),
                     "hid:name=unused");
         }
+
+        /**
+         * Builds a {@link DeviceInfo} for a wired USB display driven by brltty.
+         *
+         * <p>There is no {@link BluetoothDevice} on this path, and the native
+         * USB backend performs its own I/O, so the only fields that matter are
+         * the brltty driver code and the {@code usb:...} device parameter.
+         * {@link #getBrailleDevice()} is non-null, which makes
+         * {@code BrlttyWrapper.start()} use it directly instead of deriving a
+         * {@code bluetooth:XX:XX:...} address.
+         *
+         * <p>The friendly key names are the generic HID set: a USB display may
+         * expose additional keys, and those bindings are filtered out by
+         * {@code BrlttyWrapper.getKeyMap()} rather than shown with raw names.
+         * Per-model maps can be added once real devices have been tested.
+         */
+        public static DeviceInfo forUsb(String driverCode,
+                String brailleDevice) {
+            return new DeviceInfo(null, driverCode, null, true,
+                    new KeyNameMapBuilder()
+                            .dots8()
+                            .routing()
+                            .add("Space", R.string.key_Space)
+                            .add("Backspace", R.string.key_Backspace)
+                            .add("PanLeft", R.string.key_pan_left)
+                            .add("PanRight", R.string.key_pan_right)
+                            .add("DPadUp", R.string.key_dpad_up)
+                            .add("DPadDown", R.string.key_dpad_down)
+                            .add("DPadLeft", R.string.key_dpad_left)
+                            .add("DPadRight", R.string.key_dpad_right)
+                            .add("DPadCenter", R.string.key_dpad_center)
+                            .add("RockerUp", R.string.key_rocker_up)
+                            .add("RockerDown", R.string.key_rocker_down)
+                            .build(),
+                    brailleDevice);
+        }
     }
 
     public DeviceFinder(Context context) {
@@ -208,8 +244,16 @@ public class DeviceFinder {
             // not already first in the list, put it there.
             // (Hence, the 1 below is intentional).
             for (int i = 1; i < ret.size(); ++i) {
-                if (ret.get(i).getBluetoothDevice().getAddress().equals(
-                        lastAddress)) {
+                String address;
+                try {
+                    address = ret.get(i).getBluetoothDevice().getAddress();
+                } catch (SecurityException e) {
+                    Log.w(LOG_TAG,
+                            "BLUETOOTH_CONNECT permission denied reading device address",
+                            e);
+                    break;
+                }
+                if (lastAddress.equals(address)) {
                     Collections.swap(ret, 0, i);
                 }
             }
@@ -229,9 +273,73 @@ public class DeviceFinder {
 
     public void rememberSuccessfulConnection(DeviceInfo info) {
         BluetoothDevice device = info.getBluetoothDevice();
+        String address;
+        try {
+            address = device.getAddress();
+        } catch (SecurityException e) {
+            Log.w(LOG_TAG,
+                    "BLUETOOTH_CONNECT permission denied; not remembering device",
+                    e);
+            return;
+        }
+        if (address == null) {
+            return;
+        }
         SharedPreferences.Editor editor = mSharedPreferences.edit();
-        editor.putString(LAST_CONNECTED_DEVICE_KEY, device.getAddress());
+        editor.putString(LAST_CONNECTED_DEVICE_KEY, address);
         editor.apply();
+    }
+
+    /**
+     * Returns true when a just-bonded device is a braille display this app
+     * knows how to use. A newly paired device is not necessarily a braille
+     * display (headphones and Bluetooth serial adapters also generate bond
+     * broadcasts), so the bond broadcast must not bypass this filter.
+     */
+    public boolean isKnownDevice(String address) {
+        if (address == null) {
+            return false;
+        }
+        List<String> supportedAddresses = new ArrayList<String>();
+        for (DeviceInfo info : findDevices()) {
+            try {
+                String supportedAddress =
+                        info.getBluetoothDevice().getAddress();
+                if (supportedAddress != null) {
+                    supportedAddresses.add(supportedAddress);
+                }
+            } catch (SecurityException e) {
+                Log.w(LOG_TAG,
+                        "BLUETOOTH_CONNECT permission denied reading address",
+                        e);
+                break;
+            }
+        }
+        String lastAddress = mSharedPreferences.getString(
+                LAST_CONNECTED_DEVICE_KEY, null);
+        return shouldAutoConnectBondedDevice(
+                address, lastAddress, supportedAddresses);
+    }
+
+    static boolean shouldAutoConnectBondedDevice(
+            String address, String lastAddress,
+            List<String> supportedAddresses) {
+        if (address == null || address.length() == 0) {
+            return false;
+        }
+        if (lastAddress != null && address.equalsIgnoreCase(lastAddress)) {
+            return true;
+        }
+        if (supportedAddresses == null) {
+            return false;
+        }
+        for (String supportedAddress : supportedAddresses) {
+            if (supportedAddress != null
+                    && address.equalsIgnoreCase(supportedAddress)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static interface SupportedDevice {
@@ -257,7 +365,18 @@ public class DeviceFinder {
 
         @Override
         public DeviceInfo match(BluetoothDevice bluetoothDevice) {
-            String name = bluetoothDevice.getName();
+            String name;
+            try {
+                name = bluetoothDevice.getName();
+            } catch (SecurityException e) {
+                Log.w(LOG_TAG,
+                        "BLUETOOTH_CONNECT permission denied reading device name",
+                        e);
+                return null;
+            }
+            if (name == null) {
+                return null;
+            }
             for (Pattern nameRegex : mNameRegexes) {
                 if (nameRegex.matcher(name).lookingAt()) {
                     return new DeviceInfo(bluetoothDevice, mDriverCode,

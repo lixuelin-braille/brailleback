@@ -18,13 +18,17 @@ package com.googlecode.eyesfree.braille.service.display;
 
 import android.content.Context;
 import android.content.res.Resources;
+import android.util.Log;
 import com.googlecode.eyesfree.braille.display.BrailleDisplayProperties;
 import com.googlecode.eyesfree.braille.display.BrailleKeyBinding;
+import com.googlecode.eyesfree.braille.display.UsbDeviceEntry;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -77,7 +81,14 @@ public class BrlttyWrapper {
     public boolean start() {
         String brailleDevice = mDeviceInfo.getBrailleDevice();
         if (brailleDevice == null) {
-            brailleDevice = deviceBrlttyAddress();
+            try {
+                brailleDevice = deviceBrlttyAddress();
+            } catch (SecurityException e) {
+                Log.e(LOG_TAG,
+                        "BLUETOOTH_CONNECT permission denied; cannot start driver",
+                        e);
+                return false;
+            }
         }
         return startNative(mDeviceInfo.getDriverCode(), brailleDevice,
                 START_TIMEOUT_FACTOR);
@@ -188,8 +199,44 @@ public class BrlttyWrapper {
         return result;
     }
 
+    /**
+     * Returns the brltty USB device table (driver code / VID / PID) exported
+     * by the prebuilt {@code libbrlttywrap.so}.
+     *
+     * <p>Any linkage or JNI failure is logged and turned into an empty list so
+     * that a broken/stale .so can never take down the display service.
+     * Declared static: the native implementation
+     * ({@code BrlttyWrapper.c:getUsbDriverTableNative}) ignores its second
+     * argument, so either a static or an instance declaration resolves to the
+     * same JNI symbol (verified on device in the P0 probe).
+     */
+    public static List<UsbDeviceEntry> getUsbDriverTable() {
+        try {
+            List<UsbDeviceEntry> entries = getUsbDriverTableNative();
+            return entries == null ? Collections.<UsbDeviceEntry>emptyList()
+                    : entries;
+        } catch (Throwable t) {
+            Log.w(LOG_TAG, "Could not read the native USB driver table", t);
+            return Collections.emptyList();
+        }
+    }
+
+    /** P0 probe (debug builds only): logs the size and first table entry. */
+    public static void logUsbDriverTableProbe() {
+        List<UsbDeviceEntry> entries = getUsbDriverTable();
+        Log.i(LOG_TAG, "USB driver table probe: entries=" + entries.size());
+        if (!entries.isEmpty()) {
+            UsbDeviceEntry first = entries.get(0);
+            Log.i(LOG_TAG, "USB driver table probe: first="
+                    + first.getDriver() + " vid=" + first.getVendorId()
+                    + " pid=" + first.getProductId());
+        }
+    }
+
     // Native methods.
 
+    /** Returns the brltty USB device table (driver / VID / PID). */
+    private static native List<UsbDeviceEntry> getUsbDriverTableNative();
     private native boolean initNative(Context context);
     private native boolean startNative(String driverCode,
             String brailleDevice, float timeoutFactor);

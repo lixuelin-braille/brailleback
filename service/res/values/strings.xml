@@ -18,6 +18,30 @@
     <string name="connprog_hid_failed">HID protocol connection failed</string>
     <!-- Displayed when the user forced HID but the platform does not support it. -->
     <string name="connprog_hid_unavailable">HID protocol unavailable (requires Android 15+)</string>
+    <!-- Displayed when HID is selected but the accessibility service has not provided a controller. -->
+    <string name="connprog_hid_waiting_controller">Waiting for the HID controller…</string>
+    <!-- Displayed when the HID controller did not appear before the wait timeout. -->
+    <string name="connprog_hid_controller_unavailable">HID controller not ready yet; retrying automatically. If this persists, turn the BrailleBack accessibility service off and on again.</string>
+    <!-- Displayed when the system cannot find a Bluetooth Braille HID (usage page 0x41) device. -->
+    <string name="connprog_hid_not_found">The system does not see a Braille HID display. Switch the display to HID mode, then remove and re-pair it in the system Bluetooth settings.</string>
+    <!-- Displayed when a HID connection fails with a platform error code. -->
+    <string name="connprog_hid_failed_code">HID connection failed (code %1$d)</string>
+    <!-- Displayed when trying to connect to the Wujie vendor BLE GATT service. -->
+    <string name="connprog_trying_wujie">Connecting via Wujie BLE GATT protocol…</string>
+    <!-- Displayed when the Wujie vendor GATT connection fails. -->
+    <string name="connprog_wujie_failed_code">Wujie BLE GATT connection failed (code %1$d)</string>
+    <string name="connprog_wujie_permission">Bluetooth permission is missing. Allow nearby-device access for BrailleBack.</string>
+    <string name="connprog_wujie_service_missing">The display did not expose the Wujie GATT service. Keep it in vendor BLE mode.</string>
+    <string name="connprog_wujie_mtu">The BLE connection could not negotiate a large enough packet (MTU 33+). Try reconnecting.</string>
+    <string name="connprog_wujie_no_write">No writable characteristic was found, so braille output cannot be sent.</string>
+    <!-- Friendly names for the two paging keys on the Wujie display. -->
+    <string name="key_wujie_page_next">Next page</string>
+    <string name="key_wujie_page_previous">Previous page</string>
+    <string name="pref_connection_protocol_wujie_label">Wujie BLE GATT (vendor protocol)</string>
+    <!-- Wired USB (brltty USB backend) connection path. -->
+    <string name="pref_connection_protocol_usb_label">USB wired (OTG / brltty)</string>
+    <string name="connprog_trying_usb">Connecting via wired USB…</string>
+    <string name="connprog_usb_failed">Wired USB connection failed: %1$s</string>
 </resources>
 
 

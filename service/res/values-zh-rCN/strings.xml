@@ -7,6 +7,22 @@
     <string name="connprog_no_devices" msgid="2532622651138767831">"没有已识别的配对设备"</string><string name="connprog_trying_hid">"正在通过 HID 协议连接……"</string>
 <string name="connprog_trying_rfcomm">"正在通过蓝牙串口(RFCOMM)协议连接……"</string><string name="connprog_hid_failed">"HID 协议连接失败"</string>
 <string name="connprog_hid_unavailable">"HID 协议不可用（需要 Android 15 及以上）"</string>
+<string name="connprog_hid_waiting_controller">"正在等待 HID 控制器……"</string>
+<string name="connprog_hid_controller_unavailable">"HID 控制器暂未就绪，正在自动重试；若长时间无响应，请关闭再重新开启 brailleback盲文 无障碍服务"</string>
+<string name="connprog_hid_not_found">"系统未识别到盲文 HID 显示器：请先把显示器切到 HID 模式，再在系统蓝牙中删除旧配对并重新配对"</string>
+<string name="connprog_hid_failed_code">"HID 协议连接失败（错误码 %1$d）"</string>
+<string name="connprog_trying_wujie">"正在通过无界 BLE GATT 协议连接……"</string>
+<string name="connprog_wujie_failed_code">"无界 BLE GATT 连接失败（错误码 %1$d）"</string>
+<string name="connprog_wujie_permission">"缺少蓝牙权限，请允许 brailleback盲文 使用附近设备"</string>
+<string name="connprog_wujie_service_missing">"设备没有提供无界 GATT 服务，请保持厂商 BLE 模式"</string>
+<string name="connprog_wujie_mtu">"BLE 未能协商到足够大的数据包（需要 MTU 33 以上），请重试连接"</string>
+<string name="connprog_wujie_no_write">"没有找到可写特征，无法发送盲文数据"</string>
+<string name="key_wujie_page_next">"下一页"</string>
+<string name="key_wujie_page_previous">"上一页"</string>
+<string name="pref_connection_protocol_wujie_label">"无界书城 BLE GATT（厂商协议）"</string>
+<string name="pref_connection_protocol_usb_label">"USB 有线（OTG / brltty）"</string>
+<string name="connprog_trying_usb">"正在通过 USB 有线连接……"</string>
+<string name="connprog_usb_failed">"USB 有线连接失败：%1$s"</string>
 </resources>
 
 

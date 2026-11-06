@@ -33,10 +33,15 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
-    <!-- Android 12+ requires BLUETOOTH_CONNECT to enumerate bonded braille
-         displays (DeviceFinder.getBondedDevices). BLUETOOTH_SCAN is not used:
-         this app only connects to already-paired displays. -->
+    <!-- Android 12+ requires BLUETOOTH_CONNECT to enumerate and connect to
+         bonded braille displays. BLUETOOTH_SCAN is only used for short,
+         bounded discovery windows so a display that has just been switched
+         on can be found without polling the radio forever. The scan result is
+         never used to derive location. -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="com.googlecode.eyesfree.braille.display.PERMISSION_CONNECT" />
 
     <!-- Overlays are rendered as TYPE_ACCESSIBILITY_OVERLAY inside the
@@ -54,9 +59,22 @@
         android:description="@string/permdesc_displayConnect"
         android:protectionLevel="signature" />
 
+    <!-- Self-braille is an exported AIDL service for companion accessibility
+         apps. Only apps signed with the same key may bind to it. -->
+    <permission
+        android:name="com.googlecode.eyesfree.braille.selfbraille.PERMISSION_WRITE"
+        android:protectionLevel="signature" />
+
     <!-- Hardware compatibility. -->
     <uses-feature
         android:name="android.hardware.touchscreen"
+        android:required="false" />
+    <!-- Wired braille displays are optional; declaring USB host lets the
+         system deliver ACTION_USB_DEVICE_ATTACHED and lets UsbManager
+         enumerate OTG devices. required=false keeps Bluetooth-only installs
+         working on devices without USB host support. -->
+    <uses-feature
+        android:name="android.hardware.usb.host"
         android:required="false" />
 
     <application
@@ -104,6 +122,7 @@
 
         <service
             android:name=".SelfBrailleService"
+            android:permission="com.googlecode.eyesfree.braille.selfbraille.PERMISSION_WRITE"
             android:exported="true">
             <intent-filter>
                 <action android:name="com.googlecode.eyesfree.braille.service.ACTION_SELF_BRAILLE_SERVICE" />
