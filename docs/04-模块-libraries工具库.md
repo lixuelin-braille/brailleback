@@ -69,7 +69,7 @@
 ## 定位
 
 Android 各 API 版本的**兼容封装层**（23 个类）。
-项目 minSdk 23、targetSdk 34，跨越十几个 Android 版本，
+项目 minSdk 23、targetSdk 35，跨越十几个 Android 版本，
 需要针对不同版本调用不同 API —— 这个库把 `if (SDK_INT >= X)` 的判断集中封装。
 
 ## 类清单（按领域）

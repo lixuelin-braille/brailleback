@@ -82,6 +82,11 @@
 
 **客户端封装**：`SelfBrailleClient.java`（对应 `brailleback/SelfBrailleManager.kt` 的底层）
 
+**安全约束**：`SelfBrailleService` 虽然 `exported="true"`，但要求
+`com.googlecode.eyesfree.braille.selfbraille.PERMISSION_WRITE`
+（`signature` 级）。`SelfBrailleClient` 的 manifest 已声明该权限；
+调用方还必须与 BrailleBack 使用同一签名，服务端会再次校验调用 UID 的签名。
+
 ---
 
 ## 三、典型调用链

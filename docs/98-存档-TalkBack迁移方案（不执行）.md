@@ -20,7 +20,7 @@ TalkBack 已将 BrailleBack 功能并入（brailledisplay/brailleime），且是
 | BrailleSegmenter.java | 中文盲文分词规则引擎 | 低（纯 Java，零依赖）|
 | JiebaDict.java | jieba 分词器（34.9 万词） | 低 |
 | assets/jiebadt.txt | 分词词库 | 低（资源拷贝）|
-| assets/sunshine_split.txt | 阳光强制分写词库（1,439 条）| 低 |
+| assets/sunshine_split.txt | 阳光强制分写词库（6,782 条）| 低 |
 | assets/zhcn-cbs-full.ctb | 通用盲文全字符表（含生僻字同音覆盖）| 低 |
 | 数理化增强 | 化学式/分数/单位/365 符号点位 | 低-中 |
 | 避头点/避尾点 | 国标排版规则（折行层）| 中（需适配 TalkBack 显示层）|

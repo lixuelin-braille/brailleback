@@ -21,9 +21,9 @@
 service/src/com/googlecode/eyesfree/braille/
 ├── service/
 │   ├── translate/          ← 翻译（自研核心）
-│   │   ├── BrailleSegmenter.kt   418 行  中文盲文分词规则引擎 ★★★
-│   │   ├── JiebaDict.kt          207 行  自实现 jieba 分词器（DAG+最大概率）★★
-│   │   ├── TranslatorService.java 424 行 AIDL 服务入口（翻译中枢）★
+│   │   ├── BrailleSegmenter.kt   509 行  中文盲文分词规则引擎 ★★★
+│   │   ├── JiebaDict.kt          272 行  自实现 jieba 分词器（DAG+最大概率）★★
+│   │   ├── TranslatorService.java 489 行 AIDL 服务入口（翻译中枢）★
 │   │   ├── LibLouisWrapper.java   95 行  JNI 封装 → liblouis
 │   │   └── TableList.java        168 行  盲文表清单（解析 res/xml/tablelist.xml）
 │   ├── display/           ← 点显器连接
@@ -40,7 +40,9 @@ service/src/com/googlecode/eyesfree/braille/
 │       └── ZipResourceExtractor.java  异步解压 raw zip 到私有目录
 ├── assets/
 │   ├── jiebadt.txt          5.07 MB  词库（34.9 万词）
-│   └── sunshine_split.txt   38 KB    阳光强制分写词库（1,439 条）
+│   ├── sunshine_supplement.txt 139 KB 阳光补充词库（12,405 词，低频补缺）
+│   ├── zh_segment_overrides.txt 679 B 高优先级覆盖表（8 条，专名/领域词/词频纠正）
+│   └── sunshine_split.txt   185 KB   阳光强制分写词库（6,782 条）
 ├── res/raw/
 │   ├── translationtables.zip  2.26 MB / 131 张表（含 zhcn-cbs-full.ctb）
 │   └── keytables.zip          146 KB / 196 张键位表
@@ -53,7 +55,7 @@ service/src/com/googlecode/eyesfree/braille/
 
 ## 三、`translate` 包详解
 
-### 3.1 `TranslatorService`（424 行）—— 翻译中枢
+### 3.1 `TranslatorService`（489 行）—— 翻译中枢
 
 `Service`，实现 `ITranslatorService.Stub`，被 `:brailleback` 通过 `TranslatorClient` 绑定调用。
 
@@ -68,8 +70,10 @@ onCreate()
 
 `startSegmenterInit()` 在名为 `BrailleSegmenterInit` 的线程里：
 1. `new JiebaDict()` → `init(getAssets().open("jiebadt.txt"))`
-2. `new BrailleSegmenter(mJiebaDict)` → `loadSplitDict(getAssets().open("sunshine_split.txt"))`
-3. 置 `mSegmenterReady = true`
+2. `loadSupplement(getAssets().open("sunshine_supplement.txt"))`（补缺，不覆盖主词典）
+3. `loadOverrides(getAssets().open("zh_segment_overrides.txt"))`（专名/领域词 + 词频纠正）
+4. `new BrailleSegmenter(mJiebaDict)` → `loadSplitDict(getAssets().open("sunshine_split.txt"))`
+5. 置 `mSegmenterReady = true`
 
 > 设计要点：分词器初始化是**异步**的。在它 Ready 之前，中文表会**降级**走纯 liblouis（不分词），
 > 不会崩溃，但盲文分词质量差。这是个可观测的启动竞态。
@@ -148,7 +152,7 @@ newBtt[c] = seg.segToOrig[ btt[c] ]
 
 ---
 
-### 3.4 `BrailleSegmenter`（418 行）—— 中文盲文分词规则引擎 ★核心
+### 3.4 `BrailleSegmenter`（509 行）—— 中文盲文分词规则引擎 ★核心
 
 **输入**：`JiebaDict`；**输出**：`Result { text, origToSeg[], segToOrig[] }`
 
@@ -164,15 +168,17 @@ newBtt[c] = seg.segToOrig[ btt[c] ]
 ```
 ① 《书名号》整体保护    BOOK_RE = 「《[^》]*》」→ 《 + 书名(整体) + 》
 ② addPlainTokens
-   ├─ NUM_PAT   数字整体（-?\d{1,3}(,\d{3})+(\.\d+)?%? | -?\d+(\.\d+)?%?）
-   ├─ LETTER_RE 连续 ASCII 字母整体（BrailleBack / HID 不逐字母切）
+   ├─ PROTECTED_RE URL/邮箱整体（斜杠、查询参数不拆开）
+   ├─ NUM_PAT   数字整体（半角/全角数字、千分位、百分数、负号）
+   ├─ LETTER_RE 连续 ASCII/全角字母整体（BrailleBack / HID 不逐字母切）
    └─ addJiebaTokens
-        ├─ 阳光强制分写词库命中 → 按词库切分
+        ├─ 阳光强制分写词库命中（相邻 token 拼接匹配）→ 按词库切分
         ├─ 后附成分合并（SUFFIX：们子儿头性者员家手化度法学论品）
         ├─ 虚词分写（4字词，FUNC 在第2位→1+1+2；第3位→2+1+1）
         └─ 四字词 2+2 语节分写（前2后2各自成词时）
-③ mergeChemFormulas   化学式保护（H2O / CO2 / H2SO4，118 元素表校验）
-④ 拼装带空格文本 + 双向位置映射
+③ mergeAsciiAlnum     字母数字标识符保护（MP3 / A4 / 3D / COVID-19）
+④ mergeChemFormulas   化学式保护（H2O / CO2 / H2SO4，118 元素表校验）
+⑤ 拼装带空格文本 + 双向位置映射
 ```
 
 **规则常量一览**
@@ -180,21 +186,32 @@ newBtt[c] = seg.segToOrig[ btt[c] ]
 | 常量 | 内容 | 作用 |
 |:---|:---|:---|
 | `SPLIT4_ARR` | 风声鹤唳/草木皆兵/中华人民共和国/无缝钢管/劳动模范/… | 应从词典删除（强制分写） |
-| `CONNECT_ARR` | 孩子们/艺术家/… + 分数连写(二分之一…六分之五) + 复合单位(米每秒/千米每小时/…) | 强制连写 |
+| `CONNECT_ARR` | 孩子们/艺术家/… + 无障碍词(点显器/视障人士/读屏软件/老人们) + 分数连写(二分之一…六分之五) + 复合单位(米每秒/千米每小时/…) | 强制连写 |
 | `SPLIT4_INNER_ARR` | 风声/鹤唳/草木/皆兵/中华/人民/共和国/… | 分写后的内部词 |
 | `NAMES_ARR` | 塞维利亚/德沃夏克/霍金/马克思/习近平/… 约 50 条 + 中国共产党/人民代表大会/无界点显器(HID) | 专名保护 |
 | `SUFFIX_STR` | `们子儿头性者员家手化度法学论品` | 后附成分（合并到前词） |
 | `FUNC_STR` | `之而所如即若亦俱尚犹且及焉哉乎耳` | 强虚词（触发 4 字分写） |
 | `ELEMENTS_ARR` | 118 个化学元素（H…Og） | 化学式校验 |
 | `PUNCT_STR` | `，。、；：？！""''（）《》〈〉—…··,.;:!?()[]{} ` | 标点 |
-| `NUM_PAT` / `BOOK_RE` / `LETTER_RE` | 正则 | 数字 / 书名号 / ASCII 字母 |
+| `NUM_PAT` / `BOOK_RE` / `LETTER_RE` / `PROTECTED_RE` / `ALNUM_RE` | 正则 | 数字 / 书名号 / 字母 / URL 邮箱 / 字母数字标识符 |
 
 **`loadSplitDict()`** — 读 `sunshine_split.txt`，每行 `词\t分1 分2 分3`，
-命中该词的 jieba 结果时直接按词库切分（对标阳光读屏 1,439 条决策）。加载失败不阻塞主流程。
+把相邻 jieba token 拼接后匹配词条，命中则按词库切分（对标阳光读屏 6,782 条决策；
+`CONNECT` 连写白名单优先）。这样规则词即使被 jieba 切成多个 token 也能生效。
+分片必须能无损拼回原词，否则忽略该行以防位置映射错位；加载失败不阻塞主流程。
+
+**阳光补充词库**（`sunshine_supplement.txt`）在 `JiebaDict` 初始化后加载：
+只补主词典没有的词（二字词频 10，三字及以上 100），不覆盖主词典、不改变
+`logTotal`；加载失败只记录警告，分词器仍按主词典 + 分写规则工作。
+
+**高优先级覆盖表**（`zh_segment_overrides.txt`）在补充词库之后加载：
+同名主词典词会被覆盖词频，用于修正明显偏低的词频（如 `正确` 6167 → 20000），
+也用于补充少量专名/领域固定搭配（如 `王芳`、`大语言模型`、`协议栈`）。
+覆盖表保持很小（当前 8 条），新增条目必须有语料证据并跑回归。
 
 ---
 
-### 3.5 `JiebaDict`（207 行）—— 自实现 jieba 分词器
+### 3.5 `JiebaDict`（272 行）—— 自实现 jieba 分词器
 
 **零第三方依赖**，算法等同 jieba（`HMM=false`）：词典词频 → DAG → 动态规划最大概率路径。
 
@@ -204,6 +221,8 @@ newBtt[c] = seg.segToOrig[ btt[c] ]
 | `logTotal` | 全部词频之和取 log，用于概率计算 |
 | `init(InputStream)` | 读 `word freq [pos]` 格式词典 |
 | `addWord(word, freq)` | 加自定义词（连写词/专名用，freq 传 100000） |
+| `loadSupplement(InputStream)` | 读 `word freq` 补充词库；只补缺、不覆盖，返回新增词数 |
+| `loadOverrides(InputStream)` | 读 `word freq` 覆盖表；同名词覆盖词频，返回加载条数 |
 | `delWord(word)` | 删词（让应分写的词被切开） |
 | `isWord(word)` | 是否为完整词（freq > 0） |
 | `buildDag(sentence)` | 每个位置 k → 可到达的结束位置列表 |
@@ -242,6 +261,38 @@ JNI 封装，静态方法调用 native liblouis 2.6.0：
 | **Braille HID** | `HidDisplayConnection` + `BrlttyHidNativeHelper` + `HidBridge` | Android 15+（API 35 `VANILLA_ICE_CREAM`） | 系统 `BrailleDisplayController`（usage page 0x41），驱动 brltty 的 `hid` 驱动 |
 | **Bluetooth RFCOMM** | `DeviceFinder` + `DisplayService` | 传统 | 蓝牙串口 |
 | **USB** | `UsbHelper` + `DeviceFinder` | USB-OTG | USB 设备 |
+
+HID 的 `BrailleDisplayController.disconnect()` 是异步操作。`HidDisplayConnection`
+用 `IDLE → CONNECTING → CONNECTED → DISCONNECTING` 生命周期跟踪一次尝试：
+主动断开时保留连接对象，等待系统 `onDisconnected` 或 2 秒看门狗后才通知
+`DisplayService` 重连；重复/迟到回调会被丢弃。协议切换期间只保留
+`mConnectPending`，释放完成后读取最新设置并最多重连一次，避免旧 HID 连接
+尚未释放时启动新连接。若系统返回控制器占用（`-3`），只会在当前连接周期内
+延迟 300ms 重试一次；仍失败则按当前协议设置回落或报告失败。
+
+蓝牙配对广播不能直接当作“盲文显示器已就绪”。`DisplayService` 只接受
+`DeviceFinder` 已知支持列表中的设备，或上次成功连接的地址；耳机、通用蓝牙串口
+适配器等设备完成配对时不会触发盲文连接。设备取消配对时，若地址仍留在待连接
+队列中会立即清除，避免后续自动连接尝试一个已经不存在的绑定。
+
+自动连接采用与 TalkBack 盲文显示相同的“事件触发 + 短时发现”模型：
+
+- 服务（重新）绑定、屏幕亮起、蓝牙开启、配对完成、ACL 链路建立都会立即尝试连接；
+- 首次连接失败后开启约 30 秒的蓝牙发现窗口，发现已知点显器后立即连接；
+- 发现周期结束后，只要窗口仍在 30 秒内就继续重启，窗口到期即停止扫描；
+- 扫描只在未连接、屏幕亮起、自动连接开启且有客户端时运行，用户主动断开后抑制；
+- 蓝牙广播由系统蓝牙进程发送，Android 13+ 必须以 `RECEIVER_EXPORTED` 注册，
+  否则 `ACTION_FOUND` / `ACTION_ACL_CONNECTED` 会收不到；输入设备的隐藏广播单独用
+  `RECEIVER_NOT_EXPORTED` 注册。
+
+点显器若自己主动回连，会走 `ACTION_ACL_CONNECTED`，这是最接近蓝牙耳机“开盖即连”
+的路径；若点显器只接受手机发起连接，则依赖短时发现窗口和现有的安全重试。
+
+发现窗口结束后的重试间隔为 3 / 6 / 12 / 24 / 30 秒，30 秒封顶；屏幕熄灭后停止
+主动扫描和定时重试，点显器若自行发起 ACL 仍可触发连接。这个策略与 TalkBack 的
+30 秒扫描窗口一致，另外补了一条低频退避重试，用于点显器关机较久后重新开机的
+场景。代价是屏幕常亮且点显器离线时，每 30 秒左右会进行一次 HID/RFCOMM 连接尝试；
+若点显器支持开机自动回连，ACL 事件会先于定时器完成连接。
 
 ### 4.2 `HidBridge`（67 行）—— 关键胶水
 
