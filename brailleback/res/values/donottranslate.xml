@@ -33,11 +33,15 @@
         <item>auto</item>
         <item>hid</item>
         <item>rfcomm</item>
+        <item>wujie</item>
+        <item>usb</item>
     </string-array>
     <string-array name="pref_connection_protocol_entries">
         <item>@string/pref_connection_protocol_auto_label</item>
         <item>@string/pref_connection_protocol_hid_label</item>
         <item>@string/pref_connection_protocol_rfcomm_label</item>
+        <item>@string/pref_connection_protocol_wujie_label</item>
+        <item>@string/pref_connection_protocol_usb_label</item>
     </string-array>
     <string name="pref_category_braille_overlay_key">category_braille_overlay</string>
     <string name="pref_braille_overlay_key">overlay_enabled</string>
@@ -47,6 +51,8 @@
     <string name="pref_braille_word_wrap_key">braille_word_wrap</string>
     <string name="pref_braille_contracted_mode_key">braille_contracted_mode</string>
     <string name="pref_motion_mode_key">motion_mode</string>
+    <string name="pref_quiet_navigation_key">quiet_navigation</string>
+    <bool name="pref_quiet_navigation_default">true</bool>
     <string name="pref_pause_behavior_key">pause_behavior</string>
     <string name="pref_pause_behavior_clear_value">clear</string>
     <string name="pref_pause_behavior_keep_value">keep</string>
@@ -76,6 +82,8 @@
         <item>@string/pref_idle_clear_5min_label</item>
     </string-array>
 
+    <string name="pref_volume_gestures_enabled_key">volume_gestures_enabled</string>
+    <bool name="pref_volume_gestures_enabled_default">true</bool>
     <string name="pref_volume_long_press_up_key">volume_long_press_up</string>
     <string name="pref_volume_long_press_down_key">volume_long_press_down</string>
     <string name="pref_volume_double_press_key">volume_double_press</string>

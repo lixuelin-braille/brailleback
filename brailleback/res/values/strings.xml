@@ -76,7 +76,7 @@
     <string name="pref_category_device_summary">Connection status, protocol and keyboard help</string>
     <string name="pref_connection_protocol_title">Connection protocol</string>
     <string name="pref_auto_connect_title">Auto-connect display</string>
-    <string name="pref_auto_connect_summary">Connect to the braille display automatically when the screen turns on or a device is paired</string>
+    <string name="pref_auto_connect_summary">Connect automatically at startup, when the screen or Bluetooth turns on, or when a paired display is discovered; retry briefly after a drop and wait for the display to reconnect</string>
     <string name="pref_setup_service_title">Enable braille service</string>
     <string name="pref_setup_service_summary">Service is off. Tap to open system Accessibility settings to enable it. If you see “Restricted settings”, tap “More” then “Allow restricted settings”.</string>
     <string name="pref_setup_service_enabled">Service is enabled.</string>
@@ -161,6 +161,9 @@
     <!-- Label for the contracted mode preference. Switches between contracted (grade 2) and uncontracted (grade 1) braille. [CHAR_LIMIT=45] -->
     <string name="pref_braille_contracted_mode_title">Contracted braille</string>
     <string name="pref_motion_mode_title">Motion mode</string>
+    <string name="pref_quiet_navigation_title">Braille-only navigation</string>
+    <string name="pref_quiet_navigation_summary_on">Moving in braille does not move the screen reader focus, so the screen reader stays silent</string>
+    <string name="pref_quiet_navigation_summary_off">Braille movement also moves the screen reader focus</string>
     <string name="pref_pause_behavior_title">Pause behavior</string>
     <string name="pref_pause_behavior_clear_label">Clear the display</string>
     <string name="pref_pause_behavior_keep_label">Keep the content</string>
@@ -173,6 +176,9 @@
     <string name="pref_motion_mode_summary_on">Coalesce display updates during fast scrolling</string>
     <string name="pref_motion_mode_summary_off">Refresh the display on every update</string>
 
+    <string name="pref_volume_gestures_enabled_title">Volume key gestures</string>
+    <string name="pref_volume_gestures_enabled_summary_on">On. Volume keys still change the system volume; long press and double press also run the actions below.</string>
+    <string name="pref_volume_gestures_enabled_summary_off">Off. Volume keys only change the system volume.</string>
     <string name="pref_volume_long_press_up_title">Long press volume up</string>
     <string name="pref_volume_long_press_down_title">Long press volume down</string>
     <string name="pref_volume_double_press_title">Double press volume key</string>

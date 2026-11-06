@@ -11,6 +11,7 @@
 package com.googlecode.eyesfree.brailleback
 
 import android.Manifest
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.AlertDialog
 import android.content.BroadcastReceiver
 import android.content.ComponentName
@@ -25,11 +26,13 @@ import android.os.Bundle
 import android.provider.Settings
 import android.text.TextUtils
 import android.util.Log
+import android.view.accessibility.AccessibilityManager
 import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.preference.ListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
@@ -180,7 +183,7 @@ class SettingsActivity : AppCompatActivity(),
 
         /** Message from BrailleBackService, indicating that grade pref changed. */
         companion object {
-            private const val REQUEST_BLUETOOTH_CONNECT = 1
+            private const val REQUEST_BLUETOOTH_PERMISSIONS = 1
             private const val REQUEST_POST_NOTIFICATIONS = 2
         }
 
@@ -283,17 +286,12 @@ class SettingsActivity : AppCompatActivity(),
             translatorManager.addOnTablesChangedListener(this)
 
             refreshBrailleTypeSummary()
-            if (Build.VERSION.SDK_INT >= 33) {
-                requireContext().registerReceiver(
-                    mRefreshReceiver,
-                    IntentFilter(SettingsActivity.INTENT_REFRESH_DISPLAY),
-                    Context.RECEIVER_NOT_EXPORTED
-                )
-            } else {
-                @Suppress("DEPRECATION")
-                requireContext().registerReceiver(
-                    mRefreshReceiver, IntentFilter(SettingsActivity.INTENT_REFRESH_DISPLAY))
-            }
+            ContextCompat.registerReceiver(
+                requireContext(),
+                mRefreshReceiver,
+                IntentFilter(SettingsActivity.INTENT_REFRESH_DISPLAY),
+                ContextCompat.RECEIVER_NOT_EXPORTED
+            )
             refreshSoundPreferences()
             updateSetupServicePreference()
         }
@@ -614,11 +612,20 @@ class SettingsActivity : AppCompatActivity(),
 
         private fun isServiceEnabled(): Boolean {
             val context = requireActivity()
-            val expected =
-                ComponentName(context, BrailleBackService::class.java).flattenToString()
-            val enabled = Settings.Secure.getString(
-                context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: ""
-            return enabled.split(':').contains(expected)
+            val expected = ComponentName(context, BrailleBackService::class.java)
+            val manager = context.getSystemService(Context.ACCESSIBILITY_SERVICE)
+                as? AccessibilityManager ?: return false
+            return try {
+                manager.getEnabledAccessibilityServiceList(
+                    AccessibilityServiceInfo.FEEDBACK_ALL_MASK
+                ).any { info ->
+                    val serviceInfo = info.resolveInfo?.serviceInfo
+                    serviceInfo != null &&
+                        ComponentName(serviceInfo.packageName, serviceInfo.name) == expected
+                }
+            } catch (e: SecurityException) {
+                false
+            }
         }
 
         private fun openAccessibilitySettings() {
@@ -632,11 +639,19 @@ class SettingsActivity : AppCompatActivity(),
         private fun requestBluetoothPermissions() {
             val context = requireActivity()
             if (Build.VERSION.SDK_INT >= 31) {
+                val missing = ArrayList<String>(2)
                 if (context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)
                     != PackageManager.PERMISSION_GRANTED) {
+                    missing.add(Manifest.permission.BLUETOOTH_CONNECT)
+                }
+                if (context.checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN)
+                    != PackageManager.PERMISSION_GRANTED) {
+                    missing.add(Manifest.permission.BLUETOOTH_SCAN)
+                }
+                if (missing.isNotEmpty()) {
                     requestPermissions(
-                        arrayOf(Manifest.permission.BLUETOOTH_CONNECT),
-                        REQUEST_BLUETOOTH_CONNECT)
+                        missing.toTypedArray(),
+                        REQUEST_BLUETOOTH_PERMISSIONS)
                 }
             }
             if (Build.VERSION.SDK_INT >= 33 &&
@@ -651,12 +666,12 @@ class SettingsActivity : AppCompatActivity(),
         override fun onRequestPermissionsResult(
             requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
             super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-            if (requestCode == REQUEST_BLUETOOTH_CONNECT) {
-                val granted = grantResults.isNotEmpty() &&
-                    grantResults[0] == PackageManager.PERMISSION_GRANTED
-                if (granted) {
-                    // Permission just granted: re-scan for connected displays.
-                    (requireActivity() as SettingsActivity).displayClient?.poll()
+            if (requestCode == REQUEST_BLUETOOTH_PERMISSIONS) {
+                val context = requireActivity()
+                if (context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)
+                    == PackageManager.PERMISSION_GRANTED) {
+                    // CONNECT just granted: re-scan for connected displays.
+                    (context as SettingsActivity).displayClient?.poll()
                 }
             }
         }

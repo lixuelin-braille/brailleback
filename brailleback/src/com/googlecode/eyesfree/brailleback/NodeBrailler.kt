@@ -30,11 +30,17 @@ class NodeBrailler(
 ) {
 
     /**
-     * Converts the source of `event` and its surroundings to annotated text to
-     * put on the braille display. Returns the new content, or `null` if the
-     * event doesn't have a source node.
+     * Converts [node] and its surroundings to annotated text.
+     *
+     * [focusNode] is the braille cursor's logical focus.  It is used when
+     * braille navigation deliberately does not move system accessibility
+     * focus (for example, in braille-only teaching mode).  When omitted, the
+     * system accessibility focus is used, preserving the original behaviour.
      */
-    fun brailleNode(node: AccessibilityNodeInfoCompat): DisplayManager.Content? {
+    fun brailleNode(
+        node: AccessibilityNodeInfoCompat,
+        focusNode: AccessibilityNodeInfoCompat? = null
+    ): DisplayManager.Content? {
         var content = mSelfBrailleManager.contentForNode(node)
         if (content == null) {
             val toFormat = ArrayList<AccessibilityNodeInfoCompat>()
@@ -42,18 +48,46 @@ class NodeBrailler(
             LogUtils.log(this, Log.VERBOSE, "Going to format %d nodes", toFormat.size)
             val sb = SpannableStringBuilder()
             for (n in toFormat) {
-                formatSubtree(n, sb)
+                formatSubtree(n, sb, focusNode)
             }
             content = DisplayManager.Content(sb)
             content.setFirstNode(toFormat[0])
                 .setLastNode(toFormat[toFormat.size - 1])
             AccessibilityNodeInfoUtils.recycleNodes(*toFormat.toTypedArray())
         }
+        if (focusNode != null) {
+            ensureFocusSpan(content, focusNode)
+        }
         return content
     }
 
+    /** Makes sure logical focus is visible even for self-brailled content. */
+    private fun ensureFocusSpan(
+        content: DisplayManager.Content,
+        focusNode: AccessibilityNodeInfoCompat
+    ) {
+        val spannable = content.getText() as? Spannable ?: return
+        if (spannable.getSpans(
+                0, spannable.length, DisplaySpans.FocusSpan::class.java).isNotEmpty()) {
+            return
+        }
+        val nodeSpan = spannable.getSpans(
+                0, spannable.length, AccessibilityNodeInfoCompat::class.java)
+                .firstOrNull { it == focusNode }
+        if (nodeSpan != null) {
+            DisplaySpans.addFocus(
+                    spannable, spannable.getSpanStart(nodeSpan), spannable.getSpanEnd(nodeSpan))
+        } else {
+            DisplaySpans.addFocus(spannable, 0, spannable.length)
+        }
+    }
+
     /** Formats `node` and its descendants, appending the result to `result`. */
-    private fun formatSubtree(node: AccessibilityNodeInfoCompat, result: Editable) {
+    private fun formatSubtree(
+        node: AccessibilityNodeInfoCompat,
+        result: Editable,
+        focusNode: AccessibilityNodeInfoCompat?
+    ) {
         if (!node.isVisibleToUser) {
             return
         }
@@ -68,7 +102,7 @@ class NodeBrailler(
                 if (child == null) {
                     continue
                 }
-                formatSubtree(child, subtreeResult)
+                formatSubtree(child, subtreeResult, focusNode)
                 child.recycle()
             }
         }
@@ -76,7 +110,15 @@ class NodeBrailler(
             // If the node is accessibility focused, add the focus span here to
             // cover the node and its formatted children. This is a fallback in
             // case the formatting rule hasn't set focus by itself.
-            if (node.isAccessibilityFocused
+            // When a logical focus node is supplied, only that node is marked:
+            // the system focus may legitimately point somewhere else in
+            // braille-only navigation mode.
+            val isFocused = if (focusNode != null) {
+                node == focusNode
+            } else {
+                node.isAccessibilityFocused
+            }
+            if (isFocused
                 && subtreeResult.getSpans(0, subtreeResult.length,
                     DisplaySpans.FocusSpan::class.java).isEmpty()) {
                 DisplaySpans.addFocus(subtreeResult, 0, subtreeResult.length)

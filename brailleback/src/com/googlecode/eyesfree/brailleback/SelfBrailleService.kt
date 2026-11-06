@@ -23,6 +23,7 @@ import android.content.pm.PackageManager
 import android.os.Binder
 import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.Message
 import android.os.RemoteException
 import android.text.SpannableStringBuilder
@@ -45,7 +46,7 @@ class SelfBrailleService : Service() {
     private val serviceImpl = ServiceImpl()
     private val clients = HashMap<IBinder, ClientInfo>()
     private val nodeStates = HashMap<AccessibilityNodeInfo, NodeState>()
-    private val handler = SelfBrailleHandler()
+    private val handler = SelfBrailleHandler(this)
     private var packageManager: PackageManager? = null
 
     override fun onCreate() {
@@ -55,6 +56,19 @@ class SelfBrailleService : Service() {
 
     override fun onDestroy() {
         sInstance = null
+        handler.removeCallbacksAndMessages(null)
+        val nodes = HashSet<AccessibilityNodeInfo>()
+        for (info in clients.values) {
+            info.unlinkDeathRecipient()
+            nodes.addAll(info.mNodes)
+        }
+        nodes.addAll(nodeStates.keys)
+        clients.clear()
+        nodeStates.clear()
+        for (node in nodes) {
+            node.recycle()
+        }
+        packageManager = null
     }
 
     override fun onBind(intent: Intent): IBinder {
@@ -67,7 +81,14 @@ class SelfBrailleService : Service() {
                 LogUtils.log(this@SelfBrailleService, Log.ERROR, "null client token to write")
                 return
             }
-            val serviceUtil = ServiceUtil(packageManager!!)
+            val manager = packageManager
+            if (manager == null) {
+                LogUtils.log(
+                    this@SelfBrailleService, Log.ERROR,
+                    "write received after service destruction")
+                return
+            }
+            val serviceUtil = ServiceUtil(manager)
             if (!serviceUtil.verifyCaller(Binder.getCallingUid())) {
                 LogUtils.log(
                     this@SelfBrailleService, Log.ERROR,
@@ -145,6 +166,14 @@ class SelfBrailleService : Service() {
         IBinder.DeathRecipient {
         val mNodes = HashSet<AccessibilityNodeInfo>()
 
+        fun unlinkDeathRecipient() {
+            try {
+                mClientToken.unlinkToDeath(this, 0)
+            } catch (e: RuntimeException) {
+                // The binder may already be dead or unlinked.
+            }
+        }
+
         override fun binderDied() {
             handler.clientDisconnected(mClientToken)
         }
@@ -155,36 +184,42 @@ class SelfBrailleService : Service() {
         var mWriteData: WriteData? = null
     }
 
-    private inner class SelfBrailleHandler : Handler() {
+    /**
+     * Static so messages queued on the main Looper do not retain the service.
+     */
+    private class SelfBrailleHandler(service: SelfBrailleService) :
+        Handler(Looper.getMainLooper()) {
+        private val serviceRef = WeakReference(service)
+
         fun setNodeState(newState: NodeState) {
             obtainMessage(MSG_SET_NODE_STATE, newState).sendToTarget()
         }
 
-        fun invalidateAndRecycleNode(node: AccessibilityNodeInfo) {
-            obtainMessage(MSG_INVALIDATE_AND_RECYCLE_NODE, node).sendToTarget()
-        }
-
         fun clientDisconnected(clientToken: IBinder?) {
-            obtainMessage(MSG_CLIENT_DISCONNECTED, clientToken).sendToTarget()
-        }
-
-        override fun handleMessage(msg: Message) {
-            when (msg.what) {
-                MSG_SET_NODE_STATE -> handleSetNodeState(msg.obj as NodeState)
-                MSG_INVALIDATE_AND_RECYCLE_NODE ->
-                    invalidateAndRecycleNode(msg.obj as AccessibilityNodeInfo)
-                MSG_CLIENT_DISCONNECTED ->
-                    handleClientDisconnected(msg.obj as IBinder)
+            if (clientToken != null) {
+                obtainMessage(MSG_CLIENT_DISCONNECTED, clientToken).sendToTarget()
             }
         }
 
-        private fun handleSetNodeState(newState: NodeState) {
+        override fun handleMessage(msg: Message) {
+            val service = serviceRef.get() ?: return
+            when (msg.what) {
+                MSG_SET_NODE_STATE ->
+                    handleSetNodeState(service, msg.obj as NodeState)
+                MSG_CLIENT_DISCONNECTED ->
+                    (msg.obj as? IBinder)?.let {
+                        handleClientDisconnected(service, it)
+                    }
+            }
+        }
+
+        private fun handleSetNodeState(service: SelfBrailleService, newState: NodeState) {
             val newNode = newState.mWriteData!!.accessibilityNodeInfo!!
             // We must remove and insert to get the node replaced.
-            val oldState = nodeStates.remove(newNode)
+            val oldState = service.nodeStates.remove(newNode)
             if (oldState != null) {
                 val oldNode = oldState.mWriteData!!.accessibilityNodeInfo!!
-                val oldClientInfo = infoForClient(oldState.mClientToken!!)
+                val oldClientInfo = service.infoForClient(oldState.mClientToken!!)
                 if (oldClientInfo != null) {
                     oldClientInfo.mNodes.remove(oldNode)
                 }
@@ -192,10 +227,10 @@ class SelfBrailleService : Service() {
             }
             var recycleNewNode = true
             if (newState.mWriteData!!.text != null) {
-                val newClientInfo = infoForClient(newState.mClientToken!!)
+                val newClientInfo = service.infoForClient(newState.mClientToken!!)
                 if (newClientInfo != null) {
                     newClientInfo.mNodes.add(newNode)
-                    nodeStates[newNode] = newState
+                    service.nodeStates[newNode] = newState
                     recycleNewNode = false
                 } else {
                     // The client is already dead.
@@ -212,16 +247,25 @@ class SelfBrailleService : Service() {
             }
         }
 
-        private fun handleClientDisconnected(clientToken: IBinder) {
-            val clientInfo = clients.remove(clientToken)
+        private fun invalidateAndRecycleNode(node: AccessibilityNodeInfo) {
+            val brailleBack = BrailleBackService.getActiveInstance()
+            if (brailleBack != null) {
+                brailleBack.invalidateNode(node)
+            }
+            node.recycle()
+        }
+
+        private fun handleClientDisconnected(
+            service: SelfBrailleService, clientToken: IBinder) {
+            val clientInfo = service.clients.remove(clientToken)
             if (clientInfo != null) {
                 LogUtils.log(
-                    this@SelfBrailleService, Log.VERBOSE,
+                    service, Log.VERBOSE,
                     "Disconnected %s, removing %d nodes", clientToken, clientInfo.mNodes.size)
                 for (node in clientInfo.mNodes) {
-                    val state = nodeStates[node]
+                    val state = service.nodeStates[node]
                     if (state != null && state.mClientToken == clientToken) {
-                        nodeStates.remove(node)
+                        service.nodeStates.remove(node)
                         invalidateAndRecycleNode(node)
                     }
                 }
@@ -240,8 +284,7 @@ class SelfBrailleService : Service() {
         private var sInstance: WeakReference<SelfBrailleService>? = null
 
         private const val MSG_SET_NODE_STATE = 1
-        private const val MSG_INVALIDATE_AND_RECYCLE_NODE = 2
-        private const val MSG_CLIENT_DISCONNECTED = 3
+        private const val MSG_CLIENT_DISCONNECTED = 2
 
         @JvmStatic
         fun getActiveInstance(): SelfBrailleService? {

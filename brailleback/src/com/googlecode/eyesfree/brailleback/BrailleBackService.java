@@ -28,9 +28,11 @@ import android.content.pm.ServiceInfo;
 import android.content.res.Configuration;
 import android.os.Build;
 import android.os.Handler;
+import android.os.Looper;
 import android.os.Message;
 import android.os.SystemClock;
 import android.preference.PreferenceManager;
+import androidx.core.content.ContextCompat;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
 import android.text.TextUtils;
 import android.util.Log;
@@ -46,6 +48,7 @@ import com.googlecode.eyesfree.brailleback.utils.LogFileWriter;
 import com.googlecode.eyesfree.labeling.CustomLabelManager;
 import com.googlecode.eyesfree.labeling.PackageRemovalReceiver;
 import com.googlecode.eyesfree.utils.LogUtils;
+import java.lang.ref.WeakReference;
 
 /**
  * An accessibility service that provides feedback through a braille
@@ -125,19 +128,35 @@ public class BrailleBackService
     private static final int SWITCH_NAVIGATION_MODE_DOTS = DOT7 | DOT8;
 
   /** {@link Handler} for executing messages on the service main thread. */
-  private final Handler handler =
-      new Handler() {
-        @Override
-        public void handleMessage(Message message) {
-          switch (message.what) {
-            case WHAT_START:
-              updateServiceInfo();
-              initializeDependencies();
-              return;
-            default: // fall out
-          }
-        }
-      };
+  private final Handler handler = new StartHandler(this);
+
+  /**
+   * Static to avoid retaining the accessibility service through the main
+   * Looper while a start message is queued.
+   */
+  private static final class StartHandler extends Handler {
+    private final WeakReference<BrailleBackService> serviceRef;
+
+    StartHandler(BrailleBackService service) {
+      super(Looper.getMainLooper());
+      serviceRef = new WeakReference<>(service);
+    }
+
+    @Override
+    public void handleMessage(Message message) {
+      BrailleBackService service = serviceRef.get();
+      if (service == null) {
+        return;
+      }
+      switch (message.what) {
+        case WHAT_START:
+          service.updateServiceInfo();
+          service.initializeDependencies();
+          return;
+        default: // fall out
+      }
+    }
+  }
 
     @Override
     public void onConnectionStateChanged(int state) {
@@ -223,6 +242,7 @@ public class BrailleBackService
             // If showing preference screen... update displayed preference.
             Intent refreshPrefIntent =
                 new Intent(SettingsActivity.INTENT_REFRESH_DISPLAY);
+            refreshPrefIntent.setPackage(getPackageName());
             sendBroadcast(refreshPrefIntent);
 
             return;
@@ -274,8 +294,8 @@ public class BrailleBackService
     }
 
     // Volume key gesture detection (long press up/down, double press).
-    private static final long VOLUME_LONG_PRESS_TIMEOUT_MS = 500;
-    private static final long VOLUME_DOUBLE_PRESS_TIMEOUT_MS = 350;
+    // These gestures are PASSIVE observers: onKeyEvent() must never consume
+    // the key, otherwise Android cannot change the stream volume at all.
     private static final int GESTURE_LONG_UP = 0;
     private static final int GESTURE_LONG_DOWN = 1;
     private static final int GESTURE_DOUBLE = 2;
@@ -288,10 +308,14 @@ public class BrailleBackService
     private final Runnable mVolumeLongPressRunnable = new Runnable() {
         @Override
         public void run() {
-            mVolumeLongPressFired = true;
-            performVolumeAction(readVolumeAction(
+            final String action = readVolumeAction(
                     mVolumeLongPressKeyCode == KeyEvent.KEYCODE_VOLUME_UP
-                            ? GESTURE_LONG_UP : GESTURE_LONG_DOWN));
+                            ? GESTURE_LONG_UP : GESTURE_LONG_DOWN);
+            if (isNoneVolumeAction(action)) {
+                return;
+            }
+            mVolumeLongPressFired = true;
+            performVolumeAction(action);
         }
     };
 
@@ -304,48 +328,66 @@ public class BrailleBackService
         }
         switch (event.getAction()) {
             case KeyEvent.ACTION_DOWN:
-                return onVolumeKeyDown(keyCode);
+                onVolumeKeyDown(event);
+                break;
             case KeyEvent.ACTION_UP:
-                return onVolumeKeyUp(keyCode);
+                onVolumeKeyUp();
+                break;
             default:
-                return false;
+                break;
         }
+        // Never consume volume keys. Returning true here swallows the event
+        // before the system handles it: short press, long-press repeat and the
+        // volume panel all stop working. Gestures above only observe.
+        return VolumeKeyGesturePolicy.shouldConsumeVolumeKeyEvent();
     }
 
-    private boolean onVolumeKeyDown(int keyCode) {
-        if (!hasVolumeGestures()) {
-            return false;
+    private void onVolumeKeyDown(KeyEvent event) {
+        final boolean gesturesEnabled = hasVolumeGestures();
+        if (!VolumeKeyGesturePolicy.shouldStartLongPress(
+                event.getRepeatCount(), gesturesEnabled, mVolumeLongPressFired)) {
+            // Repeat DOWN events arrive while the key is held. Restarting the
+            // long-press timer on each repeat would prevent it ever firing.
+            return;
         }
         mVolumeKeyHandler.removeCallbacks(mVolumeLongPressRunnable);
         mVolumeLongPressFired = false;
-        mVolumeLongPressKeyCode = keyCode;
-        mVolumeKeyHandler.postDelayed(
-                mVolumeLongPressRunnable, VOLUME_LONG_PRESS_TIMEOUT_MS);
-        return true;
+        mVolumeLongPressKeyCode = event.getKeyCode();
+        mVolumeKeyHandler.postDelayed(mVolumeLongPressRunnable,
+                VolumeKeyGesturePolicy.LONG_PRESS_TIMEOUT_MS);
     }
 
-    private boolean onVolumeKeyUp(int keyCode) {
-        if (!hasVolumeGestures()) {
-            return false;
-        }
+    private void onVolumeKeyUp() {
         mVolumeKeyHandler.removeCallbacks(mVolumeLongPressRunnable);
         if (mVolumeLongPressFired) {
-            // Long press was already handled.
+            // Long press already handled; don't let it seed a double press.
             mVolumeLongPressFired = false;
-            return true;
+            mVolumeLastTapTime = 0;
+            return;
+        }
+        final String doubleAction = readVolumeAction(GESTURE_DOUBLE);
+        if (!hasVolumeGestures() || isNoneVolumeAction(doubleAction)) {
+            mVolumeLastTapTime = 0;
+            return;
         }
         final long now = SystemClock.uptimeMillis();
-        if (now - mVolumeLastTapTime < VOLUME_DOUBLE_PRESS_TIMEOUT_MS) {
-            // Double press.
+        if (VolumeKeyGesturePolicy.isDoublePress(now, mVolumeLastTapTime,
+                VolumeKeyGesturePolicy.DOUBLE_PRESS_TIMEOUT_MS)) {
             mVolumeLastTapTime = 0;
-            performVolumeAction(readVolumeAction(GESTURE_DOUBLE));
-            return true;
+            performVolumeAction(doubleAction);
+        } else {
+            mVolumeLastTapTime = now;
         }
-        mVolumeLastTapTime = now;
-        return true;
     }
 
     private boolean hasVolumeGestures() {
+        final SharedPreferences prefs =
+                PreferenceManager.getDefaultSharedPreferences(this);
+        if (!prefs.getBoolean(getString(R.string.pref_volume_gestures_enabled_key),
+                getResources().getBoolean(
+                        R.bool.pref_volume_gestures_enabled_default))) {
+            return false;
+        }
         return !isNoneVolumeAction(readVolumeAction(GESTURE_LONG_UP))
                 || !isNoneVolumeAction(readVolumeAction(GESTURE_LONG_DOWN))
                 || !isNoneVolumeAction(readVolumeAction(GESTURE_DOUBLE));
@@ -482,7 +524,12 @@ public class BrailleBackService
       }
       Log.i("BrailleBack", "onServiceConnected pid=" + android.os.Process.myPid()
           + " BrailleDisplayController=" + bdc);
-      HidBridge.setController(bdc);
+      // Publish with this instance as owner: a rebind can create this service
+      // again before the previous instance is destroyed, and the stale
+      // onDestroy() must not clear the fresh controller.
+      Log.i("BrailleBack", "Publishing BrailleDisplayController=" + bdc
+          + " sdk=" + Build.VERSION.SDK_INT);
+      HidBridge.setController(this, bdc);
     }
         PreferenceManager.getDefaultSharedPreferences(this)
                 .registerOnSharedPreferenceChangeListener(mPreferenceListener);
@@ -500,6 +547,8 @@ public class BrailleBackService
     @Override
     public void onDestroy() {
     instance = null;
+    // Do not let a queued WHAT_START re-initialize a destroyed service.
+    handler.removeCallbacksAndMessages(null);
     // Leave the foreground state explicitly; the notification is removed.
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
       stopForeground(STOP_FOREGROUND_REMOVE);
@@ -511,7 +560,9 @@ public class BrailleBackService
     // outlives this service, HidBridge.isAvailable() keeps returning true, and
     // DisplayService may try to connect using a controller bound to a dead
     // service.  Cleared early so the shutdown path sees no stale controller.
-    HidBridge.setController(null);
+    // Ownership is checked: when this instance has already been superseded,
+    // the newer controller stays published.
+    HidBridge.setController(this, null);
         PreferenceManager.getDefaultSharedPreferences(this)
                 .unregisterOnSharedPreferenceChangeListener(mPreferenceListener);
         super.onDestroy();
@@ -623,12 +674,8 @@ public class BrailleBackService
 
       if (labelManager != null) {
         packageReceiver = new PackageRemovalReceiver();
-        if (Build.VERSION.SDK_INT >= 33) {
-    registerReceiver(packageReceiver, packageReceiver.getFilter(),
-            Context.RECEIVER_NOT_EXPORTED);
-} else {
-    registerReceiver(packageReceiver, packageReceiver.getFilter());
-}
+        ContextCompat.registerReceiver(this, packageReceiver,
+            packageReceiver.getFilter(), ContextCompat.RECEIVER_NOT_EXPORTED);
         labelManager.ensureDataConsistency();
             }
         }

@@ -5,6 +5,7 @@
 package com.googlecode.eyesfree.brailleback
 
 import android.content.pm.PackageManager
+import android.os.Process
 
 /**
  * Utilities for use by services.
@@ -12,10 +13,22 @@ import android.content.pm.PackageManager
 class ServiceUtil(private val mPackageManager: PackageManager) {
 
     /**
-     * Verifies that caller package.
-     * Dummy implementation.
+     * Verifies that the caller is signed with the same certificate as this app.
+     *
+     * The self-braille service is exported so that companion accessibility
+     * apps can use it, but it must not be callable by arbitrary apps.  Same-UID
+     * callers are accepted directly; otherwise the platform compares the
+     * signing certificates.
      */
     fun verifyCaller(callingUid: Int): Boolean {
-        return false
+        if (callingUid == Process.myUid()) {
+            return true
+        }
+        return try {
+            mPackageManager.checkSignatures(callingUid, Process.myUid()) ==
+                PackageManager.SIGNATURE_MATCH
+        } catch (e: RuntimeException) {
+            false
+        }
     }
 }

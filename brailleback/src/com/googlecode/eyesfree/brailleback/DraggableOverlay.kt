@@ -16,6 +16,7 @@
 
 package com.googlecode.eyesfree.brailleback
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.PixelFormat
 import android.os.Build
@@ -105,6 +106,9 @@ open class DraggableOverlay(context: Context) : SimpleOverlay(context) {
         getRootView().performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
     }
 
+    // Clearing a gravity mask with bitwise-and is valid, but lint cannot
+    // evaluate the resulting constant expression.
+    @SuppressLint("WrongConstant")
     private fun stopDragging() {
         if (!mDragging) {
             return

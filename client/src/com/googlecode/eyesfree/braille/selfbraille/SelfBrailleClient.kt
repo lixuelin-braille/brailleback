@@ -79,7 +79,13 @@ class SelfBrailleClient(context: Context, private val mAllowDebugService: Boolea
 
     private fun doBindService() {
         val localConnection = Connection()
-        if (!mContext.bindService(mServiceIntent, localConnection, Context.BIND_AUTO_CREATE)) {
+        val bound = try {
+            mContext.bindService(mServiceIntent, localConnection, Context.BIND_AUTO_CREATE)
+        } catch (e: SecurityException) {
+            Log.e(LOG_TAG, "Not allowed to bind to self braille service", e)
+            return
+        }
+        if (!bound) {
             Log.e(LOG_TAG, "Failed to bind to service")
             mHandler.scheduleRebind()
             return

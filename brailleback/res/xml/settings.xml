@@ -96,6 +96,13 @@
             app:key="@string/pref_category_volume_key"
             app:title="@string/pref_category_volume_title">
 
+            <SwitchPreferenceCompat
+                app:key="@string/pref_volume_gestures_enabled_key"
+                app:title="@string/pref_volume_gestures_enabled_title"
+                app:summaryOn="@string/pref_volume_gestures_enabled_summary_on"
+                app:summaryOff="@string/pref_volume_gestures_enabled_summary_off"
+                app:defaultValue="@bool/pref_volume_gestures_enabled_default" />
+
             <ListPreference
                 app:key="@string/pref_volume_long_press_up_key"
                 app:title="@string/pref_volume_long_press_up_title"
@@ -148,6 +155,13 @@
                 app:summaryOn="@string/pref_motion_mode_summary_on"
                 app:summaryOff="@string/pref_motion_mode_summary_off"
                 app:defaultValue="false" />
+
+            <SwitchPreferenceCompat
+                app:key="@string/pref_quiet_navigation_key"
+                app:title="@string/pref_quiet_navigation_title"
+                app:summaryOn="@string/pref_quiet_navigation_summary_on"
+                app:summaryOff="@string/pref_quiet_navigation_summary_off"
+                app:defaultValue="@bool/pref_quiet_navigation_default" />
 
         </PreferenceCategory>
 

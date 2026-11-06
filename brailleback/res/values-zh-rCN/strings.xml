@@ -38,7 +38,7 @@
     <string name="pref_connection_protocol_rfcomm_label">"蓝牙串口（旧协议）"</string>
     <string name="pref_key_bindings_title" msgid="1228004448435300774">"键盘帮助"</string>
     <string name="pref_auto_connect_title">"自动连接盲文显示器"</string>
-    <string name="pref_auto_connect_summary">"屏幕亮起或配对设备时自动连接盲文显示器"</string>
+    <string name="pref_auto_connect_summary">"启动、屏幕亮起、蓝牙开启或发现已配对点显器时自动连接；断线后短暂重试并等待设备回连"</string>
     <string name="pref_setup_service_title">"启用盲文服务"</string>
     <string name="pref_setup_service_summary">"服务未开启。点此打开系统无障碍设置启用；若提示“受限设置”，请点“更多”再点“允许受限设置”。"</string>
     <string name="pref_setup_service_enabled">"服务已启用。"</string>
@@ -106,6 +106,9 @@
     <string name="pref_braille_word_wrap_title" msgid="6481878403472323874">"启用文字换行功能"</string>
     <string name="pref_braille_contracted_mode_title">缩写模式</string>
     <string name="pref_motion_mode_title">运动模式</string>
+    <string name="pref_quiet_navigation_title">仅盲文移动（不朗读）</string>
+    <string name="pref_quiet_navigation_summary_on">移动盲文时只更新点显器，不同步读屏焦点，读屏不会朗读</string>
+    <string name="pref_quiet_navigation_summary_off">移动盲文时同步读屏焦点，读屏会朗读</string>
     <string name="pref_pause_behavior_title">暂停行为</string>
     <string name="pref_pause_behavior_clear_label">清空点显</string>
     <string name="pref_pause_behavior_keep_label">保留内容</string>
@@ -118,6 +121,9 @@
     <string name="pref_motion_mode_summary_on">快速滑动时合并点显刷新，停下来才刷新</string>
     <string name="pref_motion_mode_summary_off">每次更新立即刷新点显</string>
 
+    <string name="pref_volume_gestures_enabled_title">音量键手势</string>
+    <string name="pref_volume_gestures_enabled_summary_on">已开启。音量键照常调节系统音量，长按和双击会同时执行下方动作，触发手势时音量也会随之变化。</string>
+    <string name="pref_volume_gestures_enabled_summary_off">已关闭。音量键完全交给系统，只用于调节音量。</string>
     <string name="pref_volume_long_press_up_title">长按音量上键</string>
     <string name="pref_volume_long_press_down_title">长按音量下键</string>
     <string name="pref_volume_double_press_title">双击音量键</string>
