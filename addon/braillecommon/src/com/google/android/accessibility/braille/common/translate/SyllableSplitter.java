@@ -52,6 +52,31 @@ final class SyllableSplitter {
 
   private SyllableSplitter() {}
 
+  /**
+   * 尾部剩余内容的状态。
+   *
+   * <p>只区分"有效/无效"是不够的：实测"合法首格 + 任意第二格"的 1092 种组合里，79.4% 的二元
+   * 组合在表里不存在（因为声调位只有 1、2、3、23 四种，第二格打错就必然无效）。一律播报
+   * "盲文组合无效"，用户听到的是"打错了"却不知道错在哪一步、下一步该按什么。
+   *
+   * <p>所以按<b>结构</b>细分：声母韵母是不是已经齐了（齐了只差声调）、还是从第二格起就接不上、
+   * 还是首格本身就不能打头。每一种给不同的可执行提示。
+   */
+  enum TailState {
+    /** 尾部没有挂起内容。 */
+    NONE,
+    /** 首格合法、内容还不够，正常输入中间态，保持安静等下一格即可。 */
+    INCOMPLETE,
+    /** 声母韵母已经齐了，只差一个声调格。 */
+    AWAIT_TONE,
+    /** 声母韵母齐了，但这一格不是它支持的声调。 */
+    WRONG_TONE,
+    /** 这个组合在翻译表里根本不存在。 */
+    NO_SUCH_SYLLABLE,
+    /** 首格既不能作音节开头，也不是能单独输出的符号。 */
+    INVALID_START,
+  }
+
   /** 一次切分的结果。字段全部只读，调用方按需取用。 */
   static final class Result {
     /** 已确认、可以写进 composing 的文本。 */
@@ -72,6 +97,9 @@ final class SyllableSplitter {
     /** 尾部盲文组合在翻译表里根本不存在。 */
     final boolean invalidTail;
 
+    /** 尾部剩余内容的结构状态，用来决定播报哪一句提示。 */
+    final TailState tailState;
+
     /** 切分过程的诊断轨迹，只在日志里用。 */
     final String trace;
 
@@ -82,6 +110,7 @@ final class SyllableSplitter {
         int pendingChoice,
         int pendingCells,
         boolean invalidTail,
+        TailState tailState,
         String trace) {
       this.confirmedText = confirmedText;
       this.pendingStart = pendingStart;
@@ -89,6 +118,7 @@ final class SyllableSplitter {
       this.pendingChoice = pendingChoice;
       this.pendingCells = pendingCells;
       this.invalidTail = invalidTail;
+      this.tailState = tailState;
       this.trace = trace;
     }
 
@@ -116,7 +146,8 @@ final class SyllableSplitter {
       int lastConfirmedStart,
       boolean allowPending) {
     if (word.isEmpty()) {
-      return new Result("", -1, Collections.emptyList(), 0, 0, false, "");
+      return new Result(
+          "", -1, Collections.emptyList(), 0, 0, false, TailState.NONE, "");
     }
 
     StringBuilder resolved = new StringBuilder();
@@ -125,6 +156,7 @@ final class SyllableSplitter {
     boolean numericMode = false;
     boolean invalid = false;
     int pendingCells = 0;
+    TailState tailState = TailState.NONE;
     // 切分是单遍从前往后做的，走到某个音节时还不知道它后面还有没有内容，也就无法判断它是不是
     // "最后一个、要等用户确认上屏"的那一个。把最近一个音节压在这里，等后面出现了别的内容
     // （数字、标点、半截音节）或者循环结束，再决定它是"已确认"还是"待确认"。
@@ -172,26 +204,37 @@ final class SyllableSplitter {
       // 后面接的既不是音节也不是数字：压着的那个音节一定不是最后一个，先落定。
       held = flushHeld(resolved, held);
 
-      // 走到这里说明余下的格凑不成一个完整音节，只剩两种可能：还在半路上，或者拼错了。
+      // 走到这里说明余下的格凑不成一个完整音节，只剩三种可能：还在半路上、声调打错了、
+      // 或者这个组合根本不存在。三者必须分开，否则用户听到的永远是一句笼统的"无效"。
       if (index.canStartSyllable(dots(word, start, 1))) {
         if (remaining == 1) {
           // 只有一格、且它能作音节首格：挂起等后续格。此时绝不能翻译——中文表里
           // digit 1 1 是无条件定义，单格会被翻成数字，看起来像已经上屏。
           trace.append("[pending:").append(dots(word, start, 1)).append(']');
           pendingCells = remaining;
+          tailState = TailState.INCOMPLETE;
           break;
         }
         if (remaining == 2 && index.isThreeCellPrefix(dots(word, start, 2))) {
-          // 这 2 格自身不是音节，但能接声调凑成 3 格音节：继续挂起。
-          trace.append("[pending:").append(dots(word, start, 2)).append(']');
+          // 这 2 格自身不是音节，但已是完整的声母韵母，只差一个声调格。
+          // 中文盲文的声调位只有 4 种（1 阴平 / 2 阳平 / 3 上声 / 23 去声），到这里用户
+          // 只差最后一下，必须明确告诉他"还差声调"，否则他不知道自己停在半路上。
+          trace.append("[await-tone:").append(dots(word, start, 2)).append(']');
           pendingCells = remaining;
+          tailState = TailState.AWAIT_TONE;
           break;
         }
-        // 首格是合法音节首格，后面接的格却既不成音节、也不是任何音节的前缀：
-        // 这串盲文在表里根本不存在。既不能当数字吐出去（用户会以为已经上屏），
-        // 也不能静默吞掉（用户会以为键盘坏了），标记出来交给上层播报。
+        // 声母韵母已经齐了、第三格却不是它支持的声调，与"这两格本来就接不上"是两种完全
+        // 不同的错误：前者只错最后一下，退一格就能救回来；后者要退两格。分开播报。
+        boolean stemComplete =
+            remaining >= 3 && index.isThreeCellPrefix(dots(word, start, 2));
         invalid = true;
-        trace.append("[invalid:").append(dots(word, start, remaining)).append(']');
+        tailState = stemComplete ? TailState.WRONG_TONE : TailState.NO_SUCH_SYLLABLE;
+        trace.append("[invalid:")
+            .append(tailState)
+            .append(':')
+            .append(dots(word, start, remaining))
+            .append(']');
         pendingCells = remaining;
         break;
       }
@@ -202,6 +245,8 @@ final class SyllableSplitter {
       if (!isStandaloneSingleCell(single)) {
         trace.append("[pending-single:").append(dots(word, start, 1)).append(']');
         pendingCells = remaining;
+        invalid = true;
+        tailState = TailState.INVALID_START;
         break;
       }
       resolved.append(single);
@@ -233,6 +278,7 @@ final class SyllableSplitter {
         pendingChoice,
         pendingCells,
         invalid,
+        tailState,
         trace.toString());
   }
 

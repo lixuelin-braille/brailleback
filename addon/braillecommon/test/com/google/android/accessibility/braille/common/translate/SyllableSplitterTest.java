@@ -309,6 +309,98 @@ public class SyllableSplitterTest {
     assertEquals("\u4E2D", result.confirmedText);
   }
 
+  // ---------------------------------------------------------------------------------------------
+  // 尾部状态诊断
+  //
+  // 实测："合法首格 + 任意第二格"的 1092 种组合里有 79.4% 在表内不存在，所以笼统的"盲文组合
+  // 无效"是最高频的一句播报，却等于什么都没说。下面每个用例锁死一种结构，保证上层能给出
+  // 不同的、可执行的提示。
+
+  @Test
+  public void emptyWord_tailStateIsNone() {
+    SyllableSplitter.Result result =
+        SyllableSplitter.split(new BrailleWord(), index, STUB_TRANSLATOR, cursor, -1, true);
+
+    assertEquals(SyllableSplitter.TailState.NONE, result.tailState);
+  }
+
+  @Test
+  public void completeSyllable_tailStateIsNone() {
+    SyllableSplitter.Result result =
+        SyllableSplitter.split(
+            new BrailleWord("145-26"), index, STUB_TRANSLATOR, cursor, -1, true);
+
+    assertEquals(SyllableSplitter.TailState.NONE, result.tailState);
+  }
+
+  @Test
+  public void firstCellOnly_tailStateIsIncomplete() {
+    // 145 能作音节首格但还凑不成音节：这是正常中间态，上层只播点位，不要报警。
+    SyllableSplitter.Result result =
+        SyllableSplitter.split(new BrailleWord("145"), index, STUB_TRANSLATOR, cursor, -1, true);
+
+    assertEquals(SyllableSplitter.TailState.INCOMPLETE, result.tailState);
+    assertFalse(result.invalidTail);
+  }
+
+  @Test
+  public void stemWithoutTone_tailStateIsAwaitTone() {
+    // 125-35 是 125-35-1（哈）的声母韵母部分：只差一个声调格。
+    // 这不是错误，必须让上层说"还差声调"，否则用户不知道自己停在半路上。
+    SyllableSplitter.Result result =
+        SyllableSplitter.split(new BrailleWord("125-35"), index, STUB_TRANSLATOR, cursor, -1, true);
+
+    assertEquals(SyllableSplitter.TailState.AWAIT_TONE, result.tailState);
+    assertEquals("", result.confirmedText);
+    assertEquals(2, result.pendingCells);
+    assertFalse("只差声调不是错误，不该报无效", result.invalidTail);
+  }
+
+  @Test
+  public void wrongTone_tailStateIsWrongTone() {
+    // 125-35 是合法音节干，但表里只有 125-35-1，打 125-35-2 就是声调打错了。
+    // 这跟"两格本来接不上"要分开：前者退一格就能救回来。
+    SyllableSplitter.Result result =
+        SyllableSplitter.split(
+            new BrailleWord("125-35-2"), index, STUB_TRANSLATOR, cursor, -1, true);
+
+    assertEquals(SyllableSplitter.TailState.WRONG_TONE, result.tailState);
+    assertTrue(result.invalidTail);
+  }
+
+  @Test
+  public void unconnectableCells_tailStateIsNoSuchSyllable() {
+    // 145 是合法首格，但 145-3 既不是音节，也不是任何三格音节的前缀。
+    SyllableSplitter.Result result =
+        SyllableSplitter.split(new BrailleWord("145-3"), index, STUB_TRANSLATOR, cursor, -1, true);
+
+    assertEquals(SyllableSplitter.TailState.NO_SUCH_SYLLABLE, result.tailState);
+    assertTrue(result.invalidTail);
+  }
+
+  @Test
+  public void cellThatCannotStart_tailStateIsInvalidStart() {
+    // 点 6 既不能作音节首格，也不是可以单独输出的符号（表里它是 capsletter）。
+    // 这种情况几乎总是"一格的几个点没同时按、被拆成了多格"。
+    SyllableSplitter.Result result =
+        SyllableSplitter.split(new BrailleWord("6"), index, STUB_TRANSLATOR, cursor, -1, true);
+
+    assertEquals(SyllableSplitter.TailState.INVALID_START, result.tailState);
+    assertTrue(result.invalidTail);
+  }
+
+  @Test
+  public void twoCellSyllableFollowedByWrongCell_reportsTailStateNotNone() {
+    // 先切出一个完整音节，尾部又落了一格不能打头的单点：状态必须描述"尾部"，
+    // 不能因为前面成功就报 NONE——否则上层会以为一切正常，把那半截静默丢掉。
+    SyllableSplitter.Result result =
+        SyllableSplitter.split(
+            new BrailleWord("145-26-3"), index, STUB_TRANSLATOR, cursor, -1, true);
+
+    assertEquals(SyllableSplitter.TailState.INVALID_START, result.tailState);
+    assertEquals(index.getCandidates("145-26").get(0), result.confirmedText);
+  }
+
   private static ChineseBrailleTableIndex assertDoesNotThrowParse(BufferedReader reader) {
     try {
       return ChineseBrailleTableIndex.parse(reader);

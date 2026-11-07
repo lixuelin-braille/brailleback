@@ -327,4 +327,14 @@
   <string name="bb_deleted">Deleted</string>
   <!-- Announced when the selected characters are committed to the text field. [CHAR_LIMIT=NONE] -->
   <string name="bb_text_committed">Committed</string>
+  <!-- Announced when a real space character is inserted (nothing was pending). [CHAR_LIMIT=NONE] -->
+  <string name="bb_space_inserted">Space</string>
+  <!-- Progress hint: initials and finals are complete, one tone cell is still needed. %1$s is the dots of the cell just pressed. [CHAR_LIMIT=NONE] -->
+  <string name="bb_await_tone">%1$s, tone needed</string>
+  <!-- The syllable exists but not with the tone just entered. %1$s is the dots of the cell just pressed. [CHAR_LIMIT=NONE] -->
+  <string name="bb_wrong_tone">%1$s, no character with this tone, swipe left to undo</string>
+  <!-- The two cells do not form any syllable. %1$s is the dots of the cell just pressed. [CHAR_LIMIT=NONE] -->
+  <string name="bb_no_such_syllable">%1$s, no such combination, swipe left to undo</string>
+  <!-- The first cell cannot start a syllable nor be a symbol on its own. %1$s is the dots of the cell just pressed. [CHAR_LIMIT=NONE] -->
+  <string name="bb_invalid_start">%1$s, cannot start here, swipe left to undo</string>
 </resources>

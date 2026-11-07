@@ -158,4 +158,9 @@
   <string name="bb_candidate_selected">%2$s，第 %1$d 个</string>
   <string name="bb_deleted">已删除</string>
   <string name="bb_text_committed">上屏</string>
+  <string name="bb_space_inserted">空格</string>
+  <string name="bb_await_tone">%1$s，还差声调</string>
+  <string name="bb_wrong_tone">%1$s，这个声调没有字，左滑退一格</string>
+  <string name="bb_no_such_syllable">%1$s，这个组合没有字，左滑退一格</string>
+  <string name="bb_invalid_start">%1$s，这一格不能打头，左滑退一格</string>
 </resources>

@@ -93,6 +93,15 @@ public class EditBufferChinese extends EditBufferUnContracted {
    */
   private boolean invalidTail;
 
+  /**
+   * 最近一次切分时尾部剩余内容的结构状态。
+   *
+   * <p>{@link #invalidTail} 只说明"确实有问题"，这一个说明"问题出在哪一步"：是只差声调、
+   * 声调打错，还是根本接不上。盲人听不到输入框，一句"组合无效"无法转化成下一步动作；
+   * 按状态给出不同的提示（"还差声调"/"这个声调没有字"/"左滑退一格"）才能让他自己修好。
+   */
+  private SyllableSplitter.TailState tailState = SyllableSplitter.TailState.NONE;
+
   /** 尾部还有几格没被翻译成字符（未完成的音节）。按空格提交时这部分会被丢弃，需要告知。 */
   private int pendingCells;
 
@@ -175,6 +184,7 @@ public class EditBufferChinese extends EditBufferUnContracted {
     lastChosenIndex = result.pendingChoice;
     pendingCells = result.pendingCells;
     invalidTail = result.invalidTail;
+    tailState = result.tailState;
     Log.d(
         SPLIT_TAG,
         "holdings="
@@ -189,24 +199,38 @@ public class EditBufferChinese extends EditBufferUnContracted {
   }
 
   /**
-   * 空格 = 阶段 2 的"上屏"。
+   * 右滑在中文里的语义是"完成当前输入"，不是"插入一个空格字符"。
    *
-   * <p>必须做两件事：先把待确认音节的选字结果并进 composing（否则 commit 时它根本不在文本里，
-   * 会被直接丢掉），再给一次明确的可听反馈。用户看不见输入框，选字阶段听到的是"某字、多少候选"，
-   * 上屏如果没有声音，就分不清"已经落进文本"和"还在选"，两阶段就白设计了。
+   * <p>上游 {@code appendSpace} 做两件事：{@code commit()} 提交 composing，再
+   * {@code commitText(" ", 1)} 插一个空格。这在按词分写的语言里成立，中文不成立——每个字后面
+   * 跟一个空格，打出来就是"的 是 我 的"，用户看不见却要为此付出一倍长度的文本。
+   *
+   * <p>所以按"手上有没有待上屏内容"分两种语义，规则只有一条：<b>右滑 = 结束当前这一段输入</b>。
+   *
+   * <ul>
+   *   <li>还有格或待选字 → 上屏，不插空格（这是中文最主要的用法）
+   *   <li>什么都没有 → 这时才是真的想要一个空格（中英混排、分隔符）
+   * </ul>
    *
    * <p>半截音节会在提交时被丢弃，这条提示和"上屏"合并成一句播报：两次 INTERRUPT 会互相打断，
    * 后一句把前一句顶掉，用户反而只听到一半。
    */
   @Override
   public void appendSpace(ImeConnection imeConnection) {
+    // 必须在 confirmPendingSyllable() 之前判断：那次刷新会把 holdings 和候选状态都清掉。
+    final boolean hasInputInProgress = !holdings.isEmpty() || lastCandidateStart >= 0;
     StringBuilder announcement = new StringBuilder();
     if (pendingCells > 0) {
       announcement.append(context.getString(R.string.bb_incomplete_braille_ignored)).append('，');
     }
     confirmPendingSyllable(imeConnection);
-    super.appendSpace(imeConnection);
-    announcement.append(context.getString(R.string.bb_text_committed));
+    if (hasInputInProgress) {
+      commit(imeConnection);
+      announcement.append(context.getString(R.string.bb_text_committed));
+    } else {
+      super.appendSpace(imeConnection);
+      announcement.append(context.getString(R.string.bb_space_inserted));
+    }
     talkBack.speak(announcement.toString(), TalkBackSpeaker.AnnounceType.INTERRUPT);
   }
 
@@ -261,25 +285,47 @@ public class EditBufferChinese extends EditBufferUnContracted {
   }
 
   /**
-   * 尾部盲文组合不存在时播报提示；音节刚凑满时播报候选列表。
+   * 落键后没有产出文本时播报什么：先念这一格的点位，再按尾部状态补一句"下一步"。
    *
    * <p>候选这条是两阶段的关键提示：字还在选字阶段、没进输入框，如果只播点位，用户会以为
-   * 什么都没发生。
+   * 什么都没发生。播报内容必须是<b>候选本身</b>，不能只说"共 N 个"：盲人看不见候选栏，
+   * 不知道能选什么就永远不会去换，那个"85 个候选"的提示等于零信息。这里按输入法候选栏的
+   * 方式念一小段（见 {@link CandidateAnnouncer}），被截断时才补总数。
    *
-   * <p>播报内容必须是<b>候选本身</b>，不能只说"共 N 个"：盲人看不见候选栏，不知道能选什么
-   * 就永远不会去换，那个"85 个候选"的提示等于零信息。这里按输入法候选栏的方式念一小段
-   * （见 {@link CandidateAnnouncer}），被截断时才补总数。
+   * <p>尾部没凑成音节时，原来一律播"盲文组合无效"。实测"合法首格 + 任意第二格"的 1092 种
+   * 组合里有 79.4% 在表内不存在（声调位只有 1、2、3、23 四种），所以这句话出现的频率极高，
+   * 却等于什么都没说：用户不知道是错在声调、错在前一格，还是只差最后一下。现在按结构分开说：
+   *
+   * <ul>
+   *   <li>只差声调 → 直接告诉他"还差声调"，这是正常进度提示，不是错误
+   *   <li>声调不是该音节支持的 → "这个声调没有字"，退一格就能救回来
+   *   <li>两格本来就接不上 → "这个组合没有字"
+   *   <li>首格不能打头 → "这一格不能打头"（通常是几个点没同时按、被拆成了多格）
+   * </ul>
    */
   @Override
   protected Optional<String> getAppendBrailleTextToSpeak(
       Resources resources, BrailleCharacter brailleCharacter) {
-    if (invalidTail) {
-      return Optional.of(resources.getString(R.string.bb_invalid_braille_combination));
-    }
     if (lastCandidateStart >= 0 && lastCandidates.size() > 1) {
       return Optional.of(describeCandidates());
     }
-    return super.getAppendBrailleTextToSpeak(resources, brailleCharacter);
+    String dotsText = BrailleTranslateUtils.getDotsText(resources, brailleCharacter);
+    return switch (tailState) {
+      case AWAIT_TONE ->
+          Optional.of(resources.getString(R.string.bb_await_tone, dotsText));
+      case WRONG_TONE ->
+          Optional.of(resources.getString(R.string.bb_wrong_tone, dotsText));
+      case NO_SUCH_SYLLABLE ->
+          Optional.of(resources.getString(R.string.bb_no_such_syllable, dotsText));
+      case INVALID_START ->
+          Optional.of(resources.getString(R.string.bb_invalid_start, dotsText));
+      // INCOMPLETE 是正常输入中间态：只播点位，不要每格都提醒"还没打完"。
+      // NONE 时交给父类（会走点位播报）。
+      case INCOMPLETE, NONE ->
+          invalidTail
+              ? Optional.of(resources.getString(R.string.bb_invalid_braille_combination))
+              : super.getAppendBrailleTextToSpeak(resources, brailleCharacter);
+    };
   }
 
   /** 拼出"候选 你，尼，呢"，候选被截断时补"共 N 个"。 */
