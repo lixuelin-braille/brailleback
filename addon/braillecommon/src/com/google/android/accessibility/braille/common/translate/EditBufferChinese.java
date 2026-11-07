@@ -297,15 +297,20 @@ public class EditBufferChinese extends EditBufferUnContracted {
   }
 
   /**
-   * 不在这里播报"已确认的字"。
+   * 尾部音节<b>直接落定</b>时播报新出现的字（唯一解的情况）。
    *
-   * <p>两阶段模型下，字进 composing 的时机是"它被确认"，而确认的触发往往是用户已经在打下一个
-   * 音节。这时再念上一个字，等于每打一个字都重复一遍，反而盖掉新音节的点位播报。用户需要听的
-   * 是：选字阶段听到候选，上屏阶段听到"上屏"。
+   * <p>为什么需要：中文里约 12% 的音节只有唯一候选（"的"=145-26 就只有一个字），按设计
+   * 不进候选态、直接落定。这时如果既不播候选也不播字，用户按完最后一点后<b>什么也听不到</b>，
+   * 只能反复猜自己打出了什么——他会把这种情况理解成"没有候选"。
+   *
+   * <p>为什么不能一律播报：追加下一格时，前一个音节会被自动确认进 composing，这时念上一个字
+   * 会盖掉新音节的点位播报，变成每打一字都重复一遍。区分方法是看尾部有没有待处理的内容：
+   * 有 {@code lastCandidateStart}（候选态）或 {@code pendingCells}（半截音节）时说明用户已经
+   * 在打下一个音节，闭嘴；否则就是这一格刚刚独立凑成一个字，必须报出来。
    */
   @Override
   protected boolean shouldSpeakResolvedTranslation() {
-    return false;
+    return lastCandidateStart < 0 && pendingCells == 0;
   }
 
   /**

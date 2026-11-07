@@ -68,6 +68,22 @@ public class SyllableSplitterTest {
           if (dots.equals("256")) {
             return "。";
           }
+          // 单格标点：中文表里引号类是单格定义，必须能打出来。
+          if (dots.equals("45")) {
+            return "\u201C";
+          }
+          // 中文表里的 lowercase 定义：点 13 是 k，反译出来是全角字母。
+          if (dots.equals("13")) {
+            return "\uFF4B";
+          }
+          // 防御：万一某个表里真有单格汉字（当前中文表 0 条），它属于正常内容，不能挡。
+          if (dots.equals("24")) {
+            return "\u4E2D";
+          }
+          // 点 6 是 capsletter（大写符），反译产物是私用区内部字符。
+          if (dots.equals("6")) {
+            return "\uE253";
+          }
           // 模拟中文表里无条件数字定义：单格会被反译成数字。
           if (dots.matches("[1-6]")) {
             return "9";
@@ -238,6 +254,59 @@ public class SyllableSplitterTest {
     assertEquals(index.getCandidates("145-26").get(0), result.confirmedText);
     assertFalse(result.hasPending());
     assertEquals(1, result.pendingCells);
+  }
+
+  @Test
+  public void singleCellLetter_isHeldInsteadOfOutput() {
+    // 点 13 在中文表里不是汉字，而是 lowercase 的 k。用户把一格的点分开按、某一格提前结算时
+    // 就会落下这种单格；照原样输出的话输入框里会出现一个全角字母，读屏念"全角 k"，
+    // 而他按的是一个汉字的头几个点——这是最难自查的一类错误。
+    SyllableSplitter.Result result =
+        SyllableSplitter.split(new BrailleWord("13"), index, STUB_TRANSLATOR, cursor, -1, true);
+
+    assertEquals("", result.confirmedText);
+    assertEquals(1, result.pendingCells);
+  }
+
+  @Test
+  public void singleCellCapsLetter_isHeldInsteadOfOutput() {
+    // 点 6 是 capsletter（大写符），反译产物是私用区内部字符。写进输入框会被读成"大写"或乱码，
+    // 这正是用户报的"按到 6 点以后直接读大写"。
+    SyllableSplitter.Result result =
+        SyllableSplitter.split(new BrailleWord("6"), index, STUB_TRANSLATOR, cursor, -1, true);
+
+    assertEquals("", result.confirmedText);
+    assertEquals(1, result.pendingCells);
+  }
+
+  @Test
+  public void singleCellWithNoTranslation_isHeld() {
+    // 表里既没有汉字也没有符号定义的单格返回空译文。输出空串等于用户按了完全没反应，
+    // 必须挂起让上层播报点位。
+    SyllableSplitter.Result result =
+        SyllableSplitter.split(new BrailleWord("36"), index, STUB_TRANSLATOR, cursor, -1, true);
+
+    assertEquals("", result.confirmedText);
+    assertEquals(1, result.pendingCells);
+  }
+
+  @Test
+  public void singleCellPunctuation_isStillOutput() {
+    // 但单格标点必须保留：中文表里引号、间隔号是单格定义，一律挡掉就打不出标点了。
+    SyllableSplitter.Result result =
+        SyllableSplitter.split(new BrailleWord("45"), index, STUB_TRANSLATOR, cursor, -1, true);
+
+    assertEquals("\u201C", result.confirmedText);
+    assertFalse(result.hasPending());
+  }
+
+  @Test
+  public void singleCellHanzi_isOutput() {
+    // 防御性用例：如果某个中文表确实定义了单格汉字，那是正常内容，不能被"挡字母"的规则误伤。
+    SyllableSplitter.Result result =
+        SyllableSplitter.split(new BrailleWord("24"), index, STUB_TRANSLATOR, cursor, -1, true);
+
+    assertEquals("\u4E2D", result.confirmedText);
   }
 
   private static ChineseBrailleTableIndex assertDoesNotThrowParse(BufferedReader reader) {

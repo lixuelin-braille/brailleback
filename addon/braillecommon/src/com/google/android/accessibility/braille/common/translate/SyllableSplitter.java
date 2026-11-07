@@ -197,12 +197,10 @@ final class SyllableSplitter {
       }
 
       // 首格不能作音节首格：可能是标点/符号，也可能是用户把一格的几个点分开按了（成了多格）。
-      // 中文表里 {@code digit 1 1} 是无条件定义，非数字模式下的单格会被反译成数字——但那个
-      // "数字"并不是用户想输入的数字，只是表在缺上下文时的默认反译。若把它显示出去，用户会
-      // 以为这一格已经定死，后面的格再也拼不成字。所以只播报点位、不产出字符。
+      // 单格能不能直接产出字符，必须严格判断，见 isStandaloneSingleCell()。
       String single = translator.translateToPrint(word.subword(start, start + 1));
-      if (isDigitsOnly(single)) {
-        trace.append("[pending-digit:").append(dots(word, start, 1)).append(']');
+      if (!isStandaloneSingleCell(single)) {
+        trace.append("[pending-single:").append(dots(word, start, 1)).append(']');
         pendingCells = remaining;
         break;
       }
@@ -293,16 +291,44 @@ final class SyllableSplitter {
     return word.subword(start, start + count).toString();
   }
 
-  /** 译文是否**全部**是数字字符（含全角数字）。用于识别"非数字模式下的假数字"。 */
-  private static boolean isDigitsOnly(String text) {
+  /**
+   * 一个单格能不能直接产出字符。
+   *
+   * <p>中文表里单格的 {@code sign}（汉字）定义是 <b>0 条</b>，所有汉字都要 2~3 格；但表里同时
+   * 带着 26 个 {@code lowercase}（a=点 1、b=点 12、k=点 13…）、26 个 {@code uppercase} 和
+   * 一个 {@code capsletter 6}（点 6 = 大写符）。这些是英文输入的残留定义，一旦有格落单，
+   * liblouis 就会按它们反译，吐出全角字母或大写符。
+   *
+   * <p>把它写进输入框的后果是读屏念"大写""全角 a"，用户完全无法理解发生了什么——他按的是
+   * 一个汉字的头几个点，屏幕上却出现了别的东西。所以单格只允许产出标点/符号，其余一律挂起，
+   * 等后续格把它补成完整音节。
+   */
+  private static boolean isStandaloneSingleCell(String text) {
     if (text.isEmpty()) {
       return false;
     }
     for (int i = 0; i < text.length(); i++) {
-      if (!Character.isDigit(text.charAt(i))) {
+      char ch = text.charAt(i);
+      if (isCjk(ch)) {
+        // 汉字是正常内容（表里单格没有汉字定义，这里只是防御）。
+        continue;
+      }
+      if (Character.isLetterOrDigit(ch)) {
+        // 全角/半角字母、数字：前者来自 lowercase/uppercase，后者来自无条件 digit。
+        return false;
+      }
+      if (ch >= 0xE000 && ch <= 0xF8FF) {
+        // 私用区：表里的 \xE2xx 段是盲文内部字符，读屏会念成乱码。
+        return false;
+      }
+      if (Character.isISOControl(ch)) {
         return false;
       }
     }
     return true;
+  }
+
+  private static boolean isCjk(char ch) {
+    return (ch >= 0x4E00 && ch <= 0x9FFF) || (ch >= 0x3400 && ch <= 0x4DBF);
   }
 }
