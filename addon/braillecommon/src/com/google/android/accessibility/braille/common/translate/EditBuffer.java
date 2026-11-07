@@ -19,6 +19,7 @@ package com.google.android.accessibility.braille.common.translate;
 import com.google.android.accessibility.braille.common.ImeConnection;
 import com.google.android.accessibility.braille.interfaces.BrailleCharacter;
 import com.google.android.accessibility.braille.interfaces.BrailleDisplayForBrailleIme.ResultForDisplay.HoldingsInfo;
+import java.util.List;
 
 /**
  * Receives and accumulates inputted {@link BrailleCharacter}, and commits the print translation of
@@ -107,6 +108,28 @@ public interface EditBuffer {
    */
   default boolean isCompleteCell(BrailleCharacter cell) {
     return true;
+  }
+
+  /**
+   * 把一段<b>连续按下、还没分格</b>的点流，切成已经可以确定下来的音节。
+   *
+   * <p>为什么需要这一层：中文盲文一格是若干点的集合，点位之间存在包含关系（{@code 12} 是波，
+   * 加 3 成勒、加 4 成佛），所以"这一格按完没有"在结构上无法判定，过去只能靠停顿猜——猜早了
+   * 把一格切断、猜晚了把两格粘住，用户报的"打慢一点就拼不成"就是这个原因。改成按<b>音节</b>
+   * 整串识别后，判据变成"这串点是不是一个不能再长的音节"，与手速完全无关。
+   *
+   * <p>返回的格会被调用方逐个 {@link #appendBraille} 进来，实现内部仍按原来的多格累积逻辑处理，
+   * 不需要改成逐点接收。
+   *
+   * @param dotStream 尚未处理的点流，每个字符是一个点号，例如 {@code 1451362}
+   * @param force {@code false} 表示用户还在打，只能切确实无疑的音节；{@code true} 表示用户已经
+   *     示意这串点打完了（按空格、滑动上屏），此时按最长匹配直接切，因为"二声"永远是"四声"的
+   *     前缀，不强制的话带二声的字永远出不来
+   * @return {@code null} 表示还要等更多点才能判断（用户还没打完）；空列表表示这段点流已经
+   *     不可能构成任何音节（按错了），调用方应退掉一个点重来；否则返回已确定音节的格序列
+   */
+  default List<BrailleCharacter> segmentDotStream(String dotStream, boolean force) {
+    return null;
   }
 
   /** Moves the cursor in the text field. */

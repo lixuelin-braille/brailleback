@@ -40,6 +40,7 @@ import com.google.android.accessibility.braille.common.Constants.BrailleType;
 import com.google.android.accessibility.braille.common.TalkBackSpeaker;
 import com.google.android.accessibility.braille.common.translate.BrailleLanguages.Code;
 import com.google.android.accessibility.braille.common.translate.BrailleTranslateUtils;
+import com.google.android.accessibility.braille.common.translate.ChineseBrailleSignNames;
 import com.google.android.accessibility.braille.interfaces.BrailleCharacter;
 import com.google.android.accessibility.brailleime.BrailleIme.OrientationSensitive;
 import com.google.android.accessibility.brailleime.BrailleInputOptions;
@@ -127,6 +128,24 @@ public class BrailleInputView extends View
       return true;
     }
 
+    /**
+     * 把连续按下的点流切成已确定的音节，<b>不使用任何等待时间</b>。
+     *
+     * <p>中文盲文一格是若干点的集合，而点位之间存在包含关系（{@code 12} 是波，加 3 成勒、加 4
+     * 成佛），所以"这一格按完没有"在结构上无法判定，只能靠停顿猜。猜早了把一格切断、猜晚了把
+     * 两格粘住，用户报的"打慢一点就拼不成"就是这个。改按音节整串识别后，判据是"这串点是不是
+     * 一个不能再长的音节"，与手速无关。
+     *
+     * @param dotStream 还没分格的点流，例如 {@code 1451362}
+     * @param force {@code false} 表示用户还在打（绝不能猜）；{@code true} 表示用户已经示意这串点
+     *     打完了（按空格上屏、做手势），此时按最长匹配直接切
+     * @return {@code null} 表示还得继续按才能判断；空列表表示这串点已经不可能成字；否则返回
+     *     已确定音节的格，调用方逐个 {@link #onBrailleProduced} 送出
+     */
+    default List<BrailleCharacter> segmentDotStream(String dotStream, boolean force) {
+      return null;
+    }
+
     /** Signals that calibration has been produced. Returns true if the action is consumed. */
     @CanIgnoreReturnValue
     default boolean onCalibration(CalibrationTriggeredType type, FingersPattern hand) {
@@ -178,51 +197,21 @@ public class BrailleInputView extends View
   private CalibrationTriggeredType calibrationType;
 
   /**
-   * 攒下的点<b>已经构成完整符号</b>时，停顿多久就把它结算成一格。
-   *
-   * <p>这个值是在两种失败之间取折中，而这两种失败的性质差别很大：
-   *
-   * <ul>
-   *   <li><b>太短</b>：一格被拆成几格。中文一格 3 个点，点 6 在右下角，从点 3 移过去如果超过
-   *       阈值，"1、3"会先结算成点 13、"6"再单独成一格，$145（声母 d）被打断成两格，这个字
-   *       就永远拼不出来。这是<b>输入错误</b>，用户只能全删重打。
-   *   <li><b>太长</b>：每格出字都要多等一会。这只是慢，不影响正确性。
-   * </ul>
-   *
-   * <p>所以宁可偏长。实测盲人单手在 6 个点位之间摸索定位，两个点之间 0.6~1 秒是常态。
-   * 真正需要立刻出格时按空格或任意手势会直接结算，不必干等。
-   */
-  private static final long DOT_COMPLETE_SETTLE_MS = 1500;
-
-  /**
-   * 攒下的点<b>还不构成完整符号</b>时，停顿多久才结算。
-   *
-   * <p>这一档是实测出来的：用户报"打一个字时间太长就拼不成了"。原因不是手慢，而是中间状态
-   * 也合法——打 {@code 12}（波）先按点 1，而点 1 单独在中文表里是"一声"（声调），若按"完整
-   * 符号"的短时限结算，这一格就没了，用户再按点 2 就成了下一格，"波"永远拼不出来。
-   *
-   * <p>所以"还没成形"的格子必须给足时间继续加点。{@link Callback#isCompleteCell} 负责判断
-   * 当前这一格成形没有，依据是音节结构（第几格、该位置允许哪些符号）。表外的组合（标点、
-   * 数字符、乱按）一律算完整，走上面那个短时限。
-   */
-  private static final long DOT_PARTIAL_SETTLE_MS = 3500;
-
-  /**
-   * 逐点累积模式下，当前这一格已经攒下的点。
+   * 攒下的点串，<b>可以跨好几格</b>，直到能判定出一个完整音节才切出去。
    *
    * <p>盲文的"一格"在上游等于<b>一次触摸手势</b>：{@link MultitouchHandler} 在最后一根手指
    * 抬起（ACTION_UP）时做 tap 判定并 {@code clearPointerCollections()}，跨手势不累积。累积
    * 模式只解决"同一手势里某根手指先松开"，不解决"分成几次点击"。而中文一个音节要 2~3 格，
    * 用户把一格的几个点分开按，就会变成几个单格，永远拼不出一个汉字。
    *
-   * <p>这里把单点点击攒进同一格，停顿一会儿再结算（时长见 {@link #DOT_COMPLETE_SETTLE_MS} 与
-   * {@link #DOT_PARTIAL_SETTLE_MS}，取决于这一格是否已经成形）；多指同时按下仍然是"一次就是
-   * 一格、立刻结算"，不会给现有的和弦输入方式增加延迟。
+   * <p><b>不再用等待时间判断这一格结束没有</b>。原因见 {@link Callback#segmentDotStream}：
+   * 点位之间的包含关系使得"格是否结束"在结构上无法判定，猜早了切断、猜晚了粘连。现在改成
+   * 攒整串点、按音节识别，攒多久都不影响正确性。
    */
   private BrailleCharacter pendingCell = BrailleCharacter.EMPTY_CELL;
 
   /**
-   * 当前格已经按下过的点，按先后顺序。
+   * 当前还没归属到任何音节的全部点，按先后顺序。
    *
    * <p>为什么要单独记顺序而不是只看 {@link #pendingCell}：中文一格要按 3 个点，按错最后一个
    * 点时想改，只能把整格退掉重打——三个点重来一遍，慢且容易再错。有了顺序就能只退最后按的
@@ -233,7 +222,6 @@ public class BrailleInputView extends View
   /** 是否启用逐点累积（跟随"包含所有按下的点"设置）。关闭时行为与上游完全一致。 */
   private boolean accumulateDotsByTap;
 
-  private final Runnable settlePendingCell;
 
   /**
    * Construct a BrailleInputView.
@@ -255,7 +243,6 @@ public class BrailleInputView extends View
     this.inputPlane = getInputPlane(context);
     this.inputPlane.setTableTopMode(tabletopMode);
     this.tabletopMode = tabletopMode;
-    this.settlePendingCell = this::emitPendingCell;
     setBackgroundColor(getResources().getColor(R.color.input_plane_background));
     this.inputViewCaption = new InputViewCaption(context.getString(R.string.input_view_caption));
     addOnAttachStateChangeListener(this);
@@ -311,7 +298,6 @@ public class BrailleInputView extends View
     }
     // 视图被摘下（切语言、旋转、收键盘）时，攒着的半格不能无声丢掉。
     flushPendingCell();
-    removeCallbacks(settlePendingCell);
     removeOnAttachStateChangeListener(this);
   }
 
@@ -596,40 +582,76 @@ public class BrailleInputView extends View
   }
 
   /**
-   * 把一个单点并进当前格，立刻播报这个点，并重置停顿计时。
+   * 把一个单点并进当前点串，立刻播报，然后试着切出已经能确定的音节。
    *
-   * <p>必须在这里就播报：这一格还没结算，编辑缓冲拿不到任何输入，也就不会按"点位播报"
-   * 反馈。用户是盲人，看不到手指落在哪，没有这句播报就等于没按到。
+   * <p>必须在这里就播报：点还在缓冲区里，编辑缓冲拿不到输入，也就不会给出任何反馈。用户是
+   * 盲人，看不到手指落在哪，没有这句播报就等于没按到。
+   *
+   * <p><b>没有计时器</b>。判断"这一格/这个音节打完没有"不再依赖停顿，见
+   * {@link #drainDecidedSyllables}。
    */
   private void accumulateDot(BrailleCharacter dot) {
-    pendingCell = pendingCell.union(dot);
     pendingDotOrder.add(dot);
-    announceDots(dot);
-    restartSettleTimer();
-    Log.d(
-        TAG,
-        "accumulate dot=" + dot + " pending=" + pendingCell + " mode=" + accumulateDotsByTap);
+    pendingCell = pendingCell.union(dot);
+    announceStream();
+    Log.d(TAG, "accumulate dot=" + dot + " stream=" + dotsStream());
+    drainDecidedSyllables();
+  }
+
+  /** 当前还没归属到任何音节的全部点，拼成点流（每个字符一个点号）。 */
+  private String dotsStream() {
+    StringBuilder builder = new StringBuilder(pendingDotOrder.size());
+    for (BrailleCharacter dot : pendingDotOrder) {
+      builder.append(dot.toString());
+    }
+    return builder.toString();
   }
 
   /**
-   * 重新开始这一格的停顿计时，时长取决于这一格现在是否已经成形。
+   * 把点流里<b>已经能确定</b>的音节切出去，剩下的继续攒着。
    *
-   * <p>每次新点、每次退点都要重置，否则计时会按第一个点按下时的时间算，越打越容易被提前切断。
+   * <p>这是"不再用时间限制"的落点：判据不是"停了多久"，而是"这串点是不是已经是一个不能再长的
+   * 音节"。例如打"读"({@code 145-136-2}) 时，按到 {@code 1451} 不会出字——因为 {@code 1451}
+   * 既是"搭"、也是"读"的开头；按到 {@code 1451362} 时整串落在表里、且没有更长的音节以它开头，
+   * 才整段切出来。用户按多慢都不会被切断，按多快也不会粘在一起。
+   *
+   * <p>有多个音节可以立刻切时循环处理，这样连续输入时不必每次退回一次按键。
    */
-  private void restartSettleTimer() {
-    removeCallbacks(settlePendingCell);
-    postDelayed(settlePendingCell, settleDelayMs(pendingCell));
+  private void drainDecidedSyllables() {
+    while (!pendingDotOrder.isEmpty()) {
+      String stream = dotsStream();
+      List<BrailleCharacter> cells = callback.segmentDotStream(stream, /* force= */ false);
+      if (cells == null) {
+        // 还得接着按，这一串点先留着。
+        return;
+      }
+      if (cells.isEmpty()) {
+        // 这串点已经不可能构成任何音节（按错了）。退掉最早的那个点，
+        // 让用户从下一个点重新开始，而不是一直卡在这串死路上。
+        pendingDotOrder.remove(0);
+        rebuildPendingCell();
+        Log.d(TAG, "dot stream dead end, drop first dot, remain=" + dotsStream());
+        continue;
+      }
+      int consumed = 0;
+      for (BrailleCharacter cell : cells) {
+        consumed += cell.getOnCount();
+        showCaption(callback.onBrailleProduced(cell));
+      }
+      for (int i = 0; i < consumed && !pendingDotOrder.isEmpty(); i++) {
+        pendingDotOrder.remove(0);
+      }
+      rebuildPendingCell();
+    }
   }
 
-  /**
-   * 这一格该等多久。
-   *
-   * <p>已经成形的格用短时限，连打不拖沓；还没成形的格用长时限，容纳用户在同一格里慢慢摸索。
-   * 判定不在本类做——"什么算成形"是语言知识（中文看音节第几格），放在编辑缓冲里，见
-   * {@link Callback#isCompleteCell}。
-   */
-  private long settleDelayMs(BrailleCharacter cell) {
-    return callback.isCompleteCell(cell) ? DOT_COMPLETE_SETTLE_MS : DOT_PARTIAL_SETTLE_MS;
+  /** 按当前点序重算合并后的点位（只用于播报与兜底提交）。 */
+  private void rebuildPendingCell() {
+    BrailleCharacter rebuilt = BrailleCharacter.EMPTY_CELL;
+    for (BrailleCharacter dot : pendingDotOrder) {
+      rebuilt = rebuilt.union(dot);
+    }
+    pendingCell = rebuilt;
   }
 
   /** 这次手势是不是"退掉刚按的那个点"。判定条件见 {@link DotUndoPolicy}。 */
@@ -650,14 +672,9 @@ public class BrailleInputView extends View
    */
   private void undoLastDot() {
     pendingDotOrder.remove(pendingDotOrder.size() - 1);
-    BrailleCharacter rebuilt = BrailleCharacter.EMPTY_CELL;
-    for (BrailleCharacter dot : pendingDotOrder) {
-      rebuilt = rebuilt.union(dot);
-    }
-    pendingCell = rebuilt;
-    removeCallbacks(settlePendingCell);
+    rebuildPendingCell();
     if (pendingCell.getOnCount() == 0) {
-      // 整格已经退空：没有可结算的内容，也不必再等停顿。
+      // 已经退空：没有可结算的内容。
       // 不能走 announceDots：空格的点位文本是"点 "，念出来像没说完。
       BrailleCommonTalkBackSpeaker.getInstance()
           .speak(
@@ -666,35 +683,69 @@ public class BrailleInputView extends View
       Log.d(TAG, "undo dot -> cell empty");
       return;
     }
-    // 剩下的点继续等停顿结算，用户可以接着改或接着按。
-    postDelayed(settlePendingCell, settleDelayMs(pendingCell));
-    announceDots(pendingCell);
-    Log.d(TAG, "undo dot -> pending=" + pendingCell);
+    announceStream();
+    Log.d(TAG, "undo dot -> stream=" + dotsStream());
   }
 
-  /** 停顿到点：把攒下的点结算成一格，交给编辑缓冲。 */
-  private void emitPendingCell() {
-    if (pendingCell.getOnCount() == 0) {
-      pendingDotOrder.clear();
+  /**
+   * 用户做了非点击手势：把攒着的点立刻交出去，避免半截输入串到后面的命令里。
+   *
+   * <p>先请切分器尽量按音节切；剩下的（标点、符号、半截音节）按"每格最多 6 点"硬切，交给
+   * 编辑缓冲去翻译和诊断——总比无声丢掉强。
+   */
+  private void flushPendingCell() {
+    if (pendingDotOrder.isEmpty()) {
       return;
     }
-    BrailleCharacter cell = pendingCell;
-    pendingCell = BrailleCharacter.EMPTY_CELL;
-    pendingDotOrder.clear();
-    Log.d(TAG, "emit accumulated cell=" + cell);
-    showCaption(callback.onBrailleProduced(cell));
+    List<BrailleCharacter> decided =
+        callback.segmentDotStream(dotsStream(), /* force= */ true);
+    if (decided != null) {
+      int consumed = 0;
+      for (BrailleCharacter cell : decided) {
+        consumed += cell.getOnCount();
+        showCaption(callback.onBrailleProduced(cell));
+      }
+      for (int i = 0; i < consumed && !pendingDotOrder.isEmpty(); i++) {
+        pendingDotOrder.remove(0);
+      }
+    }
+    while (!pendingDotOrder.isEmpty()) {
+      BrailleCharacter cell = BrailleCharacter.EMPTY_CELL;
+      int take = Math.min(BrailleCharacter.DOT_COUNT - 2, pendingDotOrder.size());
+      for (int i = 0; i < take; i++) {
+        cell = cell.union(pendingDotOrder.get(i));
+      }
+      for (int i = 0; i < take; i++) {
+        pendingDotOrder.remove(0);
+      }
+      showCaption(callback.onBrailleProduced(cell));
+    }
+    rebuildPendingCell();
   }
 
-  /** 立刻结算当前格（收到非点击手势时调用，避免半格串到后面的命令里）。 */
-  private void flushPendingCell() {
-    removeCallbacks(settlePendingCell);
-    emitPendingCell();
-  }
-
-  private void announceDots(BrailleCharacter dots) {
+  /**
+   * 播报当前这串点现在读作什么。
+   *
+   * <p>盲文是记音的，用户记的是"1-2 点是波"，不是"点 1 点 2"。所以优先播单格中文读名
+   * （{@link ChineseBrailleSignNames}）；一串点不构成单独一格时（打了一半），播最后按下的那个点，
+   * 让用户确认这一下按到的是他想按的点位。
+   *
+   * <p>这里必须播，因为点还没交给编辑缓冲，那边不会有任何反馈；用户看不见手指落点，
+   * 没有这句就等于没按到。
+   */
+  private void announceStream() {
+    String name = ChineseBrailleSignNames.describe(dotsStream());
+    if (name != null) {
+      BrailleCommonTalkBackSpeaker.getInstance().speak(name, TalkBackSpeaker.AnnounceType.INTERRUPT);
+      return;
+    }
+    BrailleCharacter last = pendingDotOrder.get(pendingDotOrder.size() - 1);
+    String lastName = ChineseBrailleSignNames.describe(last.toString());
     BrailleCommonTalkBackSpeaker.getInstance()
         .speak(
-            BrailleTranslateUtils.getDotsText(getResources(), dots),
+            lastName != null
+                ? lastName
+                : BrailleTranslateUtils.getDotsText(getResources(), last),
             TalkBackSpeaker.AnnounceType.INTERRUPT);
   }
 

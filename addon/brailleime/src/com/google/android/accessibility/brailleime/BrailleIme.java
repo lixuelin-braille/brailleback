@@ -118,6 +118,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableSet;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import java.lang.Thread.UncaughtExceptionHandler;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -1193,6 +1194,19 @@ public class BrailleIme extends InputMethodService {
         public boolean isCompleteCell(BrailleCharacter brailleChar) {
           EditBuffer buffer = editBuffer;
           return buffer == null || buffer.isCompleteCell(brailleChar);
+        }
+
+        /**
+         * 把还没分格的点流交给编辑缓冲，请它切出已经能确定的音节。
+         *
+         * <p>键盘不再靠停顿猜格边界（那会把慢慢按的一格切断、把连着按的两格粘住），改成整串
+         * 点按音节识别。没有连接时返回 {@code null}，键盘会继续攒着，等切回编辑缓冲再处理。
+         */
+        @Nullable
+        @Override
+        public List<BrailleCharacter> segmentDotStream(String dotStream, boolean force) {
+          EditBuffer buffer = editBuffer;
+          return buffer == null ? null : buffer.segmentDotStream(dotStream, force);
         }
 
         @Override

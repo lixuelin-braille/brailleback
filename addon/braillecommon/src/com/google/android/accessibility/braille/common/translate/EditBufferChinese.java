@@ -27,6 +27,7 @@ import com.google.android.accessibility.braille.common.TalkBackSpeaker;
 import com.google.android.accessibility.braille.interfaces.BrailleCharacter;
 import com.google.android.accessibility.braille.interfaces.BrailleWord;
 import com.google.android.accessibility.braille.translate.BrailleTranslator;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -430,6 +431,58 @@ public class EditBufferChinese extends EditBufferUnContracted {
   @Override
   public boolean isCompleteCell(BrailleCharacter cell) {
     return ChineseBrailleSignNames.isCompleteAt(cell.toString(), pendingCells);
+  }
+
+  /**
+   * 把连续点流切成已确定的音节，<b>彻底不用等待时间</b>。
+   *
+   * <p>原来的做法是"停顿多久算一格结束"，两头都会错：猜早了把 {@code 145}（得）切成 {@code 14}
+   * 和 {@code 5}，这个字就永远拼不出来；猜晚了把相邻两格粘成一格。用户报的"打慢一点就拼不成"
+   * 就是这个。现在改成按音节整串识别：{@code 1451362} 落在表里是"读"，与按得多慢无关，
+   * 只要这串点还不能被判定成"一个不能再长的音节"，就一直等着，绝不切断。
+   *
+   * @return {@code null} 表示还得继续按；空列表表示这串点已经不可能成字（按错了），键盘层会
+   *     退掉一个点；否则是已确定音节的格，键盘层逐个送进 {@link #appendBraille}
+   */
+  @Override
+  public List<BrailleCharacter> segmentDotStream(String dotStream, boolean force) {
+    if (TextUtils.isEmpty(dotStream) || index == null) {
+      return null;
+    }
+    ChineseDotStreamSegmenter segmenter = index.getDotStreamSegmenter();
+    ChineseDotStreamSegmenter.Decision decision = segmenter.decide(dotStream, force);
+    if (decision == null) {
+      // 走不通就明确说走不通，不能让键盘一直挂着等一个永远不会来的点。
+      return force || !segmenter.canStillGrow(dotStream)
+          ? Collections.emptyList()
+          : null;
+    }
+    String[] cells = decision.ambiguous ? pickMostCommonSyllable(decision) : decision.cells;
+    List<BrailleCharacter> result = new ArrayList<>(cells.length);
+    for (String cell : cells) {
+      result.add(new BrailleCharacter(cell));
+    }
+    return result;
+  }
+
+  /**
+   * 同一串点撞上多个音节时，挑首选字更常用的那个。
+   *
+   * <p>撞串是真实的语言现象，不是算法缺陷：{@code 12-35-2}（拔）与 {@code 1235-2}（儿）都对应
+   * 点串 {@code 12352}，因为"波"的声母格加"啊"的韵母格正好等于"儿"的韵母格。1343 个音节里
+   * 有 143 个（10.6%）存在这种情况。按字频挑，绝大多数情况下挑中的就是用户想要的那个。
+   */
+  private String[] pickMostCommonSyllable(ChineseDotStreamSegmenter.Decision decision) {
+    String[] best = decision.cells;
+    int bestWeight = Integer.MAX_VALUE;
+    for (String[] alternative : decision.alternatives) {
+      int weight = index.topCandidateWeight(String.join("-", alternative));
+      if (weight < bestWeight) {
+        bestWeight = weight;
+        best = alternative;
+      }
+    }
+    return best;
   }
 
   @Override

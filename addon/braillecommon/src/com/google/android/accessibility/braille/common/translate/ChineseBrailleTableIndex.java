@@ -89,6 +89,9 @@ public final class ChineseBrailleTableIndex {
    */
   private final ImmutableSet<String> syllableFirstCells;
 
+  /** 点流切分器，首次使用时构建，之后常驻。见 {@link #getDotStreamSegmenter}。 */
+  private volatile ChineseDotStreamSegmenter dotStreamSegmenter;
+
   private ChineseBrailleTableIndex(
       Map<String, List<String>> candidates, Set<String> threeCellPrefixes) {
     ImmutableMap.Builder<String, ImmutableList<String>> builder = ImmutableMap.builder();
@@ -144,9 +147,47 @@ public final class ChineseBrailleTableIndex {
     return candidates.containsKey(dots);
   }
 
+  /**
+   * 该点位串<b>最常用候选</b>的常用度权重，越小越常用；没有候选时返回 {@link Integer#MAX_VALUE}。
+   *
+   * <p>只给点流切分用：同一串点撞上两个音节时（如 {@code 12-35-2} 拔 与 {@code 1235-2} 儿
+   * 都对应点串 {@code 12352}），用两边首选字的常用度择优，比"格数少优先"这种几何规则靠谱得多。
+   */
+  int topCandidateWeight(String dots) {
+    ImmutableList<String> list = getCandidates(dots);
+    if (list.isEmpty()) {
+      return Integer.MAX_VALUE;
+    }
+    return sortWeight(list.get(0).charAt(0));
+  }
+
   /** 该单格是否是某个合法音节的第一格；是则说明后面还可能接韵母/声调，需挂起等待。 */
   public boolean canStartSyllable(String singleCellDots) {
     return syllableFirstCells.contains(singleCellDots);
+  }
+
+  /** 表内全部音节的点位 key（形如 {@code 145-136-2}），供点流切分器建索引。 */
+  public ImmutableSet<String> syllableKeys() {
+    return candidates.keySet();
+  }
+
+  /**
+   * 点流切分器（不依赖时间、按音节整串识别）。
+   *
+   * <p>懒建：只在第一次真正需要时遍历两万个 key，避免拖慢输入法启动。
+   */
+  public ChineseDotStreamSegmenter getDotStreamSegmenter() {
+    ChineseDotStreamSegmenter local = dotStreamSegmenter;
+    if (local != null) {
+      return local;
+    }
+    synchronized (this) {
+      if (dotStreamSegmenter == null) {
+        dotStreamSegmenter = ChineseDotStreamSegmenter.create(candidates.keySet());
+      }
+      local = dotStreamSegmenter;
+    }
+    return local;
   }
 
   // ---------------------------------------------------------------------------------------------
