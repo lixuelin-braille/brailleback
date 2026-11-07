@@ -58,8 +58,9 @@ public class ChineseBrailleTableIndexTest {
     ChineseBrailleTableIndex index = parse(table);
 
     assertEquals(2, index.getCandidates("35-1").size());
-    assertEquals("吖", index.getCandidates("35-1").get(0));
-    assertEquals("阿", index.getCandidates("35-1").get(1));
+    // 常用字优先：阿（GB2312 一级）排在"吖"前面，虽然表内"吖"的定义写在前面。
+    assertEquals("阿", index.getCandidates("35-1").get(0));
+    assertEquals("吖", index.getCandidates("35-1").get(1));
     assertEquals("哈", index.getCandidates("125-35-1").get(0));
     assertEquals("铪", index.getCandidates("125-35-1").get(1));
     // 单格、noback、digit、标点都不进索引。
@@ -132,5 +133,90 @@ public class ChineseBrailleTableIndexTest {
     // 本表里音节首格都是 2 点以上的声母，单点 1 不是任何音节的第一格（它只是声调位）。
     // 所以点 1 单独出现时按表的定义出数字是合理的，不该被挂起。
     assertFalse("单点 1 不应被当作音节首格", index.canStartSyllable("1"));
+  }
+
+  /** GB2312 一级字库判定：常用字 true，生僻字 false。 */
+  @Test
+  public void isCommonChinese_distinguishesCommonFromRare() {
+    for (char ch : new char[] {'的', '是', '不', '人', '我', '好', '中', '国', '疵', '词'}) {
+      assertTrue(ch + " 应判为常用字", ChineseBrailleTableIndex.isCommonChinese(ch));
+    }
+    // 注意"縒"(BF57)、"蠀"(CF85) 确实在 GB2312 一级字库里——一级字按拼音排序，并非按字频，
+    // 所以不能拿"看起来生僻"当判断标准，这里只用确定落在二级库或扩展区的字。
+    for (char ch : new char[] {'玼', '趀', '偨', '齹', '蚩', 'a', '1', '，'}) {
+      assertFalse(ch + " 不应判为常用字", ChineseBrailleTableIndex.isCommonChinese(ch));
+    }
+  }
+
+  /**
+   * 常用字优先排序的效果必须可回归。
+   *
+   * <p>未排序时只有 38.9% 的多候选音节首候选是 GB2312 一级字——用户打出来的多半是"玼、趀、
+   * 偨"这类生僻字，会以为"根本没拼出字"。排序后应超过 90%。这个数字一旦跌破，说明排序失效。
+   */
+  @Test
+  public void realTable_ranksCommonCharactersFirst() throws IOException {
+    File zipFile =
+        new File(
+            System.getProperty("user.dir"),
+            "../brailletranslate/res/raw/translationtables.zip");
+    assertTrue("找不到翻译表: " + zipFile.getAbsolutePath(), zipFile.isFile());
+
+    ChineseBrailleTableIndex index = null;
+    try (InputStream raw = new java.io.FileInputStream(zipFile);
+        ZipInputStream zip = new ZipInputStream(raw)) {
+      ZipEntry entry;
+      while ((entry = zip.getNextEntry()) != null) {
+        if (!"liblouis/tables/zhcn-g1.ctb".equals(entry.getName())) {
+          continue;
+        }
+        index =
+            ChineseBrailleTableIndex.parse(
+                new BufferedReader(new InputStreamReader(zip, StandardCharsets.UTF_8)));
+        break;
+      }
+    }
+    assertNotNull(index);
+
+    // 12 个高频字的点位必须一次命中——这是"打完一个音节直接得到想要的字"的底线。
+    // 未按字频排序时，"是"在 156-23 的 85 个候选里排第 26 位（前面是"士、示、世、市"），
+    // "你"在 1345-24-3 里排第 3 位（前面是"聻、拟"），用户会以为"打出来的不是字"。
+    String[][] expected = {
+      {"145-26", "的"},
+      {"156-23", "是"},
+      {"12-136-23", "不"},
+      {"123-26", "了"},
+      {"135-3", "我"},
+      {"1345-24-3", "你"},
+      {"125-235-3", "好"},
+      {"34-256-1", "中"},
+      {"1245-135-2", "国"},
+      {"125-35-1", "哈"},
+    };
+    for (String[] pair : expected) {
+      assertEquals(pair[0] + " 应首选 " + pair[1], pair[1], index.getCandidates(pair[0]).get(0));
+    }
+
+    // 全局兜底比例：多候选音节里，首候选必须落在高频表或 GB2312 一级字库内。
+    // 实测 95.7%；跌破 90% 说明排序逻辑或字表被破坏。
+    int multi = 0;
+    int commonFirst = 0;
+    for (java.util.List<String> candidates : index.asMap().values()) {
+      if (candidates.size() <= 1) {
+        continue;
+      }
+      multi++;
+      char first = candidates.get(0).charAt(0);
+      if (ChineseBrailleTableIndex.isCommonChinese(first)
+          || ChineseBrailleTableIndex.isHighFrequency(first)) {
+        commonFirst++;
+      }
+    }
+    assertTrue("多候选音节数异常: " + multi, multi > 1000);
+    int ratio = commonFirst * 100 / multi;
+    assertTrue(
+        "多候选音节中首候选为常用字的比例只有 " + ratio + "%（" + commonFirst + "/" + multi
+            + "），字频排序可能失效",
+        ratio > 90);
   }
 }

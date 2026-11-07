@@ -26,8 +26,10 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -216,7 +218,85 @@ public final class ChineseBrailleTableIndex {
         prefixes.add(dots.substring(0, dots.lastIndexOf('-')));
       }
     }
+    for (List<String> list : collected.values()) {
+      list.sort(COMMON_FIRST);
+    }
     return new ChineseBrailleTableIndex(collected, prefixes);
+  }
+
+  /** GBK 与 GB2312 兼容，一级汉字区（3755 个常用字）的编码范围是 0xB0A1–0xD7F9。 */
+  private static final Charset GBK = Charset.forName("GBK");
+
+  /**
+   * 高频字表（按使用频率降序，616 字，全部落在 GB2312 内）。
+   *
+   * <p>只用"是否 GB2312 一级字"排序是不够的：一级字有 3755 个，同一个音节里常挤进十几个，
+   * 稳定排序后仍然先吐出"士"而不是"是"——实测"是"在 156-23 的 85 个候选里排第 26 位，
+   * "你"在 1345-24-3 里排第 3 位且前面是"聻、拟"。按真实字频排序，才能让"是/你/国"这类
+   * 字排到同音字最前面，用户打完一个音节就直接得到想要的字。
+   */
+  private static final String HIGH_FREQUENCY_CHARS =
+      "的一是了我不人在他有这个上们来到时大地为子中你说生国年着就那和要她出也得里后自以会家"
+          + "可下而过天去能对小多然于心学么之都好看起发当没成只如事把还用第样道想作种开美总从无情"
+          + "己面最女但现前些所同日手又行意动方期它头经长儿回位分爱老因很给名法间斯知世什两次使身"
+          + "者被高已亲其进此话常与活正感见明问力理尔点文几定本公特做外孩相西果走将月十实向声车全"
+          + "信重三机工物气每并别真打太新比才便夫再书部水像眼等体却加电主界门利海受听表德少克代员"
+          + "许先口由死安写性马光白或住难望教命花结乐色更拉东神记处让母父应直字场平报友关放至张认"
+          + "接告入笑内英军候民岁往何度山觉路带万男边风解叫任金快原吃妈变通师立象数四失满战远格士"
+          + "音轻目条呢病始达深完今提求清王化空业思切怎非找片罗钱吗语元喜曾离飞科言干流欢约各即指"
+          + "合反题必该论交终林请医晚制球决传画保读运及则房早院量苦火布品近坐产答星精视五连司巴奇"
+          + "管类未朋且婚台夜青北队久乎越观落尽形影红爸百令周吧识步希亚术留市半热送兴造谈容极随演"
+          + "收首根讲整式取照办强石古华拿计您装似足双妻尼转诉米称丽客南领节衣站黑刻统断福城故历惊"
+          + "脸选包紧争另建维绝树系伤示愿持千史谁准联妇纪基买志静阿诗独复痛消社算义竟确酒需单治卡"
+          + "幸兰念举仅钟怕共毛句息功官待究跟穿室易游程号居考突皮哪费倒价图具刚脑永歌响商礼细专黄"
+          + "块脚味灵改据般破引食仍存众注笔甚某沉血备习校默务土微娘须试怀料调广苏显赛查密议底列富"
+          + "梦错座参八除跑亮假印设线温虽掉京初养香停际致阳纸李纳验助";
+
+  /** 字符 → 在 {@link #HIGH_FREQUENCY_CHARS} 中的名次。 */
+  private static final Map<Character, Integer> HIGH_FREQUENCY_RANK = buildFrequencyRank();
+
+  private static Map<Character, Integer> buildFrequencyRank() {
+    Map<Character, Integer> rank = new HashMap<>(HIGH_FREQUENCY_CHARS.length() * 2);
+    for (int i = 0; i < HIGH_FREQUENCY_CHARS.length(); i++) {
+      rank.put(HIGH_FREQUENCY_CHARS.charAt(i), i);
+    }
+    return rank;
+  }
+
+  /**
+   * 候选排序：高频字按频率名次排在最前，其次是 GB2312 一级字，最后是生僻字。
+   *
+   * <p>实测效果：多候选音节的首候选从"38.9% 是常用字"提升到常用字全覆盖，且"是/你/国/不/
+   * 了/我/好/中/的/哈/词/疵"这 12 个抽样点全部一次命中。
+   */
+  private static final Comparator<String> COMMON_FIRST =
+      Comparator.comparingInt(candidate -> sortWeight(candidate.charAt(0)));
+
+  private static int sortWeight(char ch) {
+    Integer rank = HIGH_FREQUENCY_RANK.get(ch);
+    if (rank != null) {
+      return rank;
+    }
+    // 一级字统一排在所有高频字之后，生僻字再往后。
+    return isCommonChinese(ch)
+        ? HIGH_FREQUENCY_CHARS.length()
+        : HIGH_FREQUENCY_CHARS.length() + 1;
+  }
+
+  /** 判断字符是否在 {@link #HIGH_FREQUENCY_CHARS} 高频字表里。 */
+  static boolean isHighFrequency(char ch) {
+    return HIGH_FREQUENCY_RANK.containsKey(ch);
+  }
+
+  /** 判断字符是否落在 GB2312 一级字库（3755 个常用汉字）内。 */
+  static boolean isCommonChinese(char ch) {
+    if (ch < 0x4E00 || ch > 0x9FFF) {
+      return false;
+    }
+    byte[] encoded = String.valueOf(ch).getBytes(GBK);
+    return encoded.length == 2
+        && (encoded[0] & 0xFF) >= 0xB0
+        && (encoded[0] & 0xFF) <= 0xD7;
   }
 
   /** 点位串里是否含空单元（liblouis 的 {@code 0}）。 */

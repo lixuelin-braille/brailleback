@@ -311,4 +311,8 @@
   <string name="bk_gesture_confirm_spelling_suggestion">Confirm suggestion</string>
   <!-- Spell check gesture of undo spelling suggestion. [CHAR_LIMIT=NONE] -->
   <string name="bk_gesture_undo_spelling_suggestion">Undo suggestion</string>
+  <!-- Announced when the entered braille cells do not form any symbol in the translation table. [CHAR_LIMIT=NONE] -->
+  <string name="bb_invalid_braille_combination">Invalid braille combination</string>
+  <!-- Announced when a space is pressed while an incomplete braille syllable is pending and will be dropped. [CHAR_LIMIT=NONE] -->
+  <string name="bb_incomplete_braille_ignored">Incomplete braille ignored</string>
 </resources>

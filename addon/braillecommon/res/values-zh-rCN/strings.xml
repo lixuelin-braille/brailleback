@@ -150,4 +150,6 @@
   <string name="bk_gesture_next_suggestion">听下一条建议</string>
   <string name="bk_gesture_confirm_spelling_suggestion">确认接受建议</string>
   <string name="bk_gesture_undo_spelling_suggestion">撤消接受建议</string>
+  <string name="bb_invalid_braille_combination">盲文组合无效</string>
+  <string name="bb_incomplete_braille_ignored">未完成的盲文已忽略</string>
 </resources>

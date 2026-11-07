@@ -17,11 +17,16 @@
 package com.google.android.accessibility.braille.common.translate;
 
 import android.content.Context;
+import android.content.res.Resources;
 import android.util.Log;
+import com.google.android.accessibility.braille.common.ImeConnection;
+import com.google.android.accessibility.braille.common.R;
 import com.google.android.accessibility.braille.common.TalkBackSpeaker;
 import com.google.android.accessibility.braille.interfaces.BrailleCharacter;
 import com.google.android.accessibility.braille.interfaces.BrailleWord;
 import com.google.android.accessibility.braille.translate.BrailleTranslator;
+import java.util.List;
+import java.util.Optional;
 
 /**
  * 中文现行盲文（带声调）的 {@link EditBuffer}。
@@ -56,6 +61,21 @@ public class EditBufferChinese extends EditBufferUnContracted {
 
   private final ChineseBrailleTableIndex index;
 
+  private final Context context;
+
+  private final TalkBackSpeaker talkBack;
+
+  /**
+   * 最近一次 {@link #translateHoldings} 的尾部是否为表内不存在的盲文组合。
+   *
+   * <p>与"尚未凑满音节"必须分开：前者是用户按错了格，必须立刻告知；后者是正常输入中间态，
+   * 保持安静等下一格即可。合并处理就会变成"按错一格后键盘彻底失声"。
+   */
+  private boolean invalidTail;
+
+  /** 尾部还有几格没被翻译成字符（未完成的音节）。按空格提交时这部分会被丢弃，需要告知。 */
+  private int pendingCells;
+
   private EditBufferChinese(
       Context context,
       BrailleTranslator translator,
@@ -63,6 +83,8 @@ public class EditBufferChinese extends EditBufferUnContracted {
       ChineseBrailleTableIndex index) {
     super(context, translator, talkBack);
     this.index = index;
+    this.context = context;
+    this.talkBack = talkBack;
   }
 
   /**
@@ -80,12 +102,16 @@ public class EditBufferChinese extends EditBufferUnContracted {
   @Override
   protected String translateHoldings(BrailleWord word) {
     if (word.isEmpty()) {
+      invalidTail = false;
+      pendingCells = 0;
       return "";
     }
     StringBuilder resolved = new StringBuilder();
     StringBuilder trace = new StringBuilder();
     int start = 0;
     boolean numericMode = false;
+    boolean invalid = false;
+    int pending = 0;
     final int size = word.size();
     while (start < size) {
       int remaining = size - start;
@@ -109,33 +135,79 @@ public class EditBufferChinese extends EditBufferUnContracted {
       }
 
       if (remaining >= 3 && index.hasCandidate(dots(word, start, 3))) {
-        resolved.append(translator.translateToPrint(word.subword(start, start + 3)));
+        resolved.append(firstCandidate(word, start, 3));
         trace.append('[').append(dots(word, start, 3)).append("=3]");
         start += 3;
         continue;
       }
       if (remaining >= 2 && index.hasCandidate(dots(word, start, 2))) {
-        resolved.append(translator.translateToPrint(word.subword(start, start + 2)));
+        resolved.append(firstCandidate(word, start, 2));
         trace.append('[').append(dots(word, start, 2)).append("=2]");
         start += 2;
         continue;
       }
 
-      // 余下的是"未完成音节"：只剩 1 格声母，或 2 格但还能接声调变成 3 格。
-      // 这类绝对不能翻译成字符——单格会被表翻成数字，看着像已经上屏，用户就会以为
-      // "后面的格子跟它拼不起来"。挂起等待后续格，输入框保持已确定的汉字不变。
-      if (remaining <= 2 && index.canStartSyllable(dots(word, start, 1))) {
-        trace.append("[pending:").append(dots(word, start, remaining)).append(']');
+      // 走到这里说明余下的格凑不成一个完整音节，只剩两种可能：还在半路上，或者拼错了。
+      if (index.canStartSyllable(dots(word, start, 1))) {
+        if (remaining == 1) {
+          // 只有一格、且它能作音节首格：挂起等后续格。此时绝不能翻译——中文表里
+          // digit 1 1 是无条件定义，单格会被翻成数字，看起来像已经上屏。
+          trace.append("[pending:").append(dots(word, start, 1)).append(']');
+          pending = remaining;
+          break;
+        }
+        if (remaining == 2 && index.isThreeCellPrefix(dots(word, start, 2))) {
+          // 这 2 格自身不是音节，但能接声调凑成 3 格音节：继续挂起。
+          trace.append("[pending:").append(dots(word, start, 2)).append(']');
+          pending = remaining;
+          break;
+        }
+        // 首格是合法音节首格，后面接的格却既不成音节、也不是任何音节的前缀：
+        // 这串盲文在表里根本不存在。既不能当数字吐出去（用户会以为已经上屏），
+        // 也不能静默吞掉（用户会以为键盘坏了），标记出来交给上层播报。
+        invalid = true;
+        trace.append("[invalid:").append(dots(word, start, remaining)).append(']');
+        pending = remaining;
         break;
       }
 
-      // 既凑不成音节、也不是数字模式（标点/符号等），交给表逐格翻译。
+      // 首格不能作音节首格 → 标点、符号等，按原样逐格交给翻译表。
       resolved.append(translator.translateToPrint(word.subword(start, start + 1)));
       trace.append('[').append(dots(word, start, 1)).append("=1]");
       start++;
     }
+    invalidTail = invalid;
+    pendingCells = pending;
     Log.d(SPLIT_TAG, "holdings=" + word + " split=" + trace + " out=[" + resolved + "]");
     return resolved.toString();
+  }
+
+  /**
+   * 空格提交时，未完成的音节会被 {@code commit()} 直接丢弃。用户是盲人，看不到输入框，
+   * 如果不提示，他会以为自己打的字已经上去了——实际一个字都没留下。
+   */
+  @Override
+  public void appendSpace(ImeConnection imeConnection) {
+    if (pendingCells > 0) {
+      talkBack.speak(
+          context.getString(R.string.bb_incomplete_braille_ignored),
+          TalkBackSpeaker.AnnounceType.INTERRUPT);
+    }
+    super.appendSpace(imeConnection);
+  }
+
+  /**
+   * 尾部盲文组合不存在时播报提示，让用户立刻知道是自己按错了格，而不是键盘没反应。
+   *
+   * <p>父类只在译文为空时走这个分支，正好是非法组合的场景（没有产出任何字符）。
+   */
+  @Override
+  protected Optional<String> getAppendBrailleTextToSpeak(
+      Resources resources, BrailleCharacter brailleCharacter) {
+    if (invalidTail) {
+      return Optional.of(resources.getString(R.string.bb_invalid_braille_combination));
+    }
+    return super.getAppendBrailleTextToSpeak(resources, brailleCharacter);
   }
 
   /**
@@ -150,5 +222,20 @@ public class EditBufferChinese extends EditBufferUnContracted {
   /** 把 {@code word[start, start + count)} 转成表内使用的点位串，如 {@code 125-35-1}。 */
   private static String dots(BrailleWord word, int start, int count) {
     return word.subword(start, start + count).toString();
+  }
+
+  /**
+   * 取该音节的输出字。
+   *
+   * <p>用索引里排序后的第一个候选（GB2312 一级字优先），而不是直接信 liblouis 的反译结果：
+   * 后者按 Unicode 码位顺序返回，实测只有 38.9% 的音节首选是常用字，其余先吐出"玼、趀、偨"
+   * 这类生僻字，用户就以为"打出来的不是字"。索引不可用时才回退到翻译器。
+   */
+  private String firstCandidate(BrailleWord word, int start, int count) {
+    List<String> candidates = index.getCandidates(dots(word, start, count));
+    if (!candidates.isEmpty()) {
+      return candidates.get(0);
+    }
+    return translator.translateToPrint(word.subword(start, start + count));
   }
 }
