@@ -50,6 +50,7 @@ public class ChineseBrailleTableIndexTest {
             + "sign \\x963F 35-1\n"
             + "sign \\x54C8 125-35-1\n"
             + "sign \\x94EA 125-35-1\n"
+            + "sign \\x554A 35-0\n"
             + "noback sign \\xE234 1\n"
             + "digit 1 1\n"
             + "punctuation \\x3002 256\n";
@@ -64,6 +65,8 @@ public class ChineseBrailleTableIndexTest {
     // 单格、noback、digit、标点都不进索引。
     assertEquals(0, index.getCandidates("1").size());
     assertFalse(index.hasCandidate("256"));
+    // 含空单元（0，liblouis 的 blank cell）的定义输入不可达，必须被排除。
+    assertEquals(0, index.getCandidates("35-0").size());
     // 3 格 key 的前两格应登记为"可等待第 3 格"的前缀。
     assertTrue(index.isThreeCellPrefix("125-35"));
     assertFalse(index.isThreeCellPrefix("35-1"));
@@ -99,13 +102,14 @@ public class ChineseBrailleTableIndexTest {
     assertNotNull("zhcn-g1.ctb 未在压缩包内", index);
     // 3 格带声调字：125-35-1 = 哈 / 铪 / 鉿。
     assertTrue("125-35-1 应含哈", index.getCandidates("125-35-1").contains("哈"));
-    // 2 格零声母字：35-1 = 吖 / 阿 / 锕 / 錒（注意"啊"是 35-0，不在这里）。
+    // 2 格零声母字：35-1 = 吖 / 阿 / 锕 / 錒。
     assertEquals(4, index.getCandidates("35-1").size());
     assertTrue("35-1 应含阿", index.getCandidates("35-1").contains("阿"));
-    assertEquals("啊", index.getCandidates("35-0").get(0));
-    // 125-35 确实是 3 格前缀，35-0 不是。
+    // "啊" 的定义是 35-0，0 是空单元、键盘产生不了，所以输入链路里拿不到它。
+    assertEquals(0, index.getCandidates("35-0").size());
+    // 125-35 确实是 3 格前缀，35-1 不是（它本身是完整的 2 格音节）。
     assertTrue(index.isThreeCellPrefix("125-35"));
-    assertFalse(index.isThreeCellPrefix("35-0"));
+    assertFalse(index.isThreeCellPrefix("35-1"));
     // 单格不产生汉字——这是"点一格只会出数字"的根因。
     for (String single : new String[] {"1", "12", "14", "145", "15", "124", "1245", "125", "24",
         "245", "2", "3", "4", "5", "6", "13", "16", "23", "26", "34", "35", "36", "45", "46",

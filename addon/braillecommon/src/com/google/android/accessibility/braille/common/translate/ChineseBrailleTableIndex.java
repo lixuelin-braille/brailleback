@@ -65,8 +65,9 @@ public final class ChineseBrailleTableIndex {
   /**
    * 形如 {@code 125-35-1} 的点位串。
    *
-   * <p>注意声调位允许 {@code 0}（轻声，如表内 {@code sign \x554A 35-0} 的"啊"），所以字符类是
-   * {@code [0-6]} 而不是 {@code [1-6]}——只写 1-6 会把全部轻声字漏出索引。
+   * <p>声调位允许 {@code 0}（如 {@code sign \x554A 35-0}），但 {@code 0} 在 liblouis 的
+   * parseDots 里是"空单元"（源码里该分支的注释就是 blank），点字键盘根本产生不了空单元，
+   * 所以这类定义在输入链路上不可达，解析时由 {@link #hasBlankCell} 排除。
    */
   private static final Pattern DOTS = Pattern.compile("[0-6]+(-[0-6]+)*");
 
@@ -150,6 +151,7 @@ public final class ChineseBrailleTableIndex {
   /** 解析 {@code ctb} 文本流，构建索引。包内可见以便单元测试直接喂字符串。 */
   static ChineseBrailleTableIndex parse(BufferedReader reader) throws IOException {
     Map<String, List<String>> collected = new LinkedHashMap<>();
+
     String line;
     while ((line = reader.readLine()) != null) {
       String trimmed = line.trim();
@@ -167,6 +169,11 @@ public final class ChineseBrailleTableIndex {
       }
       String dots = parts[2];
       if (!DOTS.matcher(dots).matches()) {
+        continue;
+      }
+      if (hasBlankCell(dots)) {
+        // 含空单元（0）的定义输入不可达：点字键盘只会产生 1~6 点的格。
+
         continue;
       }
       int cells = countCells(dots);
@@ -188,6 +195,16 @@ public final class ChineseBrailleTableIndex {
       }
     }
     return new ChineseBrailleTableIndex(collected, prefixes);
+  }
+
+  /** 点位串里是否含空单元（liblouis 的 {@code 0}）。 */
+  private static boolean hasBlankCell(String dots) {
+    for (String cell : dots.split("-")) {
+      if ("0".equals(cell)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private static int countCells(String dots) {
