@@ -124,5 +124,13 @@ public class ChineseBrailleTableIndexTest {
       totalCharacters += chars.size();
     }
     assertTrue("候选总数异常: " + totalCharacters, totalCharacters > 20000);
+
+    // 挂起规则依赖的两个判断：单格能否作为音节第一格、2 格是否为 3 格前缀。
+    // 若这两个判断失效，单格会被直接翻成数字（看起来像已上屏），后面的格再也拼不成汉字。
+    assertTrue("125 应能作为音节第一格", index.canStartSyllable("125"));
+    assertTrue("125-35 应是 3 格前缀", index.isThreeCellPrefix("125-35"));
+    // 本表里音节首格都是 2 点以上的声母，单点 1 不是任何音节的第一格（它只是声调位）。
+    // 所以点 1 单独出现时按表的定义出数字是合理的，不该被挂起。
+    assertFalse("单点 1 不应被当作音节首格", index.canStartSyllable("1"));
   }
 }

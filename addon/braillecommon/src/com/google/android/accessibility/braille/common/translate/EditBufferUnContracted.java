@@ -140,8 +140,21 @@ public class EditBufferUnContracted implements EditBuffer {
         talkBack.speak(textToSpeak, TalkBackSpeaker.AnnounceType.INTERRUPT);
       }
       result = textToSpeak;
+    } else if (shouldSpeakResolvedTranslation()) {
+      // 多格合成一个字符的语言（中文盲文）在音节凑满的瞬间，输入框里的内容被整串替换，
+      // 读屏不会主动读新出现的字。这里补一次播报，否则用户只听到"点几"，不知道字出来了。
+      talkBack.speak(result, TalkBackSpeaker.AnnounceType.INTERRUPT);
     }
     return result;
+  }
+
+  /**
+   * 译文新增了可发音内容时，是否由本类负责播报。
+   *
+   * <p>默认 {@code false}：一格一字的语言由宿主读屏播报即可。中文盲文需要覆写为 {@code true}。
+   */
+  protected boolean shouldSpeakResolvedTranslation() {
+    return false;
   }
 
   /**

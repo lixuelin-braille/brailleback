@@ -79,6 +79,14 @@ public final class ChineseBrailleTableIndex {
   /** 存在 3 格延伸的 2 格前缀。落满 2 格时若命中这里，应等第 3 格再决定。 */
   private final ImmutableSet<String> threeCellPrefixes;
 
+  /**
+   * 能作为某个音节第 1 格的单格点位集合。
+   *
+   * <p>落下一格后若命中这里，说明它可能只是声母、后面还要接韵母和声调，此时<b>不能</b>把它当
+   * 独立字符翻译（否则会被翻成数字，看起来像已经上屏），必须先挂着等后续格。
+   */
+  private final ImmutableSet<String> syllableFirstCells;
+
   private ChineseBrailleTableIndex(
       Map<String, List<String>> candidates, Set<String> threeCellPrefixes) {
     ImmutableMap.Builder<String, ImmutableList<String>> builder = ImmutableMap.builder();
@@ -87,6 +95,15 @@ public final class ChineseBrailleTableIndex {
     }
     this.candidates = builder.build();
     this.threeCellPrefixes = ImmutableSet.copyOf(threeCellPrefixes);
+
+    Set<String> firstCells = new HashSet<>();
+    for (String dots : candidates.keySet()) {
+      int dash = dots.indexOf('-');
+      if (dash > 0) {
+        firstCells.add(dots.substring(0, dash));
+      }
+    }
+    this.syllableFirstCells = ImmutableSet.copyOf(firstCells);
   }
 
   /** 拿到进程内单例；表缺失或解析失败时返回 {@code null}，调用方应降级到整串翻译。 */
@@ -123,6 +140,11 @@ public final class ChineseBrailleTableIndex {
   /** 该点位串是否有直接对应的汉字（2 格或 3 格）。 */
   public boolean hasCandidate(String dots) {
     return candidates.containsKey(dots);
+  }
+
+  /** 该单格是否是某个合法音节的第一格；是则说明后面还可能接韵母/声调，需挂起等待。 */
+  public boolean canStartSyllable(String singleCellDots) {
+    return syllableFirstCells.contains(singleCellDots);
   }
 
   // ---------------------------------------------------------------------------------------------
