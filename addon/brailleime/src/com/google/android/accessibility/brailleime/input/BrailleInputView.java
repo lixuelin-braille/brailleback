@@ -33,8 +33,13 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.View.OnAttachStateChangeListener;
 import androidx.core.view.ViewCompat;
+import com.google.android.accessibility.braille.common.BrailleCommonTalkBackSpeaker;
+import com.google.android.accessibility.braille.common.BrailleUserPreferences;
 import com.google.android.accessibility.braille.common.BrailleUtils;
 import com.google.android.accessibility.braille.common.Constants.BrailleType;
+import com.google.android.accessibility.braille.common.TalkBackSpeaker;
+import com.google.android.accessibility.braille.common.translate.BrailleLanguages.Code;
+import com.google.android.accessibility.braille.common.translate.BrailleTranslateUtils;
 import com.google.android.accessibility.braille.interfaces.BrailleCharacter;
 import com.google.android.accessibility.brailleime.BrailleIme.OrientationSensitive;
 import com.google.android.accessibility.brailleime.BrailleInputOptions;
@@ -159,6 +164,32 @@ public class BrailleInputView extends View
   private CalibrationTriggeredType calibrationType;
 
   /**
+   * 单点累积的停顿阈值：超过这个时间没有新点按下，就把已攒的点结算成一格。
+   *
+   * <p>取值要大于"手指从一格移到下一格"的时间（实测跨越上下两行约 0.3~0.6 秒），否则攒到
+   * 一半就被结算；同时也不能太大，否则每格都要干等。800 毫秒是这两者之间的折中。
+   */
+  private static final long DOT_ACCUMULATE_SETTLE_MS = 800;
+
+  /**
+   * 逐点累积模式下，当前这一格已经攒下的点。
+   *
+   * <p>盲文的"一格"在上游等于<b>一次触摸手势</b>：{@link MultitouchHandler} 在最后一根手指
+   * 抬起（ACTION_UP）时做 tap 判定并 {@code clearPointerCollections()}，跨手势不累积。累积
+   * 模式只解决"同一手势里某根手指先松开"，不解决"分成几次点击"。而中文一个音节要 2~3 格，
+   * 用户把一格的几个点分开按，就会变成几个单格，永远拼不出一个汉字。
+   *
+   * <p>这里把单点点击攒进同一格，停顿 {@link #DOT_ACCUMULATE_SETTLE_MS} 后结算；多指同时
+   * 按下仍然是"一次就是一格、立刻结算"，不会给现有的和弦输入方式增加延迟。
+   */
+  private BrailleCharacter pendingCell = BrailleCharacter.EMPTY_CELL;
+
+  /** 是否启用逐点累积（跟随"包含所有按下的点"设置）。关闭时行为与上游完全一致。 */
+  private boolean accumulateDotsByTap;
+
+  private final Runnable settlePendingCell;
+
+  /**
    * Construct a BrailleInputView.
    *
    * <p>We do not provide a constructor with {@link android.util.AttributeSet} because we have no
@@ -178,6 +209,7 @@ public class BrailleInputView extends View
     this.inputPlane = getInputPlane(context);
     this.inputPlane.setTableTopMode(tabletopMode);
     this.tabletopMode = tabletopMode;
+    this.settlePendingCell = this::emitPendingCell;
     setBackgroundColor(getResources().getColor(R.color.input_plane_background));
     this.inputViewCaption = new InputViewCaption(context.getString(R.string.input_view_caption));
     addOnAttachStateChangeListener(this);
@@ -231,6 +263,9 @@ public class BrailleInputView extends View
     if (inTwoStepCalibration()) {
       callback.onCalibrationFailed(calibrationType);
     }
+    // 视图被摘下（切语言、旋转、收键盘）时，攒着的半格不能无声丢掉。
+    flushPendingCell();
+    removeCallbacks(settlePendingCell);
     removeOnAttachStateChangeListener(this);
   }
 
@@ -264,6 +299,11 @@ public class BrailleInputView extends View
    */
   public void setAccumulationMode(boolean accumulationMode) {
     inputPlane.setAccumulationMode(accumulationMode);
+    accumulateDotsByTap = accumulationMode;
+    if (!accumulationMode) {
+      // 关闭累积时不能留着半格，否则这一格永远等不到结算。
+      flushPendingCell();
+    }
   }
 
   /** Gets the accumulation mode. */
@@ -423,17 +463,23 @@ public class BrailleInputView extends View
 
   @CanIgnoreReturnValue
   private boolean processResult(BrailleInputPlaneResult result) {
+    if (result.type != MultitouchResult.TYPE_TAP) {
+      // 非点击手势（滑动/长按/标定）一律先把攒着的半格结算掉：
+      // 它们后面可能马上要提交文本（空格）、删字或切换粒度，留着半格会让顺序错乱。
+      flushPendingCell();
+    }
     if (result.type == MultitouchResult.TYPE_INVALID) {
       return callback.onInvalidGesture();
     } else if (result.type == MultitouchResult.TYPE_TAP) {
-      String newAddition = callback.onBrailleProduced(result.releasedBrailleCharacter);
-      if (newAddition != null) {
-        if (captionText != null) {
-          captionText.animator.cancel();
-        }
-        captionText = new CaptionText(newAddition);
-        captionText.animator.start();
+      BrailleCharacter released = result.releasedBrailleCharacter;
+      if (shouldAccumulateDots() && released.getOnCount() == 1) {
+        // 单点点击：攒进当前格，等停顿后结算。多指同时按（≥2 点）走下面的"立刻出格"，
+        // 保证原有的和弦输入方式一点不变慢。
+        accumulateDot(released);
+        return true;
       }
+      flushPendingCell();
+      showCaption(callback.onBrailleProduced(released));
     } else if (result.type == MultitouchResult.TYPE_SWIPE) {
       boolean processed = callback.onSwipeProduced(result.swipe);
       if (Utils.isDebugBuild()) {
@@ -480,6 +526,71 @@ public class BrailleInputView extends View
           new DotHoldSwipe(result.swipe, result.heldBrailleCharacter));
     }
     return false;
+  }
+
+  /**
+   * 逐点累积只在"一个字符要好几格才能拼出来"的盲文里启用，目前是中文。
+   *
+   * <p>英文一级盲文里 {@code a} 就是点 1 一格，本身已经完整；若也延迟 800 毫秒才结算，
+   * 每个字母都会变慢。中文一个音节 2~3 格，单点分开按才有"攒成一格"的需求。
+   */
+  private boolean shouldAccumulateDots() {
+    if (!accumulateDotsByTap) {
+      return false;
+    }
+    Code code = BrailleUserPreferences.readCurrentActiveInputCodeAndCorrect(getContext());
+    return code.name().startsWith("CHINESE");
+  }
+
+  /**
+   * 把一个单点并进当前格，立刻播报这个点，并重置停顿计时。
+   *
+   * <p>必须在这里就播报：这一格还没结算，编辑缓冲拿不到任何输入，也就不会按"点位播报"
+   * 反馈。用户是盲人，看不到手指落在哪，没有这句播报就等于没按到。
+   */
+  private void accumulateDot(BrailleCharacter dot) {
+    pendingCell = pendingCell.union(dot);
+    announceDots(dot);
+    removeCallbacks(settlePendingCell);
+    postDelayed(settlePendingCell, DOT_ACCUMULATE_SETTLE_MS);
+    Log.d(
+        TAG,
+        "accumulate dot=" + dot + " pending=" + pendingCell + " mode=" + accumulateDotsByTap);
+  }
+
+  /** 停顿到点：把攒下的点结算成一格，交给编辑缓冲。 */
+  private void emitPendingCell() {
+    if (pendingCell.getOnCount() == 0) {
+      return;
+    }
+    BrailleCharacter cell = pendingCell;
+    pendingCell = BrailleCharacter.EMPTY_CELL;
+    Log.d(TAG, "emit accumulated cell=" + cell);
+    showCaption(callback.onBrailleProduced(cell));
+  }
+
+  /** 立刻结算当前格（收到非点击手势时调用，避免半格串到后面的命令里）。 */
+  private void flushPendingCell() {
+    removeCallbacks(settlePendingCell);
+    emitPendingCell();
+  }
+
+  private void announceDots(BrailleCharacter dots) {
+    BrailleCommonTalkBackSpeaker.getInstance()
+        .speak(
+            BrailleTranslateUtils.getDotsText(getResources(), dots),
+            TalkBackSpeaker.AnnounceType.INTERRUPT);
+  }
+
+  private void showCaption(String text) {
+    if (text == null) {
+      return;
+    }
+    if (captionText != null) {
+      captionText.animator.cancel();
+    }
+    captionText = new CaptionText(text);
+    captionText.animator.start();
   }
 
   private void drawDebugBackground(Canvas canvas) {

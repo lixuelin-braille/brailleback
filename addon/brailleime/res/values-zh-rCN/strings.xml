@@ -48,7 +48,7 @@
   <string name="switch_input_code_gesture_tip_dialog_title">在输入内容时快速更改语言</string>
   <string name="switch_input_code_gesture_tip_dialog_message">若要在使用盲文键盘输入内容时更改语言，请用 3 根手指向上滑动。然后，选择“切换到下一种语言”。</string>
   <string name="title_pref_accumulate_presses">包含所有按下的点</string>
-  <string name="summary_pref_accumulate_presses">每个按下的点都会包含在内，即使你先松开其中某些点，也不影响输入</string>
+  <string name="summary_pref_accumulate_presses">单点分开按会合并到同一格，停顿约 0.8 秒自动结算；多指同时按下仍会立刻生效。中文盲文建议开启。</string>
   <string name="title_pref_reverse_dots">互换点的位置</string>
   <string name="summary_pref_reverse_dots">互换点的位置，比如将 1 点和 4 点互换位置</string>
   <string name="bd_preference_braille_contracted">简写盲文</string>

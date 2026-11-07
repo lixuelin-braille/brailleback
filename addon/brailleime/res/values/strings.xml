@@ -105,7 +105,7 @@
   <!-- Title of accumulate mode option. [CHAR_LIMIT=60]-->
   <string name="title_pref_accumulate_presses">Include all pressed dots</string>
   <!-- Summary of accumulate mode option. [CHAR_LIMIT=200]-->
-  <string name="summary_pref_accumulate_presses">Each pressed dot is part of the input, even if the dot is released before other dots</string>
+  <string name="summary_pref_accumulate_presses">Dots pressed one at a time are merged into the same cell and settle after a brief pause. Dots pressed together still settle immediately. Recommended for Chinese braille.</string>
 
   <!-- Title of reverse dots mode option. [CHAR_LIMIT=60]-->
   <string name="title_pref_reverse_dots">Reverse dots</string>
