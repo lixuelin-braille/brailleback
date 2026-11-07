@@ -1,0 +1,48 @@
+apply plugin: 'com.android.library'
+
+android {
+    compileSdk 35
+    namespace 'com.google.android.accessibility.braille.translate'
+
+    defaultConfig {
+        minSdk 23
+        targetSdk 35
+        ndk {
+            abiFilters 'armeabi-v7a', 'arm64-v8a'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    ndkVersion '28.2.13676358'
+
+    externalNativeBuild {
+        ndkBuild {
+            path file('jni/Android.mk')
+        }
+    }
+
+    sourceSets {
+        main {
+            manifest.srcFile 'AndroidManifest.xml'
+            java.srcDirs = ['src']
+            kotlin.srcDirs = ['src']
+            res.srcDirs = ['res']
+        }
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
+
+dependencies {
+    api project(':addon:tbcompat')
+    api project(':addon:brailleinterfaces')
+    annotationProcessor 'com.google.auto.value:auto-value:1.11.0'
+    testImplementation 'junit:junit:4.13.2'
+}

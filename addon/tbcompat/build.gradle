@@ -1,0 +1,55 @@
+// TalkBack utils 薄适配层：只提供 braille 子系统真正引用到的那部分 API，
+// 内部转发到 BrailleBack 既有能力。刻意不引入 ML Kit / Compose / Wear / sonic。
+apply plugin: 'com.android.library'
+
+android {
+    compileSdk 35
+    namespace 'com.google.android.accessibility.utils'
+
+    defaultConfig {
+        minSdk 23
+        targetSdk 35
+        // BuildVersionUtils.isSystemPreload() 读取这个字段；BrailleBack 是用户态安装包，恒为 False。
+        buildConfigField "String", "IS_SYSTEM_PRELOAD", "\"False\""
+        // 宿主 applicationId。盲文键盘的 IME 组件名依赖它，
+        // 与 brailleback/build.gradle 的 applicationId 必须一致。
+        buildConfigField "String", "HOST_APPLICATION_ID", "\"com.googlecode.eyesfree.brailleback\""
+    }
+
+    buildFeatures {
+        buildConfig = true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    sourceSets {
+        main {
+            manifest.srcFile 'AndroidManifest.xml'
+            java.srcDirs = ['src']
+            kotlin.srcDirs = ['src']
+            res.srcDirs = ['res']
+        }
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
+
+dependencies {
+    api 'androidx.annotation:annotation:1.8.1'
+    api 'androidx.core:core:1.9.0'
+    api 'androidx.appcompat:appcompat:1.6.1'
+    api 'androidx.preference:preference-ktx:1.2.1'
+    api 'com.google.android.material:material:1.11.0'
+    api 'com.google.guava:guava:32.0.1-jre'
+    // BrailleUserPreferences 用 Gson 序列化"已添加的语言"列表。
+    api 'com.google.code.gson:gson:2.11.0'
+    api 'com.google.errorprone:error_prone_annotations:2.27.0'
+    api 'com.google.auto.value:auto-value-annotations:1.11.0'
+    testImplementation 'junit:junit:4.13.2'
+}

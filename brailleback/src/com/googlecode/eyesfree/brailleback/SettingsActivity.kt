@@ -263,6 +263,29 @@ class SettingsActivity : AppCompatActivity(),
                     true
                 }
 
+            // 屏幕盲文键盘（移植自 TalkBack brailleime）。
+            // 键盘设置页依赖 TalkBackForBrailleIme，后者在 BrailleBackService 连接时注入，
+            // 因此服务未启用时先提示、不跳转，避免进入后空指针。
+            findPreference<Preference>("pref_braille_keyboard_key")
+                ?.setOnPreferenceClickListener {
+                    if (BrailleBackService.getActiveInstance() == null) {
+                        Toast.makeText(
+                            requireContext(),
+                            R.string.pref_braille_keyboard_need_service,
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    } else {
+                        startActivity(
+                            Intent(
+                                requireActivity(),
+                                com.google.android.accessibility.brailleime.settings
+                                    .BrailleImePreferencesActivity::class.java,
+                            )
+                        )
+                    }
+                    true
+                }
+
             mViewLogPreference =
                 findPreference<Preference>(getString(R.string.pref_view_log_key))
             mViewLogPreference?.setOnPreferenceClickListener(this)

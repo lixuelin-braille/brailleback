@@ -59,6 +59,8 @@ dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
     implementation project(':client')
     implementation project(':service')
+    // 移植的 TalkBack 屏幕盲文键盘（addon/ 下 6 个模块，含 liblouis native）。
+    implementation project(':addon:brailleime')
     implementation project(':libraries:utils')
     implementation project(':libraries:compatutils')
     // 只用到 androidx.core 的 AccessibilityNodeInfoCompat。

@@ -77,6 +77,15 @@
         android:name="android.hardware.usb.host"
         android:required="false" />
 
+    <!-- 移植的屏幕盲文键盘用系统 TTS 播报按键反馈。
+         Android 11+ 的包可见性限制要求显式声明，否则 TextToSpeech 找不到引擎，
+         表现为"键盘能用但完全没有语音"。 -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
+
     <application
         android:label="@string/brailleback_setup_title"
         android:icon="@drawable/ic_brailleback"

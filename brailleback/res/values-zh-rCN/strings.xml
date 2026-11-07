@@ -45,6 +45,10 @@
     
     
     <string name="pref_bookshelf_title">"书架"</string>
+    <!-- 屏幕盲文键盘（移植自 TalkBack brailleime）入口 -->
+    <string name="pref_braille_keyboard_title">"屏幕盲文键盘"</string>
+    <string name="pref_braille_keyboard_summary">用六点或八点在触摸屏上打字</string>
+    <string name="pref_braille_keyboard_need_service">请先开启盲文读屏服务</string>
     
     <string name="bookshelf_title">"书架"</string>
     

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- screen_away 的中文本地化（原工程未提供该键的中文，此处按语义补译）。 -->
+<resources>
+    <string name="screen_away">屏幕远离模式</string>
+</resources>

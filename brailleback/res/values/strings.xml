@@ -83,6 +83,10 @@
     
     
     <string name="pref_bookshelf_title">Bookshelf</string>
+    <!-- 屏幕盲文键盘（移植自 TalkBack brailleime）入口 -->
+    <string name="pref_braille_keyboard_title">On-screen braille keyboard</string>
+    <string name="pref_braille_keyboard_summary">Type with six or eight dots on the touch screen</string>
+    <string name="pref_braille_keyboard_need_service">Turn on the BrailleBack accessibility service first</string>
     
     <string name="bookshelf_title">Bookshelf</string>
     

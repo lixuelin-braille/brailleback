@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <!--
+    这三个设置页在原版 TalkBack 里声明于 braille/common/src/phone/AndroidManifest.xml
+    （phone 变体清单）。移植时只复制了 main 清单（空的），漏掉了 phone 变体，
+    导致点"首选输入语言"抛 ActivityNotFoundException 闪退。
+  -->
+  <application>
+    <activity
+        android:name="com.google.android.accessibility.braille.common.settings.BrailleLanguagesActivity"
+        android:exported="false"
+        android:label="@string/braille_languages_title"
+        android:theme="@style/BrailleSettingsTheme" />
+    <activity
+        android:name="com.google.android.accessibility.braille.common.settings.LocaleLanguageActivity"
+        android:exported="false"
+        android:theme="@style/BrailleSettingsTheme" />
+    <activity
+        android:name="com.google.android.accessibility.braille.common.settings.AddLanguageActivity"
+        android:exported="false"
+        android:label="@string/braille_add_a_language_preference_title"
+        android:theme="@style/BrailleSettingsTheme" />
+  </application>
+
+</manifest>

@@ -23,3 +23,15 @@ include ':client'
 include ':libraries:utils'
 include ':libraries:compatutils'
 include ':service'
+
+// ---------------------------------------------------------------------------
+// TalkBack 屏幕盲文键盘移植（"桌面上打字"的六点/八点输入法）。
+// 目录 addon/ 下 6 个模块与林夕读屏的模块一一对应，包名与 JNI 符号均保持原样，
+// 这样 Android 侧 Java 类与 native 端的 Java_com_google_..._LouisTranslation_* 才能对上。
+// ---------------------------------------------------------------------------
+include ':addon:tbcompat'
+include ':addon:brailleinterfaces'
+include ':addon:brailletranslate'
+include ':addon:braillecommon'
+include ':addon:brailleimeanalytics'
+include ':addon:brailleime'

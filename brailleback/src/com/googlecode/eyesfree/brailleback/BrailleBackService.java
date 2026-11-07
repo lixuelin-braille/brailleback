@@ -120,6 +120,9 @@ public class BrailleBackService
 
     /** Set if the infrastructure is initialized. */
     private boolean isInfrastructureInitialized;
+    // 屏幕盲文键盘（移植自 TalkBack brailleime）的宿主桥接。
+    // 仅在首次初始化时创建，onDestroy 时释放其 TTS / SoundPool。
+    private com.googlecode.eyesfree.brailleback.ime.BrailleImeHostBridge brailleImeHostBridge;
 
     /**
      * Dot combination for switching navigation mode.
@@ -535,6 +538,9 @@ public class BrailleBackService
                 .registerOnSharedPreferenceChangeListener(mPreferenceListener);
         PreferenceUtils.initLogLevel(this);
         LogFileWriter.init(this);
+        // 触摸探索透传探针（实验性临时代码，见 PassthroughProbe）。
+        // 只注册广播监听，不自动生效；收到 adb 广播后才置 flag 与区域，并会在 60 秒后自行撤销。
+        PassthroughProbe.install(this);
         if (isInfrastructureInitialized) {
             return;
         }
@@ -542,6 +548,20 @@ public class BrailleBackService
     handler.sendEmptyMessage(WHAT_START);
         // We are in an initialized state now.
         isInfrastructureInitialized = true;
+
+    // 把宿主能力（语音、音效、焦点、全局动作）注入移植过来的屏幕盲文键盘。
+    // 注入失败绝不能影响点显器主链路，因此整体包在 try/catch 里。
+    try {
+      brailleImeHostBridge = new com.googlecode.eyesfree.brailleback.ime.BrailleImeHostBridge(this);
+      com.google.android.accessibility.brailleime.BrailleIme.initialize(
+          this,
+          brailleImeHostBridge,
+          brailleImeHostBridge,
+          /* brailleDisplayForBrailleIme= */ null);
+      Log.i("BrailleBack", "BrailleIme(port) initialized");
+    } catch (RuntimeException | LinkageError e) {
+      Log.w("BrailleBack", "BrailleIme(port) init failed: " + e);
+    }
     }
 
     @Override
@@ -565,12 +585,21 @@ public class BrailleBackService
     HidBridge.setController(this, null);
         PreferenceManager.getDefaultSharedPreferences(this)
                 .unregisterOnSharedPreferenceChangeListener(mPreferenceListener);
+        // 服务销毁前必须撤销透传，否则设备会停留在"读屏摸不动"的状态。
+        PassthroughProbe.uninstall(this);
         super.onDestroy();
     if (displayManager != null) {
       displayManager.setContent(new DisplayManager.Content(getString(R.string.shutting_down)));
 
             // We are not in an initialized state anymore.
             isInfrastructureInitialized = false;
+        }
+        // 释放移植键盘持有的 TTS / SoundPool，避免重复绑定后泄漏。
+        if (brailleImeHostBridge != null) {
+            // 先撤掉触摸探索直通区，避免服务被系统回收后整屏仍处于直通状态（读屏会"摸不动"）。
+            brailleImeHostBridge.forceClearPassthrough();
+            brailleImeHostBridge.shutdown();
+            brailleImeHostBridge = null;
         }
         shutdownDependencies();
     }

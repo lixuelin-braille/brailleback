@@ -1,0 +1,36 @@
+apply plugin: 'com.android.library'
+
+android {
+    compileSdk 35
+    namespace 'com.google.android.accessibility.braille.interfaces'
+
+    defaultConfig {
+        minSdk 23
+        targetSdk 35
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    sourceSets {
+        main {
+            manifest.srcFile 'AndroidManifest.xml'
+            java.srcDirs = ['src']
+            kotlin.srcDirs = ['src']
+            res.srcDirs = ['res']
+        }
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
+
+dependencies {
+    api project(':addon:tbcompat')
+    annotationProcessor 'com.google.auto.value:auto-value:1.11.0'
+    testImplementation 'junit:junit:4.13.2'
+}

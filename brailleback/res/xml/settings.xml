@@ -17,6 +17,12 @@
         app:title="@string/pref_bookshelf_title"
         app:summary="@string/pref_bookshelf_summary" />
 
+    <!-- 屏幕盲文键盘（移植自 TalkBack）：点击进入键盘设置页 -->
+    <Preference
+        app:key="pref_braille_keyboard_key"
+        app:title="@string/pref_braille_keyboard_title"
+        app:summary="@string/pref_braille_keyboard_summary" />
+
     <!-- 分类入口 1：设备与连接 -->
     <PreferenceScreen
         app:key="@string/pref_category_device_key"

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  移植补齐样式。
+  原 R.style.A11yAlertDialogCustomViewTheme 定义在 TalkBack utils 模块，
+  brailleime 的若干对话框用它包 Context（ContextThemeWrapper），
+  这里提供一个等价的 Material 对话框主题。
+-->
+<resources>
+    <style name="A11yAlertDialogCustomViewTheme" parent="Theme.MaterialComponents.DayNight.Dialog">
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>

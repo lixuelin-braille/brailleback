@@ -18,3 +18,14 @@
 -keepclasseswithmembernames class * {
     native <methods>;
 }
+
+# ── 移植的 TalkBack 盲文子系统（addon/ 下 6 个模块）────────────────
+# 必须整包保留，理由：
+# 1. JNI：LouisTranslation 的 native 符号硬编码为
+#    Java_com_google_android_accessibility_braille_translate_liblouis_LouisTranslation_*，
+#    包名/类名被重命名后 native 侧找不到实现，运行时才崩。
+# 2. 输入法与设置页由系统按类名反射实例化（manifest 中的 android:name 字符串），
+#    Activity/Service/Receiver 类名一旦变化即无法启动。
+# 3. AutoValue 生成类（AutoValue_*）通过构造器直接 new，混淆后行为未验证。
+# 4. 这些类合计体积很小（dex 增量 < 1 MB），保留代价可忽略。
+-keep class com.google.android.accessibility.** { *; }

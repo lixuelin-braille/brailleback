@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+  <!-- Required for haptic feedback. -->
+  <uses-permission android:name="android.permission.VIBRATE" />
+  <!-- 接收本应用未导出广播。androidx.core 在 API < 33 上会用
+       <applicationId>.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION 做权限校验，
+       必须与宿主 applicationId 一致，否则 ContextCompat.registerReceiver(..., RECEIVER_NOT_EXPORTED)
+       会抛 SecurityException。宿主为 com.googlecode.eyesfree.brailleback。 -->
+  <uses-permission
+      android:name="com.googlecode.eyesfree.brailleback.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+      tools:node="merge" />
+
+  <application>
+    <service
+        android:name="com.google.android.accessibility.brailleime.BrailleIme"
+        android:label="@string/bb_port_ime_service_name"
+        android:enabled="true"
+        android:exported="true"
+        android:directBootAware="true"
+        android:permission="android.permission.BIND_INPUT_METHOD"
+        tools:node="merge">
+      <intent-filter>
+        <action android:name="android.view.InputMethod" />
+      </intent-filter>
+      <meta-data
+          android:name="android.view.im"
+          android:resource="@xml/braille_ime" />
+    </service>
+
+    <activity
+        android:name="com.google.android.accessibility.brailleime.settings.BrailleImePreferencesActivity"
+        android:configChanges="keyboard|keyboardHidden"
+        android:exported="false"
+        android:label="@string/bb_port_ime_service_name"
+        android:launchMode="singleTop"
+        android:taskAffinity=""
+        android:theme="@style/SettingsTheme" />
+
+    <activity
+        android:name="com.google.android.accessibility.brailleime.settings.BrailleImeGestureActivity"
+        android:label="@string/braille_keyboard_gestures"
+        android:configChanges="keyboard|keyboardHidden"
+        android:exported="false"
+        android:theme="@style/BrailleImeTheme" />
+
+    <activity
+        android:name="com.google.android.accessibility.brailleime.settings.BrailleImeGestureCommandActivity"
+        android:exported="false"
+        android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout"
+        android:theme="@style/BrailleImeTheme" />
+
+    <receiver
+        android:name="com.google.android.accessibility.brailleime.MyPackageReplacedReceiver"
+        android:enabled="true"
+        android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+      </intent-filter>
+    </receiver>
+  </application>
+
+</manifest>

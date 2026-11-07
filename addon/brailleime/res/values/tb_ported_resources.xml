@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  移植补齐资源。
+  原 TalkBack 工程里 BrailleIme 引用了主模块（talkback/res）的几个键，
+  移植到 BrailleBack 后这些键不在任何模块中，因此在此补齐，源文案取自原工程。
+-->
+<resources>
+    <!-- 原值：sans-serif（values-v31 下为 google-sans，这里取其基线值） -->
+    <string name="accessibility_font" translatable="false">sans-serif</string>
+    <!-- 原值：全透明 -->
+    <color name="google_transparent">#00000000</color>
+    <!-- 原值：Screen-away mode，指设备屏幕朝下/贴桌面时的模式提示 -->
+    <string name="screen_away">Screen-away mode</string>
+</resources>
