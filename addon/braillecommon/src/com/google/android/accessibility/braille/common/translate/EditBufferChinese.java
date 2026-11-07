@@ -343,20 +343,43 @@ public class EditBufferChinese extends EditBufferUnContracted {
   }
 
   /**
-   * 尾部音节<b>直接落定</b>时播报新出现的字（唯一解的情况）。
+   * 中文的播报一律自己负责。
    *
-   * <p>为什么需要：中文里约 12% 的音节只有唯一候选（"的"=145-26 就只有一个字），按设计
-   * 不进候选态、直接落定。这时如果既不播候选也不播字，用户按完最后一点后<b>什么也听不到</b>，
-   * 只能反复猜自己打出了什么——他会把这种情况理解成"没有候选"。
+   * <p>上游用"译文有没有变长"来决定要不要播报，这个判断在中文盲文里不成立：追加一格时，即使
+   * 这一格自己什么也没产出，前面的音节也会因为"不再是最后一个"而被自动确认进 composing，
+   * 译文照样变长。按上游的条件，这种时候要么播错（念出上一个字，让人以为又打了一遍），
+   * 要么完全不播（{@link #shouldSpeakResolvedTranslation} 原来在有半截音节时返回 false，
+   * 而它一旦为 false，点位播报那条分支也进不去，结果是<b>彻底失声</b>——用户按了下一格的
+   * 第一个点，键盘毫无反应）。
    *
-   * <p>为什么不能一律播报：追加下一格时，前一个音节会被自动确认进 composing，这时念上一个字
-   * 会盖掉新音节的点位播报，变成每打一字都重复一遍。区分方法是看尾部有没有待处理的内容：
-   * 有 {@code lastCandidateStart}（候选态）或 {@code pendingCells}（半截音节）时说明用户已经
-   * 在打下一个音节，闭嘴；否则就是这一格刚刚独立凑成一个字，必须报出来。
+   * <p>所以这里始终接管，具体播什么由 {@link #getResolvedTranslationAnnouncement} 判断。
    */
   @Override
   protected boolean shouldSpeakResolvedTranslation() {
-    return lastCandidateStart < 0 && pendingCells == 0;
+    return true;
+  }
+
+  /**
+   * 决定译文变长时到底播什么。
+   *
+   * <ul>
+   *   <li>尾部还有半截音节或无效组合 → 这一格<b>没有产出字符</b>，产出的文本是"前一个音节被
+   *       自动确认"。此时必须播报这一格自身的状态（"还差声调"/"这个声调没有字"/点位），
+   *       否则用户按下去听不到任何东西。
+   *   <li>否则 → 这一格确实凑成了一个字，念出新字。
+   * </ul>
+   */
+  @Override
+  protected String getResolvedTranslationAnnouncement(
+      String resolvedText, BrailleCharacter brailleCharacter) {
+    if (pendingCells > 0 || invalidTail) {
+      return getAppendBrailleTextToSpeak(context.getResources(), brailleCharacter)
+          .orElseGet(
+              () ->
+                  BrailleTranslateUtils.getDotsText(
+                      context.getResources(), brailleCharacter));
+    }
+    return resolvedText;
   }
 
   /**

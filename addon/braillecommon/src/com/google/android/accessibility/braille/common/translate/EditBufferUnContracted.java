@@ -160,7 +160,8 @@ public class EditBufferUnContracted implements EditBuffer {
       // 多格合成一个字符的语言（中文盲文）在音节凑满的瞬间，输入框里的内容被整串替换，
       // 读屏不会主动读新出现的字。这里补一次播报，否则用户只听到"点几"，不知道字出来了。
       talkBack.speak(
-          getResolvedTranslationAnnouncement(result), TalkBackSpeaker.AnnounceType.INTERRUPT);
+          getResolvedTranslationAnnouncement(result, brailleCharacter),
+          TalkBackSpeaker.AnnounceType.INTERRUPT);
     }
     return result;
   }
@@ -170,8 +171,13 @@ public class EditBufferUnContracted implements EditBuffer {
    *
    * <p>有候选的语言（中文同音字）需要在这里补一句"共几个、怎么换"，否则用户不知道刚打出来的
    * 不是唯一解，也就永远不会去换字。
+   *
+   * <p>{@code brailleCharacter} 是刚刚落下的那一格。有些语言里"译文变长了"并不等于"这一格
+   * 产出了字符"（前面的音节被自动确认时也是这样），那时需要改播这一格自身的状态，所以必须
+   * 把这一格传进来。
    */
-  protected String getResolvedTranslationAnnouncement(String resolvedText) {
+  protected String getResolvedTranslationAnnouncement(
+      String resolvedText, BrailleCharacter brailleCharacter) {
     return resolvedText;
   }
 
