@@ -50,6 +50,7 @@ import com.google.android.accessibility.brailleime.input.BrailleInputPlane.DotTa
 import com.google.android.accessibility.brailleime.input.MultitouchHandler.HoldRecognizer;
 import com.google.common.collect.ImmutableList;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -192,6 +193,15 @@ public class BrailleInputView extends View
    * 按下仍然是"一次就是一格、立刻结算"，不会给现有的和弦输入方式增加延迟。
    */
   private BrailleCharacter pendingCell = BrailleCharacter.EMPTY_CELL;
+
+  /**
+   * 当前格已经按下过的点，按先后顺序。
+   *
+   * <p>为什么要单独记顺序而不是只看 {@link #pendingCell}：中文一格要按 3 个点，按错最后一个
+   * 点时想改，只能把整格退掉重打——三个点重来一遍，慢且容易再错。有了顺序就能只退最后按的
+   * 那一个点，和普通打字机"退格"的手感一致。
+   */
+  private final List<BrailleCharacter> pendingDotOrder = new ArrayList<>();
 
   /** 是否启用逐点累积（跟随"包含所有按下的点"设置）。关闭时行为与上游完全一致。 */
   private boolean accumulateDotsByTap;
@@ -473,7 +483,14 @@ public class BrailleInputView extends View
   @CanIgnoreReturnValue
   private boolean processResult(BrailleInputPlaneResult result) {
     if (result.type != MultitouchResult.TYPE_TAP) {
-      // 非点击手势（滑动/长按/标定）一律先把攒着的半格结算掉：
+      // 单指左滑 + 还有没结算的点 = 用户想改掉刚按错的那个点，不是想删掉整格。
+      // 中文一格要按 3 个点，整格重打的代价太大，而且很容易再错一次。
+      // 这条让左滑始终表示同一个意思："撤销最后一次输入动作"——有点就退点，没点才退格。
+      if (shouldUndoLastDot(result)) {
+        undoLastDot();
+        return true;
+      }
+      // 其余非点击手势（滑动/长按/标定）一律先把攒着的半格结算掉：
       // 它们后面可能马上要提交文本（空格）、删字或切换粒度，留着半格会让顺序错乱。
       flushPendingCell();
     }
@@ -559,6 +576,7 @@ public class BrailleInputView extends View
    */
   private void accumulateDot(BrailleCharacter dot) {
     pendingCell = pendingCell.union(dot);
+    pendingDotOrder.add(dot);
     announceDots(dot);
     removeCallbacks(settlePendingCell);
     postDelayed(settlePendingCell, DOT_ACCUMULATE_SETTLE_MS);
@@ -567,13 +585,55 @@ public class BrailleInputView extends View
         "accumulate dot=" + dot + " pending=" + pendingCell + " mode=" + accumulateDotsByTap);
   }
 
+  /** 这次手势是不是"退掉刚按的那个点"。判定条件见 {@link DotUndoPolicy}。 */
+  private boolean shouldUndoLastDot(BrailleInputPlaneResult result) {
+    return DotUndoPolicy.shouldUndoDot(
+        result.type == MultitouchResult.TYPE_SWIPE,
+        result.swipe == null ? 0 : result.swipe.getTouchCount(),
+        result.swipe != null && result.swipe.getDirection() == Swipe.Direction.LEFT,
+        shouldAccumulateDots(),
+        pendingDotOrder.size());
+  }
+
+  /**
+   * 退掉最后按下的那一个点，并把剩下的点重新播报一遍。
+   *
+   * <p>必须播报结果而不是只说"已删除"：用户是盲人，看不到这一格现在还剩哪几个点，
+   * 不念出来他就不知道刚才那一下退掉的是不是他想退的。
+   */
+  private void undoLastDot() {
+    pendingDotOrder.remove(pendingDotOrder.size() - 1);
+    BrailleCharacter rebuilt = BrailleCharacter.EMPTY_CELL;
+    for (BrailleCharacter dot : pendingDotOrder) {
+      rebuilt = rebuilt.union(dot);
+    }
+    pendingCell = rebuilt;
+    removeCallbacks(settlePendingCell);
+    if (pendingCell.getOnCount() == 0) {
+      // 整格已经退空：没有可结算的内容，也不必再等停顿。
+      // 不能走 announceDots：空格的点位文本是"点 "，念出来像没说完。
+      BrailleCommonTalkBackSpeaker.getInstance()
+          .speak(
+              getContext().getString(R.string.bb_cell_cleared),
+              TalkBackSpeaker.AnnounceType.INTERRUPT);
+      Log.d(TAG, "undo dot -> cell empty");
+      return;
+    }
+    // 剩下的点继续等停顿结算，用户可以接着改或接着按。
+    postDelayed(settlePendingCell, DOT_ACCUMULATE_SETTLE_MS);
+    announceDots(pendingCell);
+    Log.d(TAG, "undo dot -> pending=" + pendingCell);
+  }
+
   /** 停顿到点：把攒下的点结算成一格，交给编辑缓冲。 */
   private void emitPendingCell() {
     if (pendingCell.getOnCount() == 0) {
+      pendingDotOrder.clear();
       return;
     }
     BrailleCharacter cell = pendingCell;
     pendingCell = BrailleCharacter.EMPTY_CELL;
+    pendingDotOrder.clear();
     Log.d(TAG, "emit accumulated cell=" + cell);
     showCaption(callback.onBrailleProduced(cell));
   }

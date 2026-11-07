@@ -21,6 +21,10 @@ android {
             kotlin.srcDirs = ['src']
             res.srcDirs = ['res']
         }
+        // main 的 java.srcDirs 是 'src'，会把 src/test 也吞进主源集，所以测试单独放 test/。
+        test {
+            java.srcDirs = ['test']
+        }
     }
 
     lint {
