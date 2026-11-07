@@ -229,7 +229,17 @@ public class BrailleLanguages {
         LOCALE_ZH_CN,
         R.string.code_user_facing_name_chinese_china_current_with_tones,
         /* supportedContracted= */ false,
-        /* eightDot= */ false),
+        /* eightDot= */ false) {
+      @Override
+      EditBuffer createEditBuffer(
+          Context context,
+          TalkBackSpeaker talkBack,
+          BrailleTranslator translator,
+          boolean contractedMode) {
+        // 一个音节 2~3 格，必须按音节切分再翻译，否则连续输入会出现跨字歧义。
+        return EditBufferChinese.create(context, translator, talkBack);
+      }
+    },
     CHINESE_CHINA_CURRENT_WITHOUT_TONES(
         LOCALE_ZH_CN,
         R.string.code_user_facing_name_chinese_china_current_without_tones,

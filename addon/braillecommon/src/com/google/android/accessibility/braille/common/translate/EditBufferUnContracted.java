@@ -69,7 +69,7 @@ public class EditBufferUnContracted implements EditBuffer {
   private static final String TAG = "EditBufferCommon";
   private static final int DELETE_WORD_MAX = 50;
   private final TalkBackSpeaker talkBack;
-  private final BrailleTranslator translator;
+  protected final BrailleTranslator translator;
   private final Context context;
   protected final BrailleWord holdings = new BrailleWord();
   protected int lastCommitIndexOfHoldings = NO_CURSOR;
@@ -85,9 +85,9 @@ public class EditBufferUnContracted implements EditBuffer {
   @Override
   public String appendBraille(ImeConnection imeConnection, BrailleCharacter brailleCharacter) {
     String result = "";
-    String previousTranslation = translator.translateToPrint(holdings);
+    String previousTranslation = translateHoldings(holdings);
     holdings.append(brailleCharacter);
-    String currentTranslation = translator.translateToPrint(holdings);
+    String currentTranslation = translateHoldings(holdings);
     if (currentTranslation.startsWith(previousTranslation)) {
       result = currentTranslation.substring(previousTranslation.length());
     }
@@ -142,6 +142,17 @@ public class EditBufferUnContracted implements EditBuffer {
       result = textToSpeak;
     }
     return result;
+  }
+
+  /**
+   * Translates the accumulated holdings into print.
+   *
+   * <p>子类可以覆写这个方法改变"整串翻译"的策略。中文现行盲文在多字连打时，整串丢给 liblouis
+   * 会按规则长度做匹配，2 格字 + 2 格字 很容易被切成 3 格 + 1 格（跨字歧义），前面的字还会因为
+   * 重新分词而跳变。中文子类在这里先按合法音节切分，再逐段翻译拼接。
+   */
+  protected String translateHoldings(BrailleWord word) {
+    return translator.translateToPrint(word);
   }
 
   /** Provides (optionally) an audial announcement for a just-appended {@code brailleCharacter}. */
@@ -270,9 +281,8 @@ public class EditBufferUnContracted implements EditBuffer {
 
   private boolean holdingsEndsWithPrefix() {
     return !holdings.isEmpty()
-        && translator
-            .translateToPrint(holdings)
-            .equals(translator.translateToPrint(holdings.subword(0, holdings.size() - 1)));
+        && translateHoldings(holdings)
+            .equals(translateHoldings(holdings.subword(0, holdings.size() - 1)));
   }
 
   private void deleteCharacter(InputConnection inputConnection, int keyCode) {
