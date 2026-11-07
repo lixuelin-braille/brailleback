@@ -116,19 +116,6 @@ public class BrailleInputView extends View
     }
 
     /**
-     * 这一格在当前输入位置上是否已经是一个完整符号（键盘可以立刻把它结算出去）。
-     *
-     * <p>键盘用它决定"停顿多久算一格结束"：完整就用短时限，还没成形就用长时限。这才是"格"
-     * 的语义边界，比单纯的时间阈值可靠——中文盲文里 {@code 12} 的第一点 {@code 1} 在表里是
-     * 声调符号，若按完整符号的时限结算，用户慢慢打"波"就会被切成两格，永远拼不成字。
-     *
-     * <p>默认 {@code true}：一格一字符的语言按完就该结算，行为与上游一致。
-     */
-    default boolean isCompleteCell(BrailleCharacter brailleCharacter) {
-      return true;
-    }
-
-    /**
      * 把连续按下的点流切成已确定的音节，<b>不使用任何等待时间</b>。
      *
      * <p>中文盲文一格是若干点的集合，而点位之间存在包含关系（{@code 12} 是波，加 3 成勒、加 4
@@ -495,6 +482,7 @@ public class BrailleInputView extends View
 
   @CanIgnoreReturnValue
   private boolean processResult(BrailleInputPlaneResult result) {
+    boolean producedSyllable = false;
     if (result.type != MultitouchResult.TYPE_TAP) {
       // 单指左滑 + 还有没结算的点 = 用户想改掉刚按错的那个点，不是想删掉整格。
       // 中文一格要按 3 个点，整格重打的代价太大，而且很容易再错一次。
@@ -503,16 +491,16 @@ public class BrailleInputView extends View
         undoLastDot();
         return true;
       }
-      // 其余非点击手势（滑动/长按/标定）一律先把攒着的半格结算掉：
-      // 它们后面可能马上要提交文本（空格）、删字或切换粒度，留着半格会让顺序错乱。
-      flushPendingCell();
+      // 其余非点击手势（滑动/长按/标定）一律先把攒着的点结算掉：
+      // 它们后面可能马上要上屏、删字或切换粒度，留着半截会让顺序错乱。
+      producedSyllable = flushPendingCell();
     }
     if (result.type == MultitouchResult.TYPE_INVALID) {
       return callback.onInvalidGesture();
     } else if (result.type == MultitouchResult.TYPE_TAP) {
       BrailleCharacter released = result.releasedBrailleCharacter;
       if (shouldAccumulateDots() && released.getOnCount() == 1) {
-        // 单点点击：攒进当前格，等停顿后结算。多指同时按（≥2 点）走下面的"立刻出格"，
+        // 单点点击：攒进点流，等上屏键结算。多指同时按（≥2 点）走下面的"立刻出格"，
         // 保证原有的和弦输入方式一点不变慢。
         accumulateDot(released);
         return true;
@@ -520,6 +508,16 @@ public class BrailleInputView extends View
       flushPendingCell();
       showCaption(callback.onBrailleProduced(released));
     } else if (result.type == MultitouchResult.TYPE_SWIPE) {
+      // 上屏键（单指右滑）分两步，跟普通输入法"输入和选字 / 上屏"一致：
+      //   第 1 次：把攒的点切成音节，编辑缓冲给出候选 —— 本次不再转发给动作层，
+      //            否则 appendSpace() 会立刻把刚产生的首选字上屏，用户就没机会换候选了。
+      //   第 2 次：已经没有点流、只有候选，正常转发 appendSpace() 把选中的字上屏。
+      // 其它滑动（删字、切粒度…）不吞手势，行为不变。
+      if (producedSyllable
+          && result.swipe.getTouchCount() == 1
+          && result.swipe.getDirection() == Swipe.Direction.RIGHT) {
+        return true;
+      }
       boolean processed = callback.onSwipeProduced(result.swipe);
       if (Utils.isDebugBuild()) {
         if (result.swipe.getTouchCount() == 5) {
@@ -688,18 +686,22 @@ public class BrailleInputView extends View
   }
 
   /**
-   * 用户做了非点击手势：把攒着的点立刻交出去，避免半截输入串到后面的命令里。
+   * 用户做了非点击手势（右滑上屏、删字、切粒度…）：把攒着的点按上屏键的语义结算。
    *
-   * <p>先请切分器尽量按音节切；剩下的（标点、符号、半截音节）按"每格最多 6 点"硬切，交给
-   * 编辑缓冲去翻译和诊断——总比无声丢掉强。
+   * <p>一次只切<b>一个</b>音节。剩下的点继续留在点流里，下次按上屏键再切下一个——用户
+   * 连打了好几个字才按上屏键时，这样能逐字出，且每次都是确定的最长匹配。
+   *
+   * <p>绝不能像旧版那样把剩余点按"每格 6 点"硬切送出去：那会把后面还没打完的字切碎，
+   * 而编辑缓冲会把这些碎格当成合法单格去翻译，吐出莫名其妙的字母和大写符。
+   * @return 这次是否切出了一个音节。上屏键靠它区分"第一次按：出候选"和"第二次按：上屏"，
+   *     见 {@link #processResult}。
    */
-  private void flushPendingCell() {
+  private boolean flushPendingCell() {
     if (pendingDotOrder.isEmpty()) {
-      return;
+      return false;
     }
-    List<BrailleCharacter> decided =
-        callback.segmentDotStream(dotsStream(), /* force= */ true);
-    if (decided != null) {
+    List<BrailleCharacter> decided = callback.segmentDotStream(dotsStream(), /* force= */ true);
+    if (decided != null && !decided.isEmpty()) {
       int consumed = 0;
       for (BrailleCharacter cell : decided) {
         consumed += cell.getOnCount();
@@ -708,19 +710,26 @@ public class BrailleInputView extends View
       for (int i = 0; i < consumed && !pendingDotOrder.isEmpty(); i++) {
         pendingDotOrder.remove(0);
       }
-    }
-    while (!pendingDotOrder.isEmpty()) {
-      BrailleCharacter cell = BrailleCharacter.EMPTY_CELL;
-      int take = Math.min(BrailleCharacter.DOT_COUNT - 2, pendingDotOrder.size());
-      for (int i = 0; i < take; i++) {
-        cell = cell.union(pendingDotOrder.get(i));
+      rebuildPendingCell();
+      if (!pendingDotOrder.isEmpty()) {
+        // 还有没上屏的点：明确说出来，否则用户以为一次上屏键就把整串都交出去了。
+        BrailleCommonTalkBackSpeaker.getInstance()
+            .speak(
+                getContext()
+                    .getString(R.string.bb_pending_points_remaining, pendingDotOrder.size()),
+                TalkBackSpeaker.AnnounceType.INTERRUPT);
       }
-      for (int i = 0; i < take; i++) {
-        pendingDotOrder.remove(0);
-      }
-      showCaption(callback.onBrailleProduced(cell));
+      return true;
     }
+    // 连强制切分都切不出音节：这串点确实按错了，或者只打了半截。清掉，别让它一直挂着
+    // 挡住后面的输入。原来会硬切送出去，那是"吐大写符/私用区字符"的来源。
+    pendingDotOrder.clear();
     rebuildPendingCell();
+    BrailleCommonTalkBackSpeaker.getInstance()
+        .speak(
+            getContext().getString(R.string.bb_incomplete_braille_cleared),
+            TalkBackSpeaker.AnnounceType.INTERRUPT);
+    return false;
   }
 
   /**

@@ -22,10 +22,8 @@ import static com.google.android.accessibility.braille.common.BrailleImeAction.B
 import static com.google.android.accessibility.braille.common.BrailleImeAction.COPY;
 import static com.google.android.accessibility.braille.common.BrailleImeAction.CUT;
 import static com.google.android.accessibility.braille.common.BrailleImeAction.DELETE_CHARACTER_OR_PREVIOUS_ITEM;
-import static com.google.android.accessibility.braille.common.BrailleImeAction.DELETE_WORD;
 import static com.google.android.accessibility.braille.common.BrailleImeAction.END_OF_PAGE;
 import static com.google.android.accessibility.braille.common.BrailleImeAction.HELP_AND_OTHER_ACTIONS;
-import static com.google.android.accessibility.braille.common.BrailleImeAction.HIDE_KEYBOARD;
 import static com.google.android.accessibility.braille.common.BrailleImeAction.MOVE_CURSOR_BACKWARD;
 import static com.google.android.accessibility.braille.common.BrailleImeAction.MOVE_CURSOR_FORWARD;
 import static com.google.android.accessibility.braille.common.BrailleImeAction.NEXT_CHARACTER;
@@ -82,9 +80,10 @@ public final class BrailleImeGestureAction {
           .put(ADD_SPACE_OR_NEXT_ITEM, new Swipe(Direction.RIGHT, /* touchCount= */ 1))
           .put(DELETE_CHARACTER_OR_PREVIOUS_ITEM, new Swipe(Direction.LEFT, /* touchCount= */ 1))
           .put(SUBMIT_TEXT, new Swipe(Direction.UP, /* touchCount= */ 2))
-          .put(HIDE_KEYBOARD, new Swipe(Direction.DOWN, /* touchCount= */ 2))
+          // 双指下滑原本是"隐藏键盘"，枚举里本就标着 not used，系统返回键已经能收键盘；
+          // 双指左滑原本是"删词"，与单指左滑的删字重复，而中文是按字输入的。
+          // 中文输入以打点为主，这两个低频手势不再默认占用，用户仍可在设置里自行指派。
           .put(ADD_NEWLINE, new Swipe(Direction.RIGHT, /* touchCount= */ 2))
-          .put(DELETE_WORD, new Swipe(Direction.LEFT, /* touchCount= */ 2))
           .put(HELP_AND_OTHER_ACTIONS, new Swipe(Direction.UP, /* touchCount= */ 3))
           .put(SWITCH_KEYBOARD, new Swipe(Direction.DOWN, /* touchCount= */ 3))
           .put(NEXT_GRANULARITY, new Swipe(Direction.RIGHT, /* touchCount= */ 3))

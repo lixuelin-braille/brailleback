@@ -233,7 +233,7 @@
 
   <!-- Basic controls -->
   <!-- Basic controls, gesture of adding space. [CHAR_LIMIT=NONE] -->
-  <string name="bk_gesture_add_space">Add a space</string>
+  <string name="bk_gesture_add_space">Commit / Space</string>
   <!-- Basic controls, gesture of deleting. [CHAR_LIMIT=NONE] -->
   <string name="bk_gesture_delete">Delete</string>
   <!-- Basic controls, gesture adding a new line. [CHAR_LIMIT=NONE] -->
@@ -245,7 +245,7 @@
   <!-- Basic controls, gesture of switching to next keyboard. [CHAR_LIMIT=NONE] -->
   <string name="bk_gesture_switch_to_next_keyboard">Switch to next keyboard</string>
   <!-- Basic controls, gesture of submitting text. [CHAR_LIMIT=NONE] -->
-  <string name="bk_gesture_submit_text">Submit text</string>
+  <string name="bk_gesture_submit_text">Enter</string>
   <!-- Basic controls, gesture of help and other options. [CHAR_LIMIT=NONE] -->
   <string name="bk_gesture_help_and_other_options">Help and other options</string>
   <!-- Cursor movement -->

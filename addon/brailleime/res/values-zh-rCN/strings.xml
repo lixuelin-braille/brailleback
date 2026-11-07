@@ -186,6 +186,8 @@
   <string name="perform_add_new_line_announcement">已添加新行</string>
   <string name="perform_delete_letter_announcement">已删除字符</string>
   <string name="bb_cell_cleared">这一格已清空</string>
+  <string name="bb_pending_points_remaining">还有 %1$d 个点没上屏，再按一次上屏键</string>
+  <string name="bb_incomplete_braille_cleared">没打完的点已清除</string>
   <string name="perform_delete_word_announcement">已删除字词</string>
   <string name="continue_tutorial_announcement">我们继续学习教程吧。%1$s</string>
   <string name="switch_on_screen_keyboard_announcement">正在切换到盲文触摸屏</string>

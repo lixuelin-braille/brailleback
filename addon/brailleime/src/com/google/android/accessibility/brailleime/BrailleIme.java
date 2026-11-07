@@ -1185,18 +1185,6 @@ public class BrailleIme extends InputMethodService {
         }
 
         /**
-         * 这一格成形没有，问编辑缓冲——只有它知道当前音节打到了第几格、这一格合不合法。
-         *
-         * <p>键盘用这个答案决定"停顿多久算一格结束"：成形了给短时限，还没成形给长时限，
-         * 免得用户在同一格里慢慢摸索时被提前切断。没有连接时按"已成形"处理，保持原行为。
-         */
-        @Override
-        public boolean isCompleteCell(BrailleCharacter brailleChar) {
-          EditBuffer buffer = editBuffer;
-          return buffer == null || buffer.isCompleteCell(brailleChar);
-        }
-
-        /**
          * 把还没分格的点流交给编辑缓冲，请它切出已经能确定的音节。
          *
          * <p>键盘不再靠停顿猜格边界（那会把慢慢按的一格切断、把连着按的两格粘住），改成整串

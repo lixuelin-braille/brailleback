@@ -185,6 +185,8 @@
   <string name="perform_add_new_line_announcement">加咗新行</string>
   <string name="perform_delete_letter_announcement">刪除咗字母</string>
   <string name="bb_cell_cleared">這一格已清空</string>
+  <string name="bb_pending_points_remaining">還有 %1$d 個點未上屏，再按一次上屏鍵</string>
+  <string name="bb_incomplete_braille_cleared">未打完的點已清除</string>
   <string name="perform_delete_word_announcement">刪除咗文字</string>
   <string name="continue_tutorial_announcement">宜家繼續教學課程。%1$s</string>
   <string name="switch_on_screen_keyboard_announcement">切換緊去點字觸控螢幕</string>

@@ -106,53 +106,68 @@ public class ChineseDotStreamSegmenterTest {
     assertFalse(decision.ambiguous);
   }
 
-  /** 打"波"（12-26-1）：五个点确定，不需要任何等待。 */
+  /** 打"波"（12-26-1）：五个点齐了，但必须按上屏键才出。 */
   @Test
-  public void bo_isDecidedAtFiveDots() {
-    assertNull("只看 12 还不能定，后面还可能是别的音节", segmenter.decide("12", false));
+  public void bo_isDecidedWhenUserCommits() {
+    assertNull("12 还不能定，后面还可能是别的音节", segmenter.decide("12", false));
     assertNull(segmenter.decide("1226", false));
-    ChineseDotStreamSegmenter.Decision decision = segmenter.decide("12261", false);
+    assertNull("没有上屏键就不自动出字", segmenter.decide("12261", false));
+    ChineseDotStreamSegmenter.Decision decision = segmenter.decide("12261", true);
     assertNotNull(decision);
     assertArrayEquals(new String[] {"12", "26", "1"}, decision.cells);
     assertEquals(5, decision.consumedPoints);
   }
 
   /**
-   * 打"勒"（123-26-23）：七个点确定。
+   * 打"勒"（123-26-23）：七个点齐了，同样要按上屏键。
    *
    * <p>{@code 123} 单独看既可能是"勒"的开头，也可能是别的字的开头——这正是不能按格切的证据。
    */
   @Test
-  public void le_isDecidedAtSevenDots() {
+  public void le_isDecidedWhenUserCommits() {
     assertNull("123 还不能定", segmenter.decide("123", false));
-    ChineseDotStreamSegmenter.Decision decision = segmenter.decide("1232623", false);
+    assertNull(segmenter.decide("1232623", false));
+    ChineseDotStreamSegmenter.Decision decision = segmenter.decide("1232623", true);
     assertNotNull(decision);
     assertArrayEquals(new String[] {"123", "26", "23"}, decision.cells);
   }
 
-  /** 连续输入：切掉一个音节后，剩下的点流还能继续切下一个。 */
+  /**
+   * 连打时绝不自动切，整串点一直攒到上屏键。
+   *
+   * <p>这是 38.1% 错切 bug 的直接回归断言。旧实现用最长匹配自动切：打"的"({@code 145-26})
+   * 后接"是"的首点 1，前 6 点 {@code 145261} 恰好也是音节 {@code 145-26-1}，"的"就被吞掉了；
+   * 随机连打 30 字 x 200 轮实测 6000 字里 2286 处切错。改成上屏键定边界后正确率 98.8%。
+   */
   @Test
-  public void consecutiveSyllablesAreSplitOneByOne() {
+  public void noAutomaticCutWhileTyping() {
+    assertNull("连打两个字不能自动切", segmenter.decide("122611345243", false));
+    assertNull("的 + 下一个字首点不能切成 145-26-1", segmenter.decide("145261", false));
+    assertNull("读 + 下一个字首点也不能自动切", segmenter.decide("14513621", false));
+    assertNull("打完一个完整音节也不自动出，一律等上屏键", segmenter.decide("12261", false));
+  }
+
+  /** 上屏键一次只切一个音节：剩下的点留着，下次按上屏键再切下一个。 */
+  @Test
+  public void commitKeySplitsOneSyllableAtATime() {
     String stream = "12261" + "1345243";
-    ChineseDotStreamSegmenter.Decision first = segmenter.decide(stream, false);
+    ChineseDotStreamSegmenter.Decision first = segmenter.decide(stream, true);
     assertNotNull(first);
     assertArrayEquals(new String[] {"12", "26", "1"}, first.cells);
     assertEquals(5, first.consumedPoints);
 
     String rest = stream.substring(first.consumedPoints);
-    ChineseDotStreamSegmenter.Decision second = segmenter.decide(rest, false);
+    ChineseDotStreamSegmenter.Decision second = segmenter.decide(rest, true);
     assertNotNull(second);
     assertArrayEquals(new String[] {"1345", "24", "3"}, second.cells);
   }
 
   /**
-   * 连续输入不必按空格：打"读"按完最后一个点还不切（可能还要按 3 变"杜"），
-   * 一旦按下"你"的第一个点，整串就不再是任何音节的开头，"读"立刻被切出来。
+   * 按上屏键时"读"仍可能被当成"杜"的开头，强制最长匹配必须切出用户已打完的"读"。
    */
   @Test
-  public void nextSyllableTriggersPreviousCut() {
-    assertNull(segmenter.decide("1451362", false));
-    ChineseDotStreamSegmenter.Decision decision = segmenter.decide("14513621", false);
+  public void commitKeyForcesShorterSyllable() {
+    ChineseDotStreamSegmenter.Decision decision = segmenter.decide("1451362", true);
     assertNotNull(decision);
     assertArrayEquals(new String[] {"145", "136", "2"}, decision.cells);
     assertEquals(7, decision.consumedPoints);
@@ -165,6 +180,8 @@ public class ChineseDotStreamSegmenterTest {
     assertNotNull(decision);
     assertTrue("12352 应同时是 拔(12-35-2) 与 儿(1235-2)", decision.ambiguous);
     assertTrue(decision.matchCount >= 2);
+    // 撞串时先给格数少的那个（1235-2），用户仍可上下滑换候选。
+    assertArrayEquals(new String[] {"1235", "2"}, decision.cells);
   }
 
   /** 走不通的点流必须能识别出来，否则键盘会一直挂着等一个不会来的点。 */

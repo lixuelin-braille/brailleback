@@ -112,13 +112,13 @@
   <string name="braille_languages_title">語言</string>
   <string name="braille_add_a_language_preference_title">新增語言</string>
   <string name="icon_delete">刪除</string>
-  <string name="bk_gesture_add_space">新增一個空格</string>
+  <string name="bk_gesture_add_space">上屏／空格</string>
   <string name="bk_gesture_delete">刪除</string>
   <string name="bk_gesture_new_line">新增一行</string>
   <string name="bk_gesture_delete_word">刪除一個字詞</string>
   <string name="bk_gesture_hide_the_keyboard">隱藏鍵盤</string>
   <string name="bk_gesture_switch_to_next_keyboard">切換到下一個鍵盤</string>
-  <string name="bk_gesture_submit_text">送出文字</string>
+  <string name="bk_gesture_submit_text">回車／執行</string>
   <string name="bk_gesture_help_and_other_options">說明和其他選項</string>
   <string name="bk_gesture_move_to_previous_character">移至上一個字元</string>
   <string name="bk_gesture_move_to_next_character">移至下一個字元</string>

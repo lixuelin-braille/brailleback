@@ -422,18 +422,6 @@ public class EditBufferChinese extends EditBufferUnContracted {
   }
 
   /**
-   * 这一格是否完整到可以立刻结算，交给 {@link ChineseBrailleSignNames#isCompleteAt} 判断，
-   * 位置取尾部还没翻译成字的格数 {@link #pendingCells}。
-   *
-   * <p>用 {@code pendingCells} 而不是自己数：它由 {@link SyllableSplitter} 在每次落键后重算，
-   * 已经扣掉了"前面凑满的音节"，是唯一可靠的位置来源。
-   */
-  @Override
-  public boolean isCompleteCell(BrailleCharacter cell) {
-    return ChineseBrailleSignNames.isCompleteAt(cell.toString(), pendingCells);
-  }
-
-  /**
    * 把连续点流切成已确定的音节，<b>彻底不用等待时间</b>。
    *
    * <p>原来的做法是"停顿多久算一格结束"，两头都会错：猜早了把 {@code 145}（得）切成 {@code 14}

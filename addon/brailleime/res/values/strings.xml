@@ -416,6 +416,8 @@
   <string name="perform_delete_letter_announcement">Letter deleted</string>
   <!-- Announced when the last pressed dot is undone and the pending cell becomes empty. [CHAR_LIMIT=NONE] -->
   <string name="bb_cell_cleared">Cell cleared</string>
+  <string name="bb_pending_points_remaining">%1$d dots still waiting, press the commit key again</string>
+  <string name="bb_incomplete_braille_cleared">Incomplete input cleared</string>
   <!-- Audial announcement that plays when user performs the action of deleting a word. [CHAR LIMIT=50] -->
   <string name="perform_delete_word_announcement">Word deleted</string>
   <!-- Audial announcement that plays when user has tried a fixed number of instructions. %1$s is the instruction to teach the user how to complete the tutorial. [CHAR LIMIT=100] -->
