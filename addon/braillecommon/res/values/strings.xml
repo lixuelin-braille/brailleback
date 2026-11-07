@@ -315,12 +315,16 @@
   <string name="bb_invalid_braille_combination">Invalid braille combination</string>
   <!-- Announced when a space is pressed while an incomplete braille syllable is pending and will be dropped. [CHAR_LIMIT=NONE] -->
   <string name="bb_incomplete_braille_ignored">Incomplete braille ignored</string>
-  <!-- Announced together with the resolved character when the syllable has more than one candidate. [CHAR_LIMIT=NONE] -->
-  <string name="bb_candidate_available">%1$s, %2$d candidates, swipe left to change</string>
+  <!-- Separator used when reading out a run of candidate characters. [CHAR_LIMIT=NONE] -->
+  <string name="bb_candidate_separator">, </string>
+  <!-- Announced when a syllable resolves to several candidates; %1$s is a run of candidates. [CHAR_LIMIT=NONE] -->
+  <string name="bb_candidate_list_all">Candidates %1$s</string>
+  <!-- Same as above but more candidates exist; %2$d is the total number. [CHAR_LIMIT=NONE] -->
+  <string name="bb_candidate_list_more">Candidates %1$s, %2$d total</string>
   <!-- Announced after switching candidate; %1$d is the 1-based position, %2$s is the character. [CHAR_LIMIT=NONE] -->
-  <string name="bb_candidate_selected">%1$d of %2$s</string>
+  <string name="bb_candidate_selected">%2$s, number %1$d</string>
+  <!-- Announced after a braille cell is deleted. [CHAR_LIMIT=NONE] -->
+  <string name="bb_deleted">Deleted</string>
   <!-- Announced when the selected characters are committed to the text field. [CHAR_LIMIT=NONE] -->
   <string name="bb_text_committed">Committed</string>
-  <!-- Announced when the pending syllable is discarded before being committed. [CHAR_LIMIT=NONE] -->
-  <string name="bb_candidate_discarded">Discarded</string>
 </resources>

@@ -152,8 +152,10 @@
   <string name="bk_gesture_undo_spelling_suggestion">撤消接受建议</string>
   <string name="bb_invalid_braille_combination">盲文组合无效</string>
   <string name="bb_incomplete_braille_ignored">未完成的盲文已忽略</string>
-  <string name="bb_candidate_available">%1$s，%2$d 个候选，左滑换</string>
-  <string name="bb_candidate_selected">第 %1$d 个，%2$s</string>
+  <string name="bb_candidate_separator">，</string>
+  <string name="bb_candidate_list_all">候选 %1$s</string>
+  <string name="bb_candidate_list_more">候选 %1$s，共 %2$d 个</string>
+  <string name="bb_candidate_selected">%2$s，第 %1$d 个</string>
+  <string name="bb_deleted">已删除</string>
   <string name="bb_text_committed">上屏</string>
-  <string name="bb_candidate_discarded">已放弃</string>
 </resources>

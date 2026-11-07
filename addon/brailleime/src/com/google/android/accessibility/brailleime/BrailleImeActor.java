@@ -187,12 +187,9 @@ public class BrailleImeActor {
                             ? R.string.no_grammar_suggestion_available_announcement
                             : R.string.no_spelling_suggestion_available_announcement));
           }
-        } else if (moveCandidate(imeConnection, /* forward= */ true)) {
-          // 中文盲文刚凑满一个音节时，单指左滑改为"换下一个候选"。
-          // 换字只占左向：识别到的"单指右滑"就是空格手势（盲文键盘没有独立空格键），
-          // 那是打字最高频的动作之一，不能拿来换候选。回退方向放在双指左滑（DELETE_WORD）。
-          result = true;
         } else {
+          // 候选换字不占用左滑：候选是列表，用上下滑（见 MOVE_CURSOR_* 分支）。删字在候选态下
+          // 一样必需——打错的格要能删掉，否则用户只能先上屏一个错字再删。
           callback.getEditBuffer().deleteCharacterBackward(imeConnection);
         }
       }
@@ -202,16 +199,16 @@ public class BrailleImeActor {
           if (!result) {
             feedbackManager.emitFeedback(FeedbackManager.Type.NAVIGATE_OUT_OF_BOUNDS);
           }
-        } else if (moveCandidate(imeConnection, /* forward= */ false)) {
-          // 候选误换过头时用双指左滑回退。候选态下"删整个词"的需求本来就低，
-          // 一旦换了候选，下一次双指左滑会落到删词上，不会一直被困住。
-          result = true;
         } else {
           callback.getEditBuffer().deleteWord(imeConnection);
         }
       }
       case MOVE_CURSOR_FORWARD -> {
-        if (talkBackForBrailleIme.shouldUseCharacterGranularity()) {
+        if (moveCandidate(imeConnection, /* forward= */ true)) {
+          // 下滑 = 候选列表往下滚一格。候选是列表，上下滑是列表滚动的通用直觉；
+          // 左右滑在候选态下另有用途（左删字、右空格上屏），不能借走。
+          result = true;
+        } else if (talkBackForBrailleIme.shouldUseCharacterGranularity()) {
           if (!callback.getEditBuffer().moveCursorForward(imeConnection)) {
             performTextAction(imeConnection, ScreenReaderAction.FOCUS_NEXT_CHARACTER);
           }
@@ -228,7 +225,10 @@ public class BrailleImeActor {
         }
       }
       case MOVE_CURSOR_BACKWARD -> {
-        if (talkBackForBrailleIme.shouldUseCharacterGranularity()) {
+        if (moveCandidate(imeConnection, /* forward= */ false)) {
+          // 上滑 = 候选列表往上滚一格。没有候选时回落到原本的"向上移动光标"。
+          result = true;
+        } else if (talkBackForBrailleIme.shouldUseCharacterGranularity()) {
           if (!callback.getEditBuffer().moveCursorBackward(imeConnection)) {
             performTextAction(imeConnection, ScreenReaderAction.FOCUS_PREVIOUS_CHARACTER);
           }

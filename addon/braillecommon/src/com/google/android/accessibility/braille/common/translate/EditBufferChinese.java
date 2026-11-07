@@ -261,10 +261,14 @@ public class EditBufferChinese extends EditBufferUnContracted {
   }
 
   /**
-   * 尾部盲文组合不存在时播报提示；音节刚凑满时播报候选数。
+   * 尾部盲文组合不存在时播报提示；音节刚凑满时播报候选列表。
    *
    * <p>候选这条是两阶段的关键提示：字还在选字阶段、没进输入框，如果只播点位，用户会以为
-   * 什么都没发生。播"某字，多少候选"才说明"轮到你了，选完按空格上屏"。
+   * 什么都没发生。
+   *
+   * <p>播报内容必须是<b>候选本身</b>，不能只说"共 N 个"：盲人看不见候选栏，不知道能选什么
+   * 就永远不会去换，那个"85 个候选"的提示等于零信息。这里按输入法候选栏的方式念一小段
+   * （见 {@link CandidateAnnouncer}），被截断时才补总数。
    */
   @Override
   protected Optional<String> getAppendBrailleTextToSpeak(
@@ -273,13 +277,23 @@ public class EditBufferChinese extends EditBufferUnContracted {
       return Optional.of(resources.getString(R.string.bb_invalid_braille_combination));
     }
     if (lastCandidateStart >= 0 && lastCandidates.size() > 1) {
-      return Optional.of(
-          context.getString(
-              R.string.bb_candidate_available,
-              lastCandidates.get(lastChosenIndex),
-              lastCandidates.size()));
+      return Optional.of(describeCandidates());
     }
     return super.getAppendBrailleTextToSpeak(resources, brailleCharacter);
+  }
+
+  /** 拼出"候选 你，尼，呢"，候选被截断时补"共 N 个"。 */
+  private String describeCandidates() {
+    String window =
+        CandidateAnnouncer.window(
+            lastCandidates,
+            lastChosenIndex,
+            CandidateAnnouncer.WINDOW,
+            context.getString(R.string.bb_candidate_separator));
+    if (CandidateAnnouncer.hasMore(lastCandidates, lastChosenIndex, CandidateAnnouncer.WINDOW)) {
+      return context.getString(R.string.bb_candidate_list_more, window, lastCandidates.size());
+    }
+    return context.getString(R.string.bb_candidate_list_all, window);
   }
 
   /**
@@ -324,7 +338,11 @@ public class EditBufferChinese extends EditBufferUnContracted {
   }
 
   /**
-   * 把尾部音节的候选前后移动一格并刷新 composing，成功返回 {@code true}。
+   * 把尾部音节的候选前后移动一格，成功返回 {@code true}。
+   *
+   * <p>调用方是上下滑（原本是移动光标）：候选是一个列表，上下滑动就是列表上下滚动，方向符合
+   * 直觉。刻意不占用左右滑——单指左滑是删字、单指右滑是空格上屏，候选态下这两个动作仍然必需
+   * （删掉打错的格、确认上屏），借走它们会让用户在最需要的时候找不到。
    *
    * <p>返回 {@code false} 的三种情况都必须让调用方回落到原动作，否则用户会觉得手势丢了：
    *
@@ -348,12 +366,6 @@ public class EditBufferChinese extends EditBufferUnContracted {
     if (lastCandidates.size() <= 1) {
       return false;
     }
-    if (delta < 0 && lastChosenIndex == 0) {
-      // 往回退已经到头：再退一次就放弃这个音节。
-      // 没有这条，用户在候选里只能绕圈，打错的音节永远删不掉——单指左滑在候选态下被换字占用了。
-      discardPendingSyllable(imeConnection);
-      return true;
-    }
     // 拷到局部：后续字段还可能被别的路径改写，播报和日志必须用"决定这一跳时"的那份数据，
     // 否则可能对着另一个音节念字，甚至下标越界。
     final int start = lastCandidateStart;
@@ -374,24 +386,38 @@ public class EditBufferChinese extends EditBufferUnContracted {
   }
 
   /**
-   * 放弃尾部待确认的音节，连同它占用的格一起从 holdings 里删掉。
+   * 中文按"格"删，不按输入框字符删。
    *
-   * <p>两阶段下这个音节<b>不在输入框里</b>，用户删不掉它；而单指左滑在候选态下被"换下一个
-   * 候选"占用了。不给这条出口，打错的音节就只能先上屏再删——多一步，而且会先落一个错字进文本。
+   * <p>父类的实现是"删一格 holdings + 给输入框发一次删除键"。这在一格等于一个字符的语言里成立，
+   * 中文不成立：3 格凑成一个汉字，删 1 格却会把输入框里那 1 个汉字一并删掉，剩下的 2 格下次
+   * 刷新 composing 时又会翻出别的字——用户看到的就是"删一下，字没了又冒出来一个"。
+   *
+   * <p>所以这里只动 holdings 再整体刷新 composing，输入框的删除只在 holdings 已经空了
+   * （要删的是更早提交进文本的字）时才交给父类。
    */
-  private void discardPendingSyllable(ImeConnection imeConnection) {
-    int count = holdings.size() - lastCandidateStart;
-    for (int i = 0; i < count; i++) {
-      if (!holdings.isEmpty()) {
-        holdings.remove(holdings.size() - 1);
-      }
+  @Override
+  public void deleteCharacterBackward(ImeConnection imeConnection) {
+    if (holdings.isEmpty()) {
+      super.deleteCharacterBackward(imeConnection);
+      return;
     }
-    lastCandidateStart = -1;
-    lastCandidates = Collections.emptyList();
-    lastChosenIndex = 0;
+    holdings.remove(holdings.size() - 1);
+    lastCommitIndexOfHoldings = holdings.size();
     refreshComposing(imeConnection);
-    talkBack.speak(
-        context.getString(R.string.bb_candidate_discarded),
-        TalkBackSpeaker.AnnounceType.INTERRUPT);
+    talkBack.speak(describeRemainingInput(), TalkBackSpeaker.AnnounceType.INTERRUPT);
+  }
+
+  /**
+   * 删掉一格之后告诉用户还剩什么。
+   *
+   * <p>两阶段下被删的那一格如果属于待确认音节，它本来就没进输入框，删完输入框不会有任何变化。
+   * 不给一句反馈，用户按了左滑却什么也没听到，只能判断成"删不掉"。
+   */
+  /** 删掉一格之后告诉用户还剩什么。 */
+  private String describeRemainingInput() {
+    if (lastCandidateStart >= 0 && lastCandidates.size() > 1) {
+      return describeCandidates();
+    }
+    return context.getString(R.string.bb_deleted);
   }
 }
