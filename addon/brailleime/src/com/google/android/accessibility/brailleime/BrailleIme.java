@@ -717,6 +717,11 @@ public class BrailleIme extends InputMethodService {
         BrailleCommonTalkBackSpeaker.getInstance()
             .speak(getString(R.string.perform_action_submitting));
       }
+    } else {
+      // 输入框没声明提交动作（IME_ACTION_NONE / IME_ACTION_UNSPECIFIED）。原来这里静默返回，
+      // 调用方又已经先把键盘收掉了，用户会以为"手势失效"。现在明确告知没有提交动作。
+      BrailleCommonTalkBackSpeaker.getInstance()
+          .speak(getString(R.string.perform_action_unavailable));
     }
   }
 

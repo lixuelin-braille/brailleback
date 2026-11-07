@@ -15,6 +15,7 @@
   <string name="input_view_caption">TalkBack 點字鍵盤 - 如需協助，請前往 g.co/help/braille</string>
   <string name="perform_action_next">下一個</string>
   <string name="perform_action_submitting">送出文字</string>
+  <string name="perform_action_unavailable">目前輸入框沒有送出動作</string>
   <string name="calibration_step1_hold_left_or_right_finger_announcement">正在更新圓點位置。首先記錄%s的圓點。</string>
   <string name="calibration_hold_left_or_right_three_finger_announcement">請使用%s的中間 3 指按住螢幕。</string>
   <string name="calibration_hold_left_or_right_four_finger_announcement">請使用%s的後 4 指按住螢幕。</string>

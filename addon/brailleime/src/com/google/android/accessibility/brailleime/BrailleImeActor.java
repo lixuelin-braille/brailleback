@@ -147,14 +147,12 @@ public class BrailleImeActor {
       case PASTE -> performTextAction(imeConnection, ScreenReaderAction.PASTE);
       case CUT -> performTextAction(imeConnection, ScreenReaderAction.CUT);
       case COPY -> performTextAction(imeConnection, ScreenReaderAction.COPY);
-      case SUBMIT_TEXT ->
-          performTextAction(
-              imeConnection,
-              () -> {
-                callback
-                    .hideBrailleKeyboard(); // Restore EBT so a11y focus could jump to next field.
-                callback.performEditorAction();
-              });
+      // 原版在这里会先 hideBrailleKeyboard()（注释：恢复 EBT 让无障碍焦点跳到下一个输入框），
+      // 再提交。那是 TalkBack 作为宿主、自己接管无障碍焦点时的前提。我们这套是独立 IME，
+      // 没有 EBT 可恢复，预收键盘就变成纯副作用：输入框 imeOptions 是 NONE/UNSPECIFIED 时
+      // performEditorAction() 什么都不做，用户看到的就是“双指上滑把键盘关了、什么都没提交”。
+      // 改成只提交，收不收键盘交给宿主 App 决定。
+      case SUBMIT_TEXT -> performTextAction(imeConnection, callback::performEditorAction);
       case ADD_SPACE_OR_NEXT_ITEM -> {
         if (talkBackForBrailleIme.isCurrentGranularityTypoCorrection()) {
           if (!typoHandler.nextSuggestion()) {

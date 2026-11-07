@@ -16,6 +16,7 @@
   <string name="input_view_caption">TalkBack 盲文键盘 - 如需帮助，请访问 g.co/help/braille</string>
   <string name="perform_action_next">继续</string>
   <string name="perform_action_submitting">正在提交文本</string>
+  <string name="perform_action_unavailable">当前输入框没有提交动作</string>
   <string name="calibration_step1_hold_left_or_right_finger_announcement">正在更新圆点位置。首先，记录%s的圆点位置。</string>
   <string name="calibration_hold_left_or_right_three_finger_announcement">请用%s中间的 3 根手指轻触并按住屏幕。</string>
   <string name="calibration_hold_left_or_right_four_finger_announcement">请用%s的后 4 根手指轻触并按住屏幕。</string>
