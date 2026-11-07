@@ -309,7 +309,7 @@ public class EditBufferChinese extends EditBufferUnContracted {
     if (lastCandidateStart >= 0 && lastCandidates.size() > 1) {
       return Optional.of(describeCandidates());
     }
-    String dotsText = BrailleTranslateUtils.getDotsText(resources, brailleCharacter);
+    String dotsText = describeCell(resources, brailleCharacter);
     return switch (tailState) {
       case AWAIT_TONE ->
           Optional.of(resources.getString(R.string.bb_await_tone, dotsText));
@@ -319,12 +319,17 @@ public class EditBufferChinese extends EditBufferUnContracted {
           Optional.of(resources.getString(R.string.bb_no_such_syllable, dotsText));
       case INVALID_START ->
           Optional.of(resources.getString(R.string.bb_invalid_start, dotsText));
-      // INCOMPLETE 是正常输入中间态：只播点位，不要每格都提醒"还没打完"。
-      // NONE 时交给父类（会走点位播报）。
-      case INCOMPLETE, NONE ->
-          invalidTail
-              ? Optional.of(resources.getString(R.string.bb_invalid_braille_combination))
-              : super.getAppendBrailleTextToSpeak(resources, brailleCharacter);
+      // INCOMPLETE 是正常输入中间态：只播这一格的名称，不要每格都提醒"还没打完"。
+      // NONE 时同样播名称；只有当这一格连名称都认不出来时才由父类回落到点位号。
+      // 注意不能在这里返回 empty 交给父类的兜底：父类兜底一律念点位号（"点 1 点 2"），
+      // 那正是用户听不懂的东西。
+      case INCOMPLETE, NONE -> {
+        if (invalidTail) {
+          yield Optional.of(resources.getString(R.string.bb_invalid_braille_combination));
+        }
+        Optional<String> base = super.getAppendBrailleTextToSpeak(resources, brailleCharacter);
+        yield base.isPresent() ? base : Optional.of(describeCell(resources, brailleCharacter));
+      }
     };
   }
 
@@ -340,6 +345,23 @@ public class EditBufferChinese extends EditBufferUnContracted {
       return context.getString(R.string.bb_candidate_list_more, window, lastCandidates.size());
     }
     return context.getString(R.string.bb_candidate_list_all, window);
+  }
+
+  /**
+   * 这一格在中文盲文里"叫什么"。
+   *
+   * <p>盲文是记音文字：用户记的是"1-2 点是波"，不是"点 1 点 2"。所以能认出归属格时按教学读法
+   * 播报（声母呼读音 / 韵母例字 / 几声），只有认不出来的格（标点、数字符、空格、按错的乱组合）
+   * 才退回点位号，让用户知道自己按了哪几个点。
+   *
+   * <p>回落不能省：点位号是用户唯一的"我到底按了什么"的证据。全换成名称以后，按错了会听到
+   * 一句无意义的话，反而更难自查。
+   */
+  private static String describeCell(Resources resources, BrailleCharacter brailleCharacter) {
+    String name = ChineseBrailleSignNames.describe(brailleCharacter.toString());
+    return name != null
+        ? name
+        : BrailleTranslateUtils.getDotsText(resources, brailleCharacter);
   }
 
   /**
@@ -374,10 +396,7 @@ public class EditBufferChinese extends EditBufferUnContracted {
       String resolvedText, BrailleCharacter brailleCharacter) {
     if (pendingCells > 0 || invalidTail) {
       return getAppendBrailleTextToSpeak(context.getResources(), brailleCharacter)
-          .orElseGet(
-              () ->
-                  BrailleTranslateUtils.getDotsText(
-                      context.getResources(), brailleCharacter));
+          .orElseGet(() -> describeCell(context.getResources(), brailleCharacter));
     }
     return resolvedText;
   }
