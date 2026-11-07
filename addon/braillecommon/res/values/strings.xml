@@ -319,4 +319,8 @@
   <string name="bb_candidate_available">%1$s, %2$d candidates, swipe left to change</string>
   <!-- Announced after switching candidate; %1$d is the 1-based position, %2$s is the character. [CHAR_LIMIT=NONE] -->
   <string name="bb_candidate_selected">%1$d of %2$s</string>
+  <!-- Announced when the selected characters are committed to the text field. [CHAR_LIMIT=NONE] -->
+  <string name="bb_text_committed">Committed</string>
+  <!-- Announced when the pending syllable is discarded before being committed. [CHAR_LIMIT=NONE] -->
+  <string name="bb_candidate_discarded">Discarded</string>
 </resources>

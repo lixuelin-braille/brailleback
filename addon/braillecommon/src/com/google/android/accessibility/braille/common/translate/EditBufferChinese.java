@@ -58,14 +58,22 @@ import java.util.Optional;
  * <p>残留歧义：若某个 2 格字 A 恰好与后面一格拼成合法的 3 格字 B，会优先取 2 格。这类歧义
  * 只有语言模型能解，当前版本接受此限制。
  *
- * <p><b>同音字与候选</b>：一个合法音节平均对应 15.6 个汉字（1343 个音节 / 20974 条定义），
- * 87.8% 的音节有多候选。所以"译出一个字"只是猜中最常见的那个，不一定是用户要的。这里保留
- * 一个候选态：尾部音节刚凑满时，{@link #moveToNextCandidate} 可以在候选之间移动，输入框里的
- * 字实时跟着换。用户不换就直接打下一格或按空格，当前选中的字自然落定——<b>确认是隐式的，
- * 不需要多按一下</b>；需要选字时才有额外操作。
+ * <p><b>两阶段：输入选字 → 上屏</b>。中文现行盲文一个合法音节平均对应 15.6 个汉字（1343 个
+ * 音节 / 20974 条定义），87.8% 的音节有多候选，"译出一个字"只是猜中最常见的那个。所以照标准
+ * 输入法的模型分成两步：
  *
- * <p>没有独立"确认"手势是有意的：盲文键盘上没有空格键，"空格"就是单指右滑，而那是打字最高频
- * 的动作之一，不能拿来当确认键。
+ * <ol>
+ *   <li><b>阶段 1（输入和选字）</b>：音节凑满时<b>不</b>把汉字写进输入框，只把选中的候选播报
+ *       出来（"某字，多少候选"）。此时 {@link #moveToNextCandidate} 可以前后换字，用户听到的
+ *       是"第 N 个，某字"，输入框一直是空的——这一点很关键：盲人看不见下划线，如果字提前
+ *       出现，他无法分清"还没上屏"和"已经上屏"。
+ *   <li><b>阶段 2（上屏）</b>：按空格（或提交）时先把选中的字并进 composing，再提交成文本，
+ *       并播报"上屏"。打下一格时，前一个音节因为不再是最后一个，自动确认并进入 composing，
+ *       这就是连续输入时不必每字按空格的原因。
+ * </ol>
+ *
+ * <p>没有独立的"确认"手势是有意的：盲文键盘上没有空格键，"空格"就是单指右滑，而那是打字最高频
+ * 的动作之一，不能拿来当确认键。确认复用空格，和标准中文输入法的"空格上屏"一致。
  */
 public class EditBufferChinese extends EditBufferUnContracted {
 
@@ -96,6 +104,23 @@ public class EditBufferChinese extends EditBufferUnContracted {
    * 时不会变，所以这个 key 是稳定的。
    */
   private final CandidateCursor candidateCursor = new CandidateCursor();
+
+  /**
+   * 已经确认过的最后一个音节的起始格下标；{@code -1} 表示一个字都还没确认。
+   *
+   * <p>"确认"是阶段 1（输入选字）和阶段 2（上屏）的分界：确认之前的字只在候选阶段，不写进
+   * 输入框；确认之后才进 composing，按空格或提交时落成文本。追加新格时，前一个音节因为不再是
+   * 最后一个，会被自动确认——这就是"自动确认上一个字"。
+   */
+  private int lastConfirmedSyllableStart = -1;
+
+  /**
+   * 当前输入框能不能做"选字"这一步。
+   *
+   * <p>密码框和非文本框没有 composing 可用，待确认的字根本无处安放，按空格时会被连同 holdings
+   * 一起清掉，等于吞字。这两种场景直接退化成"凑满即落定"，不做两阶段。
+   */
+  private boolean supportsCandidateSelection = true;
 
   /** 最近一次切分里最后一个完整音节的起始格下标；{@code -1} 表示尾部没有完整音节。 */
   private int lastCandidateStart = -1;
@@ -131,133 +156,115 @@ public class EditBufferChinese extends EditBufferUnContracted {
 
   @Override
   protected String translateHoldings(BrailleWord word) {
-    // 每次重算都先复位"尾部音节"三元组：下面只有在真的切出完整音节时才会重新赋值，
-    // 留在上一轮的值会让"换候选"作用在已经不属于尾部的音节上。
-    lastCandidateStart = -1;
-    lastCandidates = Collections.emptyList();
-    lastChosenIndex = 0;
     // 删字/提交让 holdings 变短后，落在已不存在区间里的候选选择要丢掉。
     candidateCursor.trimTo(word.size());
-
-    if (word.isEmpty()) {
-      invalidTail = false;
-      pendingCells = 0;
-      return "";
+    if (lastConfirmedSyllableStart >= word.size()) {
+      // holdings 已经短到不包括那个音节了，确认标记随之失效。
+      lastConfirmedSyllableStart = -1;
     }
-    StringBuilder resolved = new StringBuilder();
-    StringBuilder trace = new StringBuilder();
-    int start = 0;
-    boolean numericMode = false;
-    boolean invalid = false;
-    int pending = 0;
-    // 尾部最后一个单元是不是"完整音节"。只有它是，才有候选态可换字：尾部是标点、数字或
-    // 半截音节时，换候选就会改到前面早已定好的字上，用户会以为"删掉了一个字"。
-    boolean tailIsSyllable = false;
-    final int size = word.size();
-    while (start < size) {
-      int remaining = size - start;
-      BrailleCharacter cell = word.get(start);
-      tailIsSyllable = false;
-
-      // 数字符 3456：进入数字模式。它本身不产生字符（numsign 只切换状态），这里只置标志、
-      // 不输出，避免把数字符翻成难以理解的符号。
-      if (BrailleTranslateUtils.DOTS3456.equals(cell)) {
-        numericMode = true;
-        trace.append("[3456=numsign]");
-        start++;
-        continue;
-      }
-
-      // 数字模式：逐格翻成 0-9，直到按空格提交（appendSpace 会清空 holdings）。
-      if (numericMode) {
-        resolved.append(translator.translateToPrint(word.subword(start, start + 1)));
-        trace.append('[').append(dots(word, start, 1)).append("=digit]");
-        start++;
-        continue;
-      }
-
-      if (remaining >= 3 && index.hasCandidate(dots(word, start, 3))) {
-        appendResolvedSyllable(resolved, word, start, 3);
-        tailIsSyllable = true;
-        trace.append('[').append(dots(word, start, 3)).append("=3]");
-        start += 3;
-        continue;
-      }
-      if (remaining >= 2 && index.hasCandidate(dots(word, start, 2))) {
-        appendResolvedSyllable(resolved, word, start, 2);
-        tailIsSyllable = true;
-        trace.append('[').append(dots(word, start, 2)).append("=2]");
-        start += 2;
-        continue;
-      }
-
-      // 走到这里说明余下的格凑不成一个完整音节，只剩两种可能：还在半路上，或者拼错了。
-      if (index.canStartSyllable(dots(word, start, 1))) {
-        if (remaining == 1) {
-          // 只有一格、且它能作音节首格：挂起等后续格。此时绝不能翻译——中文表里
-          // digit 1 1 是无条件定义，单格会被翻成数字，看起来像已经上屏。
-          trace.append("[pending:").append(dots(word, start, 1)).append(']');
-          pending = remaining;
-          break;
-        }
-        if (remaining == 2 && index.isThreeCellPrefix(dots(word, start, 2))) {
-          // 这 2 格自身不是音节，但能接声调凑成 3 格音节：继续挂起。
-          trace.append("[pending:").append(dots(word, start, 2)).append(']');
-          pending = remaining;
-          break;
-        }
-        // 首格是合法音节首格，后面接的格却既不成音节、也不是任何音节的前缀：
-        // 这串盲文在表里根本不存在。既不能当数字吐出去（用户会以为已经上屏），
-        // 也不能静默吞掉（用户会以为键盘坏了），标记出来交给上层播报。
-        invalid = true;
-        trace.append("[invalid:").append(dots(word, start, remaining)).append(']');
-        pending = remaining;
-        break;
-      }
-
-      // 首格不能作音节首格：可能是标点/符号，也可能是用户把一格的几个点分开按了（成了多格）。
-      // 中文表里 {@code digit 1 1} 是无条件定义，非数字模式下的单格会被反译成数字——但那个
-      // "数字"并不是用户想输入的数字，只是表在缺上下文时的默认反译。若把它显示出去，用户会
-      // 以为这一格已经定死，后面的格再也拼不成字。所以只播报点位、不产出字符。
-      String single = translator.translateToPrint(word.subword(start, start + 1));
-      if (isDigitsOnly(single)) {
-        trace.append("[pending-digit:").append(dots(word, start, 1)).append(']');
-        pending = remaining;
-        break;
-      }
-      resolved.append(single);
-      trace.append('[').append(dots(word, start, 1)).append("=1]");
-      start++;
-    }
-    invalidTail = invalid;
-    pendingCells = pending;
-    if (!tailIsSyllable) {
-      // 尾部不是完整音节：没有候选态。这里必须清掉 appendResolvedSyllable 在中间某轮留下的
-      // 下标，否则"打完一个字又开始打下一个字"时，左滑会去换前一个字的候选。
-      lastCandidateStart = -1;
-    }
-    Log.d(SPLIT_TAG, "holdings=" + word + " split=" + trace + " out=[" + resolved + "]");
-    return resolved.toString();
+    SyllableSplitter.Result result =
+        SyllableSplitter.split(
+            word,
+            index,
+            translator,
+            candidateCursor,
+            lastConfirmedSyllableStart,
+            supportsCandidateSelection);
+    lastCandidateStart = result.pendingStart;
+    lastCandidates = result.pendingCandidates;
+    lastChosenIndex = result.pendingChoice;
+    pendingCells = result.pendingCells;
+    invalidTail = result.invalidTail;
+    Log.d(
+        SPLIT_TAG,
+        "holdings="
+            + word
+            + " split="
+            + result.trace
+            + " out=["
+            + result.confirmedText
+            + "] pending="
+            + result.pendingStart);
+    return result.confirmedText;
   }
 
   /**
-   * 空格提交时，未完成的音节会被 {@code commit()} 直接丢弃。用户是盲人，看不到输入框，
-   * 如果不提示，他会以为自己打的字已经上去了——实际一个字都没留下。
+   * 空格 = 阶段 2 的"上屏"。
+   *
+   * <p>必须做两件事：先把待确认音节的选字结果并进 composing（否则 commit 时它根本不在文本里，
+   * 会被直接丢掉），再给一次明确的可听反馈。用户看不见输入框，选字阶段听到的是"某字、多少候选"，
+   * 上屏如果没有声音，就分不清"已经落进文本"和"还在选"，两阶段就白设计了。
+   *
+   * <p>半截音节会在提交时被丢弃，这条提示和"上屏"合并成一句播报：两次 INTERRUPT 会互相打断，
+   * 后一句把前一句顶掉，用户反而只听到一半。
    */
   @Override
   public void appendSpace(ImeConnection imeConnection) {
+    StringBuilder announcement = new StringBuilder();
     if (pendingCells > 0) {
-      talkBack.speak(
-          context.getString(R.string.bb_incomplete_braille_ignored),
-          TalkBackSpeaker.AnnounceType.INTERRUPT);
+      announcement.append(context.getString(R.string.bb_incomplete_braille_ignored)).append('，');
     }
+    confirmPendingSyllable(imeConnection);
     super.appendSpace(imeConnection);
+    announcement.append(context.getString(R.string.bb_text_committed));
+    talkBack.speak(announcement.toString(), TalkBackSpeaker.AnnounceType.INTERRUPT);
   }
 
   /**
-   * 尾部盲文组合不存在时播报提示，让用户立刻知道是自己按错了格，而不是键盘没反应。
+   * 上屏前必须先确认待选字。
    *
-   * <p>父类只在译文为空时走这个分支，正好是非法组合的场景（没有产出任何字符）。
+   * <p>提交、移动光标、切换应用都会走 {@code commit()}，那里会清空 holdings 并结束 composing。
+   * 待确认的字此时还没进 composing，不先并进去就等于被静默吞掉。
+   */
+  @Override
+  public void commit(ImeConnection imeConnection) {
+    confirmPendingSyllable(imeConnection);
+    super.commit(imeConnection);
+  }
+
+  /**
+   * 把待确认音节的选字结果并进 composing（阶段 1 → 阶段 2 的分界线）。
+   *
+   * <p>只推进"确认到哪一格"并刷新 composing，不提交文本；提交交给调用方，这样"打下一格自动
+   * 确认"和"按空格上屏"复用同一段逻辑。已经确认过时原样返回，可以安全重复调用。
+   */
+  private void confirmPendingSyllable(ImeConnection imeConnection) {
+    if (lastCandidateStart < 0) {
+      return;
+    }
+    lastConfirmedSyllableStart = lastCandidateStart;
+    lastCandidateStart = -1;
+    refreshComposing(imeConnection);
+  }
+
+  /** 用最新译文刷新 composing；密码框和非文本框没有 composing 可写，跳过。 */
+  private void refreshComposing(ImeConnection imeConnection) {
+    if (!BrailleCommonUtils.isTextField(imeConnection.editorInfo)
+        || BrailleCommonUtils.isPasswordField(imeConnection.editorInfo)) {
+      return;
+    }
+    imeConnection.inputConnection.setComposingText(translateHoldings(holdings), 1);
+  }
+
+  /**
+   * 记录当前输入框能不能走两阶段。
+   *
+   * <p>必须在 {@code super.appendBraille} 之前设好：{@link #translateHoldings} 要靠它决定
+   * 要不要把最后一个音节挂在"待确认"上，而密码框里挂起就等于吞字。
+   */
+  @Override
+  public String appendBraille(ImeConnection imeConnection, BrailleCharacter brailleCharacter) {
+    supportsCandidateSelection =
+        BrailleCommonUtils.isTextField(imeConnection.editorInfo)
+            && !BrailleCommonUtils.isPasswordField(imeConnection.editorInfo);
+    return super.appendBraille(imeConnection, brailleCharacter);
+  }
+
+  /**
+   * 尾部盲文组合不存在时播报提示；音节刚凑满时播报候选数。
+   *
+   * <p>候选这条是两阶段的关键提示：字还在选字阶段、没进输入框，如果只播点位，用户会以为
+   * 什么都没发生。播"某字，多少候选"才说明"轮到你了，选完按空格上屏"。
    */
   @Override
   protected Optional<String> getAppendBrailleTextToSpeak(
@@ -265,16 +272,26 @@ public class EditBufferChinese extends EditBufferUnContracted {
     if (invalidTail) {
       return Optional.of(resources.getString(R.string.bb_invalid_braille_combination));
     }
+    if (lastCandidateStart >= 0 && lastCandidates.size() > 1) {
+      return Optional.of(
+          context.getString(
+              R.string.bb_candidate_available,
+              lastCandidates.get(lastChosenIndex),
+              lastCandidates.size()));
+    }
     return super.getAppendBrailleTextToSpeak(resources, brailleCharacter);
   }
 
   /**
-   * 中文一个音节 2~3 格，译出汉字的那一刻输入框整串被替换，读屏不会主动读新出现的字，
-   * 所以必须自己播报。否则用户只听到"点几"，看不到也听不到汉字真的出来了。
+   * 不在这里播报"已确认的字"。
+   *
+   * <p>两阶段模型下，字进 composing 的时机是"它被确认"，而确认的触发往往是用户已经在打下一个
+   * 音节。这时再念上一个字，等于每打一个字都重复一遍，反而盖掉新音节的点位播报。用户需要听的
+   * 是：选字阶段听到候选，上屏阶段听到"上屏"。
    */
   @Override
   protected boolean shouldSpeakResolvedTranslation() {
-    return true;
+    return false;
   }
 
   /**
@@ -284,34 +301,16 @@ public class EditBufferChinese extends EditBufferUnContracted {
    * 字的语言里文本上屏就会被读出来）。中文盲文在凑满音节之前输入框<b>根本不变</b>，若再挡掉
    * 点位播报，用户按下去就既没有声音也没有字——只能判断成"键盘坏了"。实测 63 个单格里 55 个
    * 属于"音节首格"，都会被挂起，所以这条不是边缘情况，而是主路径。
+   *
+   * <p>有候选待确认时同理必须放行：那时 composing 里只有已经确认的字，这一格本身没有产出，
+   * 挡掉播报就会变成"按下去了、什么也没说"。
    */
   @Override
   protected boolean shouldEmitDotAnnouncement(
       ImeConnection imeConnection, String currentTranslation) {
-    return TextUtils.isEmpty(currentTranslation)
+    return lastCandidateStart >= 0
+        || TextUtils.isEmpty(currentTranslation)
         || super.shouldEmitDotAnnouncement(imeConnection, currentTranslation);
-  }
-
-  /**
-   * 把一个完整音节译成汉字并追加到 {@code resolved}，同时把"尾部音节"三元组更新到这个音节。
-   *
-   * <p>取哪个字由 {@link #candidateChoices} 决定：没有记录（用户还没换过）取排序后的第一个，
-   * 也就是字频最高的常用字；换过就取用户选定的那个。这样追加下一格触发整串重算时，用户先前
-   * 的选择不会被打回原形。
-   */
-  private void appendResolvedSyllable(
-      StringBuilder resolved, BrailleWord word, int start, int count) {
-    List<String> candidates = index.getCandidates(dots(word, start, count));
-    if (candidates.isEmpty()) {
-      // 索引里没有（理论上 hasCandidate 已经挡掉），退回翻译器，保证不吞字。
-      resolved.append(translator.translateToPrint(word.subword(start, start + count)));
-      return;
-    }
-    int chosen = candidateCursor.indexFor(start, candidates.size());
-    resolved.append(candidates.get(chosen));
-    lastCandidateStart = start;
-    lastCandidates = candidates;
-    lastChosenIndex = chosen;
   }
 
   @Override
@@ -343,22 +342,31 @@ public class EditBufferChinese extends EditBufferUnContracted {
     // 先重算一次：holdingsEndsWithPrefix() 之类的试探性翻译会把三元组留在别的子串上，
     // 不刷新就可能对着一个早已不属于尾部的音节换字。
     translateHoldings(holdings);
-    if (lastCandidateStart < 0 || lastCandidates.size() <= 1) {
+    if (lastCandidateStart < 0) {
       return false;
     }
-    // 拷到局部：紧接着的第二次 translateHoldings 会重新赋值这两个字段，播报和日志必须用
-    // "决定这一跳时"的那份数据，否则可能对着另一个音节念字，甚至下标越界。
+    if (lastCandidates.size() <= 1) {
+      return false;
+    }
+    if (delta < 0 && lastChosenIndex == 0) {
+      // 往回退已经到头：再退一次就放弃这个音节。
+      // 没有这条，用户在候选里只能绕圈，打错的音节永远删不掉——单指左滑在候选态下被换字占用了。
+      discardPendingSyllable(imeConnection);
+      return true;
+    }
+    // 拷到局部：后续字段还可能被别的路径改写，播报和日志必须用"决定这一跳时"的那份数据，
+    // 否则可能对着另一个音节念字，甚至下标越界。
     final int start = lastCandidateStart;
     final List<String> candidates = lastCandidates;
     int next = candidateCursor.shift(start, lastChosenIndex, candidates.size(), delta);
+    lastChosenIndex = next;
     String picked = candidates.get(next);
-
-    String text = translateHoldings(holdings);
-    imeConnection.inputConnection.setComposingText(text, 1);
+    // 两阶段下这个字还没进 composing（要等确认才写），所以换候选只需要更新选择，界面不用动。
+    // 用户靠这句播报确认换到了哪个字。
     Log.d(
         SPLIT_TAG,
         "candidate start=" + start + " index=" + next + " of " + candidates.size()
-            + " -> " + picked + " composing=[" + text + "]");
+            + " -> " + picked);
     talkBack.speak(
         context.getString(R.string.bb_candidate_selected, next + 1, picked),
         TalkBackSpeaker.AnnounceType.INTERRUPT);
@@ -366,35 +374,24 @@ public class EditBufferChinese extends EditBufferUnContracted {
   }
 
   /**
-   * 音节凑满时补一句候选数。
+   * 放弃尾部待确认的音节，连同它占用的格一起从 holdings 里删掉。
    *
-   * <p>中文同音字平均 15.6 个，光念出打中的那个字会让用户以为这就是唯一解 —— 他看不见输入框，
-   * 不报候选数就永远不会去换。候选只有一个时不加这句，免得每次都是废话。
+   * <p>两阶段下这个音节<b>不在输入框里</b>，用户删不掉它；而单指左滑在候选态下被"换下一个
+   * 候选"占用了。不给这条出口，打错的音节就只能先上屏再删——多一步，而且会先落一个错字进文本。
    */
-  @Override
-  protected String getResolvedTranslationAnnouncement(String resolvedText) {
-    if (lastCandidateStart < 0 || lastCandidates.size() <= 1) {
-      return resolvedText;
-    }
-    return context.getString(
-        R.string.bb_candidate_available, resolvedText, lastCandidates.size());
-  }
-
-  /** 把 {@code word[start, start + count)} 转成表内使用的点位串，如 {@code 125-35-1}。 */
-  private static String dots(BrailleWord word, int start, int count) {
-    return word.subword(start, start + count).toString();
-  }
-
-  /** 译文是否**全部**是数字字符（含全角数字）。用于识别"非数字模式下的假数字"。 */
-  private static boolean isDigitsOnly(String text) {
-    if (text.isEmpty()) {
-      return false;
-    }
-    for (int i = 0; i < text.length(); i++) {
-      if (!Character.isDigit(text.charAt(i))) {
-        return false;
+  private void discardPendingSyllable(ImeConnection imeConnection) {
+    int count = holdings.size() - lastCandidateStart;
+    for (int i = 0; i < count; i++) {
+      if (!holdings.isEmpty()) {
+        holdings.remove(holdings.size() - 1);
       }
     }
-    return true;
+    lastCandidateStart = -1;
+    lastCandidates = Collections.emptyList();
+    lastChosenIndex = 0;
+    refreshComposing(imeConnection);
+    talkBack.speak(
+        context.getString(R.string.bb_candidate_discarded),
+        TalkBackSpeaker.AnnounceType.INTERRUPT);
   }
 }
