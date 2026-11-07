@@ -420,6 +420,18 @@ public class EditBufferChinese extends EditBufferUnContracted {
         || super.shouldEmitDotAnnouncement(imeConnection, currentTranslation);
   }
 
+  /**
+   * 这一格是否完整到可以立刻结算，交给 {@link ChineseBrailleSignNames#isCompleteAt} 判断，
+   * 位置取尾部还没翻译成字的格数 {@link #pendingCells}。
+   *
+   * <p>用 {@code pendingCells} 而不是自己数：它由 {@link SyllableSplitter} 在每次落键后重算，
+   * 已经扣掉了"前面凑满的音节"，是唯一可靠的位置来源。
+   */
+  @Override
+  public boolean isCompleteCell(BrailleCharacter cell) {
+    return ChineseBrailleSignNames.isCompleteAt(cell.toString(), pendingCells);
+  }
+
   @Override
   public boolean moveToNextCandidate(ImeConnection imeConnection) {
     return shiftCandidate(imeConnection, /* delta= */ 1);

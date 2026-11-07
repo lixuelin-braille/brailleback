@@ -114,6 +114,19 @@ public class BrailleInputView extends View
       return "";
     }
 
+    /**
+     * 这一格在当前输入位置上是否已经是一个完整符号（键盘可以立刻把它结算出去）。
+     *
+     * <p>键盘用它决定"停顿多久算一格结束"：完整就用短时限，还没成形就用长时限。这才是"格"
+     * 的语义边界，比单纯的时间阈值可靠——中文盲文里 {@code 12} 的第一点 {@code 1} 在表里是
+     * 声调符号，若按完整符号的时限结算，用户慢慢打"波"就会被切成两格，永远拼不成字。
+     *
+     * <p>默认 {@code true}：一格一字符的语言按完就该结算，行为与上游一致。
+     */
+    default boolean isCompleteCell(BrailleCharacter brailleCharacter) {
+      return true;
+    }
+
     /** Signals that calibration has been produced. Returns true if the action is consumed. */
     @CanIgnoreReturnValue
     default boolean onCalibration(CalibrationTriggeredType type, FingersPattern hand) {
@@ -165,7 +178,7 @@ public class BrailleInputView extends View
   private CalibrationTriggeredType calibrationType;
 
   /**
-   * 单点累积的停顿阈值：超过这个时间没有新点按下，就把已攒的点结算成一格。
+   * 攒下的点<b>已经构成完整符号</b>时，停顿多久就把它结算成一格。
    *
    * <p>这个值是在两种失败之间取折中，而这两种失败的性质差别很大：
    *
@@ -176,10 +189,23 @@ public class BrailleInputView extends View
    *   <li><b>太长</b>：每格出字都要多等一会。这只是慢，不影响正确性。
    * </ul>
    *
-   * <p>所以宁可偏长。实测盲人单手在 6 个点位之间摸索定位，两个点之间 0.6~1 秒是常态，
-   * 取 1200 毫秒留出余量。真正需要立刻出格时按空格或任意手势会直接结算，不必干等。
+   * <p>所以宁可偏长。实测盲人单手在 6 个点位之间摸索定位，两个点之间 0.6~1 秒是常态。
+   * 真正需要立刻出格时按空格或任意手势会直接结算，不必干等。
    */
-  private static final long DOT_ACCUMULATE_SETTLE_MS = 1200;
+  private static final long DOT_COMPLETE_SETTLE_MS = 1500;
+
+  /**
+   * 攒下的点<b>还不构成完整符号</b>时，停顿多久才结算。
+   *
+   * <p>这一档是实测出来的：用户报"打一个字时间太长就拼不成了"。原因不是手慢，而是中间状态
+   * 也合法——打 {@code 12}（波）先按点 1，而点 1 单独在中文表里是"一声"（声调），若按"完整
+   * 符号"的短时限结算，这一格就没了，用户再按点 2 就成了下一格，"波"永远拼不出来。
+   *
+   * <p>所以"还没成形"的格子必须给足时间继续加点。{@link Callback#isCompleteCell} 负责判断
+   * 当前这一格成形没有，依据是音节结构（第几格、该位置允许哪些符号）。表外的组合（标点、
+   * 数字符、乱按）一律算完整，走上面那个短时限。
+   */
+  private static final long DOT_PARTIAL_SETTLE_MS = 3500;
 
   /**
    * 逐点累积模式下，当前这一格已经攒下的点。
@@ -189,8 +215,9 @@ public class BrailleInputView extends View
    * 模式只解决"同一手势里某根手指先松开"，不解决"分成几次点击"。而中文一个音节要 2~3 格，
    * 用户把一格的几个点分开按，就会变成几个单格，永远拼不出一个汉字。
    *
-   * <p>这里把单点点击攒进同一格，停顿 {@link #DOT_ACCUMULATE_SETTLE_MS} 后结算；多指同时
-   * 按下仍然是"一次就是一格、立刻结算"，不会给现有的和弦输入方式增加延迟。
+   * <p>这里把单点点击攒进同一格，停顿一会儿再结算（时长见 {@link #DOT_COMPLETE_SETTLE_MS} 与
+   * {@link #DOT_PARTIAL_SETTLE_MS}，取决于这一格是否已经成形）；多指同时按下仍然是"一次就是
+   * 一格、立刻结算"，不会给现有的和弦输入方式增加延迟。
    */
   private BrailleCharacter pendingCell = BrailleCharacter.EMPTY_CELL;
 
@@ -578,11 +605,31 @@ public class BrailleInputView extends View
     pendingCell = pendingCell.union(dot);
     pendingDotOrder.add(dot);
     announceDots(dot);
-    removeCallbacks(settlePendingCell);
-    postDelayed(settlePendingCell, DOT_ACCUMULATE_SETTLE_MS);
+    restartSettleTimer();
     Log.d(
         TAG,
         "accumulate dot=" + dot + " pending=" + pendingCell + " mode=" + accumulateDotsByTap);
+  }
+
+  /**
+   * 重新开始这一格的停顿计时，时长取决于这一格现在是否已经成形。
+   *
+   * <p>每次新点、每次退点都要重置，否则计时会按第一个点按下时的时间算，越打越容易被提前切断。
+   */
+  private void restartSettleTimer() {
+    removeCallbacks(settlePendingCell);
+    postDelayed(settlePendingCell, settleDelayMs(pendingCell));
+  }
+
+  /**
+   * 这一格该等多久。
+   *
+   * <p>已经成形的格用短时限，连打不拖沓；还没成形的格用长时限，容纳用户在同一格里慢慢摸索。
+   * 判定不在本类做——"什么算成形"是语言知识（中文看音节第几格），放在编辑缓冲里，见
+   * {@link Callback#isCompleteCell}。
+   */
+  private long settleDelayMs(BrailleCharacter cell) {
+    return callback.isCompleteCell(cell) ? DOT_COMPLETE_SETTLE_MS : DOT_PARTIAL_SETTLE_MS;
   }
 
   /** 这次手势是不是"退掉刚按的那个点"。判定条件见 {@link DotUndoPolicy}。 */
@@ -620,7 +667,7 @@ public class BrailleInputView extends View
       return;
     }
     // 剩下的点继续等停顿结算，用户可以接着改或接着按。
-    postDelayed(settlePendingCell, DOT_ACCUMULATE_SETTLE_MS);
+    postDelayed(settlePendingCell, settleDelayMs(pendingCell));
     announceDots(pendingCell);
     Log.d(TAG, "undo dot -> pending=" + pendingCell);
   }

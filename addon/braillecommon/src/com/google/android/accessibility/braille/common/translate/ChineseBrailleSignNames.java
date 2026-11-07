@@ -155,6 +155,36 @@ public final class ChineseBrailleSignNames {
     return TONE.containsKey(dots);
   }
 
+  /**
+   * 这一格在音节第 {@code position} 格（从 0 起）的位置上，是否已经<b>完整到可以单独交出去</b>。
+   *
+   * <p>键盘层用它决定"停顿多久就把攒下的点结算成一格"：完整就给短窗口（连打不拖沓），
+   * 还不完整就给长窗口——因为用户很可能只是在这一格中间摸索，点与点的间隔超过一秒是常态。
+   * 这一点是实测出来的：用户报"打一个字时间太长就拼不成了"，根因就是中间状态（例如
+   * {@code 12} 的第一点 {@code 1} 在表里是"一声"）被当成了完整符号提前结算。
+   *
+   * <p>位置判断故意<b>不</b>让第 2 格接受声调：2 格字（声母 + 声调）只占 19%，让它们多等一会儿，
+   * 换来 81% 的三格字在打韵母时不会因为第一点恰好是声调点位而被切断。
+   *
+   * <p>表外的点集（标点、数字符 {@code 3456}、用户乱按的组合）一律算完整，按原来的节奏结算：
+   * 这类内容没有"打一半"的中间态，多等没有收益。
+   */
+  public static boolean isCompleteAt(String dots, int position) {
+    if (dots == null || dots.isEmpty()) {
+      return false;
+    }
+    if (isShengmu(dots)) {
+      return position <= 0;
+    }
+    if (isYunmu(dots)) {
+      return position <= 1;
+    }
+    if (isTone(dots)) {
+      return position >= 2;
+    }
+    return true;
+  }
+
   /** 全部声母点位，供单测穷举校验。 */
   public static Set<String> shengmuCells() {
     return new HashSet<>(SHENGMU.keySet());

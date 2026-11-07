@@ -156,4 +156,48 @@ public class ChineseBrailleSignNamesTest {
       assertFalse(cell, ChineseBrailleSignNames.isYunmu(cell));
     }
   }
+
+  @Test
+  public void isCompleteAt_firstCell_acceptsShengmuAndYunmu() {
+    assertTrue(ChineseBrailleSignNames.isCompleteAt("12", 0)); // 波（声母）
+    assertTrue(ChineseBrailleSignNames.isCompleteAt("35", 0)); // 啊（零声母韵母）
+  }
+
+  @Test
+  public void isCompleteAt_firstCell_rejectsSingleDot() {
+    // 这就是用户报"打一个字时间太长就拼不成"的根因：打 12（波）先按点 1，
+    // 点 1 单独是声调，若判成完整就会被立刻结算，点 2 变成下一格。
+    for (String dot : new String[] {"1", "2", "3"}) {
+      assertFalse(dot, ChineseBrailleSignNames.isCompleteAt(dot, 0));
+    }
+  }
+
+  @Test
+  public void isCompleteAt_secondCell_acceptsYunmuOnly() {
+    assertTrue(ChineseBrailleSignNames.isCompleteAt("35", 1));
+    assertTrue(ChineseBrailleSignNames.isCompleteAt("24", 1));
+    // 第 2 格故意不接受声调：2 格字只占 19%，让它们多等，换来 81% 的三格字打韵母时不被切断。
+    assertFalse(ChineseBrailleSignNames.isCompleteAt("1", 1));
+    assertFalse(ChineseBrailleSignNames.isCompleteAt("23", 1));
+    // 声母不能出现在第 2 格。
+    assertFalse(ChineseBrailleSignNames.isCompleteAt("12", 1));
+  }
+
+  @Test
+  public void isCompleteAt_thirdCell_acceptsToneOnly() {
+    assertTrue(ChineseBrailleSignNames.isCompleteAt("1", 2));
+    assertTrue(ChineseBrailleSignNames.isCompleteAt("23", 2));
+    assertFalse(ChineseBrailleSignNames.isCompleteAt("12", 2));
+    assertFalse(ChineseBrailleSignNames.isCompleteAt("35", 2));
+  }
+
+  @Test
+  public void isCompleteAt_unknownCellIsComplete() {
+    // 标点、表外组合没有"打一半"的中间态，一律按完整处理，走短时限。
+    assertTrue(ChineseBrailleSignNames.isCompleteAt("36", 0)); // 标点
+    assertTrue(ChineseBrailleSignNames.isCompleteAt("4567", 0)); // 含点 7，表外
+    assertTrue(ChineseBrailleSignNames.isCompleteAt("12352", 1)); // 乱按
+    assertFalse(ChineseBrailleSignNames.isCompleteAt("", 0));
+    assertFalse(ChineseBrailleSignNames.isCompleteAt(null, 0));
+  }
 }

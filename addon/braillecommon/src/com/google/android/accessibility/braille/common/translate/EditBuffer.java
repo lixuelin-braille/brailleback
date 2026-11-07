@@ -95,6 +95,20 @@ public interface EditBuffer {
     return false;
   }
 
+  /**
+   * 这一格在当前位置上，是否已经是一个完整的盲文符号（可以立刻交出去）。
+   *
+   * <p>给键盘层判断"停顿多久才把攒下的点结算成一格"用。一格一字符的语言（英文）按完就该结算，
+   * 默认返回 {@code true}，行为与原来一致。
+   *
+   * <p>多格拼一字、且中间状态自己也可能合法时才需要覆写（中文现行盲文：{@code 1} 是声调、
+   * {@code 12} 是声母，用户打 {@code 12} 的第一点时听到的是"声调"，此时若按 {@code 12} 的
+   * 时限结算，这一格就被切断了）。
+   */
+  default boolean isCompleteCell(BrailleCharacter cell) {
+    return true;
+  }
+
   /** Moves the cursor in the text field. */
   boolean moveTextFieldCursor(ImeConnection imeConnection, int index);
 
