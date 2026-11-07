@@ -136,16 +136,43 @@ public class EditBufferUnContracted implements EditBuffer {
       if (TextUtils.isEmpty(textToSpeak)) {
         textToSpeak = BrailleTranslateUtils.getDotsText(context.getResources(), brailleCharacter);
       }
-      if (EditBufferUtils.shouldEmitPerCharacterFeedback(imeConnection)) {
+      final boolean emitDots = shouldEmitDotAnnouncement(imeConnection, currentTranslation);
+      // 诊断：中间态播报是否被闸门挡掉（tag=BBAnnounce）。用户是盲人，看不到输入框，
+      // "不产出文本 + 不播报"等于键盘完全没反应，这条日志是排查该类问题的唯一线索。
+      android.util.Log.d(
+          "BBAnnounce",
+          "dots=["
+              + textToSpeak
+              + "] emit="
+              + emitDots
+              + " announceType="
+              + imeConnection.announceType
+              + " textField="
+              + BrailleCommonUtils.isTextField(imeConnection.editorInfo)
+              + " cur=["
+              + currentTranslation
+              + "]");
+      if (emitDots) {
         talkBack.speak(textToSpeak, TalkBackSpeaker.AnnounceType.INTERRUPT);
       }
       result = textToSpeak;
     } else if (shouldSpeakResolvedTranslation()) {
       // 多格合成一个字符的语言（中文盲文）在音节凑满的瞬间，输入框里的内容被整串替换，
       // 读屏不会主动读新出现的字。这里补一次播报，否则用户只听到"点几"，不知道字出来了。
-      talkBack.speak(result, TalkBackSpeaker.AnnounceType.INTERRUPT);
+      talkBack.speak(
+          getResolvedTranslationAnnouncement(result), TalkBackSpeaker.AnnounceType.INTERRUPT);
     }
     return result;
+  }
+
+  /**
+   * 音节凑满时播报的文本，默认就是新译出来的那几个字。
+   *
+   * <p>有候选的语言（中文同音字）需要在这里补一句"共几个、怎么换"，否则用户不知道刚打出来的
+   * 不是唯一解，也就永远不会去换字。
+   */
+  protected String getResolvedTranslationAnnouncement(String resolvedText) {
+    return resolvedText;
   }
 
   /**
@@ -155,6 +182,21 @@ public class EditBufferUnContracted implements EditBuffer {
    */
   protected boolean shouldSpeakResolvedTranslation() {
     return false;
+  }
+
+  /**
+   * 落键后没有任何文本产出时，是否播报这一格的点位。
+   *
+   * <p>默认沿用上游的"逐字符回显"开关（{@link EditBufferUtils#shouldEmitPerCharacterFeedback}）：
+   * 该开关在文本框 + {@code announceType == SILENCE} 时是关的，因为一格一字的语言里文本上屏
+   * 本身就会被读屏读出来，再念点号就是重复。
+   *
+   * <p>但多格合成一字的语言（中文盲文）不成立：半截音节**不产出任何文本**，点位播报是用户
+   * 唯一能感知"这一下按到了"的反馈。所以中文子类覆写为"没产出文本就一定播报"。
+   */
+  protected boolean shouldEmitDotAnnouncement(
+      ImeConnection imeConnection, String currentTranslation) {
+    return EditBufferUtils.shouldEmitPerCharacterFeedback(imeConnection);
   }
 
   /**

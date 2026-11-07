@@ -187,6 +187,11 @@ public class BrailleImeActor {
                             ? R.string.no_grammar_suggestion_available_announcement
                             : R.string.no_spelling_suggestion_available_announcement));
           }
+        } else if (moveCandidate(imeConnection, /* forward= */ true)) {
+          // 中文盲文刚凑满一个音节时，单指左滑改为"换下一个候选"。
+          // 换字只占左向：识别到的"单指右滑"就是空格手势（盲文键盘没有独立空格键），
+          // 那是打字最高频的动作之一，不能拿来换候选。回退方向放在双指左滑（DELETE_WORD）。
+          result = true;
         } else {
           callback.getEditBuffer().deleteCharacterBackward(imeConnection);
         }
@@ -197,6 +202,10 @@ public class BrailleImeActor {
           if (!result) {
             feedbackManager.emitFeedback(FeedbackManager.Type.NAVIGATE_OUT_OF_BOUNDS);
           }
+        } else if (moveCandidate(imeConnection, /* forward= */ false)) {
+          // 候选误换过头时用双指左滑回退。候选态下"删整个词"的需求本来就低，
+          // 一旦换了候选，下一次双指左滑会落到删词上，不会一直被困住。
+          result = true;
         } else {
           callback.getEditBuffer().deleteWord(imeConnection);
         }
@@ -286,6 +295,23 @@ public class BrailleImeActor {
       }
     }
     return result;
+  }
+
+  /**
+   * 尝试把尾部音节的候选前后移动一格。
+   *
+   * <p>返回值直接决定这次手势归谁：{@code true} 说明已被"换候选"消费，调用方<b>不能</b>再执行
+   * 原动作，否则用户换一次候选会连带删掉一个字。没有候选可换（英文输入的左滑、中文半截音节）
+   * 时返回 {@code false}，手势按原义走，功能一点不少。
+   */
+  private boolean moveCandidate(ImeConnection imeConnection, boolean forward) {
+    EditBuffer editBuffer = callback.getEditBuffer();
+    if (editBuffer == null) {
+      return false;
+    }
+    return forward
+        ? editBuffer.moveToNextCandidate(imeConnection)
+        : editBuffer.moveToPreviousCandidate(imeConnection);
   }
 
   private void performTextAction(

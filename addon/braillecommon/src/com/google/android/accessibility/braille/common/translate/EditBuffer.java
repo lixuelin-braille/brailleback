@@ -73,6 +73,28 @@ public interface EditBuffer {
     return false;
   }
 
+  /**
+   * 把尾部音节的候选切到下一个／上一个。
+   *
+   * <p>只有"多格拼成一个字符、且同一个字符有多种写法"的语言才存在候选这回事（中文现行盲文：
+   * 1343 个音节、平均 15.6 个同音字）。一格一字符的语言默认返回 {@code false}，调用方据此把
+   * 这次手势按原义处理，所以不影响英文等现有输入。
+   *
+   * <p>只作用于<b>尾部</b>音节：盲文从尾部累积输入，前缀已在 composing 里固定，用户能改的只有
+   * 刚打出来的那一段。
+   *
+   * @return {@code true} 表示这次手势已被"换候选"消费掉；{@code false} 表示当前没有可换的候选，
+   *     调用方应继续原来的动作。
+   */
+  default boolean moveToNextCandidate(ImeConnection imeConnection) {
+    return false;
+  }
+
+  /** 见 {@link #moveToNextCandidate}。 */
+  default boolean moveToPreviousCandidate(ImeConnection imeConnection) {
+    return false;
+  }
+
   /** Moves the cursor in the text field. */
   boolean moveTextFieldCursor(ImeConnection imeConnection, int index);
 
