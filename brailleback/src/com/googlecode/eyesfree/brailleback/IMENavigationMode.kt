@@ -132,6 +132,14 @@ class IMENavigationMode @JvmOverloads constructor(
         // These commands are handled by the IME whenever it is accepting
         // input, even if it has not taken control of the display.
         if (ime != null && mState.acceptsText()) {
+            // 唯一输入入口：所有码表下把点字键、上屏、退格、回车、候选切换交给
+            // 与屏幕盲文键盘同源的 EditBuffer（经 BrailleInputPolicy 统一按键语义）。
+            // 返回 null 表示该按键不归引擎处理（前删、越界点位、导航等），继续原链路；
+            // 没有候选时候选键也会返回 null，按键退回原来的光标导航语义。
+            val unified = ime.onHardwareInputEvent(event.command, event.argument)
+            if (unified != null) {
+                return unified
+            }
             when (event.command) {
                 BrailleInputEvent.CMD_KEY_DEL -> return ime.sendAndroidKey(KeyEvent.KEYCODE_DEL)
                 BrailleInputEvent.CMD_KEY_ENTER -> return ime.sendAndroidKey(KeyEvent.KEYCODE_ENTER)

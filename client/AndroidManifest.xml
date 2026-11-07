@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Library module: app version lives only in root gradle.properties. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-      package="com.googlecode.eyesfree.braille.client"
-      android:versionCode="1"
-      android:versionName="1.0">
+      package="com.googlecode.eyesfree.braille.client">
     <uses-permission
         android:name="com.googlecode.eyesfree.braille.selfbraille.PERMISSION_WRITE" />
 </manifest>

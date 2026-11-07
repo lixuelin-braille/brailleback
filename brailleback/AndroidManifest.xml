@@ -15,11 +15,11 @@
      limitations under the License.
 -->
 
+<!-- App version is injected by AGP from root gradle.properties
+     (appVersionCode / appVersionName). Do not declare it here again. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    package="com.googlecode.eyesfree.brailleback"
-      android:versionCode="33"
-      android:versionName="0.98.0">
+    package="com.googlecode.eyesfree.brailleback">
 
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Foreground service keeps the braille display connection alive when
@@ -106,18 +106,27 @@
                 android:resource="@xml/accessibilityservice" />
         </service>
 
+        <!--
+            唯一注册的盲文输入法：点显器硬件按键与触屏点字键盘共用本服务。
+            移植键盘 BrailleIme 不再单独注册（见 addon/brailleime/AndroidManifest.xml），
+            其实现由 BrailleIME 继承复用，形态由 pref_single_ime_view_mode 决定。
+            meta-data 沿用移植键盘的 braille_ime.xml，保留设置页入口与
+            supportsSwitchingToNextInputMethod，避免合并后设置页与切换键丢失。
+        -->
         <service
             android:name=".BrailleIME"
-            android:label="@string/braille_ime_name"
-            android:permission="android.permission.BIND_INPUT_METHOD" 
-            android:exported="true">
+            android:label="@string/bb_port_ime_service_name"
+            android:permission="android.permission.BIND_INPUT_METHOD"
+            android:enabled="true"
+            android:exported="true"
+            android:directBootAware="true">
             <intent-filter>
                 <action android:name="android.view.InputMethod" />
             </intent-filter>
 
             <meta-data
                 android:name="android.view.im"
-                android:resource="@xml/method" />
+                android:resource="@xml/braille_ime" />
         </service>
 
         <service

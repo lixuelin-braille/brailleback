@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Library module: no version here. The app version has a single source:
+     appVersionCode / appVersionName in the root gradle.properties. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-      package="com.googlecode.eyesfree.braille.service"
-      android:versionCode="1"
-      android:versionName="1.0">
+      package="com.googlecode.eyesfree.braille.service">
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission

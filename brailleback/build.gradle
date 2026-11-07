@@ -1,5 +1,10 @@
 apply plugin: 'com.android.application'
 
+// Version lives in the root gradle.properties only (see VersionCatalogTest).
+// providers.gradleProperty() keeps configuration-cache compatibility.
+def appVersionCode = providers.gradleProperty('appVersionCode').get().toInteger()
+def appVersionName = providers.gradleProperty('appVersionName').get()
+
 android {
     compileSdk 35
     buildFeatures {
@@ -11,8 +16,8 @@ android {
         applicationId "com.googlecode.eyesfree.brailleback"
         minSdk 23
         targetSdk 35
-        versionCode 33
-        versionName "0.98.0"
+        versionCode appVersionCode
+        versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             abiFilters 'armeabi-v7a', 'arm64-v8a'

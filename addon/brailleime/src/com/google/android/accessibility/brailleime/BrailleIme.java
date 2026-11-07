@@ -403,6 +403,13 @@ public class BrailleIme extends InputMethodService {
   public void onDestroy() {
     super.onDestroy();
     BrailleImeLog.d(TAG, "onDestroy");
+    // 单注册合并后本类会随唯一注册的 BrailleIME 反复创建/销毁。
+    // 原实现只在 onCreate() 里替换进程级 UncaughtExceptionHandler，却从不还原，
+    // 于是 handler 长期持有已销毁的 IME 实例，造成累积泄漏。这里在销毁时还原；
+    // 判断当前 handler 是否仍是自己，避免覆盖别的组件后来设置的处理链。
+    if (Thread.getDefaultUncaughtExceptionHandler() == localUncaughtExceptionHandler) {
+      Thread.setDefaultUncaughtExceptionHandler(originalDefaultUncaughtExceptionHandler);
+    }
     instance = null;
     if (talkBackForBrailleIme != null) {
       talkBackForBrailleIme.setBrailleImeForTalkBack(null);
@@ -1713,7 +1720,17 @@ public class BrailleIme extends InputMethodService {
 
         @Override
         public boolean sendBrailleDots(BrailleCharacter brailleCharacter) {
-          keyboardView.getStripView().animateInput(brailleCharacter.toDotNumbers());
+          // 移植接线：宿主 BrailleBackService 目前不提供 BrailleDisplayForBrailleIme
+          // (BrailleBackService.java:560 传 null)，所以 stripView 可能根本没创建
+          // (KeyboardView.stripView 初值 null，tearDown 也会置空)。引擎合并后硬件
+          // 按键走 BrailleIME 的统一入口，这里只保证该接口一旦被接线也不会闪退。
+          if (brailleImeActor == null || editBuffer == null || !isConnectionValid()) {
+            BrailleImeLog.d(TAG, "sendBrailleDots ignored: keyboard not activated");
+            return false;
+          }
+          if (keyboardView != null && keyboardView.getStripView() != null) {
+            keyboardView.getStripView().animateInput(brailleCharacter.toDotNumbers());
+          }
           boolean result;
           if (brailleCharacter.isEmpty()) {
             result = brailleImeActor.performAction(BrailleImeAction.ADD_SPACE_OR_NEXT_ITEM);

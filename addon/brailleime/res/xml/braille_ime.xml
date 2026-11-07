@@ -5,5 +5,5 @@
       android:imeSubtypeLocale=""
       android:imeSubtypeMode="keyboard"
       android:isAsciiCapable="true"
-      android:label="Braille Keyboard" />
+      android:label="@string/bb_port_ime_service_name" />
 </input-method>

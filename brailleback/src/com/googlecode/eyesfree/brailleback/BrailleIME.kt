@@ -33,18 +33,30 @@ import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
+import com.google.android.accessibility.brailleime.BrailleIme
+import com.googlecode.eyesfree.braille.display.BrailleInputEvent
 import com.googlecode.eyesfree.braille.translate.BrailleTranslator
-import com.googlecode.eyesfree.braille.translate.TableInfo
-import com.googlecode.eyesfree.brailleback.BrailleBackService.DOT7
-import com.googlecode.eyesfree.brailleback.BrailleBackService.DOT8
+import com.googlecode.eyesfree.brailleback.ime.BrailleInputPolicy
+import com.googlecode.eyesfree.brailleback.ime.SingleImeViewPolicy
+import com.googlecode.eyesfree.brailleback.ime.UnifiedBrailleInput
 import com.googlecode.eyesfree.utils.LogUtils
 import java.lang.ref.WeakReference
-import java.nio.ByteBuffer
 
 /**
- * Input method service for keys from the connected braille display.
+ * 唯一注册的盲文输入法。
+ *
+ * 合并前项目里有两个 InputMethodService：本类（点显器硬件输入）与移植过来的触屏
+ * 盲文键盘 [BrailleIme]，在系统输入法列表里各占一项。现在只注册本类，由它继承
+ * [BrailleIme] 复用触屏点字实现，并按 [resolveTouchKeyboardMode] 在两种形态间
+ * 选择 input view：
+ *   - 硬件模式（接点显器时默认）：沿用原点显器 IME 的占位视图，输入走 UnifiedBrailleInput；
+ *   - 触屏模式（未接点显器时默认）：加载移植键盘的 InputView，走它自己的 EditBuffer。
+ *
+ * 硬件模式刻意不调用 BrailleIme 的 onStartInputView()：那会挂载 overlay 键盘、
+ * 弹首启教程并替换全局异常处理器，对依赖读屏的点显器用户是干扰。
+ * 硬件输入不依赖触屏键盘是否激活，因此两条链路不会互相影响。
  */
-class BrailleIME : InputMethodService {
+class BrailleIME : BrailleIme {
 
     /**
      * Interface between the IME and a "host" in the accessibility service.
@@ -140,15 +152,15 @@ class BrailleIME : InputMethodService {
      */
     private val mCurrentText = StringBuilder()
     /**
-     * Buffer storing the currently-composing braille dots for contracted
-     * braille.
+     * 唯一的盲文输入引擎（与触屏盲文键盘同源的 EditBuffer）。
+     * 旧的 mComposingBraille + backTranslate 输入路径已整体移除：
+     * 点位不再在本类里自行累积和回译，全部交给 EditBuffer。
      */
-    private val mComposingBraille = ByteBuffer.allocate(MAX_COMPOSE_DOTS)
+    private var unifiedBraille: UnifiedBrailleInput? = null
 
     /** Constructor for general use. */
     constructor() : super() {
         mHost = null
-        mComposingBraille.clear()
     }
 
     /** Constructor for testing. Allows using a non-global host object. */
@@ -163,6 +175,8 @@ class BrailleIME : InputMethodService {
         super.onCreate()
         sInstance = WeakReference(this)
         mInputMethodManager = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        // 复制在 BrailleInputPolicy 里的命令常量必须与 AIDL 事件定义保持一致。
+        UnifiedBrailleInput.assertCommandContract()
         LogUtils.log(this, Log.VERBOSE, "Created Braille IME")
 
         getHost()?.onCreateIME()
@@ -174,7 +188,8 @@ class BrailleIME : InputMethodService {
         // to another one, so clear the state here as well.
         mExtractedText = null
         updateCurrentText()
-        mComposingBraille.clear()
+        unifiedBraille?.reset()
+        unifiedBraille = null
         sInstance = null
 
         getHost()?.onDestroyIME()
@@ -211,7 +226,6 @@ class BrailleIME : InputMethodService {
         }
         updateCurrentText()
         updateDisplay()
-        mComposingBraille.clear()
 
         getHost()?.onStartInput(attribute, restarting)
     }
@@ -219,22 +233,30 @@ class BrailleIME : InputMethodService {
     override fun onFinishInput() {
         super.onFinishInput()
         LogUtils.log(this, Log.VERBOSE, "onFinishInput")
+        // 统一引擎里可能还挂着 composing 的音节，切走输入框前先落定，避免丢字。
+        unifiedBraille?.finish()
         mExtractedText = null
         updateCurrentText()
-        mComposingBraille.clear()
 
         getHost()?.onFinishInput()
     }
 
     override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
-        super.onStartInputView(info, restarting)
-        LogUtils.log(this, Log.VERBOSE, "onStartInputView")
+        // 只有触屏模式才让父类激活移植键盘（overlay / 教程 / 手势控制器）。
+        // InputMethodService 对这两个 View 生命周期回调默认是空实现，硬件模式跳过
+        // 父类不会破坏 input view 的显示状态。
+        if (touchKeyboardEnabled()) {
+            super.onStartInputView(info, restarting)
+        }
+        LogUtils.log(this, Log.VERBOSE, "onStartInputView: touchKeyboard=$touchKeyboard")
 
         getHost()?.onStartInputView(info, restarting)
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
-        super.onFinishInputView(finishingInput)
+        if (touchKeyboardEnabled()) {
+            super.onFinishInputView(finishingInput)
+        }
         LogUtils.log(this, Log.VERBOSE, "onFinishInputView")
 
         getHost()?.onFinishInputView(finishingInput)
@@ -245,6 +267,13 @@ class BrailleIME : InputMethodService {
     }
 
     override fun onCreateInputView(): View {
+        // touchKeyboard 在这里定格：onCreateInputView 每个 IME 会话只调用一次，
+        // 同一会话里切模式必须保持一致，否则 onStart/FinishInputView 的判断会错位。
+        touchKeyboard = resolveTouchKeyboardMode(readViewMode(),
+                BrailleBackService.isBrailleDisplayConnected())
+        if (touchKeyboard) {
+            return super.onCreateInputView()
+        }
         val inflater = getLayoutInflater()
         val inputView = inflater.inflate(R.layout.braille_ime, null)
         inputView.setOnClickListener { switchAwayFromThisIme() }
@@ -254,6 +283,15 @@ class BrailleIME : InputMethodService {
         }
         return inputView
     }
+
+    /** 本会话是否处于触屏点字形态；在 onCreateInputView 时确定，之后不再变化。 */
+    private var touchKeyboard = false
+
+    private fun touchKeyboardEnabled(): Boolean = touchKeyboard
+
+    private fun readViewMode(): String =
+        getSharedPreferences(BRAILLE_KEYBOARD_PREFS, Context.MODE_PRIVATE)
+            .getString(PREF_SINGLE_IME_VIEW_MODE, MODE_AUTO) ?: MODE_AUTO
 
     override fun onUpdateExtractedText(token: Int, text: ExtractedText) {
         // The superclass only deals with fullscreen support, which we've
@@ -283,8 +321,9 @@ class BrailleIME : InputMethodService {
 
             // If we're composing but the selection isn't a single cursor at
             // the end of the composing text, then cancel composing.
-            if ((candidatesEnd != selStart || selStart != selEnd)
-                    && mComposingBraille.position() != 0) {
+            // 统一引擎下用 holdings（未上屏点位）代替旧的 mComposingBraille。
+            val pendingCells = unifiedBraille?.holdings()?.position() ?: 0
+            if ((candidatesEnd != selStart || selStart != selEnd) && pendingCells > 0) {
                 cancelComposingText()
             }
 
@@ -373,40 +412,80 @@ class BrailleIME : InputMethodService {
      * through an input connection.
      */
     fun sendAndroidKey(keyCode: Int): Boolean {
-        if (mComposingBraille.position() > 0 && keyCode == KeyEvent.KEYCODE_DEL) {
-            // Delete the last composing dot and update composing text.
-            mComposingBraille.position(mComposingBraille.position() - 1)
-
-            val translator = getCurrentBrailleTranslator()
-            val ic = getCurrentInputConnection()
-            if (translator == null || ic == null) {
-                LogUtils.log(this, Log.WARN, "missing translator %s or IC %s",
-                        translator, ic)
-                return false
-            }
-
-            updateComposingText(translator, ic)
-            return true
+        // DEL / ENTER 交给统一引擎（EditBuffer 按格删 / 上屏并回车）；
+        // 其它系统按键前先落定 composing，与屏幕键盘 performTextAction 同语义。
+        val command = when (keyCode) {
+            KeyEvent.KEYCODE_DEL -> BrailleInputEvent.CMD_KEY_DEL
+            KeyEvent.KEYCODE_ENTER -> BrailleInputEvent.CMD_KEY_ENTER
+            else -> BrailleInputEvent.CMD_NONE
         }
-
+        if (command != BrailleInputEvent.CMD_NONE) {
+            val routed = onHardwareInputEvent(command, 0)
+            if (routed != null) {
+                return routed
+            }
+        }
         cancelComposingText()
         return emitFeedbackOnFailure(
                 sendAndroidKeyInternal(keyCode),
                 FeedbackManager.TYPE_COMMAND_FAILED)
     }
 
-    fun handleBrailleKey(dots: Int): Boolean {
-        val translator = getCurrentBrailleTranslator()
-        val sixDot = translator != null && translator.tableInfo?.isEightDot == false
-        return if (sixDot && dots == DOT7) {
-            sendAndroidKey(KeyEvent.KEYCODE_DEL)
-        } else if (sixDot && dots == DOT8) {
-            sendAndroidKey(KeyEvent.KEYCODE_ENTER)
-        } else {
-            emitFeedbackOnFailure(
-                    handleBrailleKeyInternal(dots),
-                    FeedbackManager.TYPE_COMMAND_FAILED)
+    /**
+     * 取得唯一输入引擎。所有码表（中文现行 / 英文 / 八点电脑盲文）一律走这里，
+     * 由 BrailleLanguages.createEditBuffer 按码表创建对应的 EditBuffer 实现；
+     * 不再按 locale 或点数在本类里分流到第二套引擎。
+     */
+    private fun unifiedEngine(): UnifiedBrailleInput? {
+        if (unifiedBraille == null) {
+            unifiedBraille = UnifiedBrailleInput(this, ::getCurrentBrailleTranslator)
         }
+        return unifiedBraille?.takeIf { it.isAvailable() }
+    }
+
+    /**
+     * 软件 / 硬件统一的输入入口。
+     *
+     * @return null 表示本次事件不归输入引擎处理（越界点位、前删、导航等），
+     *         调用方应继续原来的导航链路；非 null 表示已消费。
+     *         没有候选时候选键也返回 null，按键退回原来的光标导航语义。
+     */
+    fun onHardwareInputEvent(command: Int, argument: Int): Boolean? {
+        val engine = unifiedEngine() ?: return null
+        val route = BrailleInputPolicy.route(command, argument, /* unified= */ true, engine.isEightDot())
+        return when (route.action) {
+            BrailleInputPolicy.Action.LEGACY -> null
+            BrailleInputPolicy.Action.APPEND_CELL ->
+                emitFeedbackOnFailure(
+                    engine.appendCell(route.cell),
+                    FeedbackManager.TYPE_COMMAND_FAILED,
+                )
+            BrailleInputPolicy.Action.COMMIT ->
+                emitFeedbackOnFailure(
+                    engine.commit(),
+                    FeedbackManager.TYPE_COMMAND_FAILED,
+                )
+            BrailleInputPolicy.Action.DELETE ->
+                emitFeedbackOnFailure(
+                    engine.delete(),
+                    FeedbackManager.TYPE_COMMAND_FAILED,
+                )
+            BrailleInputPolicy.Action.ENTER ->
+                emitFeedbackOnFailure(
+                    engine.enter(),
+                    FeedbackManager.TYPE_COMMAND_FAILED,
+                )
+            BrailleInputPolicy.Action.NEXT_CANDIDATE ->
+                if (engine.nextCandidate()) true else null
+            BrailleInputPolicy.Action.PREVIOUS_CANDIDATE ->
+                if (engine.previousCandidate()) true else null
+        }
+    }
+
+    fun handleBrailleKey(dots: Int): Boolean {
+        // 兜底：即使有调用点绕过 onHardwareInputEvent，也只会进同一条链路。
+        // 返回 null 的点位（越界、八点表空点位）统一忽略，不再有第二条输入引擎。
+        return onHardwareInputEvent(BrailleInputEvent.CMD_BRAILLE_KEY, dots) ?: true
     }
 
     fun updateDisplay() {
@@ -445,9 +524,15 @@ class BrailleIME : InputMethodService {
                 editStart + mSelectionStart, editStart + mSelectionEnd)
         if (0 <= mComposingStart && mComposingStart < mComposingEnd
                 && mComposingEnd <= mCurrentText.length) {
-            DisplaySpans.addBraille(text,
-                    editStart + mComposingStart, editStart + mComposingEnd,
-                    mComposingBraille)
+            // 回显数据源从旧的 mComposingBraille 改成统一引擎的 holdings，
+            // 否则点显器上看不到正在输入的盲文格。
+            unifiedBraille?.holdings()?.let { cells ->
+                if (cells.position() > 0) {
+                    DisplaySpans.addBraille(text,
+                            editStart + mComposingStart, editStart + mComposingEnd,
+                            cells)
+                }
+            }
         }
         displayManager.setContent(
                 DisplayManager.Content(text)
@@ -530,118 +615,16 @@ class BrailleIME : InputMethodService {
                         KeyEvent.ACTION_UP, keyCode, 0 /*repeat*/))
     }
 
-    private fun handleBrailleKeyInternal(dots: Int): Boolean {
-        val translator = getCurrentBrailleTranslator()
-        val ic = getCurrentInputConnection()
-        if (translator == null || ic == null) {
-            LogUtils.log(this, Log.WARN, "missing translator %s or IC %s",
-                    translator, ic)
-            return false
-        }
-
-        val tableInfo = translator.tableInfo ?: return false
-        return if (doesTableNeedComposition(tableInfo)) {
-            // 中文/日文/韩文：标点键应即时上屏，而不是混进组词缓冲区等空格。
-            if (isCjkTable(tableInfo) && mComposingBraille.position() > 0
-                    && isPunctuationCell(dots, translator)) {
-                finishComposingText(translator, ic)
-                val punct = translator.backTranslate(byteArrayOf(dots.toByte()))
-                if (!TextUtils.isEmpty(punct) && !hasUnknownDots(punct)) {
-                    ic.commitText(punct, 1)
-                }
-                true
-            } else {
-                mComposingBraille.put(dots.toByte())
-                if (dots == 0 || mComposingBraille.position() == MAX_COMPOSE_DOTS) {
-                    // Finish composition (error if cannot translate).
-                    finishComposingText(translator, ic)
-                } else {
-                    // Continue composing (OK if cannot translate).
-                    updateComposingText(translator, ic)
-                    true
-                }
-            }
-        } else {
-            handleBrailleKeySimple(dots, translator, ic)
-        }
-    }
-
-    /** 中文/日文/韩文表：词间不以空格分隔，标点不适合参与组词。 */
-    private fun isCjkTable(info: TableInfo): Boolean =
-        info.locale.language in CJK_LANGUAGES
-
-    /**
-     * 单点位试探回译：判断该点位是否为标点（非字母/数字/空白，且不是
-     * 未知点位标记）。回译为空（上下文相关表常见）则按普通点位处理。
+    /*
+     * 旧的第二套输入引擎已删除。
+     *
+     * 这里原本有 handleBrailleKeyInternal / isCjkTable / isPunctuationCell /
+     * handleBrailleKeySimple / updateComposingText / finishComposingText，
+     * 它们自行用 mComposingBraille 累积点位并调 host 的 liblouis backTranslate，
+     * 与触屏键盘的 EditBuffer 各解释一遍按键，是「两套引擎」的根源。
+     * 现在所有码表、所有输入源统一走 UnifiedBrailleInput → EditBuffer。
+     * 应急降级也实现同一个 EditBuffer 接口（ime/LegacyEditBuffer.kt），不在此分叉。
      */
-    private fun isPunctuationCell(dots: Int,
-                                  translator: BrailleTranslator): Boolean {
-        if (dots == 0) return false
-        val text = translator.backTranslate(byteArrayOf(dots.toByte()))
-            ?: return false
-        if (TextUtils.isEmpty(text) || hasUnknownDots(text)) return false
-        val c = text[0]
-        return !Character.isLetterOrDigit(c) && !Character.isWhitespace(c)
-    }
-
-    private fun handleBrailleKeySimple(dots: Int,
-                                       translator: BrailleTranslator,
-                                       ic: InputConnection): Boolean {
-        val text = translator.backTranslate(
-                byteArrayOf(dots.toByte()))
-        return when {
-            TextUtils.isEmpty(text) -> true // 空白点位，静默忽略（原行为）
-            // 未知点位（liblouis 输出 "\4568/" 形式的点号标记）：
-            // 不把标记当正文提交，返回 false 让外层给失败反馈。
-            hasUnknownDots(text) -> false
-            else -> ic.commitText(text, 1)
-        }
-    }
-
-    /**
-     * Updates the composing text based on the braille dots composed thus far,
-     * and maintains the composing state of the editor.
-     * Returns `true` if the current string of braille dots could be
-     * translated into text, otherwise `false`.
-     */
-    private fun updateComposingText(translator: BrailleTranslator,
-                                    ic: InputConnection): Boolean {
-        if (mComposingBraille.position() == 0) {
-            return ic.commitText("", 1)
-        }
-
-        val text = translator.backTranslate(getComposingBrailleArray())
-        return if (TextUtils.isEmpty(text) || hasUnknownDots(text)) {
-            // 空或含未知点位：用不换行空格占位，保持组词状态。
-            ic.setComposingText("\u00A0", 1)
-        } else {
-            ic.setComposingText(text, 1)
-        }
-    }
-
-    /**
-     * Updates the composing text and commits it to the editor. Returns
-     * `true` if the pending braille dots could be translated into text,
-     * otherwise `false`.
-     */
-    private fun finishComposingText(translator: BrailleTranslator,
-                                    ic: InputConnection): Boolean {
-        if (mComposingBraille.position() == 0) {
-            return true
-        }
-
-        val text = translator.backTranslate(getComposingBrailleArray())
-        mComposingBraille.clear()
-
-        // Commit the final text if we could translate; otherwise, clear the
-        // composing text.
-        return if (TextUtils.isEmpty(text) || hasUnknownDots(text)) {
-            ic.commitText("", 1)
-            false
-        } else {
-            ic.commitText(text, 1)
-        }
-    }
 
     /**
      * Cancels the text composition by leaving the already-composed text there
@@ -655,17 +638,15 @@ class BrailleIME : InputMethodService {
             return false
         }
 
-        mComposingBraille.clear()
+        // 统一引擎的 holdings 与输入框 composing 是同一份状态：任何会结束 composing
+        // 的动作（前删、方向键、切焦点等）都必须先让缓冲落定，否则输入框的
+        // 下划线没了、holdings 还在，下一次输入会重冒出旧字。
+        // 与屏幕键盘 BrailleImeActor.performTextAction「动作前先提交」保持同一语义。
+        val unified = unifiedEngine()
+        if (unified != null && unified.finish()) {
+            return true
+        }
         return ic.finishComposingText()
-    }
-
-    private fun getComposingBrailleArray(): ByteArray {
-        val len = mComposingBraille.position()
-        val dotsArray = ByteArray(len)
-        mComposingBraille.position(0)
-        mComposingBraille.get(dotsArray, 0, len)
-        mComposingBraille.position(len)
-        return dotsArray
     }
 
     private fun getHost(): Host? {
@@ -749,9 +730,18 @@ class BrailleIME : InputMethodService {
         const val DIRECTION_FORWARD = 1
         const val DIRECTION_BACKWARD = -1
         private const val MAX_REQUEST_CHARS = 1000
-        private const val MAX_COMPOSE_DOTS = 1000
-        /** 无词间空格书写的语言（表 locale.language）。 */
-        private val CJK_LANGUAGES = setOf("zh", "ja", "ko")
+
+        const val BRAILLE_KEYBOARD_PREFS = SingleImeViewPolicy.BRAILLE_KEYBOARD_PREFS
+        const val PREF_SINGLE_IME_VIEW_MODE = SingleImeViewPolicy.PREF_SINGLE_IME_VIEW_MODE
+        const val MODE_AUTO = SingleImeViewPolicy.MODE_AUTO
+        const val MODE_ON = SingleImeViewPolicy.MODE_ON
+        const val MODE_OFF = SingleImeViewPolicy.MODE_OFF
+
+        /** 形态选择委托给纯 Kotlin 策略，便于 JVM 单测与变异测试锁死。 */
+        @JvmStatic
+        fun resolveTouchKeyboardMode(mode: String?, displayConnected: Boolean): Boolean =
+            SingleImeViewPolicy.useTouchKeyboard(mode, displayConnected)
+
         /** Marks the extent of the editable text.  */
         private val EDIT_TEXT_SPAN = MarkingSpan()
         /** Marks the extent of the action button.  */
@@ -768,12 +758,6 @@ class BrailleIME : InputMethodService {
         @JvmStatic
         fun setSingletonHost(host: Host?) {
             sHost = if (host != null) WeakReference(host) else null
-        }
-
-        private fun doesTableNeedComposition(info: TableInfo): Boolean {
-            // Assume that six-dot (literary) braille needs composition but
-            // eight-dot (computer) braille is immediate.
-            return !info.isEightDot
         }
     }
 }

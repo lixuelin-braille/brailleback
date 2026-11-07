@@ -33,9 +33,15 @@ public final class AccessibilityServiceCompatUtils {
     /** 盲文键盘 IME 的包名（宿主 applicationId）。 */
     public static final String HOST_PACKAGE_NAME = BuildConfig.HOST_APPLICATION_ID;
 
-    /** 盲文键盘 IME 的服务类全名（移植后包名保持不变）。 */
+    /**
+     * 唯一注册的盲文输入法组件类名。
+     * 单注册合并后不再指向移植键盘 BrailleIme（它已无 service 声明），
+     * 而是指向宿主的 BrailleIME——本常量用于 setComponentEnabledSetting、
+     * isBrailleKeyboardEnabled / isDefault 等判断，必须与清单里唯一的
+     * android.view.InputMethod 服务保持一致。
+     */
     public static final String BRAILLE_IME_CLASS_NAME =
-        "com.google.android.accessibility.brailleime.BrailleIme";
+        "com.googlecode.eyesfree.brailleback.BrailleIME";
 
     /** 盲文键盘 IME 组件。 */
     public static final ComponentName BRAILLE_KEYBOARD =

@@ -822,6 +822,17 @@ public class BrailleBackService
     return instance;
     }
 
+    /**
+     * 单注册 IME 用它判断本次会话该用「点显器硬件」还是「触屏点字」形态。
+     * 服务未启动或点显器尚未连接时返回 false（走触屏键盘），不做任何推测。
+     */
+    public static boolean isBrailleDisplayConnected() {
+      BrailleBackService service = instance;
+      return service != null
+          && service.displayManager != null
+          && service.displayManager.isDisplayConnected();
+    }
+
     public CustomLabelManager getLabelManager() {
     return labelManager;
     }

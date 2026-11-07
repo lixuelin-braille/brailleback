@@ -13,21 +13,14 @@
       tools:node="merge" />
 
   <application>
-    <service
-        android:name="com.google.android.accessibility.brailleime.BrailleIme"
-        android:label="@string/bb_port_ime_service_name"
-        android:enabled="true"
-        android:exported="true"
-        android:directBootAware="true"
-        android:permission="android.permission.BIND_INPUT_METHOD"
-        tools:node="merge">
-      <intent-filter>
-        <action android:name="android.view.InputMethod" />
-      </intent-filter>
-      <meta-data
-          android:name="android.view.im"
-          android:resource="@xml/braille_ime" />
-    </service>
+    <!--
+      单注册合并：触屏盲文键盘不再单独注册为系统输入法。
+      BrailleIme 类保留，由唯一注册的 com.googlecode.eyesfree.brailleback.BrailleIME
+      继承复用（见 BrailleIME.onCreateInputView / resolveTouchKeyboardMode）。
+      这里只保留设置页与手势教学 Activity、以及包替换广播接收器。
+      组件开关常量 BRAILLE_KEYBOARD 也已改指向 BrailleIME，
+      全项目只剩一个输入法服务声明。
+    -->
 
     <activity
         android:name="com.google.android.accessibility.brailleime.settings.BrailleImePreferencesActivity"
