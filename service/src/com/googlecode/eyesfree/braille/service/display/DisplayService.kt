@@ -69,22 +69,22 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         @JvmField
         val LOG_TAG: String = DisplayService::class.java.simpleName
 
-        private const val STATE_DISCONNECTED = 0
-        private const val STATE_CONNECTED = 1
+        const val STATE_DISCONNECTED = 0
+        const val STATE_CONNECTED = 1
         /**
          * Delay between the screen goes off and the display gets automatically
          * disconnected.
          */
         private const val SCREEN_OFF_DISCONNECT_DELAY = 7000L
-        private const val HID_RETRY_DELAY = 300L
+        const val HID_RETRY_DELAY = 300L
         /**
          * Delays for background reconnects after the display drops or a
          * connection attempt fails. The delay doubles on each consecutive
          * failure, up to the maximum, so a sleeping or out-of-range display is
          * not polled aggressively.
          */
-        private const val AUTO_RECONNECT_INITIAL_DELAY = 3000L
-        private const val AUTO_RECONNECT_MAX_DELAY = 30000L
+        const val AUTO_RECONNECT_INITIAL_DELAY = 3000L
+        const val AUTO_RECONNECT_MAX_DELAY = 30000L
         /**
          * TalkBack-like discovery window. A bonded display is normally connected
          * directly, but while it is switched off that attempt fails. Keeping a
@@ -107,9 +107,9 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
          * rebound, so an immediate error is usually misleading.
          */
         private const val HID_CONTROLLER_WAIT_TIMEOUT = 2500L
-        private const val FILES_ERROR = -1
-        private const val FILES_NOT_EXTRACTED = 0
-        private const val FILES_EXTRACTED = 1
+        const val FILES_ERROR = -1
+        const val FILES_NOT_EXTRACTED = 0
+        const val FILES_EXTRACTED = 1
         /**
          * 刷新链路心跳。冻结问题时只看三件事：上层有没有继续送点阵、
          * 服务有没有收到、最终走了哪条连接路径。每 5 秒一行，量很小。
@@ -139,9 +139,9 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
      */
     /** Written in main thread, read in IPC threads. */
     @Volatile
-    private var mReadThread: ReadThread? = null
+    var mReadThread: ReadThread? = null
     /** The list of registered clients. */
-    private val mClients =
+    val mClients =
             RemoteCallbackList<IBrailleServiceCallback>()
     private val mServiceImpl = ServiceImpl()
     private val mBroadcastReceiver =
@@ -227,30 +227,30 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         }
     };
 
-    private val mHandler = MainHandler(this)
+    val mHandler = MainHandler(this)
 
-    private var mConnectionState = STATE_DISCONNECTED
-    private var mConnectionProgress: String? = null
-    private var mConnectPending = false
+    var mConnectionState = STATE_DISCONNECTED
+    var mConnectionProgress: String? = null
+    var mConnectPending = false
 
-    private var mDisplayProperties: BrailleDisplayProperties? = null
+    var mDisplayProperties: BrailleDisplayProperties? = null
     private lateinit var mTablesDir: File
-    private var mDataFileState = FILES_NOT_EXTRACTED
+    var mDataFileState = FILES_NOT_EXTRACTED
     private var mPendingBluetoothAddress: String? = null
 
     /**
      * HID connection (Braille HID standard via BrailleDisplayController).
      */
     @Volatile
-    private var mHidConnection: HidDisplayConnection? = null
+    var mHidConnection: HidDisplayConnection? = null
     /**
      * Custom BLE GATT connection used by the Wujie / Orbit 30-cell display.
      */
     @Volatile
-    private var mWujieConnection: WujieGattConnection? = null
+    var mWujieConnection: WujieGattConnection? = null
     /** Wired USB connection (brltty USB backend), null unless selected. */
     @Volatile
-    private var mUsbConnection: UsbDisplayConnection? = null
+    var mUsbConnection: UsbDisplayConnection? = null
 
     private val mDotsCalls = AtomicLong()
     @Volatile
@@ -283,47 +283,47 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         }
     }
     /** True after the vendor BLE path was attempted in this cycle. */
-    private var mWujieTried = false
+    var mWujieTried = false
     /** True after the brltty serial USB path was attempted in this cycle. */
-    private var mUsbSerialTried = false
+    var mUsbSerialTried = false
     /** True after the system USB HID path was attempted in this cycle. */
-    private var mUsbHidTried = false
+    var mUsbHidTried = false
     /** Whether mHidConnection is the wired USB HID path rather than Bluetooth. */
-    private var mHidConnectionIsUsb = false
+    var mHidConnectionIsUsb = false
     /**
      * True after an HID connection attempt, to avoid retrying HID in a loop
      * when the connected display only supports classic RFCOMM.
      */
     @Volatile
-    private var mHidTried = false
+    var mHidTried = false
     /** Number of HID retries already used by the current connection cycle. */
-    private var mHidRetryCount = 0
+    var mHidRetryCount = 0
     /**
      * True while waiting for the accessibility service to publish the HID
      * controller. {@link HidBridge} notifies us as soon as it appears.
      */
-    private var mWaitingForHidController = false
+    var mWaitingForHidController = false
     /**
      * Error returned by the last HID attempt, or {@code 0} if no attempt has
      * failed yet. Used to replace the generic failure message with an
      * actionable one (for example, "display is not in Braille HID mode").
      */
-    private var mLastHidError = 0
+    var mLastHidError = 0
     /** Number of consecutive automatic reconnect attempts. */
-    private var mAutoReconnectAttempt = 0
+    var mAutoReconnectAttempt = 0
     /**
      * True after the user explicitly disconnected the display. Automatic
      * retries stay off until the next explicit connect trigger (opening the
      * app, requesting a connect, or turning the screen on).
      */
-    private var mAutoReconnectSuppressed = false
+    var mAutoReconnectSuppressed = false
     /**
      * True while the current explicit automatic-connect trigger is still
      * allowed to open its one discovery window. It is cleared as soon as that
      * window starts, so periodic safety retries do not turn into continuous
      * scanning.
      */
-    private var mDiscoveryAllowedForCycle = false
+    var mDiscoveryAllowedForCycle = false
     /** True while this service owns the current Bluetooth discovery session. */
     private var mDiscoverySessionActive = false
     /** True when this service, rather than another app, started discovery. */
@@ -635,7 +635,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
      * Disconnects the service from the currently connected braille device,
      * sends notification to the clients about the state change.
      */
-    private fun disconnectBraille() {
+    fun disconnectBraille() {
         disconnectBraille(false)
     }
 
@@ -643,7 +643,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
      * Disconnects the display. A user-initiated disconnect suppresses the
      * background reconnect loop until the next explicit connect trigger.
      */
-    private fun disconnectBraille(userInitiated: Boolean) {
+    fun disconnectBraille(userInitiated: Boolean) {
         if (userInitiated) {
             mAutoReconnectSuppressed = true
             mAutoReconnectAttempt = 0
@@ -685,7 +685,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
     }
 
     /** Cancels a reconnect requested by an earlier transition. */
-    private fun cancelPendingReconnect() {
+    fun cancelPendingReconnect() {
         mConnectPending = false
         mHidRetryCount = 0
         mHandler.cancelHidRetry()
@@ -696,7 +696,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
      * settings UI is not left showing a stale "connecting..." message and
      * re-renders the real connection state.
      */
-    private fun clearConnectionProgress() {
+    fun clearConnectionProgress() {
         if (mConnectionProgress != null) {
             mConnectionProgress = null
             broadcastConnectionProgress()
@@ -723,7 +723,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
     }
 
     /** Cancels a pending wait for the HID controller. */
-    private fun clearHidControllerWait() {
+    fun clearHidControllerWait() {
         if (mWaitingForHidController) {
             mWaitingForHidController = false
             mHandler.cancelHidControllerTimeout()
@@ -734,7 +734,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
      * Tries to connect to the braille device, on success sends notification to
      * registered clients.
      */
-    private fun connectBraille() {
+    fun connectBraille() {
         if (mConnectionState == STATE_CONNECTED) {
             return
         }
@@ -814,7 +814,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
     }
 
     /** Retries an HID attempt after the controller release conflict. */
-    private fun retryHidConnect(): Boolean {
+    fun retryHidConnect(): Boolean {
         if (mHidTried || !HidBridge.isAvailable()) {
             return false
         }
@@ -886,7 +886,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
      * Both are expected states when nothing is plugged in, so the wording must
      * tell the user what to do instead of just showing an error code.
      */
-    private fun getUsbHidFailureMessage(error: Int): String {
+    fun getUsbHidFailureMessage(error: Int): String {
         if (error == -7) {
             return getString(R.string.connprog_usb_hid_not_found)
         }
@@ -897,19 +897,19 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
     }
 
     /** Returns the user-selected connection protocol. */
-    private fun getConnectionProtocol(): String {
+    fun getConnectionProtocol(): String {
         val value = PreferenceManager.getDefaultSharedPreferences(this)
                 .getString(ConnectionProtocolPolicy.PREFERENCE_KEY,
                         ConnectionProtocolPolicy.BLUETOOTH)
         return ConnectionProtocolPolicy.normalize(value)
     }
 
-    private fun isBluetoothProtocol(): Boolean {
+    fun isBluetoothProtocol(): Boolean {
         return ConnectionProtocolPolicy.BLUETOOTH.equals(
                 getConnectionProtocol())
     }
 
-    private fun isUsbProtocol(): Boolean {
+    fun isUsbProtocol(): Boolean {
         return ConnectionProtocolPolicy.USB.equals(getConnectionProtocol())
     }
 
@@ -918,12 +918,12 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         return isUsbProtocol()
     }
 
-    private fun isHidRequested(): Boolean {
+    fun isHidRequested(): Boolean {
         return isBluetoothProtocol()
     }
 
     /** Resets the per-cycle transport fallback state. */
-    private fun resetConnectionAttemptFlags() {
+    fun resetConnectionAttemptFlags() {
         mHidTried = false
         mHidRetryCount = 0
         mLastHidError = 0
@@ -959,7 +959,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
     }
 
     /** Starts a connection explicitly requested by a client. */
-    private fun startExplicitConnect() {
+    fun startExplicitConnect() {
         mAutoReconnectSuppressed = false
         mAutoReconnectAttempt = 0
         mHandler.cancelAutoReconnect()
@@ -1023,7 +1023,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         autoConnectBraille()
     }
 
-    private fun isConnectionActive(): Boolean {
+    fun isConnectionActive(): Boolean {
         return mConnectionState == STATE_CONNECTED
                 || mReadThread != null
                 || mHidConnection != null
@@ -1038,7 +1038,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
      * interactive, auto-connect is enabled and the user has not explicitly
      * disconnected the display.
      */
-    private fun scheduleAutoReconnectIfNeeded() {
+    fun scheduleAutoReconnectIfNeeded() {
         if (!shouldAutoReconnect()) {
             Timber.v("Not scheduling auto reconnect (not eligible)")
             return
@@ -1064,7 +1064,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
                 })
     }
 
-    private fun shouldAutoReconnect(): Boolean {
+    fun shouldAutoReconnect(): Boolean {
         if (!PreferenceManager.getDefaultSharedPreferences(this)
                 .getBoolean("auto_connect", true)) {
             return false
@@ -1134,7 +1134,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
     }
 
     /** Opens (or extends) the short discovery window used after a failed connect. */
-    private fun startDiscoveryWindow(reason: String): Boolean {
+    fun startDiscoveryWindow(reason: String): Boolean {
         if (!shouldStartDiscovery()) {
             Timber.v("Not starting discovery (%s): not eligible", reason)
             return false
@@ -1157,7 +1157,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         return mDiscoverySessionActive
     }
 
-    private fun startDiscoveryInternal(reason: String) {
+    fun startDiscoveryInternal(reason: String) {
         if (!mDiscoverySessionActive) {
             return
         }
@@ -1242,7 +1242,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         mDiscoveryAllowedForCycle = false
     }
 
-    private fun stopDiscoverySession(reason: String) {
+    fun stopDiscoverySession(reason: String) {
         mDiscoverySessionActive = false
         mDiscoverySessionDeadline = 0
         mHandler.cancelDiscoveryTimeout()
@@ -1266,94 +1266,18 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         }
     }
 
-    private fun cancelAutoReconnect() {
+    fun cancelAutoReconnect() {
         mHandler.cancelAutoReconnect()
     }
 
     /**
-     * Callbacks from the {@link HidDisplayConnection}.
+     * Connection callbacks come from the extension factories in
+     * DisplayServiceListeners.kt. Extensions keep the listener bodies
+     * reading service state directly instead of through a wrapper.
      */
-    private val mHidListener =
-            object : HidDisplayConnection.Listener {
-        override fun onHidConnected(source: HidDisplayConnection?,
-                properties: BrailleDisplayProperties?) {
-            // Do NOT clear mConnectionProgress here: it must be broadcast to
-            // clients so the settings UI re-renders the connected state.
-            // handleOnDisplayConnected -> clearConnectionProgress() does that.
-            mHandler.onHidConnected(source, properties)
-        }
-
-        override fun onHidDisconnected(source: HidDisplayConnection?) {
-            mHandler.onHidDisconnected(source)
-        }
-
-        override fun onHidConnectFailed(source: HidDisplayConnection?, error: Int) {
-            mHandler.onHidConnectFailed(source, error)
-        }
-    }
-
-    private val mWujieListener =
-            object : WujieGattConnection.Listener {
-        override fun onWujieConnected(source: WujieGattConnection?,
-                properties: BrailleDisplayProperties?) {
-            mHandler.onWujieConnected(source, properties)
-        }
-
-        override fun onWujieInputEvent(source: WujieGattConnection?,
-                event: BrailleInputEvent?) {
-            mHandler.onWujieInputEvent(source, event)
-        }
-
-        override fun onWujieDisconnected(source: WujieGattConnection?) {
-            mHandler.onWujieDisconnected(source)
-        }
-
-        override fun onWujieConnectFailed(source: WujieGattConnection?,
-                error: Int) {
-            mHandler.onWujieConnectFailed(source, error)
-        }
-    }
-
-    /** Callbacks from the wired USB connection. */
-    private val mUsbListener =
-            object : UsbDisplayConnection.Listener {
-        override fun onUsbConnected(source: UsbDisplayConnection?,
-                properties: BrailleDisplayProperties?) {
-            if (source != mUsbConnection) {
-                Timber.w("Ignoring stale USB connected callback")
-                return
-            }
-            mHandler.onDisplayConnected(properties)
-        }
-
-        override fun onUsbDisconnected(source: UsbDisplayConnection?) {
-            if (source != mUsbConnection) {
-                Timber.w("Ignoring stale USB disconnected callback")
-                return
-            }
-            mHandler.onDisplayDisconnected()
-        }
-
-        override fun onUsbConnectFailed(source: UsbDisplayConnection?,
-                reason: String?) {
-            if (source != mUsbConnection) {
-                Timber.w("Ignoring stale USB failure callback")
-                return
-            }
-            mUsbConnection = null
-            mConnectPending = false
-            Timber.w("USB connection failed: %s", reason)
-            if (isUsbProtocol() && !mUsbHidTried && canUseUsbHid()) {
-                mUsbHidTried = true
-                Timber.i("Serial USB path unavailable; trying USB HID")
-                connectUsbHid()
-                return
-            }
-            mHandler.setConnectionProgress(
-                    getString(R.string.connprog_usb_failed, reason))
-            scheduleAutoReconnectIfNeeded()
-        }
-    }
+    private val mHidListener = createHidListener()
+    private val mWujieListener = createWujieListener()
+    private val mUsbListener = createUsbListener()
 
     /**
      * Starts the wired USB connection path (brltty's Android USB backend).
@@ -1361,7 +1285,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
      * {@link UsbDisplayConnection}; this method only wires it into the service
      * state machine.
      */
-    private fun connectUsb() {
+    fun connectUsb() {
         mHandler.setConnectionProgress(
                 getString(R.string.connprog_trying_usb))
         val connection = UsbDisplayConnection(
@@ -1381,7 +1305,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         connectUsb()
     }
 
-    private fun canUseUsbHid(): Boolean {
+    fun canUseUsbHid(): Boolean {
         return Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM
                 && HidBridge.isAvailable()
     }
@@ -1394,7 +1318,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
      * "hid" driver and BrlttyHidNativeHelper are reused unchanged.
      */
     @SuppressLint("NewApi")
-    private fun connectUsbHid() {
+    fun connectUsbHid() {
         if (Build.VERSION.SDK_INT
                 < Build.VERSION_CODES.VANILLA_ICE_CREAM
                 || !HidBridge.isAvailable()) {
@@ -1586,7 +1510,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         }
     }
 
-    private fun sendConnectionState(callback: IBrailleServiceCallback?) {
+    fun sendConnectionState(callback: IBrailleServiceCallback?) {
         callback ?: return
         try {
             when (mConnectionState) {
@@ -1607,7 +1531,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         }
     }
 
-    private fun sendConnectionProgress(callback: IBrailleServiceCallback?) {
+    fun sendConnectionProgress(callback: IBrailleServiceCallback?) {
         callback ?: return
         try {
             callback.onConnectionChangeProgress(mConnectionProgress)
@@ -1617,7 +1541,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         }
     }
 
-    private fun broadcastConnectionState() {
+    fun broadcastConnectionState() {
         var i = mClients.beginBroadcast()
         try {
             while (i-- > 0) {
@@ -1628,7 +1552,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         }
     }
 
-    private fun broadcastConnectionProgress() {
+    fun broadcastConnectionProgress() {
         var i = mClients.beginBroadcast()
         try {
             while (i-- > 0) {
@@ -1639,7 +1563,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         }
     }
 
-    private fun broadcastInputEvent(event: BrailleInputEvent?) {
+    fun broadcastInputEvent(event: BrailleInputEvent?) {
         var i = mClients.beginBroadcast()
         try {
             while (i-- > 0) {
@@ -1659,7 +1583,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
      * Returns {@code true} if there are any registered clients that
      * haven't died or unregistered themselves.
      */
-    private fun haveClients(): Boolean {
+    fun haveClients(): Boolean {
         // Unfortunately, the callback list doesn't provide this
         // information without doing this.
         val numClients = mClients.beginBroadcast()
@@ -1677,561 +1601,4 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         DataFileExtractor(this, R.raw.keytables, mTablesDir).execute()
     }
 
-    private class DataFileExtractor(service: DisplayService, rawResId: Int,
-            outputDir: File) :
-            ZipResourceExtractor(service.getApplicationContext(), rawResId,
-                    outputDir) {
-        private val mService: WeakReference<DisplayService> =
-                WeakReference(service)
-
-        override fun onPostExecute(result: Int?) {
-            val service = mService.get()
-            if (service == null) {
-                return
-            }
-            if (result == ZipResourceExtractor.RESULT_OK) {
-                service.mDataFileState = FILES_EXTRACTED
-                if (service.haveClients()) {
-                    service.connectBraille()
-                }
-                // The initial bind can arrive before data extraction
-                // finishes, and the client callback may not be registered
-                // yet. Check again shortly so startup never leaves the
-                // display disconnected until the user taps "Status".
-                service.mHandler.scheduleAutoReconnect(0)
-            } else {
-                Log.e(LOG_TAG, "Couldn't extract data files")
-                // TODO: figure out a way to deal with this so a user
-                // doesn't get stuck in this state.
-                service.mDataFileState = FILES_ERROR
-                service.broadcastConnectionState()
-            }
-        }
-    }
-
-    private class HidEvent(
-            val connection: HidDisplayConnection?,
-            val properties: BrailleDisplayProperties?,
-            val error: Int)
-
-    private class WujieEvent(
-            val connection: WujieGattConnection?,
-            val properties: BrailleDisplayProperties?,
-            val error: Int)
-
-    private class WujieInputEvent(
-            val connection: WujieGattConnection?,
-            val event: BrailleInputEvent?)
-
-    private class MainHandler(service: DisplayService) :
-            Handler(Looper.getMainLooper()) {
-        private val mService: WeakReference<DisplayService> =
-                WeakReference(service)
-
-        companion object {
-            private const val MSG_REGISTER_CALLBACK = 1
-            private const val MSG_ON_DISPLAY_CONNECTED = 2
-            private const val MSG_ON_DISPLAY_DISCONNECTED = 3
-            private const val MSG_SET_CONNECTION_PROGRESS = 4
-            private const val MSG_ON_INPUT_EVENT = 5
-            private const val MSG_CONNECT_BRAILLE = 6
-            private const val MSG_DISCONNECT_BRAILLE = 7
-            private const val MSG_ON_HID_CONNECTED = 8
-            private const val MSG_ON_HID_DISCONNECTED = 9
-            private const val MSG_ON_HID_CONNECT_FAILED = 10
-            private const val MSG_RETRY_HID = 11
-            private const val MSG_ON_WUJIE_CONNECTED = 12
-            private const val MSG_ON_WUJIE_DISCONNECTED = 13
-            private const val MSG_ON_WUJIE_CONNECT_FAILED = 14
-            private const val MSG_ON_WUJIE_INPUT_EVENT = 15
-            private const val MSG_HID_CONTROLLER_TIMEOUT = 16
-            private const val MSG_AUTO_RECONNECT = 17
-            private const val MSG_DISCOVERY_TIMEOUT = 18
-            private const val MSG_DISCOVERY_RESTART = 19
-        }
-
-        fun registerCallback(callback: IBrailleServiceCallback?) {
-            obtainMessage(MSG_REGISTER_CALLBACK, callback).sendToTarget()
-        }
-
-        fun onDisplayConnected(properties: BrailleDisplayProperties?) {
-            obtainMessage(MSG_ON_DISPLAY_CONNECTED, properties).sendToTarget()
-        }
-
-        fun onDisplayDisconnected() {
-            sendEmptyMessage(MSG_ON_DISPLAY_DISCONNECTED)
-        }
-
-        fun onHidConnected(source: HidDisplayConnection?,
-                properties: BrailleDisplayProperties?) {
-            obtainMessage(MSG_ON_HID_CONNECTED,
-                    HidEvent(source, properties, 0)).sendToTarget()
-        }
-
-        fun onHidDisconnected(source: HidDisplayConnection?) {
-            obtainMessage(MSG_ON_HID_DISCONNECTED,
-                    HidEvent(source, null, 0)).sendToTarget()
-        }
-
-        fun onHidConnectFailed(source: HidDisplayConnection?, error: Int) {
-            obtainMessage(MSG_ON_HID_CONNECT_FAILED,
-                    HidEvent(source, null, error)).sendToTarget()
-        }
-
-        fun onWujieConnected(source: WujieGattConnection?,
-                properties: BrailleDisplayProperties?) {
-            obtainMessage(MSG_ON_WUJIE_CONNECTED,
-                    WujieEvent(source, properties, 0)).sendToTarget()
-        }
-
-        fun onWujieDisconnected(source: WujieGattConnection?) {
-            obtainMessage(MSG_ON_WUJIE_DISCONNECTED,
-                    WujieEvent(source, null, 0)).sendToTarget()
-        }
-
-        fun onWujieInputEvent(source: WujieGattConnection?,
-                event: BrailleInputEvent?) {
-            obtainMessage(MSG_ON_WUJIE_INPUT_EVENT,
-                    WujieInputEvent(source, event)).sendToTarget()
-        }
-
-        fun onWujieConnectFailed(source: WujieGattConnection?,
-                error: Int) {
-            obtainMessage(MSG_ON_WUJIE_CONNECT_FAILED,
-                    WujieEvent(source, null, error)).sendToTarget()
-        }
-
-        fun setConnectionProgress(description: String?) {
-            obtainMessage(MSG_SET_CONNECTION_PROGRESS, description)
-                    .sendToTarget()
-        }
-
-        fun onInputEvent(event: BrailleInputEvent?) {
-            obtainMessage(MSG_ON_INPUT_EVENT, event).sendToTarget()
-        }
-
-        fun unscheduleDisconnect() {
-            removeMessages(MSG_DISCONNECT_BRAILLE)
-        }
-
-        fun scheduleDisconnect(delayMillis: Long) {
-            sendMessageDelayed(obtainMessage(MSG_DISCONNECT_BRAILLE, 0, 0),
-                    delayMillis)
-        }
-
-        fun connectBraille() {
-            obtainMessage(MSG_CONNECT_BRAILLE, 0, 0).sendToTarget()
-        }
-
-        fun connectBrailleExplicit() {
-            obtainMessage(MSG_CONNECT_BRAILLE, 1, 0).sendToTarget()
-        }
-
-        fun disconnectBraille() {
-            obtainMessage(MSG_DISCONNECT_BRAILLE, 1, 0).sendToTarget()
-        }
-
-        fun scheduleAutoReconnect(attempt: Int) {
-            scheduleAutoReconnect(attempt, -1)
-        }
-
-        fun scheduleAutoReconnect(attempt: Int, overrideDelay: Long) {
-            var delay = AUTO_RECONNECT_INITIAL_DELAY shl Math.min(attempt, 4)
-            delay = Math.min(delay, AUTO_RECONNECT_MAX_DELAY)
-            if (overrideDelay >= 0) {
-                delay = overrideDelay
-            }
-            removeMessages(MSG_AUTO_RECONNECT)
-            sendEmptyMessageDelayed(MSG_AUTO_RECONNECT, delay)
-            Timber.i("Scheduling automatic reconnect attempt %d in %d ms",
-                    attempt + 1, delay)
-        }
-
-        fun cancelAutoReconnect() {
-            removeMessages(MSG_AUTO_RECONNECT)
-        }
-
-        fun hasAutoReconnectScheduled(): Boolean {
-            return hasMessages(MSG_AUTO_RECONNECT)
-        }
-
-        fun scheduleDiscoveryTimeout(delayMillis: Long) {
-            removeMessages(MSG_DISCOVERY_TIMEOUT)
-            sendEmptyMessageDelayed(MSG_DISCOVERY_TIMEOUT, delayMillis)
-        }
-
-        fun cancelDiscoveryTimeout() {
-            removeMessages(MSG_DISCOVERY_TIMEOUT)
-        }
-
-        fun scheduleDiscoveryRestart(delayMillis: Long) {
-            removeMessages(MSG_DISCOVERY_RESTART)
-            sendEmptyMessageDelayed(MSG_DISCOVERY_RESTART, delayMillis)
-        }
-
-        fun cancelDiscoveryRestart() {
-            removeMessages(MSG_DISCOVERY_RESTART)
-        }
-
-        fun scheduleHidRetry() {
-            sendEmptyMessageDelayed(MSG_RETRY_HID, HID_RETRY_DELAY)
-        }
-
-        fun cancelHidRetry() {
-            removeMessages(MSG_RETRY_HID)
-        }
-
-        fun scheduleHidControllerTimeout(delayMillis: Long) {
-            removeMessages(MSG_HID_CONTROLLER_TIMEOUT)
-            sendEmptyMessageDelayed(MSG_HID_CONTROLLER_TIMEOUT, delayMillis)
-        }
-
-        fun cancelHidControllerTimeout() {
-            removeMessages(MSG_HID_CONTROLLER_TIMEOUT)
-        }
-
-        override fun handleMessage(msg: Message) {
-            val service = mService.get()
-            if (service == null) {
-                return
-            }
-            when (msg.what) {
-                MSG_REGISTER_CALLBACK -> {
-                    handleRegisterCallback(service,
-                            msg.obj as IBrailleServiceCallback)
-                }
-                MSG_ON_DISPLAY_CONNECTED -> {
-                    handleOnDisplayConnected(service,
-                        msg.obj as BrailleDisplayProperties)
-                }
-                MSG_ON_DISPLAY_DISCONNECTED -> {
-                    handleOnDisplayDisconnected(service)
-                }
-                MSG_SET_CONNECTION_PROGRESS -> {
-                    handleSetConnectionProgress(service, msg.obj as String)
-                }
-                MSG_ON_INPUT_EVENT -> {
-                    handleOnInputEvent(service, msg.obj as BrailleInputEvent)
-                }
-                MSG_CONNECT_BRAILLE -> {
-                    if (msg.arg1 != 0) {
-                        service.startExplicitConnect()
-                    } else {
-                        service.connectBraille()
-                    }
-                }
-                MSG_DISCONNECT_BRAILLE -> {
-                    service.cancelPendingReconnect()
-                    service.disconnectBraille(msg.arg1 != 0)
-                }
-                MSG_ON_HID_CONNECTED -> {
-                    handleOnHidConnected(service, msg.obj as HidEvent)
-                }
-                MSG_ON_HID_DISCONNECTED -> {
-                    handleOnHidDisconnected(service, msg.obj as HidEvent)
-                }
-                MSG_ON_HID_CONNECT_FAILED -> {
-                    handleOnHidConnectFailed(service, msg.obj as HidEvent)
-                }
-                MSG_RETRY_HID -> {
-                    handleRetryHid(service)
-                }
-                MSG_ON_WUJIE_CONNECTED -> {
-                    handleOnWujieConnected(service, msg.obj as WujieEvent)
-                }
-                MSG_ON_WUJIE_DISCONNECTED -> {
-                    handleOnWujieDisconnected(service, msg.obj as WujieEvent)
-                }
-                MSG_ON_WUJIE_CONNECT_FAILED -> {
-                    handleOnWujieConnectFailed(service, msg.obj as WujieEvent)
-                }
-                MSG_ON_WUJIE_INPUT_EVENT -> {
-                    handleOnWujieInputEvent(service,
-                            msg.obj as WujieInputEvent)
-                }
-                MSG_HID_CONTROLLER_TIMEOUT -> {
-                    handleHidControllerTimeout(service)
-                }
-                MSG_AUTO_RECONNECT -> {
-                    handleAutoReconnect(service)
-                }
-                MSG_DISCOVERY_TIMEOUT -> {
-                    service.stopDiscoverySession("discovery window expired")
-                }
-                MSG_DISCOVERY_RESTART -> {
-                    service.startDiscoveryInternal("discovery cycle restart")
-                }
-                else -> {  // fall out
-                }
-            }
-        }
-
-        private fun handleRegisterCallback(
-                service: DisplayService, callback: IBrailleServiceCallback?) {
-            service.mClients.register(callback)
-            if (service.mDataFileState == FILES_EXTRACTED
-                    && service.mConnectionState == STATE_DISCONNECTED
-                    && !service.isConnectionActive()
-                    && !service.mConnectPending
-                    && !service.mWaitingForHidController) {
-                // onBind() runs before the client has registered, so its
-                // failed attempt cannot open a discovery window yet. Fill that
-                // gap now that haveClients() is true.
-                service.mDiscoveryAllowedForCycle = true
-                service.startDiscoveryWindow("client registered")
-            }
-            if (service.mConnectionProgress != null) {
-                service.sendConnectionProgress(callback)
-            }
-            if (service.mDataFileState == FILES_NOT_EXTRACTED
-                    || (service.mConnectionState == STATE_DISCONNECTED
-                            && (service.mReadThread != null
-                                    || (service.mHidConnection != null
-                                            && !service.mHidConnection!!
-                                                    .isDisconnecting())
-                                    || service.mWujieConnection != null
-                                    || service.mUsbConnection != null))) {
-                // Extraction or connection in progress, there will be a
-                // broadcast of the state when it either succeeds or fails.
-                return
-            }
-            service.sendConnectionState(callback)
-        }
-
-        private fun handleOnDisplayConnected(
-                service: DisplayService, properties: BrailleDisplayProperties?) {
-            handleConnectionEstablished(service, properties)
-        }
-
-        private fun handleOnHidConnected(
-                service: DisplayService, event: HidEvent) {
-            if (event.connection != service.mHidConnection) {
-                Timber.w("Ignoring stale HID connected callback")
-                return
-            }
-            handleConnectionEstablished(service, event.properties)
-        }
-
-        private fun handleConnectionEstablished(
-                service: DisplayService, properties: BrailleDisplayProperties?) {
-            service.clearHidControllerWait()
-            service.mConnectionState = STATE_CONNECTED
-            // Also broadcast the progress clear, so clients do not keep
-            // showing a stale "connecting..." message and suppress the
-            // connected state.
-            service.clearConnectionProgress()
-            service.mDisplayProperties = properties
-            service.mConnectPending = false
-            service.mHidTried = false
-            service.mWujieTried = false
-            service.mUsbSerialTried = false
-            service.mUsbHidTried = false
-            service.mHidConnectionIsUsb = false
-            service.mHidRetryCount = 0
-            service.mAutoReconnectAttempt = 0
-            service.mAutoReconnectSuppressed = false
-            service.mDiscoveryAllowedForCycle = false
-            service.stopDiscoverySession("display connected")
-            service.cancelAutoReconnect()
-            cancelHidRetry()
-            service.broadcastConnectionState()
-        }
-
-        private fun handleOnDisplayDisconnected(service: DisplayService) {
-            service.mReadThread = null
-            // Also released by the wired path (which has no ReadThread).
-            service.mUsbConnection = null
-            handleConnectionReleased(service)
-        }
-
-        private fun handleOnHidDisconnected(
-                service: DisplayService, event: HidEvent) {
-            if (event.connection != service.mHidConnection) {
-                Timber.w("Ignoring stale HID disconnected callback")
-                return
-            }
-            service.mHidConnection = null
-            handleConnectionReleased(service)
-        }
-
-        private fun handleConnectionReleased(service: DisplayService) {
-            service.resetConnectionAttemptFlags()
-            cancelHidRetry()
-            service.clearConnectionProgress()
-            if (service.mConnectionState != STATE_DISCONNECTED) {
-                service.mConnectionState = STATE_DISCONNECTED
-                service.broadcastConnectionState()
-            }
-            if (service.mConnectPending) {
-                // Don't get stuck retrying if connecting fails.
-                service.mConnectPending = false
-                Timber.i("Previous connection released; reconnecting once")
-                service.connectBraille()
-                return
-            }
-            service.scheduleAutoReconnectIfNeeded()
-        }
-
-        private fun handleOnHidConnectFailed(
-                service: DisplayService, event: HidEvent) {
-            if (event.connection != service.mHidConnection) {
-                Timber.w("Ignoring stale HID failure callback %d", event.error)
-                return
-            }
-            service.mHidConnection = null
-            service.mConnectPending = false
-            service.mLastHidError = event.error
-            if (service.mHidConnectionIsUsb && service.isUsbProtocol()) {
-                service.mHidConnectionIsUsb = false
-                // A wired USB HID attempt with no device attached fails
-                // synchronously inside connectUsb(). Calling connectBraille()
-                // here would repost the same failure on the main looper, which
-                // spins at thousands of iterations per second (observed
-                // 47k retries in 17 s, ~106% CPU). Report the failure once and
-                // let the USB attach broadcast or the backoff schedule a retry.
-                Timber.w("Wired USB HID connect failed (%d); waiting for a "
-                        + "device or the next scheduled retry", event.error)
-                service.mHandler.setConnectionProgress(
-                        service.getUsbHidFailureMessage(event.error))
-                service.scheduleAutoReconnectIfNeeded()
-                return
-            }
-            val protocol = service.getConnectionProtocol()
-            val hidRequested = service.isBluetoothProtocol()
-            if (event.error == -3 && service.mHidRetryCount == 0
-                    && hidRequested && service.mReadThread == null) {
-                service.mHidRetryCount = 1
-                service.mHidTried = false
-                Timber.i("Retrying HID once after controller release conflict")
-                scheduleHidRetry()
-                return
-            }
-            Timber.e("HID connect failed (%d), protocol=%s", event.error,
-                    protocol)
-            // mHidTried remains true so auto mode falls through to RFCOMM and
-            // forced HID reports the existing failure message.
-            service.connectBraille()
-            service.scheduleAutoReconnectIfNeeded()
-        }
-
-        private fun handleOnWujieConnected(
-                service: DisplayService, event: WujieEvent) {
-            if (event.connection != service.mWujieConnection) {
-                Timber.w("Ignoring stale Wujie connected callback")
-                return
-            }
-            handleConnectionEstablished(service, event.properties)
-        }
-
-        private fun handleOnWujieDisconnected(
-                service: DisplayService, event: WujieEvent) {
-            if (event.connection != service.mWujieConnection) {
-                Timber.w("Ignoring stale Wujie disconnected callback")
-                return
-            }
-            service.mWujieConnection = null
-            handleConnectionReleased(service)
-        }
-
-        private fun handleOnWujieConnectFailed(
-                service: DisplayService, event: WujieEvent) {
-            if (event.connection != service.mWujieConnection) {
-                Timber.w("Ignoring stale Wujie failure callback %d",
-                        event.error)
-                return
-            }
-            service.mWujieConnection = null
-            service.mConnectPending = false
-            Timber.e("Wujie GATT connect failed (%d)", event.error)
-            val message: Int = when (event.error) {
-                WujieGattConnection.ERROR_PERMISSION -> R.string.connprog_wujie_permission
-                WujieGattConnection.ERROR_SERVICE -> R.string.connprog_wujie_service_missing
-                WujieGattConnection.ERROR_MTU -> R.string.connprog_wujie_mtu
-                WujieGattConnection.ERROR_NO_WRITE -> R.string.connprog_wujie_no_write
-                else -> {
-                    service.mHandler.setConnectionProgress(
-                            service.getString(
-                                    R.string.connprog_wujie_failed_code,
-                                    event.error))
-                    service.scheduleAutoReconnectIfNeeded()
-                    return
-                }
-            }
-            service.mHandler.setConnectionProgress(
-                    service.getString(message))
-            service.scheduleAutoReconnectIfNeeded()
-        }
-
-        private fun handleOnWujieInputEvent(
-                service: DisplayService, input: WujieInputEvent) {
-            if (input.connection != service.mWujieConnection
-                    || input.event == null) {
-                Timber.w("Ignoring stale Wujie input event")
-                return
-            }
-            service.broadcastInputEvent(input.event)
-        }
-
-        private fun handleRetryHid(service: DisplayService) {
-            if (service.mHidConnection != null || service.mReadThread != null
-                    || service.mUsbConnection != null) {
-                return
-            }
-            if (!service.isHidRequested()) {
-                return
-            }
-            service.mHidTried = false
-            if (!service.retryHidConnect()) {
-                service.mHidTried = true
-                service.connectBraille()
-            }
-        }
-
-        private fun handleHidControllerTimeout(service: DisplayService) {
-            if (!service.mWaitingForHidController) {
-                return
-            }
-            service.mWaitingForHidController = false
-            if (!service.isBluetoothProtocol()) {
-                return
-            }
-            if (HidBridge.isAvailable()) {
-                // The controller arrived just before the timeout fired.
-                service.mHidTried = false
-                service.connectBraille()
-                return
-            }
-            // HID is not available in this cycle, so use classic RFCOMM instead
-            // of waiting forever.
-            service.mHidTried = true
-            service.connectBraille()
-            service.scheduleAutoReconnectIfNeeded()
-        }
-
-        private fun handleAutoReconnect(service: DisplayService) {
-            if (!service.shouldAutoReconnect()) {
-                Timber.i("Skipping automatic reconnect (no longer eligible)")
-                return
-            }
-            Timber.i("Automatic reconnect attempt %d",
-                    service.mAutoReconnectAttempt)
-            service.connectBraille()
-        }
-
-        private fun handleSetConnectionProgress(
-                service: DisplayService, description: String?) {
-            if ((description == null && service.mConnectionProgress == null)
-                    || (description != null && description.equals(
-                                    service.mConnectionProgress))) {
-                return
-            }
-            service.mConnectionProgress = description
-            service.broadcastConnectionProgress()
-        }
-
-        private fun handleOnInputEvent(
-                service: DisplayService, event: BrailleInputEvent?) {
-            service.broadcastInputEvent(event)
-        }
-    }
 }

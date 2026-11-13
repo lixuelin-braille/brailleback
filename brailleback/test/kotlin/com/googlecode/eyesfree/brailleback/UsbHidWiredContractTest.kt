@@ -87,9 +87,22 @@ class UsbHidWiredContractTest {
         }
         .joinToString("\n")
 
-    private fun displayServiceSource() = text(
+    /**
+     * DisplayService 已按职责拆成多个文件。契约是跨文件的，因此把全部
+     * 拆分文件拼成一个源码视图，断言强度不因拆分而降低。
+     * 主文件必须排第一：methodBody() 用 indexOf 找 "fun connectBraille()"，
+     * 主类的连接编排要先于 MainHandler 的同名 post 方法被解析到。
+     */
+    private val displayServiceSources = listOf(
         "service/src/com/googlecode/eyesfree/braille/service/display/DisplayService.kt",
+        "service/src/com/googlecode/eyesfree/braille/service/display/DisplayServiceHandler.kt",
+        "service/src/com/googlecode/eyesfree/braille/service/display/DisplayServiceHandlerActions.kt",
+        "service/src/com/googlecode/eyesfree/braille/service/display/DisplayServiceListeners.kt",
+        "service/src/com/googlecode/eyesfree/braille/service/display/DataFileExtractor.kt",
     )
+
+    private fun displayServiceSource(): String =
+        displayServiceSources.joinToString("\n\n") { text(it) }
 
     private fun arrayBlock(name: String): String {
         val xml = text("brailleback/res/values/donottranslate.xml")

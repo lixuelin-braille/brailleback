@@ -26,11 +26,24 @@ class ConnectionFailureLoggingContractTest {
 
     private fun text(path: String) = projectFile(path).readText()
 
+    /**
+     * DisplayService 已按职责拆成多个文件；日志安装契约跨文件成立，
+     * 因此用同一个源码视图覆盖全部拆分文件，断言强度不降低。
+     */
+    private val displayServiceSources = listOf(
+        "service/src/com/googlecode/eyesfree/braille/service/display/DisplayService.kt",
+        "service/src/com/googlecode/eyesfree/braille/service/display/DisplayServiceHandler.kt",
+        "service/src/com/googlecode/eyesfree/braille/service/display/DisplayServiceHandlerActions.kt",
+        "service/src/com/googlecode/eyesfree/braille/service/display/DisplayServiceListeners.kt",
+        "service/src/com/googlecode/eyesfree/braille/service/display/DataFileExtractor.kt",
+    )
+
+    private fun displayServiceSource(): String =
+        displayServiceSources.joinToString("\n\n") { text(it) }
+
     @Test
     fun timberIsForwardedToTheFileLogInReleaseToo() {
-        val display = text(
-            "service/src/com/googlecode/eyesfree/braille/service/display/DisplayService.kt",
-        )
+        val display = displayServiceSource()
         assertTrue(display.contains("Timber.plant(LogUtilsTimberTree())"))
         assertFalse(display.contains("BuildConfig.DEBUG && Timber.treeCount() == 0"))
 
@@ -49,9 +62,7 @@ class ConnectionFailureLoggingContractTest {
         // The display service may start before the accessibility service, so it
         // must install the same single file sink instead of only logging to
         // logcat. Both run in one process, hence init must stay idempotent.
-        val display = text(
-            "service/src/com/googlecode/eyesfree/braille/service/display/DisplayService.kt",
-        )
+        val display = displayServiceSource()
         assertTrue(display.contains("configureProcessLogging()"))
         assertTrue(display.contains("LogFileWriter.init(this)"))
         assertTrue(display.contains("LogUtils.setLogLevel("))
