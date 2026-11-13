@@ -682,8 +682,14 @@ class BrailleBackService : AccessibilityService(),
         // record and rotated the log file within minutes, so the compact
         // summary is what a normal (DEBUG) log keeps; the complete dump is
         // reserved for VERBOSE.
-        if (LogUtils.shouldLog(Log.DEBUG)) {
-            LogUtils.log(this, Log.DEBUG, "Event: %s", describeEvent(event))
+        //
+        // 诊断包（DIAG_LOG_LEVEL>0）是发给用户排查点显器连接问题的，事件流
+        // 会把 1MB 滚动日志在一小时内冲干净，所以诊断包里连摘要也只在
+        // VERBOSE 保留。
+        val eventSummaryLevel =
+            if (BuildConfig.DIAG_LOG_LEVEL > 0) Log.VERBOSE else Log.DEBUG
+        if (LogUtils.shouldLog(eventSummaryLevel)) {
+            LogUtils.log(this, eventSummaryLevel, "Event: %s", describeEvent(event))
         }
         if (LogUtils.shouldLog(Log.VERBOSE)) {
             LogUtils.log(this, Log.VERBOSE, "Event detail: %s", event.toString())

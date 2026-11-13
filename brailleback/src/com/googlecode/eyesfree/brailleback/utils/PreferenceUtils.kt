@@ -38,6 +38,10 @@ object PreferenceUtils {
      */
     @JvmStatic
     fun initLogLevel(context: Context) {
+        if (BuildConfig.DIAG_LOG_LEVEL > 0) {
+            LogUtils.setLogLevel(BuildConfig.DIAG_LOG_LEVEL)
+            return
+        }
         if (BuildConfig.DEBUG) {
             val prefs = PreferenceManager.getDefaultSharedPreferences(context)
             val key = context.getString(R.string.pref_log_level_key)
@@ -57,6 +61,11 @@ object PreferenceUtils {
      */
     @JvmStatic
     fun updateLogLevel(logLevel: Int): Boolean {
+        // 诊断包里级别是硬编码的，设置页改不动它。
+        if (BuildConfig.DIAG_LOG_LEVEL > 0) {
+            LogUtils.setLogLevel(BuildConfig.DIAG_LOG_LEVEL)
+            return false
+        }
         // Keep the live level consistent with getLogLevel(): in debug builds a
         // tester may raise verbosity above INFO, but never drop below it.
         LogUtils.setLogLevel(
@@ -70,6 +79,10 @@ object PreferenceUtils {
      */
     @JvmStatic
     fun getLogLevel(context: Context): Int {
+        // 诊断包：级别硬编码，不看偏好项，避免被设置页或旧偏好改回去。
+        if (BuildConfig.DIAG_LOG_LEVEL > 0) {
+            return BuildConfig.DIAG_LOG_LEVEL
+        }
         val prefs: SharedPreferences =
             PreferenceManager.getDefaultSharedPreferences(context)
         // A level chosen on the settings screen always wins, including in

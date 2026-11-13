@@ -450,6 +450,10 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
      * lifecycle lines, but may still opt into VERBOSE.
      */
     private fun computeLogLevel(): Int {
+        // 诊断包：级别硬编码进 APK，先于偏好项生效。
+        if (BuildConfig.DIAG_LOG_LEVEL > 0) {
+            return BuildConfig.DIAG_LOG_LEVEL
+        }
         val raw: String? = PreferenceManager.getDefaultSharedPreferences(this)
                 .getString("log_level", null)
         if (raw != null) {

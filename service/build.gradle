@@ -21,6 +21,10 @@ android {
         minSdk 23
         targetSdk 35
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        // 诊断包专用：把日志级别硬编码进 APK，不再读设置项。
+        // 正常构建为 -1（不生效）；出诊断包用 -PdiagLogLevel=3（DEBUG）。
+        buildConfigField "int", "DIAG_LOG_LEVEL",
+                (project.findProperty("diagLogLevel") ?: "-1").toString()
     }
     testOptions {
         unitTests {
