@@ -11,7 +11,7 @@
 `:service` 承担两件完全不同的事，被打包成 AAR 供 `:brailleback` 使用（**同进程**）：
 
 1. **翻译（translate）** —— 文本 → 盲文点位。**自研中文分词规则引擎在这里**。
-2. **显示（display）** —— 盲文点位 → 点显器硬件。brltty 6.7 + Braille HID。
+2. **显示（display）** —— 盲文点位 → 点显器硬件。brltty 6.9.1 + Braille HID。
 
 ---
 
@@ -47,7 +47,7 @@ service/src/com/googlecode/eyesfree/braille/
 │   ├── translationtables.zip  2.26 MB / 131 张表（含 zhcn-cbs-full.ctb）
 │   └── keytables.zip          146 KB / 196 张键位表
 └── jni/
-    ├── brlttywrapper/   third_party/brltty (6.7) + driver.mk + Android.mk
+    ├── brlttywrapper/   third_party/brltty (6.9.1) + driver.mk + Android.mk
     └── liblouiswrapper/ liblouis (2.6.0) + tables (485 张)
 ```
 
