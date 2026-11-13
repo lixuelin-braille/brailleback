@@ -542,6 +542,9 @@ extern "C" {
 /* Define this to be a string containing the path to the helper commands directory. */
 #define COMMANDS_DIRECTORY "/libexec/brltty"
 
+/* Define this to be a string containing the path to the helper commands directory. */
+#define HELPERS_DIRECTORY "/libexec/brltty"
+
 /* Define this to be a string containing the path to the drivers directory. */
 #define DRIVERS_DIRECTORY "/lib/brltty"
 

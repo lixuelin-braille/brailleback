@@ -30,7 +30,7 @@
 
 static void
 usbLogSerialProblem (UsbDevice *device, const char *problem) {
-  logMessage(LOG_CATEGORY(SERIAL_IO),
+  logMessage(LOG_ERR,
     "%s: Vendor:%04X Product:%04X",
     problem,
     getLittleEndian16(device->descriptor.idVendor),
@@ -143,11 +143,20 @@ usbSetSerialOperations (UsbDevice *device) {
     if (!uso) {
       if (device->descriptor.bDeviceClass == 0X02) {
         uso = &usbSerialOperations_CDC_ACM;
+      } else {
+        logMessage(LOG_ERR,
+          "USB serial: no adapter for Vendor:%04X Product:%04X class:%02X/%02X/%02X",
+          getLittleEndian16(device->descriptor.idVendor),
+          getLittleEndian16(device->descriptor.idProduct),
+          device->descriptor.bDeviceClass,
+          device->descriptor.bDeviceSubClass,
+          device->descriptor.bDeviceProtocol
+        );
       }
     }
 
     if (uso) {
-      logMessage(LOG_CATEGORY(SERIAL_IO), "USB adapter: %s", uso->name);
+      logMessage(LOG_NOTICE, "USB serial adapter selected: %s", uso->name);
       UsbSerialData *usd = NULL;
 
       if (uso->makeData) {

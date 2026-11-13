@@ -277,6 +277,7 @@ ASYNC_ALARM_CALLBACK(handleUsbStatusAlarm) {
     handleNavigationKeys(brl, (packet[2] | (packet[3] << 8)));
     setUsbStatusAlarm(brl);
   } else {
+    logMessage(LOG_ERR, "Metec: USB status poll failed: errno=%d", errno);
     enqueueCommand(BRL_CMD_RESTARTBRL);
   }
 }
@@ -384,6 +385,8 @@ brl_construct (BrailleDisplay *brl, char **parameters, const char *device) {
     memset(brl->data, 0, sizeof(*brl->data));
 
     if (connectResource(brl, device)) {
+      logMessage(LOG_NOTICE, "Metec: device connected");
+
       if (brl->data->protocol->setHighVoltage(brl, 1)) {
         unsigned char statusPacket[MT_STATUS_PACKET_SIZE];
 
@@ -423,6 +426,7 @@ brl_construct (BrailleDisplay *brl, char **parameters, const char *device) {
           if (brl->data->protocol->beginProtocol(brl)) return 1;
         }
 
+        logMessage(LOG_ERR, "Metec: status packet read failed during initialization");
         brl->data->protocol->setHighVoltage(brl, 0);
       }
 
@@ -439,6 +443,7 @@ brl_construct (BrailleDisplay *brl, char **parameters, const char *device) {
 
 static void
 brl_destruct (BrailleDisplay *brl) {
+  logMessage(LOG_NOTICE, "Metec: disconnecting display");
   brl->data->protocol->endProtocol(brl);
   brl->data->protocol->setHighVoltage(brl, 0);
   disconnectResource(brl);
@@ -458,7 +463,11 @@ brl_writeWindow (BrailleDisplay *brl, const wchar_t *text) {
       unsigned char cells[MT_MODULE_SIZE];
 
       translateOutputCells(cells, source, MT_MODULE_SIZE);
-      if (tellUsbDevice(brl, 0X0A+moduleNumber, cells, MT_MODULE_SIZE) == -1) return 0;
+      if (tellUsbDevice(brl, 0X0A+moduleNumber, cells, MT_MODULE_SIZE) == -1) {
+        logMessage(LOG_ERR, "Metec: writing cells failed: module=%u errno=%d",
+                   moduleNumber, errno);
+        return 0;
+      }
     }
 
     source += MT_MODULE_SIZE;

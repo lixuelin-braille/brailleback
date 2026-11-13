@@ -31,6 +31,30 @@ extern const BrailleDriver brl_driver_hm;
 extern const BrailleDriver brl_driver_ht;
 extern const BrailleDriver brl_driver_hw;
 extern const BrailleDriver brl_driver_mm;
+extern const BrailleDriver brl_driver_mt;
+extern const BrailleDriver brl_driver_at;
+extern const BrailleDriver brl_driver_bn;
+extern const BrailleDriver brl_driver_cn;
+extern const BrailleDriver brl_driver_ce;
+extern const BrailleDriver brl_driver_dp;
+extern const BrailleDriver brl_driver_eu;
+extern const BrailleDriver brl_driver_fa;
+extern const BrailleDriver brl_driver_hd;
+extern const BrailleDriver brl_driver_ic;
+extern const BrailleDriver brl_driver_md;
+extern const BrailleDriver brl_driver_pg;
+extern const BrailleDriver brl_driver_vs;
+extern const BrailleDriver brl_driver_cb;
+extern const BrailleDriver brl_driver_ts;
+extern const BrailleDriver brl_driver_bc;
+extern const BrailleDriver brl_driver_bl;
+extern const BrailleDriver brl_driver_bd;
+extern const BrailleDriver brl_driver_ec;
+extern const BrailleDriver brl_driver_lt;
+extern const BrailleDriver brl_driver_mn;
+extern const BrailleDriver brl_driver_mb;
+extern const BrailleDriver brl_driver_tn;
+extern const BrailleDriver brl_driver_np;
 extern const BrailleDriver brl_driver_pm;
 extern const BrailleDriver brl_driver_sk;
 extern const BrailleDriver brl_driver_vo;
@@ -45,6 +69,30 @@ static const DriverEntry driverTable[] = {
     {&brl_driver_ht, &brl_driver_ht.definition},
     {&brl_driver_hw, &brl_driver_hw.definition},
     {&brl_driver_mm, &brl_driver_mm.definition},
+    {&brl_driver_mt, &brl_driver_mt.definition},
+    {&brl_driver_at, &brl_driver_at.definition},
+    {&brl_driver_bn, &brl_driver_bn.definition},
+    {&brl_driver_cn, &brl_driver_cn.definition},
+    {&brl_driver_ce, &brl_driver_ce.definition},
+    {&brl_driver_dp, &brl_driver_dp.definition},
+    {&brl_driver_eu, &brl_driver_eu.definition},
+    {&brl_driver_fa, &brl_driver_fa.definition},
+    {&brl_driver_hd, &brl_driver_hd.definition},
+    {&brl_driver_ic, &brl_driver_ic.definition},
+    {&brl_driver_md, &brl_driver_md.definition},
+    {&brl_driver_pg, &brl_driver_pg.definition},
+    {&brl_driver_vs, &brl_driver_vs.definition},
+    {&brl_driver_cb, &brl_driver_cb.definition},
+    {&brl_driver_ts, &brl_driver_ts.definition},
+    {&brl_driver_bc, &brl_driver_bc.definition},
+    {&brl_driver_bl, &brl_driver_bl.definition},
+    {&brl_driver_bd, &brl_driver_bd.definition},
+    {&brl_driver_ec, &brl_driver_ec.definition},
+    {&brl_driver_lt, &brl_driver_lt.definition},
+    {&brl_driver_mn, &brl_driver_mn.definition},
+    {&brl_driver_mb, &brl_driver_mb.definition},
+    {&brl_driver_tn, &brl_driver_tn.definition},
+    {&brl_driver_np, &brl_driver_np.definition},
     {&brl_driver_pm, &brl_driver_pm.definition},
     {&brl_driver_sk, &brl_driver_sk.definition},
     {&brl_driver_vo, &brl_driver_vo.definition},
