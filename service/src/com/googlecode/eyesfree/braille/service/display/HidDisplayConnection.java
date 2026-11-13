@@ -19,19 +19,28 @@ package com.googlecode.eyesfree.braille.service.display;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.accessibilityservice.BrailleDisplayController;
+import android.app.PendingIntent;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.content.res.Resources;
+import android.hardware.usb.UsbDevice;
+import android.hardware.usb.UsbManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
-import android.util.Log;
 import com.googlecode.eyesfree.braille.display.BrailleDisplayProperties;
+import com.googlecode.eyesfree.utils.LogUtils;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executor;
 import timber.log.Timber;
 
@@ -59,7 +68,10 @@ public class HidDisplayConnection implements DriverThread.OnInitListener {
   private static final String LOG_TAG = HidDisplayConnection.class.getSimpleName();
 
   private static final long DISCONNECT_TIMEOUT_MS = 2000;
+  private static final long USB_PERMISSION_TIMEOUT_MS = 15000;
   private static final int FAILURE_NONE = Integer.MIN_VALUE;
+  private static final String ACTION_USB_HID_PERMISSION =
+      "com.googlecode.eyesfree.brailleback.action.USB_HID_PERMISSION";
 
   private final Context mContext;
   private final Resources mResources;
@@ -72,8 +84,22 @@ public class HidDisplayConnection implements DriverThread.OnInitListener {
 
   private volatile BrailleDisplayController mController;
   private volatile BluetoothDevice mDevice;
+  private volatile UsbDevice mUsbDevice;
+  private volatile BrailleDisplayController mPendingUsbController;
+  private UsbManager mUsbManager;
+  private BroadcastReceiver mUsbPermissionReceiver;
+  private boolean mUsbPermissionSettled;
   private volatile DriverThread mDriverThread;
   private volatile int mPendingFailure = FAILURE_NONE;
+
+  private final Runnable mUsbPermissionTimeout = new Runnable() {
+    @Override
+    public void run() {
+      boolean granted = mUsbDevice != null && mUsbManager != null
+          && mUsbManager.hasPermission(mUsbDevice);
+      onUsbPermissionResult(granted);
+    }
+  };
 
   private final Runnable mDisconnectTimeout = new Runnable() {
     @Override
@@ -103,14 +129,14 @@ public class HidDisplayConnection implements DriverThread.OnInitListener {
   /** Connects to the HID braille display with the given bluetooth address. */
   public void connect(BrailleDisplayController controller, String deviceAddress) {
     if (controller == null || deviceAddress == null) {
-      Log.e(LOG_TAG, "Cannot connect: missing controller or device address");
+      LogUtils.e(this, "Cannot connect: missing controller or device address");
       notifyConnectFailed(-1);
       return;
     }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
         && mContext.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)
             != PackageManager.PERMISSION_GRANTED) {
-      Log.e(LOG_TAG, "BLUETOOTH_CONNECT permission not granted");
+      LogUtils.e(this, "BLUETOOTH_CONNECT permission not granted");
       notifyConnectFailed(-6);
       return;
     }
@@ -123,7 +149,7 @@ public class HidDisplayConnection implements DriverThread.OnInitListener {
     try {
       device = adapter.getRemoteDevice(deviceAddress);
     } catch (IllegalArgumentException | SecurityException e) {
-      Log.e(LOG_TAG, "Invalid HID braille display address "
+      LogUtils.e(this, "Invalid HID braille display address "
           + deviceAddress + ": " + e);
       notifyConnectFailed(-5);
       return;
@@ -134,7 +160,8 @@ public class HidDisplayConnection implements DriverThread.OnInitListener {
     }
     mController = controller;
     mDevice = device;
-    Log.i(LOG_TAG, "Connecting to HID braille display " + deviceAddress);
+    mUsbDevice = null;
+    LogUtils.i(this, "Connecting to HID braille display " + deviceAddress);
     Timber.i("Starting HID connection to %s", deviceAddress);
     try {
       controller.connect(device, mExecutor, mCallback);
@@ -144,12 +171,171 @@ public class HidDisplayConnection implements DriverThread.OnInitListener {
       // fully torn down yet, or the display is held by another service).
       // Release it and wait for the controller to settle before reporting a
       // clean failure, so the service does not race the system teardown.
-      Log.e(LOG_TAG, "BrailleDisplayController already connected: " + e);
+      LogUtils.e(this, "BrailleDisplayController already connected: " + e);
       startTeardown(-3);
     } catch (RuntimeException e) {
-      Log.e(LOG_TAG, "BrailleDisplayController.connect() failed: " + e);
+      LogUtils.e(this, "BrailleDisplayController.connect() failed: " + e);
       startTeardown(-4);
     }
+  }
+
+  /**
+   * Connects to a wired USB HID braille display (Android 15+ / Braille HID
+   * standard). Ported from Google TalkBack 16.2's {@code UsbHidConnector}: the
+   * framework's {@code BrailleDisplayController.connect(UsbDevice, ...)}
+   * overload supplies the report descriptor and the transport, so the same
+   * callbacks, BRLTTY "hid" driver and BrlttyHidNativeHelper used by the
+   * Bluetooth HID path are reused verbatim. No native change is required.
+   *
+   * <p>Unlike Bluetooth, USB needs an explicit permission grant before the
+   * framework lets an accessibility service open the device.
+   */
+  public void connectUsb(BrailleDisplayController controller,
+      UsbManager usbManager) {
+    if (controller == null || usbManager == null) {
+      LogUtils.e(this, "Cannot connect USB HID: controller or UsbManager missing");
+      notifyConnectFailed(-7);
+      return;
+    }
+    mUsbManager = usbManager;
+    Map<String, UsbDevice> plugged = usbManager.getDeviceList();
+    List<UsbHidCandidate> candidates = new ArrayList<>();
+    for (UsbDevice device : plugged.values()) {
+      int[] classes = new int[device.getInterfaceCount()];
+      int[] subclasses = new int[classes.length];
+      int[] protocols = new int[classes.length];
+      for (int i = 0; i < classes.length; i++) {
+        classes[i] = device.getInterface(i).getInterfaceClass();
+        subclasses[i] = device.getInterface(i).getInterfaceSubclass();
+        protocols[i] = device.getInterface(i).getInterfaceProtocol();
+      }
+      candidates.add(new UsbHidCandidate(device.getDeviceId(),
+          device.getVendorId(), device.getProductId(), classes, subclasses,
+          protocols));
+    }
+    LogUtils.i(this, "USB HID: attached devices=" + plugged.size());
+    UsbHidCandidate match = UsbHidDevicePolicy.firstCompatible(candidates);
+    if (match == null) {
+      LogUtils.w(this, "No attached USB device exposes a HID interface");
+      notifyConnectFailed(-7);
+      return;
+    }
+    UsbDevice selected = null;
+    for (UsbDevice device : plugged.values()) {
+      if (device.getDeviceId() == match.getDeviceId()) {
+        selected = device;
+        break;
+      }
+    }
+    if (selected == null) {
+      notifyConnectFailed(-7);
+      return;
+    }
+    mUsbDevice = selected;
+    mPendingUsbController = controller;
+    LogUtils.i(this, "USB HID display id=" + selected.getDeviceId()
+        + " vid=" + selected.getVendorId()
+        + " pid=" + selected.getProductId());
+    if (!usbManager.hasPermission(selected)) {
+      requestUsbPermission(selected);
+      return;
+    }
+    finishUsbConnect(controller, selected);
+  }
+
+  private void requestUsbPermission(UsbDevice device) {
+    LogUtils.i(this, "Requesting USB permission for HID device id="
+        + device.getDeviceId());
+    mUsbPermissionSettled = false;
+    IntentFilter filter = new IntentFilter(ACTION_USB_HID_PERMISSION);
+    mUsbPermissionReceiver = new BroadcastReceiver() {
+      @Override
+      public void onReceive(Context context, Intent intent) {
+        UsbDevice granted = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+        if (granted == null || mUsbDevice == null
+            || granted.getDeviceId() != mUsbDevice.getDeviceId()) {
+          LogUtils.w(this, "Ignoring USB permission for a different device");
+          return;
+        }
+        onUsbPermissionResult(intent.getBooleanExtra(
+            UsbManager.EXTRA_PERMISSION_GRANTED, false));
+      }
+    };
+    if (Build.VERSION.SDK_INT >= 33) {
+      mContext.registerReceiver(mUsbPermissionReceiver, filter,
+          Context.RECEIVER_NOT_EXPORTED);
+    } else {
+      mContext.registerReceiver(mUsbPermissionReceiver, filter);
+    }
+    Intent intent = new Intent(ACTION_USB_HID_PERMISSION)
+        .setPackage(mContext.getPackageName());
+    int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      // The system fills the permission result into this PendingIntent; an
+      // immutable one drops those extras and always reports "denied".
+      flags |= PendingIntent.FLAG_MUTABLE;
+    }
+    mUsbManager.requestPermission(device,
+        PendingIntent.getBroadcast(mContext, 0, intent, flags));
+    // Some OEMs swallow the broadcast; the poll is the fallback.
+    mMainHandler.postDelayed(mUsbPermissionTimeout, USB_PERMISSION_TIMEOUT_MS);
+  }
+
+  private synchronized void onUsbPermissionResult(boolean granted) {
+    if (mUsbPermissionSettled || mLifecycle.isDisconnecting()) {
+      return;
+    }
+    mUsbPermissionSettled = true;
+    mMainHandler.removeCallbacks(mUsbPermissionTimeout);
+    unregisterUsbReceiver();
+    // hasPermission() is authoritative; "granted" may be false merely because
+    // an OEM dropped the system's PendingIntent extras.
+    if (mUsbDevice == null || mUsbManager == null
+        || !mUsbManager.hasPermission(mUsbDevice)) {
+      LogUtils.w(this, "USB permission for HID display was not granted");
+      notifyConnectFailed(-8);
+      return;
+    }
+    finishUsbConnect(mPendingUsbController, mUsbDevice);
+  }
+
+  private void finishUsbConnect(BrailleDisplayController controller,
+      UsbDevice device) {
+    if (controller == null || !mLifecycle.beginConnect()) {
+      Timber.w("Ignoring USB HID connect request in state %s",
+          mLifecycle.getState());
+      return;
+    }
+    mController = controller;
+    mDevice = null;
+    Timber.i("Connecting to wired USB HID braille display");
+    try {
+      controller.connect(device, mExecutor, mCallback);
+    } catch (IllegalStateException e) {
+      LogUtils.e(this, "BrailleDisplayController already connected: " + e);
+      startTeardown(-3);
+    } catch (RuntimeException e) {
+      LogUtils.e(this,
+          "BrailleDisplayController.connect(UsbDevice) failed: " + e);
+      startTeardown(-4);
+    }
+  }
+
+  private void cleanupUsbPermission() {
+    mMainHandler.removeCallbacks(mUsbPermissionTimeout);
+    unregisterUsbReceiver();
+  }
+
+  private void unregisterUsbReceiver() {
+    if (mUsbPermissionReceiver == null) {
+      return;
+    }
+    try {
+      mContext.unregisterReceiver(mUsbPermissionReceiver);
+    } catch (IllegalArgumentException e) {
+      LogUtils.d(this, "USB permission receiver was already unregistered");
+    }
+    mUsbPermissionReceiver = null;
   }
 
   /**
@@ -162,7 +348,7 @@ public class HidDisplayConnection implements DriverThread.OnInitListener {
     if (dt != null) {
       dt.writeWindow(patterns);
     } else {
-      Log.w(LOG_TAG, "writeWindow before driver is ready; dropping "
+      LogUtils.w(this, "writeWindow before driver is ready; dropping "
           + patterns.length + " cells");
     }
   }
@@ -178,6 +364,7 @@ public class HidDisplayConnection implements DriverThread.OnInitListener {
   }
 
   private synchronized void startTeardown(int failure) {
+    cleanupUsbPermission();
     boolean started = mLifecycle.beginDisconnect();
     if (!started && !mLifecycle.isDisconnecting()) {
       return;
@@ -208,7 +395,7 @@ public class HidDisplayConnection implements DriverThread.OnInitListener {
       // flight, and it must be cancelled before the next protocol starts.
       controller.disconnect();
     } catch (RuntimeException e) {
-      Log.w(LOG_TAG, "Releasing BrailleDisplayController failed: " + e);
+      LogUtils.w(this, "Releasing BrailleDisplayController failed: " + e);
       Timber.w(e, "Releasing BrailleDisplayController failed");
     }
   }
@@ -223,6 +410,7 @@ public class HidDisplayConnection implements DriverThread.OnInitListener {
   }
 
   private synchronized void completeDisconnected() {
+    cleanupUsbPermission();
     mMainHandler.removeCallbacks(mDisconnectTimeout);
     stopDriver();
     BrlttyHidNativeHelper.reset();
@@ -238,7 +426,10 @@ public class HidDisplayConnection implements DriverThread.OnInitListener {
   }
 
   private void notifyConnectFailed(int error) {
-    Timber.e("HID connection could not start (%d)", error);
+    cleanupUsbPermission();
+    // 没插点显器时这条每次重连都会出现，属正常回退；用 WARNING 避免把
+    // 用户日志刷成一堆“E”，真正需要关注的错误反而被淹没。
+    Timber.w("HID connection could not start (%d)", error);
     mListener.onHidConnectFailed(this, error);
   }
 
@@ -260,11 +451,11 @@ public class HidDisplayConnection implements DriverThread.OnInitListener {
             return;
           }
           if (descriptor == null) {
-            Log.e(LOG_TAG, "HID connection returned no report descriptor");
+            LogUtils.e(this, "HID connection returned no report descriptor");
             startTeardown(-5);
             return;
           }
-          Log.i(LOG_TAG, "HID braille display connected, descriptor("
+          LogUtils.i(this, "HID braille display connected, descriptor("
               + descriptor.length + "): " + toHex(descriptor));
           Timber.i("HID controller connected, descriptor length %d",
               descriptor.length);
@@ -286,7 +477,7 @@ public class HidDisplayConnection implements DriverThread.OnInitListener {
                 error, mLifecycle.getState());
             return;
           }
-          Log.e(LOG_TAG, "HID connection failed: " + error);
+          LogUtils.e(this, "HID connection failed: " + error);
           stopDriver();
           BrlttyHidNativeHelper.reset();
           mListener.onHidConnectFailed(HidDisplayConnection.this, error);
@@ -299,7 +490,7 @@ public class HidDisplayConnection implements DriverThread.OnInitListener {
                 mLifecycle.getState());
             return;
           }
-          Log.i(LOG_TAG, "HID braille display disconnected");
+          LogUtils.i(this, "HID braille display disconnected");
           completeDisconnected();
         }
 
@@ -322,8 +513,14 @@ public class HidDisplayConnection implements DriverThread.OnInitListener {
     if (mDriverThread != null) {
       return;
     }
+    // Wired USB HID and Bluetooth HID share the same native "hid" driver.
+    // The only difference is how DeviceInfo describes the (non-)Bluetooth
+    // device; the transport itself is always BrailleDisplayController.
+    DeviceFinder.DeviceInfo info = mUsbDevice != null
+        ? DeviceFinder.DeviceInfo.forUsb("hid", "hid:name=unused")
+        : DeviceFinder.DeviceInfo.forHid(mDevice);
     mDriverThread = new DriverThread(new NoOpOutputStream(),
-        DeviceFinder.DeviceInfo.forHid(mDevice), mResources, mTablesDir, mContext,
+        info, mResources, mTablesDir, mContext,
         this /*initListener*/, mInputEventListener);
   }
 
@@ -331,7 +528,7 @@ public class HidDisplayConnection implements DriverThread.OnInitListener {
   public void onInit(BrailleDisplayProperties displayProperties) {
     // We're in the driver thread.
     if (displayProperties == null) {
-      Log.e(LOG_TAG, "HID driver failed to initialize");
+      LogUtils.e(this, "HID driver failed to initialize");
       startTeardown(-2);
       return;
     }

@@ -40,12 +40,8 @@ class TranslatorManager(context: Context) :
         fun onTablesChanged()
     }
 
-    private val mPrefBrailleTypeKey: String
-    private val mPrefBrailleTypeSixDotValue: String
-    private val mPrefBrailleTypeEightDotValue: String
-    private val mPrefBrailleTypeDefault: String
-    private val mPrefSixDotBrailleTableKey: String
-    private val mPrefEightDotBrailleTableKey: String
+    private val mPrefBrailleTableKey: String
+    private val mLegacySixDotBrailleTableKey: String
     private val mPrefContractedModeKey: String
     private val mTableValueDefault: String
 
@@ -62,16 +58,14 @@ class TranslatorManager(context: Context) :
     private var mClientInitialized = false
 
     init {
-        mPrefBrailleTypeKey = context.getString(R.string.pref_braille_type_key)
-        mPrefBrailleTypeSixDotValue = context.getString(R.string.pref_braille_type_six_dot_value)
-        mPrefBrailleTypeEightDotValue = context.getString(R.string.pref_braille_type_eight_dot_value)
-        mPrefBrailleTypeDefault = context.getString(R.string.pref_braille_type_default)
-        mPrefSixDotBrailleTableKey = context.getString(R.string.pref_six_dot_braille_table_key)
-        mPrefEightDotBrailleTableKey = context.getString(R.string.pref_eight_dot_braille_table_key)
+        mPrefBrailleTableKey = context.getString(R.string.pref_braille_table_key)
+        mLegacySixDotBrailleTableKey =
+            context.getString(R.string.pref_six_dot_braille_table_key)
         mPrefContractedModeKey = context.getString(R.string.pref_braille_contracted_mode_key)
         mTableValueDefault = context.getString(R.string.table_value_default)
 
         mSharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
+        migrateLegacyTablePreference()
         mSharedPreferences.registerOnSharedPreferenceChangeListener(this)
         mTranslatorClient = TranslatorClient(
             context,
@@ -158,7 +152,7 @@ class TranslatorManager(context: Context) :
 
     private fun updateTranslators() {
         val eightDot = isEightDotBrailleSelected()
-        val newTranslator = findBrailleTranslator(eightDot, true /*fallback*/)
+        val newTranslator = findBrailleTranslator(true /*fallback*/)
         if (newTranslator == null) {
             LogUtils.log(this, Log.ERROR,
                 "Couldn't find braille translator for %s", mLocale)
@@ -180,7 +174,7 @@ class TranslatorManager(context: Context) :
                 "Uncontracted table for %s: %s", mLocale, info?.id)
         }
         if (newUncontractedTranslator == null) {
-            newUncontractedTranslator = findBrailleTranslator(true /*eightDot*/, true /*fallback*/)
+            newUncontractedTranslator = findBrailleTranslator(true /*fallback*/)
         }
         if (newUncontractedTranslator == null) {
             newUncontractedTranslator = newTranslator
@@ -219,9 +213,8 @@ class TranslatorManager(context: Context) :
         return best
     }
 
-    private fun getTranslatorFromPreferences(eightDot: Boolean): BrailleTranslator? {
-        val key = if (eightDot) mPrefEightDotBrailleTableKey else mPrefSixDotBrailleTableKey
-        val value = mSharedPreferences.getString(key, mTableValueDefault)
+    private fun getTranslatorFromPreferences(): BrailleTranslator? {
+        val value = mSharedPreferences.getString(mPrefBrailleTableKey, mTableValueDefault)
         if (mTableValueDefault == value) {
             return null
         }
@@ -232,12 +225,12 @@ class TranslatorManager(context: Context) :
      * Finds a translation table for the `userLocale`, falling back on US
      * English if no match is found.
      */
-    private fun findBrailleTranslator(eightDot: Boolean, fallback: Boolean): BrailleTranslator? {
-        var translator = getTranslatorFromPreferences(eightDot)
+    private fun findBrailleTranslator(fallback: Boolean): BrailleTranslator? {
+        var translator = getTranslatorFromPreferences()
         if (translator != null) {
             return translator
         }
-        var info = findDefaultTableInfo(eightDot)
+        var info = findDefaultTableInfo(false)
         if (info == null && fallback) {
             info = findFallbackTableInfo()
         }
@@ -296,9 +289,7 @@ class TranslatorManager(context: Context) :
     }
 
     private fun isTablePreferenceKey(key: String): Boolean {
-        return mPrefBrailleTypeKey == key
-            || mPrefSixDotBrailleTableKey == key
-            || mPrefEightDotBrailleTableKey == key
+        return mPrefBrailleTableKey == key
             || mPrefContractedModeKey == key
     }
 
@@ -308,11 +299,45 @@ class TranslatorManager(context: Context) :
         return mSharedPreferences.getBoolean(mPrefContractedModeKey, false)
     }
 
-    /** Returns whether eight dot (computer) braille is selected for the
-     * display. Following the TalkBack model, the display always uses literary
-     * (six dot) braille; computer braille is only used internally for text
-     * editing. */
-    private fun isEightDotBrailleSelected(): Boolean {
-        return false
+    /** 当前选中的表；选的是“默认（跟随语言）”时返回 null。 */
+    private fun selectedTableInfo(): TableInfo? {
+        val value = mSharedPreferences.getString(mPrefBrailleTableKey, mTableValueDefault)
+        if (value == null || value == mTableValueDefault) {
+            return null
+        }
+        return mTables?.firstOrNull { it.id == value }
+    }
+
+    /** 当前选中的是不是八点（计算机）表。 */
+    private fun isEightDotBrailleSelected(): Boolean =
+        selectedTableInfo()?.isEightDot == true
+
+    /**
+     * 在六点与八点（计算机）盲文表之间切换，供 CMD_TOGGLE_BRAILLE_GRADE 使用。
+     *
+     * 返回切换后是否为八点；当前语言没有八点表时保持原状。
+     */
+    fun toggleBrailleDots(): Boolean {
+        val eightDot = isEightDotBrailleSelected()
+        val target = findDefaultTableInfo(!eightDot)
+        if (target == null) {
+            return eightDot
+        }
+        mSharedPreferences.edit()
+            .putString(mPrefBrailleTableKey, target.id)
+            .apply()
+        return !eightDot
+    }
+
+    /** 老版本的“书面盲文表格”并入统一表：只在用户改过表时才迁移。 */
+    private fun migrateLegacyTablePreference() {
+        if (mSharedPreferences.contains(mPrefBrailleTableKey)) {
+            return
+        }
+        val legacy = mSharedPreferences.getString(
+            mLegacySixDotBrailleTableKey, mTableValueDefault)
+        if (legacy != null && legacy != mTableValueDefault) {
+            mSharedPreferences.edit().putString(mPrefBrailleTableKey, legacy).apply()
+        }
     }
 }

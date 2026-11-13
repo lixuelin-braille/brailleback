@@ -26,6 +26,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ServiceInfo;
 import android.content.res.Configuration;
+import android.media.AudioManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -49,6 +50,7 @@ import com.googlecode.eyesfree.labeling.CustomLabelManager;
 import com.googlecode.eyesfree.labeling.PackageRemovalReceiver;
 import com.googlecode.eyesfree.utils.LogUtils;
 import java.lang.ref.WeakReference;
+import java.util.List;
 
 /**
  * An accessibility service that provides feedback through a braille
@@ -99,6 +101,8 @@ public class BrailleBackService
           } else if (getString(R.string.pref_idle_clear_key).equals(key)) {
             displayManager.setIdleClearTimeoutMs(
                 parseIdleClearMinutes(prefs.getString(key, "3")));
+          } else if (getString(R.string.pref_cursor_dots_key).equals(key)) {
+            displayManager.setCursorDotsEnabled(prefs.getBoolean(key, false));
           }
         }
       };
@@ -217,30 +221,14 @@ public class BrailleBackService
             return;
         }
         if (event.getCommand() == BrailleInputEvent.CMD_TOGGLE_BRAILLE_GRADE) {
-            // Read current grade preference.
-            Context context = this;
-            SharedPreferences sharedPreferences =
-                    PreferenceManager.getDefaultSharedPreferences(context);
-            final String prefKey = context.getString(R.string.pref_braille_type_key);
-            final String prefValueDefault = "";
-            final String prefValueOld = sharedPreferences.getString(prefKey, prefValueDefault);
-            final String prefValue6Dot =
-                    context.getString(R.string.pref_braille_type_six_dot_value);
-            final String prefValue8Dot =
-                    context.getString(R.string.pref_braille_type_eight_dot_value);
-
-            // Toggle and store new computer/literary grade preference.
-            final String prefValueNew =
-                    TextUtils.equals(prefValueOld, prefValue6Dot) ? prefValue8Dot : prefValue6Dot;
-            SharedPreferences.Editor prefEditor = sharedPreferences.edit();
-            prefEditor.putString(prefKey, prefValueNew);
-            prefEditor.apply();
-
-            // Play audio indicator of grade.
-            final int audioId = TextUtils.equals(prefValueNew, prefValue6Dot)
-                    ? FeedbackManager.TYPE_GRADE_6_DOT
-                    : FeedbackManager.TYPE_GRADE_8_DOT;
-      feedbackManager.emitFeedback(audioId);
+            if (translatorManager == null) {
+                return;
+            }
+            // 统一盲文表后，级切换直接在所选语言的六点与八点表之间切换。
+            final boolean eightDot = translatorManager.toggleBrailleDots();
+            feedbackManager.emitFeedback(eightDot
+                    ? FeedbackManager.TYPE_GRADE_8_DOT
+                    : FeedbackManager.TYPE_GRADE_6_DOT);
 
             // If showing preference screen... update displayed preference.
             Intent refreshPrefIntent =
@@ -297,28 +285,50 @@ public class BrailleBackService
     }
 
     // Volume key gesture detection (long press up/down, double press).
-    // These gestures are PASSIVE observers: onKeyEvent() must never consume
-    // the key, otherwise Android cannot change the stream volume at all.
+    // While gestures are enabled the service CONSUMES every volume key and
+    // re-applies the single volume step for an ordinary ("slow") press itself.
+    // That is the only way to keep a long press or a fast double press from
+    // also changing the volume: onKeyEvent() must decide synchronously and
+    // cannot observe a gesture first, then consume it afterwards.
+    // When gestures are disabled the keys go to the system untouched.
     private static final int GESTURE_LONG_UP = 0;
     private static final int GESTURE_LONG_DOWN = 1;
     private static final int GESTURE_DOUBLE = 2;
 
     private final Handler mVolumeKeyHandler = new Handler();
     private long mVolumeLastTapTime = 0;
+    private int mVolumeLastTapKeyCode = 0;
     private int mVolumeLongPressKeyCode = 0;
     private boolean mVolumeLongPressFired = false;
+    private int mPendingSlowPressKeyCode = 0;
+    private AudioManager mAudioManager;
 
     private final Runnable mVolumeLongPressRunnable = new Runnable() {
         @Override
         public void run() {
+            final boolean up = mVolumeLongPressKeyCode
+                    == KeyEvent.KEYCODE_VOLUME_UP;
             final String action = readVolumeAction(
-                    mVolumeLongPressKeyCode == KeyEvent.KEYCODE_VOLUME_UP
-                            ? GESTURE_LONG_UP : GESTURE_LONG_DOWN);
+                    up ? GESTURE_LONG_UP : GESTURE_LONG_DOWN);
             if (isNoneVolumeAction(action)) {
+                // Nothing configured for this slot: let the release fall back
+                // to the slow-press branch so the key is not swallowed.
                 return;
             }
+            cancelPendingSlowPress();
+            clearVolumeTapHistory();
             mVolumeLongPressFired = true;
             performVolumeAction(action);
+        }
+    };
+
+    /** Re-applies the single volume step for a confirmed slow press. */
+    private final Runnable mSlowPressRunnable = new Runnable() {
+        @Override
+        public void run() {
+            adjustSystemVolume(mPendingSlowPressKeyCode);
+            mPendingSlowPressKeyCode = 0;
+            clearVolumeTapHistory();
         }
     };
 
@@ -329,26 +339,37 @@ public class BrailleBackService
                 && keyCode != KeyEvent.KEYCODE_VOLUME_DOWN) {
             return false;
         }
-        switch (event.getAction()) {
-            case KeyEvent.ACTION_DOWN:
-                onVolumeKeyDown(event);
-                break;
-            case KeyEvent.ACTION_UP:
-                onVolumeKeyUp();
-                break;
-            default:
-                break;
+        // Never take ownership until every piece needed to honour a press is
+        // ready: consuming a key we cannot act on (or cannot put the volume
+        // step back) is exactly the "swallowed volume key" regression.
+        final boolean gesturesEnabled = hasVolumeGestures()
+                && mAudioManager != null
+                && displayManager != null
+                && feedbackManager != null;
+        final boolean consume =
+                VolumeKeyGesturePolicy.shouldConsumeVolumeKeyEvent(gesturesEnabled);
+        if (consume) {
+            switch (event.getAction()) {
+                case KeyEvent.ACTION_DOWN:
+                    onVolumeKeyDown(event);
+                    break;
+                case KeyEvent.ACTION_UP:
+                    onVolumeKeyUp(event);
+                    break;
+                default:
+                    break;
+            }
+        } else {
+            // Gestures may have been switched off mid-press; drop any timer.
+            clearVolumeGestureState();
         }
-        // Never consume volume keys. Returning true here swallows the event
-        // before the system handles it: short press, long-press repeat and the
-        // volume panel all stop working. Gestures above only observe.
-        return VolumeKeyGesturePolicy.shouldConsumeVolumeKeyEvent();
+        return consume;
     }
 
     private void onVolumeKeyDown(KeyEvent event) {
-        final boolean gesturesEnabled = hasVolumeGestures();
         if (!VolumeKeyGesturePolicy.shouldStartLongPress(
-                event.getRepeatCount(), gesturesEnabled, mVolumeLongPressFired)) {
+                event.getRepeatCount(), /* gesturesEnabled= */ true,
+                mVolumeLongPressFired)) {
             // Repeat DOWN events arrive while the key is held. Restarting the
             // long-press timer on each repeat would prevent it ever firing.
             return;
@@ -360,29 +381,109 @@ public class BrailleBackService
                 VolumeKeyGesturePolicy.LONG_PRESS_TIMEOUT_MS);
     }
 
-    private void onVolumeKeyUp() {
+    private void onVolumeKeyUp(KeyEvent event) {
         mVolumeKeyHandler.removeCallbacks(mVolumeLongPressRunnable);
-        if (mVolumeLongPressFired) {
-            // Long press already handled; don't let it seed a double press.
-            mVolumeLongPressFired = false;
-            mVolumeLastTapTime = 0;
-            return;
-        }
-        final String doubleAction = readVolumeAction(GESTURE_DOUBLE);
-        if (!hasVolumeGestures() || isNoneVolumeAction(doubleAction)) {
-            mVolumeLastTapTime = 0;
-            return;
-        }
+        final int keyCode = event.getKeyCode();
         final long now = SystemClock.uptimeMillis();
-        if (VolumeKeyGesturePolicy.isDoublePress(now, mVolumeLastTapTime,
-                VolumeKeyGesturePolicy.DOUBLE_PRESS_TIMEOUT_MS)) {
-            mVolumeLastTapTime = 0;
-            performVolumeAction(doubleAction);
-        } else {
-            mVolumeLastTapTime = now;
+        final boolean doubleActionEnabled =
+                !isNoneVolumeAction(readVolumeAction(GESTURE_DOUBLE));
+        final VolumeKeyGesturePolicy.TapOutcome outcome =
+                VolumeKeyGesturePolicy.classifyTap(
+                        /* gesturesEnabled= */ true,
+                        mVolumeLongPressFired,
+                        doubleActionEnabled,
+                        now,
+                        mVolumeLastTapTime,
+                        keyCode == mVolumeLastTapKeyCode,
+                        VolumeKeyGesturePolicy.DOUBLE_PRESS_TIMEOUT_MS);
+        mVolumeLongPressFired = false;
+        switch (outcome) {
+            case ADJUST_VOLUME_NOW:
+                // No double-press action configured, so there is nothing to
+                // wait for: the slow press takes effect immediately.
+                cancelPendingSlowPress();
+                adjustSystemVolume(keyCode);
+                clearVolumeTapHistory();
+                break;
+            case SCHEDULE_SLOW_PRESS:
+                mVolumeKeyHandler.removeCallbacks(mSlowPressRunnable);
+                mPendingSlowPressKeyCode = keyCode;
+                mVolumeKeyHandler.postDelayed(mSlowPressRunnable,
+                        VolumeKeyGesturePolicy.DOUBLE_PRESS_TIMEOUT_MS);
+                mVolumeLastTapTime = now;
+                mVolumeLastTapKeyCode = keyCode;
+                break;
+            case RUN_DOUBLE_ACTION:
+                // Cancel the first tap's pending step: a double press never
+                // changes the volume, it only runs the configured action.
+                cancelPendingSlowPress();
+                clearVolumeTapHistory();
+                performVolumeAction(readVolumeAction(GESTURE_DOUBLE));
+                break;
+            case SUPPRESS_AFTER_LONG_PRESS:
+                cancelPendingSlowPress();
+                clearVolumeTapHistory();
+                break;
+            case PASSTHROUGH:
+            default:
+                break;
         }
     }
 
+    /**
+     * Applies the single volume step that Android would have applied, because
+     * the key event was consumed. Only a confirmed slow press reaches this
+     * method: long press and double press run their action instead and never
+     * change the volume.
+     */
+    private void adjustSystemVolume(int keyCode) {
+        if (mAudioManager == null
+                || (keyCode != KeyEvent.KEYCODE_VOLUME_UP
+                    && keyCode != KeyEvent.KEYCODE_VOLUME_DOWN)) {
+            return;
+        }
+        final int direction = keyCode == KeyEvent.KEYCODE_VOLUME_UP
+                ? AudioManager.ADJUST_RAISE : AudioManager.ADJUST_LOWER;
+        final int mode = mAudioManager.getMode();
+        final boolean inCall = mode == AudioManager.MODE_IN_CALL
+                || mode == AudioManager.MODE_IN_COMMUNICATION;
+        final VolumeKeyGesturePolicy.VolumeStream stream =
+                VolumeKeyGesturePolicy.volumeStream(inCall);
+        final int streamType =
+                stream == VolumeKeyGesturePolicy.VolumeStream.VOICE_CALL
+                        ? AudioManager.STREAM_VOICE_CALL
+                        : AudioManager.STREAM_MUSIC;
+        try {
+            mAudioManager.adjustStreamVolume(streamType, direction,
+                    AudioManager.FLAG_SHOW_UI);
+        } catch (SecurityException e) {
+            Log.w("BrailleBack", "adjustStreamVolume denied: " + e);
+        }
+    }
+
+    private void cancelPendingSlowPress() {
+        mVolumeKeyHandler.removeCallbacks(mSlowPressRunnable);
+        mPendingSlowPressKeyCode = 0;
+    }
+
+    private void clearVolumeTapHistory() {
+        mVolumeLastTapTime = 0;
+        mVolumeLastTapKeyCode = 0;
+    }
+
+    private void clearVolumeGestureState() {
+        mVolumeKeyHandler.removeCallbacks(mVolumeLongPressRunnable);
+        cancelPendingSlowPress();
+        mVolumeLongPressFired = false;
+        clearVolumeTapHistory();
+    }
+
+    /**
+     * Whether the service should take ownership of the volume keys. This is
+     * also the escape hatch: switching the preference off (or setting every
+     * slot to "none") restores stock Android behaviour instantly, including
+     * long-press auto-repeat.
+     */
     private boolean hasVolumeGestures() {
         final SharedPreferences prefs =
                 PreferenceManager.getDefaultSharedPreferences(this);
@@ -500,9 +601,21 @@ public class BrailleBackService
     }
 
     @Override
+    public void onCreate() {
+        super.onCreate();
+        // 文件日志要在任何可能抛异常的重活之前就绪：onServiceConnected 里的
+        // 前台提升 / BrailleDisplayController / HidBridge 一旦抛错，日志通道
+        // 不能跟着一起丢，否则用户点“清除日志/分享日志”只会看到上一次进程的旧文件。
+        PreferenceUtils.initLogLevel(this);
+        LogFileWriter.init(this);
+    }
+
+    @Override
 
     public void onServiceConnected() {
     instance = this;
+    // Required to put the slow-press volume step back after consuming the key.
+    mAudioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
     // Promote to a foreground service so the braille display connection
     // survives idle pruning and aggressive OEM battery managers.  Best
     // effort only: if the platform rejects the promotion (e.g. missing
@@ -569,6 +682,7 @@ public class BrailleBackService
     instance = null;
     // Do not let a queued WHAT_START re-initialize a destroyed service.
     handler.removeCallbacksAndMessages(null);
+    mVolumeKeyHandler.removeCallbacksAndMessages(null);
     // Leave the foreground state explicitly; the notification is removed.
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
       stopForeground(STOP_FOREGROUND_REMOVE);
@@ -606,8 +720,18 @@ public class BrailleBackService
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
-        LogUtils.log(this, Log.VERBOSE, "Event: %s", event.toString());
-        LogUtils.log(this, Log.VERBOSE, "Node: %s", event.getSource());
+        // A full event dump is several hundred bytes and the framework emits
+        // dozens of events per second. Writing all of them buried every other
+        // record and rotated the log file within minutes, so the compact
+        // summary is what a normal (DEBUG) log keeps; the complete dump is
+        // reserved for VERBOSE.
+        if (LogUtils.shouldLog(Log.DEBUG)) {
+            LogUtils.log(this, Log.DEBUG, "Event: %s", describeEvent(event));
+        }
+        if (LogUtils.shouldLog(Log.VERBOSE)) {
+            LogUtils.log(this, Log.VERBOSE, "Event detail: %s", event.toString());
+            LogUtils.log(this, Log.VERBOSE, "Node detail: %s", event.getSource());
+        }
     if (modeSwitcher != null) {
       modeSwitcher.onObserveAccessibilityEvent(event);
       modeSwitcher.onAccessibilityEvent(event);
@@ -615,6 +739,53 @@ public class BrailleBackService
     if (labelManager != null) {
       labelManager.onAccessibilityEvent(event);
         }
+    }
+
+    /** Upper bound on the characters kept for one field of the summary. */
+    private static final int EVENT_TEXT_LIMIT = 120;
+
+    /** Builds the single-line summary logged for every accessibility event. */
+    private static String describeEvent(AccessibilityEvent event) {
+        StringBuilder summary = new StringBuilder(96);
+        summary.append(AccessibilityEvent.eventTypeToString(event.getEventType()));
+        appendEventField(summary, "pkg", event.getPackageName());
+        appendEventField(summary, "cls", event.getClassName());
+        appendEventField(summary, "text", joinEventText(event.getText()));
+        appendEventField(summary, "desc", event.getContentDescription());
+        return summary.toString();
+    }
+
+    private static void appendEventField(
+            StringBuilder summary, String name, CharSequence value) {
+        if (TextUtils.isEmpty(value)) {
+            return;
+        }
+        summary.append(' ').append(name).append('=').append(clipEventText(value));
+    }
+
+    private static String joinEventText(List<CharSequence> parts) {
+        if (parts == null || parts.isEmpty()) {
+            return null;
+        }
+        StringBuilder joined = new StringBuilder();
+        for (CharSequence part : parts) {
+            if (TextUtils.isEmpty(part)) {
+                continue;
+            }
+            if (joined.length() > 0) {
+                joined.append(" | ");
+            }
+            joined.append(part);
+        }
+        return joined.length() == 0 ? null : joined.toString();
+    }
+
+    private static String clipEventText(CharSequence value) {
+        String text = value.toString().replace('\n', ' ').replace('\r', ' ').trim();
+        if (text.length() <= EVENT_TEXT_LIMIT) {
+            return text;
+        }
+        return text.substring(0, EVENT_TEXT_LIMIT) + "...";
     }
 
     @Override
@@ -728,6 +899,8 @@ public class BrailleBackService
                             getString(R.string.pref_pause_behavior_key), "")));
     displayManager.setIdleClearTimeoutMs(parseIdleClearMinutes(
             prefs.getString(getString(R.string.pref_idle_clear_key), "3")));
+    displayManager.setCursorDotsEnabled(prefs.getBoolean(
+            getString(R.string.pref_cursor_dots_key), false));
     }
 
     private void initializeNavigationMode() {

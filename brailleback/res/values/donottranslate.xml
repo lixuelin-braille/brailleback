@@ -12,6 +12,7 @@
     <string name="pref_chinese_segmentation_key">chinese_segmentation</string>
     <string name="pref_six_dot_braille_table_key">six_dot_braille_table</string>
     <string name="pref_eight_dot_braille_table_key">eight_dot_braille_table</string>
+    <string name="pref_braille_table_key">braille_table</string>
     <!-- Used when the user hasn't specified any table and it is determined by the user locale. -->
     <string name="table_value_default">auto</string>
     <string name="pref_braille_type_six_dot_value">six_dot</string>
@@ -30,17 +31,11 @@
     
     <string name="pref_bookshelf_key">bookshelf</string>
     <string-array name="pref_connection_protocol_values">
-        <item>auto</item>
-        <item>hid</item>
-        <item>rfcomm</item>
-        <item>wujie</item>
+        <item>bluetooth</item>
         <item>usb</item>
     </string-array>
     <string-array name="pref_connection_protocol_entries">
-        <item>@string/pref_connection_protocol_auto_label</item>
-        <item>@string/pref_connection_protocol_hid_label</item>
-        <item>@string/pref_connection_protocol_rfcomm_label</item>
-        <item>@string/pref_connection_protocol_wujie_label</item>
+        <item>@string/pref_connection_protocol_bluetooth_label</item>
         <item>@string/pref_connection_protocol_usb_label</item>
     </string-array>
     <string name="pref_category_braille_overlay_key">category_braille_overlay</string>
@@ -49,6 +44,7 @@
     <string name="pref_braille_overlay_tutorial_key">show_overlay_tutorial</string>
     <string name="pref_os_license_key">opensource_license_notice</string>
     <string name="pref_braille_word_wrap_key">braille_word_wrap</string>
+    <string name="pref_cursor_dots_key">cursor_dots</string>
     <string name="pref_braille_contracted_mode_key">braille_contracted_mode</string>
     <string name="pref_motion_mode_key">motion_mode</string>
     <string name="pref_quiet_navigation_key">quiet_navigation</string>
@@ -111,8 +107,10 @@
 
     <!-- Log level preference -->
     <string name="pref_log_level_key">log_level</string>
-    <string name="pref_log_level_default">5</string>
+    <string name="pref_log_level_default">4</string>
     <string name="pref_view_log_key">view_log</string>
+    <string name="pref_share_log_key">share_log</string>
+    <string name="pref_copy_log_key">copy_log</string>
     <string name="pref_clear_log_key">clear_log</string>
     <string-array name="pref_log_level_entries">
         <item>NONE</item>

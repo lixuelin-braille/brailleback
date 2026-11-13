@@ -47,10 +47,14 @@ import com.googlecode.eyesfree.braille.display.IBrailleServiceCallback;
 import com.googlecode.eyesfree.braille.service.BuildConfig;
 import com.googlecode.eyesfree.braille.service.R;
 import com.googlecode.eyesfree.braille.utils.ZipResourceExtractor;
+import com.googlecode.eyesfree.utils.LogUtils;
+import com.googlecode.eyesfree.utils.LogFileWriter;
 import java.io.File;
 import java.lang.ref.WeakReference;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 import timber.log.Timber;
 
 /**
@@ -128,13 +132,14 @@ public class DisplayService extends Service
                 } else if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(action)) {
                     // Wired displays only: a USB stick or keyboard must not
                     // disturb a working Bluetooth connection.
-                    if ("usb".equals(getConnectionProtocol())
-                            && !isConnectionActive()) {
+                    if (isWiredProtocol() && !isConnectionActive()) {
                         Timber.i("USB device attached; trying wired connection");
                         autoConnectBraille();
                     }
                 } else if (UsbManager.ACTION_USB_DEVICE_DETACHED.equals(action)) {
-                    if (mUsbConnection != null) {
+                    if (mUsbConnection != null
+                            || (isUsbProtocol()
+                                && mHidConnection != null)) {
                         Timber.i("USB device detached; disconnecting display");
                         disconnectBraille();
                     }
@@ -225,6 +230,52 @@ public class DisplayService extends Service
     /** Wired USB connection (brltty USB backend), null unless selected. */
     private volatile UsbDisplayConnection mUsbConnection;
     /**
+     * 刷新链路心跳。冻结问题时只看三件事：上层有没有继续送点阵、
+     * 服务有没有收到、最终走了哪条连接路径。每 5 秒一行，量很小。
+     */
+    private static final long DOTS_TELEMETRY_INTERVAL = 5000;
+    private static final int ROUTE_NONE = 0;
+    private static final int ROUTE_USB = 1;
+    private static final int ROUTE_HID = 2;
+    private static final int ROUTE_WUJIE = 3;
+    private static final int ROUTE_READ_THREAD = 4;
+    private final AtomicLong mDotsCalls = new AtomicLong();
+    private volatile int mDotsLastDigest;
+    private volatile int mDotsLastCells;
+    private volatile int mDotsLastRoute = ROUTE_NONE;
+    private long mDotsReportedCalls;
+    private final Runnable mDotsTelemetry = new Runnable() {
+        @Override
+        public void run() {
+            long calls = mDotsCalls.get();
+            boolean hasConnection = mUsbConnection != null
+                    || mHidConnection != null
+                    || mWujieConnection != null
+                    || mReadThread != null;
+            if (hasConnection || calls > mDotsReportedCalls) {
+                LogUtils.i(DisplayService.this,
+                        "dots stats: calls=%d (+%d) route=%s digest=%08X "
+                        + "cells=%d usb=%s usbActive=%s hid=%s wujie=%s read=%s",
+                        calls, calls - mDotsReportedCalls,
+                        routeName(mDotsLastRoute), mDotsLastDigest,
+                        mDotsLastCells,
+                        mUsbConnection != null, isUsbActive(),
+                        mHidConnection != null, mWujieConnection != null,
+                        mReadThread != null);
+            }
+            mDotsReportedCalls = calls;
+            mHandler.postDelayed(this, DOTS_TELEMETRY_INTERVAL);
+        }
+    };
+    /** True after the vendor BLE path was attempted in this cycle. */
+    private boolean mWujieTried;
+    /** True after the brltty serial USB path was attempted in this cycle. */
+    private boolean mUsbSerialTried;
+    /** True after the system USB HID path was attempted in this cycle. */
+    private boolean mUsbHidTried;
+    /** Whether mHidConnection is the wired USB HID path rather than Bluetooth. */
+    private boolean mHidConnectionIsUsb;
+    /**
      * True after an HID connection attempt, to avoid retrying HID in a loop
      * when the connected display only supports classic RFCOMM.
      */
@@ -271,9 +322,11 @@ public class DisplayService extends Service
             public void onSharedPreferenceChanged(
                     SharedPreferences prefs, String key) {
                 if ("connection_protocol".equals(key)) {
-                    String protocol = prefs.getString(key, "auto");
+                    String protocol = ConnectionProtocolPolicy.normalize(
+                            prefs.getString(key, null));
                     mHandler.cancelHidRetry();
                     mHidRetryCount = 0;
+                    resetConnectionAttemptFlags();
                     Timber.i("Connection protocol changed to %s", protocol);
                     if (mConnectionState == STATE_CONNECTED
                             || mReadThread != null || mHidConnection != null
@@ -324,9 +377,7 @@ public class DisplayService extends Service
             mHandler.post(new Runnable() {
                 @Override
                 public void run() {
-                    String protocol = getConnectionProtocol();
-                    boolean hidRequested = "hid".equals(protocol)
-                            || "auto".equals(protocol);
+                    boolean hidRequested = isBluetoothProtocol();
                     if (hidRequested && mWaitingForHidController) {
                         mWaitingForHidController = false;
                         mHandler.cancelHidControllerTimeout();
@@ -348,12 +399,49 @@ public class DisplayService extends Service
     };
 
 
+    /**
+     * Mirrors the accessibility service's log level and installs the shared
+     * file sink. Both services run in the same process, so init is idempotent:
+     * whoever starts first owns the single RollingFileLog.
+     */
+    private void configureProcessLogging() {
+        LogUtils.setLogLevel(computeLogLevel());
+        LogFileWriter.init(this);
+    }
+
+    /**
+     * Mirrors PreferenceUtils.getLogLevel for early display-service starts.
+     * A level chosen on the settings screen wins; otherwise both build types
+     * start at INFO, matching R.string.pref_log_level_default. Debug builds
+     * never run quieter than INFO so a tester report keeps the connection
+     * lifecycle lines, but may still opt into VERBOSE.
+     */
+    private int computeLogLevel() {
+        String raw = PreferenceManager.getDefaultSharedPreferences(this)
+                .getString("log_level", null);
+        if (raw != null) {
+            try {
+                int stored = Integer.parseInt(raw);
+                return BuildConfig.DEBUG ? Math.min(stored, Log.INFO) : stored;
+            } catch (NumberFormatException e) {
+                // Fall through to the build default.
+            }
+        }
+        return Log.INFO;
+    }
+
     @Override
     public void onCreate() {
         super.onCreate();
-        if (BuildConfig.DEBUG && Timber.treeCount() == 0) {
-            Timber.plant(new Timber.DebugTree());
+        // Route Timber into LogUtils so connection failures (including USB)
+        // reach the in-app file log that users can share or copy.
+        if (Timber.treeCount() == 0) {
+            Timber.plant(new LogUtilsTimberTree());
         }
+        // The display service can be the first component to start (for example
+        // when a client binds it before the accessibility service). Install the
+        // shared file sink here so USB diagnostics never depend on start order.
+        configureProcessLogging();
         mTablesDir = getDir("keytables", Context.MODE_PRIVATE);
         PreferenceManager.getDefaultSharedPreferences(this)
                 .registerOnSharedPreferenceChangeListener(
@@ -370,7 +458,8 @@ public class DisplayService extends Service
         if (BuildConfig.DEBUG) {
             BrlttyWrapper.logUsbDriverTableProbe();
         }
-        Log.i(LOG_TAG, "Service started.");
+        mHandler.postDelayed(mDotsTelemetry, DOTS_TELEMETRY_INTERVAL);
+        LogUtils.i(this, "Service started.");
     }
 
     @Override
@@ -462,27 +551,33 @@ public class DisplayService extends Service
             // (HID uses HidDisplayConnection instead of ReadThread).
             UsbDisplayConnection usbConnection = mUsbConnection;
             if (usbConnection != null) {
+                recordDots(patterns, ROUTE_USB);
                 usbConnection.writeWindow(patterns);
                 return;
             }
             HidDisplayConnection hidConnection = mHidConnection;
             if (hidConnection != null) {
+                recordDots(patterns, ROUTE_HID);
                 hidConnection.writeWindow(patterns);
                 return;
             }
         WujieGattConnection wujieConnection = mWujieConnection;
         if (wujieConnection != null) {
+            recordDots(patterns, ROUTE_WUJIE);
             wujieConnection.writeWindow(patterns);
             return;
         }
             ReadThread localReadThread = mReadThread;
             if (localReadThread == null) {
+                recordDots(patterns, ROUTE_NONE);
                 return;
             }
             DriverThread localDriverThread = localReadThread.getDriverThread();
             if (localDriverThread == null) {
+                recordDots(patterns, ROUTE_NONE);
                 return;
             }
+            recordDots(patterns, ROUTE_READ_THREAD);
             localDriverThread.writeWindow(patterns);
         }
 
@@ -500,6 +595,35 @@ public class DisplayService extends Service
     /*package*/ void onDisplayConnected(
         final BrailleDisplayProperties properties) {
         mHandler.onDisplayConnected(properties);
+    }
+
+    /** Records one displayDots delivery for the refresh telemetry. */
+    private void recordDots(byte[] patterns, int route) {
+        mDotsCalls.incrementAndGet();
+        mDotsLastCells = patterns.length;
+        mDotsLastDigest = Arrays.hashCode(patterns);
+        mDotsLastRoute = route;
+    }
+
+    /** True when the wired USB path still owns a live driver thread. */
+    private boolean isUsbActive() {
+        UsbDisplayConnection connection = mUsbConnection;
+        return connection != null && connection.isDriverActive();
+    }
+
+    private static String routeName(int route) {
+        switch (route) {
+            case ROUTE_USB:
+                return "usb";
+            case ROUTE_HID:
+                return "hid";
+            case ROUTE_WUJIE:
+                return "wujie";
+            case ROUTE_READ_THREAD:
+                return "readthread";
+            default:
+                return "none";
+        }
     }
 
     /*package*/ void onDisplayDisconnected() {
@@ -644,52 +768,37 @@ public class DisplayService extends Service
         stopDiscoverySession("connecting display");
         String protocol = getConnectionProtocol();
         Timber.i("Starting connection with protocol %s", protocol);
-        if ("wujie".equals(protocol)) {
-            connectWujie();
-            return;
+        if (isUsbProtocol()) {
+            connectUsbUnified();
+        } else {
+            connectBluetooth();
         }
-        if ("usb".equals(protocol)) {
-            connectUsb();
-            return;
+    }
+
+    /** Tries the wireless transports in order: Wujie BLE, HID, then RFCOMM. */
+    private void connectBluetooth() {
+        if (!mWujieTried && mPendingBluetoothAddress == null) {
+            String wujieAddress = findNamedWujieAddress();
+            if (wujieAddress != null) {
+                mWujieTried = true;
+                connectWujie(wujieAddress);
+                return;
+            }
         }
-        if ("auto".equals(protocol) || "hid".equals(protocol)) {
+        if (!mHidTried) {
             if (tryConnectHid()) {
                 // A Braille HID connection attempt was started (async).
                 return;
             }
-            if (!mHidTried && Build.VERSION.SDK_INT
-                    >= Build.VERSION_CODES.VANILLA_ICE_CREAM
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM
                     && !HidBridge.isAvailable()) {
-                // BrailleDisplayController is briefly null while the
-                // accessibility service is being rebound. Wait for it instead
-                // of showing "enable the accessibility service" or falling
-                // back to RFCOMM for a HID-only display.
+                // The controller is briefly null while the accessibility service
+                // rebinds. Wait instead of falling back to RFCOMM prematurely.
                 waitForHidController();
                 return;
             }
-            if ("hid".equals(protocol)) {
-                // The user forced HID but it could not be used; do not fall
-                // back to classic RFCOMM silently.
-                if (mHidTried) {
-                    mHandler.setConnectionProgress(getHidFailureMessage());
-                } else if (Build.VERSION.SDK_INT
-                        < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
-                    mHandler.setConnectionProgress(
-                            getString(R.string.connprog_hid_unavailable));
-                } else if (!HidBridge.isAvailable()) {
-                    waitForHidController();
-                } else {
-                    // Controller is fine: the attempt stopped because no
-                    // matching paired display was found. Saying "enable the
-                    // accessibility service" here is misleading.
-                    mHandler.setConnectionProgress(
-                            getString(R.string.connprog_hid_not_found));
-                }
-                scheduleAutoReconnectIfNeeded();
-                return;
-            }
         }
-        // "auto" (HID failed / not available) or "rfcomm": classic RFCOMM.
+        // HID failed / is unavailable: classic Bluetooth serial (RFCOMM).
         mReadThread = new ReadThread(this, mTablesDir,
                 mPendingBluetoothAddress);
         mPendingBluetoothAddress = null;
@@ -751,6 +860,7 @@ public class DisplayService extends Service
             }
         }
         mHidTried = true;
+        mHidConnectionIsUsb = false;
         mLastHidError = 0;
         mPendingBluetoothAddress = null;
         mHandler.setConnectionProgress(getString(R.string.connprog_trying_hid));
@@ -783,15 +893,57 @@ public class DisplayService extends Service
         return getString(R.string.connprog_hid_failed);
     }
 
-    /** Returns the user-selected connection protocol: auto, hid or rfcomm. */
+    /**
+     * Failure copy for the wired USB HID path. Error -7 means no attached USB
+     * device exposes a HID interface; -8 means the USB permission was denied.
+     * Both are expected states when nothing is plugged in, so the wording must
+     * tell the user what to do instead of just showing an error code.
+     */
+    private String getUsbHidFailureMessage(int error) {
+        if (error == -7) {
+            return getString(R.string.connprog_usb_hid_not_found);
+        }
+        if (error == -8) {
+            return getString(R.string.connprog_usb_hid_permission_denied);
+        }
+        return getString(R.string.connprog_usb_hid_failed, error);
+    }
+
+    /** Returns the user-selected connection protocol. */
     private String getConnectionProtocol() {
-        return PreferenceManager.getDefaultSharedPreferences(this)
-                .getString("connection_protocol", "auto");
+        String value = PreferenceManager.getDefaultSharedPreferences(this)
+                .getString(ConnectionProtocolPolicy.PREFERENCE_KEY,
+                        ConnectionProtocolPolicy.BLUETOOTH);
+        return ConnectionProtocolPolicy.normalize(value);
+    }
+
+    private boolean isBluetoothProtocol() {
+        return ConnectionProtocolPolicy.BLUETOOTH.equals(
+                getConnectionProtocol());
+    }
+
+    private boolean isUsbProtocol() {
+        return ConnectionProtocolPolicy.USB.equals(getConnectionProtocol());
+    }
+
+    /** Wired USB must keep retrying even when Bluetooth is off. */
+    private boolean isWiredProtocol() {
+        return isUsbProtocol();
     }
 
     private boolean isHidRequested() {
-        String protocol = getConnectionProtocol();
-        return "hid".equals(protocol) || "auto".equals(protocol);
+        return isBluetoothProtocol();
+    }
+
+    /** Resets the per-cycle transport fallback state. */
+    private void resetConnectionAttemptFlags() {
+        mHidTried = false;
+        mHidRetryCount = 0;
+        mLastHidError = 0;
+        mWujieTried = false;
+        mUsbSerialTried = false;
+        mUsbHidTried = false;
+        mHidConnectionIsUsb = false;
     }
 
     /**
@@ -808,6 +960,9 @@ public class DisplayService extends Service
         mHandler.cancelAutoReconnect();
         if (PreferenceManager.getDefaultSharedPreferences(this)
                 .getBoolean("auto_connect", true)) {
+            if (!isConnectionActive()) {
+                resetConnectionAttemptFlags();
+            }
             mDiscoveryAllowedForCycle = true;
             connectBraille();
         } else {
@@ -821,6 +976,9 @@ public class DisplayService extends Service
         mAutoReconnectSuppressed = false;
         mAutoReconnectAttempt = 0;
         mHandler.cancelAutoReconnect();
+        if (!isConnectionActive()) {
+            resetConnectionAttemptFlags();
+        }
         mDiscoveryAllowedForCycle = true;
         connectBraille();
     }
@@ -857,7 +1015,10 @@ public class DisplayService extends Service
 
     /** Retries an HID attempt when a new input device is registered. */
     private void retryHidWhenInputDeviceAppears() {
-        if (!isHidRequested() || isConnectionActive()) {
+        // Wired USB HID devices also arrive as InputDevice additions, even
+        // though they are not part of the Bluetooth HID protocol set.
+        boolean wiredUsbHid = isUsbProtocol();
+        if ((!isHidRequested() && !wiredUsbHid) || isConnectionActive()) {
             return;
         }
         prepareAutomaticRetry("HID input device appeared");
@@ -869,10 +1030,7 @@ public class DisplayService extends Service
         }
         mHandler.cancelHidControllerTimeout();
         mWaitingForHidController = false;
-        if (isHidRequested()) {
-            mHidTried = false;
-            mHidRetryCount = 0;
-        }
+        resetConnectionAttemptFlags();
         Timber.i("%s; retrying display connection", reason);
         autoConnectBraille();
     }
@@ -931,6 +1089,9 @@ public class DisplayService extends Service
         }
         if (!isScreenInteractive()) {
             return false;
+        }
+        if (isWiredProtocol()) {
+            return true;
         }
         BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
         try {
@@ -1079,6 +1240,7 @@ public class DisplayService extends Service
         stopDiscoverySession("known display discovered");
         mPendingBluetoothAddress = address;
         mHidTried = false;
+        mWujieTried = false;
         mHidRetryCount = 0;
         mLastHidError = 0;
         autoConnectBraille();
@@ -1198,6 +1360,12 @@ public class DisplayService extends Service
             mUsbConnection = null;
             mConnectPending = false;
             Timber.w("USB connection failed: %s", reason);
+            if (isUsbProtocol() && !mUsbHidTried && canUseUsbHid()) {
+                mUsbHidTried = true;
+                Timber.i("Serial USB path unavailable; trying USB HID");
+                connectUsbHid();
+                return;
+            }
             mHandler.setConnectionProgress(
                     getString(R.string.connprog_usb_failed, reason));
             scheduleAutoReconnectIfNeeded();
@@ -1221,6 +1389,52 @@ public class DisplayService extends Service
     }
 
     /**
+     * Unified USB entry point: the precise brltty VID/PID table is tried
+     * first; if no serial device matches, the failure callback falls back to
+     * the system Braille HID path on Android 15+.
+     */
+    private void connectUsbUnified() {
+        mUsbSerialTried = true;
+        connectUsb();
+    }
+
+    private boolean canUseUsbHid() {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM
+                && HidBridge.isAvailable();
+    }
+
+    /**
+     * Starts the wired USB HID path (Android 15+ / Braille HID standard).
+     * Ported from Google TalkBack's UsbHidConnector: the system
+     * {@code BrailleDisplayController.connect(UsbDevice, ...)} overload owns
+     * the descriptor and transport, so the Bluetooth HID callbacks, the native
+     * "hid" driver and BrlttyHidNativeHelper are reused unchanged.
+     */
+    @SuppressLint("NewApi")
+    private void connectUsbHid() {
+        if (Build.VERSION.SDK_INT
+                < Build.VERSION_CODES.VANILLA_ICE_CREAM
+                || !HidBridge.isAvailable()) {
+            mHandler.setConnectionProgress(
+                    getString(R.string.connprog_usb_hid_unavailable));
+            scheduleAutoReconnectIfNeeded();
+            return;
+        }
+        mHidTried = true;
+        mHidConnectionIsUsb = true;
+        mLastHidError = 0;
+        mPendingBluetoothAddress = null;
+        mHandler.setConnectionProgress(
+                getString(R.string.connprog_trying_usb_hid));
+        HidDisplayConnection connection = new HidDisplayConnection(this,
+                getResources(), mTablesDir, mHidListener, this);
+        mHidConnection = connection;
+        Timber.i("Starting wired USB HID connection");
+        connection.connectUsb(HidBridge.getController(),
+                (UsbManager) getSystemService(Context.USB_SERVICE));
+    }
+
+    /**
      * Starts the private BLE GATT connection used by the Wujie display.
      * Unlike the HID path this does not depend on the system braille HID
      * service, so the display can stay in its vendor BLE mode.
@@ -1230,6 +1444,10 @@ public class DisplayService extends Service
         if (address == null) {
             address = findWujieAddress();
         }
+        connectWujie(address);
+    }
+
+    private void connectWujie(String address) {
         if (address == null) {
             Timber.w("No bonded Wujie display found");
             mHandler.setConnectionProgress(
@@ -1253,17 +1471,25 @@ public class DisplayService extends Service
      * and the user may have renamed it.
      */
     private String findWujieAddress() {
+        String named = findNamedWujieAddress();
+        if (named != null) {
+            return named;
+        }
+        return PreferenceManager
+                .getDefaultSharedPreferences(this)
+                .getString("lastBluetoothDevice", null);
+    }
+
+    /** Strict discovery for automatic Bluetooth fallback. */
+    private String findNamedWujieAddress() {
         BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
         if (adapter == null) {
             return null;
         }
-        String lastAddress = PreferenceManager
-                .getDefaultSharedPreferences(this)
-                .getString("lastBluetoothDevice", null);
         try {
             Set<BluetoothDevice> bonded = adapter.getBondedDevices();
             if (bonded == null) {
-                return lastAddress;
+                return null;
             }
             for (BluetoothDevice device : bonded) {
                 if (device == null) {
@@ -1285,7 +1511,7 @@ public class DisplayService extends Service
                     e);
             return null;
         }
-        return lastAddress;
+        return null;
     }
 
 
@@ -1838,6 +2064,10 @@ public class DisplayService extends Service
             service.mDisplayProperties = properties;
             service.mConnectPending = false;
             service.mHidTried = false;
+            service.mWujieTried = false;
+            service.mUsbSerialTried = false;
+            service.mUsbHidTried = false;
+            service.mHidConnectionIsUsb = false;
             service.mHidRetryCount = 0;
             service.mAutoReconnectAttempt = 0;
             service.mAutoReconnectSuppressed = false;
@@ -1866,8 +2096,7 @@ public class DisplayService extends Service
         }
 
         private void handleConnectionReleased(DisplayService service) {
-            service.mHidTried = false;
-            service.mHidRetryCount = 0;
+            service.resetConnectionAttemptFlags();
             cancelHidRetry();
             service.clearConnectionProgress();
             if (service.mConnectionState != STATE_DISCONNECTED) {
@@ -1893,9 +2122,23 @@ public class DisplayService extends Service
             service.mHidConnection = null;
             service.mConnectPending = false;
             service.mLastHidError = event.error;
+            if (service.mHidConnectionIsUsb && service.isUsbProtocol()) {
+                service.mHidConnectionIsUsb = false;
+                // A wired USB HID attempt with no device attached fails
+                // synchronously inside connectUsb(). Calling connectBraille()
+                // here would repost the same failure on the main looper, which
+                // spins at thousands of iterations per second (observed
+                // 47k retries in 17 s, ~106% CPU). Report the failure once and
+                // let the USB attach broadcast or the backoff schedule a retry.
+                Timber.w("Wired USB HID connect failed (%d); waiting for a "
+                        + "device or the next scheduled retry", event.error);
+                service.mHandler.setConnectionProgress(
+                        service.getUsbHidFailureMessage(event.error));
+                service.scheduleAutoReconnectIfNeeded();
+                return;
+            }
             String protocol = service.getConnectionProtocol();
-            boolean hidRequested = "hid".equals(protocol)
-                    || "auto".equals(protocol);
+            boolean hidRequested = service.isBluetoothProtocol();
             if (event.error == -3 && service.mHidRetryCount == 0
                     && hidRequested && service.mReadThread == null) {
                 service.mHidRetryCount = 1;
@@ -1998,10 +2241,7 @@ public class DisplayService extends Service
                 return;
             }
             service.mWaitingForHidController = false;
-            String protocol = service.getConnectionProtocol();
-            boolean hidRequested = "hid".equals(protocol)
-                    || "auto".equals(protocol);
-            if (!hidRequested) {
+            if (!service.isBluetoothProtocol()) {
                 return;
             }
             if (HidBridge.isAvailable()) {
@@ -2010,17 +2250,11 @@ public class DisplayService extends Service
                 service.connectBraille();
                 return;
             }
-            if ("hid".equals(protocol)) {
-                service.mHandler.setConnectionProgress(service.getString(
-                        R.string.connprog_hid_controller_unavailable));
-                service.scheduleAutoReconnectIfNeeded();
-            } else {
-                // Auto mode: HID is not available in this cycle, so use the
-                // classic RFCOMM path instead of waiting forever.
-                service.mHidTried = true;
-                service.connectBraille();
-                service.scheduleAutoReconnectIfNeeded();
-            }
+            // HID is not available in this cycle, so use classic RFCOMM instead
+            // of waiting forever.
+            service.mHidTried = true;
+            service.connectBraille();
+            service.scheduleAutoReconnectIfNeeded();
         }
 
         private void handleAutoReconnect(DisplayService service) {

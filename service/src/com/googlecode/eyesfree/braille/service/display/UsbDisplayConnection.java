@@ -20,9 +20,9 @@ import android.hardware.usb.UsbManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
-import android.util.Log;
 import com.googlecode.eyesfree.braille.display.BrailleDisplayProperties;
 import com.googlecode.eyesfree.braille.display.UsbDeviceEntry;
+import com.googlecode.eyesfree.utils.LogUtils;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -58,6 +58,8 @@ public class UsbDisplayConnection implements DriverThread.OnInitListener {
     /** Fallback in case the permission broadcast is not delivered. */
     private static final long PERMISSION_POLL_MILLIS = 500L;
     private static final int PERMISSION_POLL_MAX = 60;
+    /** Let the failed driver finish its native teardown before retrying. */
+    private static final long DRIVER_FALLBACK_DELAY_MILLIS = 300L;
 
     /** Callbacks are always delivered on the main thread. */
     public interface Listener {
@@ -82,6 +84,8 @@ public class UsbDisplayConnection implements DriverThread.OnInitListener {
     private volatile boolean mFailed;
     private UsbDevice mDevice;
     private String mDriverCode;
+    private List<String> mDriverCandidates;
+    private int mDriverIndex;
     private int mPermissionPollCount;
     private BroadcastReceiver mPermissionReceiver;
 
@@ -106,7 +110,7 @@ public class UsbDisplayConnection implements DriverThread.OnInitListener {
                 return;
             }
             if (mUsbManager.hasPermission(mDevice)) {
-                Log.i(LOG_TAG, "USB permission detected by fallback poll");
+                LogUtils.i(this, "USB permission detected by fallback poll");
                 onPermissionGranted();
                 return;
             }
@@ -128,14 +132,17 @@ public class UsbDisplayConnection implements DriverThread.OnInitListener {
             boolean granted = intent.getBooleanExtra(
                     UsbManager.EXTRA_PERMISSION_GRANTED, false);
             UsbDevice device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
-            Log.i(LOG_TAG, "USB permission broadcast: granted=" + granted);
-            if (!granted) {
+            LogUtils.i(this, "USB permission broadcast: granted=" + granted);
+            // hasPermission() is authoritative: some OEMs deliver the
+            // broadcast without the system's extras.
+            if (!granted && mDevice != null
+                    && !mUsbManager.hasPermission(mDevice)) {
                 fail("USB permission denied by the user");
                 return;
             }
             if (device != null && mDevice != null
                     && device.getDeviceId() != mDevice.getDeviceId()) {
-                Log.w(LOG_TAG, "Ignoring permission for a different USB device");
+                LogUtils.w(this, "Ignoring permission for a different USB device");
                 return;
             }
             onPermissionGranted();
@@ -163,16 +170,16 @@ public class UsbDisplayConnection implements DriverThread.OnInitListener {
         }
 
         Map<String, UsbDevice> plugged = mUsbManager.getDeviceList();
-        Log.i(LOG_TAG, "USB devices currently attached: " + plugged.size());
+        LogUtils.i(this, "USB devices currently attached: " + plugged.size());
         for (UsbDevice device : plugged.values()) {
-            Log.i(LOG_TAG, "  device id=" + device.getDeviceId()
+            LogUtils.i(this, "  device id=" + device.getDeviceId()
                     + " vid=" + device.getVendorId()
                     + " pid=" + device.getProductId()
                     + " name=" + device.getDeviceName());
         }
 
         List<UsbDeviceEntry> table = BrlttyWrapper.getUsbDriverTable();
-        Log.i(LOG_TAG, "native USB driver table entries: " + table.size());
+        LogUtils.i(this, "native USB driver table entries: " + table.size());
         if (table.isEmpty()) {
             fail("native USB driver table is empty (stale libbrlttywrap.so?)");
             return;
@@ -183,7 +190,7 @@ public class UsbDisplayConnection implements DriverThread.OnInitListener {
         for (UsbDevice device : plugged.values()) {
             List<String> drivers = UsbBrailleDevice.candidateDrivers(
                     table, device.getVendorId(), device.getProductId());
-            Log.i(LOG_TAG, "  driver candidates for vid="
+            LogUtils.i(this, "  driver candidates for vid="
                     + device.getVendorId() + " pid=" + device.getProductId()
                     + ": " + drivers);
             if (!drivers.isEmpty()) {
@@ -198,10 +205,12 @@ public class UsbDisplayConnection implements DriverThread.OnInitListener {
         }
 
         mDevice = selected;
+        mDriverCandidates = candidates;
+        mDriverIndex = 0;
         mDriverCode = candidates.get(0);
         if (candidates.size() > 1) {
-            Log.w(LOG_TAG, "Multiple drivers match; using " + mDriverCode
-                    + ". Others: " + candidates);
+            LogUtils.w(this, "Multiple drivers match; trying " + mDriverCode
+                    + " first. Fallback order: " + candidates);
         }
 
         if (!mUsbManager.hasPermission(mDevice)) {
@@ -212,7 +221,7 @@ public class UsbDisplayConnection implements DriverThread.OnInitListener {
     }
 
     private void requestPermission() {
-        Log.i(LOG_TAG, "Requesting USB permission for device id="
+        LogUtils.i(this, "Requesting USB permission for device id="
                 + mDevice.getDeviceId());
         IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
         mPermissionReceiver = mPermissionBroadcastReceiver;
@@ -226,8 +235,12 @@ public class UsbDisplayConnection implements DriverThread.OnInitListener {
         Intent intent = new Intent(ACTION_USB_PERMISSION)
                 .setPackage(mContext.getPackageName());
         int flags = PendingIntent.FLAG_UPDATE_CURRENT;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            flags |= PendingIntent.FLAG_IMMUTABLE;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // The system fills EXTRA_DEVICE and EXTRA_PERMISSION_GRANTED into
+            // this PendingIntent when the dialog is answered. An immutable
+            // PendingIntent silently drops that fill-in, so the receiver sees
+            // granted=false even after the user allowed the device.
+            flags |= PendingIntent.FLAG_MUTABLE;
         }
         PendingIntent permissionIntent = PendingIntent.getBroadcast(
                 mContext, 0, intent, flags);
@@ -254,7 +267,7 @@ public class UsbDisplayConnection implements DriverThread.OnInitListener {
         String serial = safeSerialNumber(mDevice);
         String parameter = UsbBrailleDevice.buildParameter(
                 serial, mDevice.getVendorId(), mDevice.getProductId());
-        Log.i(LOG_TAG, "Starting brltty USB driver=" + mDriverCode
+        LogUtils.i(this, "Starting brltty USB driver=" + mDriverCode
                 + " parameter=" + parameter);
         try {
             mDriverThread = new DriverThread(new NoOpOutputStream(),
@@ -262,7 +275,7 @@ public class UsbDisplayConnection implements DriverThread.OnInitListener {
                     mContext.getResources(), mTablesDir, mContext,
                     this, mInputEventListener);
         } catch (Throwable t) {
-            Log.e(LOG_TAG, "Could not create the USB driver thread", t);
+            LogUtils.e(this, t, "Could not create the USB driver thread");
             fail("Could not start the brltty USB driver: " + t);
         }
     }
@@ -272,7 +285,7 @@ public class UsbDisplayConnection implements DriverThread.OnInitListener {
             try {
                 return device.getSerialNumber();
             } catch (Throwable t) {
-                Log.w(LOG_TAG, "USB serial number unavailable; matching by VID/PID", t);
+                LogUtils.w(this, t, "USB serial number unavailable; matching by VID/PID");
             }
         }
         // Empty is safe: usbVerifyString() skips verification for an empty value.
@@ -286,11 +299,17 @@ public class UsbDisplayConnection implements DriverThread.OnInitListener {
             return;
         }
         if (properties == null) {
-            Log.w(LOG_TAG, "brltty USB driver failed to initialize");
-            fail("brltty USB driver failed to initialize (" + mDriverCode + ")");
+            LogUtils.w(this, "brltty USB driver failed to initialize");
+            final String failedDriver = mDriverCode;
+            mHandler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    tryNextDriver(failedDriver);
+                }
+            }, DRIVER_FALLBACK_DELAY_MILLIS);
             return;
         }
-        Log.i(LOG_TAG, "USB braille display ready, text cells="
+        LogUtils.i(this, "USB braille display ready, text cells="
                 + properties.getNumTextCells());
         mHandler.post(new Runnable() {
             @Override
@@ -312,13 +331,18 @@ public class UsbDisplayConnection implements DriverThread.OnInitListener {
         }
     }
 
+    /** True while this connection is live and still owns a driver thread. */
+    public boolean isDriverActive() {
+        return mDriverThread != null && !mDisconnecting && !mFailed;
+    }
+
     /** Tears the connection down. The listener is notified after native stop. */
     public void disconnect() {
         if (mDisconnecting) {
             return;
         }
         mDisconnecting = true;
-        Log.i(LOG_TAG, "Disconnecting USB braille display");
+        LogUtils.i(this, "Disconnecting USB braille display");
         mHandler.removeCallbacks(mInputPollRunnable);
         mHandler.removeCallbacks(mPermissionPollRunnable);
         unregisterPermissionReceiver();
@@ -353,7 +377,7 @@ public class UsbDisplayConnection implements DriverThread.OnInitListener {
             return;
         }
         mFailed = true;
-        Log.w(LOG_TAG, "USB connection failed: " + reason);
+        LogUtils.w(this, "USB connection failed: " + reason);
         mHandler.removeCallbacks(mInputPollRunnable);
         mHandler.removeCallbacks(mPermissionPollRunnable);
         unregisterPermissionReceiver();
@@ -365,6 +389,28 @@ public class UsbDisplayConnection implements DriverThread.OnInitListener {
         });
     }
 
+    /**
+     * Some USB chips are shared by several drivers (CP2102 is used by both
+     * BrailleMemo and Seika). Try the next candidate when the current driver
+     * cannot initialize this particular device.
+     */
+    private void tryNextDriver(String failedDriver) {
+        if (mDisconnecting || mFailed) {
+            return;
+        }
+        List<String> candidates = mDriverCandidates;
+        if (candidates == null || mDriverIndex + 1 >= candidates.size()) {
+            fail("brltty USB driver failed to initialize (" + failedDriver + ")");
+            return;
+        }
+        mDriverThread = null;
+        mDriverIndex += 1;
+        mDriverCode = candidates.get(mDriverIndex);
+        LogUtils.i(this, "Trying fallback driver " + mDriverCode
+                + " after " + failedDriver + " failed");
+        startDriver();
+    }
+
     private void unregisterPermissionReceiver() {
         BroadcastReceiver receiver = mPermissionReceiver;
         mPermissionReceiver = null;
@@ -372,7 +418,7 @@ public class UsbDisplayConnection implements DriverThread.OnInitListener {
             try {
                 mContext.unregisterReceiver(receiver);
             } catch (IllegalArgumentException e) {
-                Log.d(LOG_TAG, "Permission receiver was already unregistered");
+                LogUtils.d(this, "Permission receiver was already unregistered");
             }
         }
     }

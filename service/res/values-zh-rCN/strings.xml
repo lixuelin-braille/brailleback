@@ -20,9 +20,16 @@
 <string name="key_wujie_page_next">"下一页"</string>
 <string name="key_wujie_page_previous">"上一页"</string>
 <string name="pref_connection_protocol_wujie_label">"无界书城 BLE GATT（厂商协议）"</string>
-<string name="pref_connection_protocol_usb_label">"USB 有线（OTG / brltty）"</string>
+<string name="pref_connection_protocol_bluetooth_label">"蓝牙连接"</string>
+<string name="pref_connection_protocol_usb_label">"USB 连接"</string>
 <string name="connprog_trying_usb">"正在通过 USB 有线连接……"</string>
 <string name="connprog_usb_failed">"USB 有线连接失败：%1$s"</string>
+<string name="pref_connection_protocol_usbhid_label">"USB HID 有线（Android 15 以上）"</string>
+<string name="connprog_trying_usb_hid">"正在通过 USB HID 有线连接……"</string>
+<string name="connprog_usb_hid_unavailable">"USB HID 有线连接需要 Android 15 或更高版本，并启用本无障碍服务"</string>
+<string name="connprog_usb_hid_not_found">"未检测到 USB HID 有线盲文显示器，请连接设备后重试"</string>
+<string name="connprog_usb_hid_permission_denied">"USB 权限被拒绝，请在弹窗中允许后重新连接"</string>
+<string name="connprog_usb_hid_failed">"USB HID 有线连接失败（错误码 %1$d）"</string>
 </resources>
 
 

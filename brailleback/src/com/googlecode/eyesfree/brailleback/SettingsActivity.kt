@@ -14,6 +14,8 @@ import android.Manifest
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.AlertDialog
 import android.content.BroadcastReceiver
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.DialogInterface
@@ -39,6 +41,7 @@ import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.PreferenceScreen
 import com.googlecode.eyesfree.braille.display.Display
 import com.googlecode.eyesfree.braille.display.DisplayClient
+import com.googlecode.eyesfree.braille.service.display.ConnectionProtocolPolicy
 import com.googlecode.eyesfree.braille.translate.TableInfo
 import com.googlecode.eyesfree.brailleback.sound.SoundSchemeManager
 import com.googlecode.eyesfree.brailleback.utils.LogFileWriter
@@ -191,9 +194,7 @@ class SettingsActivity : AppCompatActivity(),
 
         private var mTranslatorManager: TranslatorManager? = null
         private var mStatusPreference: Preference? = null
-        private var mBrailleTypePreference: ListPreference? = null
-        private var mSixDotTablePreference: ListPreference? = null
-        private var mEightDotTablePreference: ListPreference? = null
+        private var mTablePreference: ListPreference? = null
         private var mOverlayPreference: Preference? = null
         private var mOverlayTutorialPreference: Preference? = null
         private var mLicensesPreference: Preference? = null
@@ -201,11 +202,26 @@ class SettingsActivity : AppCompatActivity(),
         private var mSoundVolumePreference: Preference? = null
         private var mSetupServicePreference: Preference? = null
         private var mViewLogPreference: Preference? = null
+        private var mShareLogPreference: Preference? = null
+        private var mCopyLogPreference: Preference? = null
         private var mClearLogPreference: Preference? = null
         private var mTables: List<TableInfo> = emptyList()
 
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
+            migrateConnectionProtocolPreference()
             setPreferencesFromResource(R.xml.settings, rootKey)
+        }
+
+        /** 旧版六种协议值合并为“蓝牙”和“USB”两项。 */
+        private fun migrateConnectionProtocolPreference() {
+            val prefs = androidx.preference.PreferenceManager
+                .getDefaultSharedPreferences(requireContext())
+            val key = getString(R.string.pref_connection_protocol_key)
+            val value = prefs.getString(key, null)
+            val normalized = ConnectionProtocolPolicy.normalize(value)
+            if (value != normalized) {
+                prefs.edit().putString(key, normalized).apply()
+            }
         }
 
         override fun onCreate(savedInstanceState: Bundle?) {
@@ -218,15 +234,9 @@ class SettingsActivity : AppCompatActivity(),
             mStatusPreference?.setOnPreferenceClickListener(this)
             assignKeyBindingsIntent()
 
-            mBrailleTypePreference =
-                findPreference<ListPreference>(getString(R.string.pref_braille_type_key))
-            mBrailleTypePreference?.setOnPreferenceChangeListener(this)
-            mSixDotTablePreference =
-                findPreference<ListPreference>(getString(R.string.pref_six_dot_braille_table_key))
-            mSixDotTablePreference?.setOnPreferenceChangeListener(this)
-            mEightDotTablePreference =
-                findPreference<ListPreference>(getString(R.string.pref_eight_dot_braille_table_key))
-            mEightDotTablePreference?.setOnPreferenceChangeListener(this)
+            mTablePreference =
+                findPreference<ListPreference>(getString(R.string.pref_braille_table_key))
+            mTablePreference?.setOnPreferenceChangeListener(this)
 
             mOverlayPreference =
                 findPreference<Preference>(getString(R.string.pref_braille_overlay_key))
@@ -243,10 +253,13 @@ class SettingsActivity : AppCompatActivity(),
             mLogLevelPreference =
                 findPreference<ListPreference>(getString(R.string.pref_log_level_key))
             mLogLevelPreference?.setOnPreferenceChangeListener(this)
-            if (BuildConfig.DEBUG) {
+            // Debug builds used to pin this preference to VERBOSE. Testers
+            // must be able to raise the level themselves while reproducing a
+            // problem, so keep it editable and only show the computed default
+            // until a level has been chosen.
+            if (mLogLevelPreference?.value == null) {
                 val logLevel = PreferenceUtils.getLogLevel(requireActivity())
                 updateListPreferenceSummary(mLogLevelPreference, Integer.toString(logLevel))
-                mLogLevelPreference?.isEnabled = false
             }
 
             mSoundVolumePreference =
@@ -289,6 +302,12 @@ class SettingsActivity : AppCompatActivity(),
             mViewLogPreference =
                 findPreference<Preference>(getString(R.string.pref_view_log_key))
             mViewLogPreference?.setOnPreferenceClickListener(this)
+            mShareLogPreference =
+                findPreference<Preference>(getString(R.string.pref_share_log_key))
+            mShareLogPreference?.setOnPreferenceClickListener(this)
+            mCopyLogPreference =
+                findPreference<Preference>(getString(R.string.pref_copy_log_key))
+            mCopyLogPreference?.setOnPreferenceClickListener(this)
             mClearLogPreference =
                 findPreference<Preference>(getString(R.string.pref_clear_log_key))
             mClearLogPreference?.setOnPreferenceClickListener(this)
@@ -308,7 +327,7 @@ class SettingsActivity : AppCompatActivity(),
             mTranslatorManager = translatorManager
             translatorManager.addOnTablesChangedListener(this)
 
-            refreshBrailleTypeSummary()
+            refreshBrailleTableSummary()
             ContextCompat.registerReceiver(
                 requireContext(),
                 mRefreshReceiver,
@@ -338,7 +357,7 @@ class SettingsActivity : AppCompatActivity(),
         private val mRefreshReceiver: BroadcastReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent) {
                 if (TextUtils.equals(intent.action, SettingsActivity.INTENT_REFRESH_DISPLAY)) {
-                    refreshBrailleTypeSummary()
+                    refreshBrailleTableSummary()
                 }
             }
         }
@@ -370,8 +389,7 @@ class SettingsActivity : AppCompatActivity(),
 
         override fun onTablesChanged() {
             mTables = mTranslatorManager?.getTranslatorClient()?.getTables() ?: emptyList()
-            addTableList(mSixDotTablePreference, false)
-            addTableList(mEightDotTablePreference, true)
+            addTableList(mTablePreference)
         }
 
         /** Assigns the appropriate intent to the key bindings preference. */
@@ -381,21 +399,17 @@ class SettingsActivity : AppCompatActivity(),
             pref?.intent = intent
         }
 
-        private fun addTableList(pref: ListPreference?, eightDot: Boolean) {
+        private fun addTableList(pref: ListPreference?) {
             if (pref == null || mTranslatorManager == null) {
                 return
             }
-            val tables = ArrayList<TableInfo>()
-            for (info in mTables) {
-                if (eightDot == info.isEightDot) {
-                    tables.add(info)
-                }
-            }
+            // 统一列表：六点与八点（计算机）表放在一起，按语言名排序。
+            val tables = ArrayList<TableInfo>(mTables)
             Collections.sort(tables, mTableInfoComparator)
             val entryValues = arrayOfNulls<CharSequence>(tables.size + 1)
             val entries = arrayOfNulls<CharSequence>(tables.size + 1)
             var index = 0
-            val defaultInfo = mTranslatorManager!!.findDefaultTableInfo(eightDot)
+            val defaultInfo = mTranslatorManager!!.findDefaultTableInfo(false)
             if (defaultInfo != null) {
                 entries[index] = getString(
                     R.string.pref_braille_table_default_label,
@@ -426,8 +440,8 @@ class SettingsActivity : AppCompatActivity(),
         private fun createTableDisplayName(tableInfo: TableInfo): String {
             val localeDisplayName = tableInfo.locale.getDisplayName()
             if (tableInfo.isEightDot) {
-                // Computer braille is obvious from context.
-                return localeDisplayName
+                // 合并成一个列表后必须标出八点，否则和同语言的六点表同名。
+                return getString(R.string.table_name_eight_dot, localeDisplayName)
             }
             // Chinese braille is referred to by its system name (e.g. 国家通用盲文方案).
             if ("zh".equals(tableInfo.locale.getLanguage(), ignoreCase = true)) {
@@ -526,6 +540,14 @@ class SettingsActivity : AppCompatActivity(),
                     showDebugLogDialog()
                     return true
                 }
+                mShareLogPreference -> {
+                    shareCurrentLog()
+                    return true
+                }
+                mCopyLogPreference -> {
+                    copyCurrentLog()
+                    return true
+                }
                 mClearLogPreference -> {
                     AlertDialog.Builder(requireActivity())
                         .setMessage(R.string.debug_log_clear_confirm)
@@ -546,7 +568,29 @@ class SettingsActivity : AppCompatActivity(),
         // Debug log view / export
         // ------------------------------------------------------------------
 
-        /** 弹出调试日志对话框：ScrollView 展示 + 分享按钮。 */
+        /** 直接从开发者选项分享当前日志，省去先打开查看对话框的一步。 */
+        private fun shareCurrentLog() {
+            val log = LogFileWriter.readAll(requireActivity())
+            if (log.isBlank()) {
+                Toast.makeText(requireActivity(), R.string.debug_log_empty,
+                    Toast.LENGTH_SHORT).show()
+                return
+            }
+            shareLog(log)
+        }
+
+        /** 直接从开发者选项把当前日志复制到剪贴板。 */
+        private fun copyCurrentLog() {
+            val log = LogFileWriter.readAll(requireActivity())
+            if (log.isBlank()) {
+                Toast.makeText(requireActivity(), R.string.debug_log_empty,
+                    Toast.LENGTH_SHORT).show()
+                return
+            }
+            copyLogToClipboard(log)
+        }
+
+        /** 弹出调试日志对话框：ScrollView 展示 + 分享 / 复制按钮。 */
         private fun showDebugLogDialog() {
             val context = requireActivity()
             val log = LogFileWriter.readAll(context)
@@ -564,11 +608,35 @@ class SettingsActivity : AppCompatActivity(),
             AlertDialog.Builder(context)
                 .setTitle(R.string.debug_log_view_title)
                 .setView(scroll)
+                .setNeutralButton(R.string.debug_log_copy) { _, _ ->
+                    copyLogToClipboard(body)
+                }
                 .setPositiveButton(R.string.debug_log_share) { _, _ ->
                     shareLog(body)
                 }
                 .setNegativeButton(android.R.string.cancel, null)
                 .show()
+        }
+
+        /** 把日志文本复制到剪贴板，便于直接粘贴到聊天或反馈里。 */
+        private fun copyLogToClipboard(text: String) {
+            val context = requireActivity()
+            val manager = context.getSystemService(Context.CLIPBOARD_SERVICE)
+                as? ClipboardManager
+            if (manager == null) {
+                Toast.makeText(context, R.string.debug_log_copy_fail,
+                    Toast.LENGTH_SHORT).show()
+                return
+            }
+            try {
+                manager.setPrimaryClip(
+                    ClipData.newPlainText(getString(R.string.debug_log_view_title), text))
+                Toast.makeText(context, R.string.debug_log_copied,
+                    Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(context, R.string.debug_log_copy_fail,
+                    Toast.LENGTH_SHORT).show()
+            }
         }
 
         private fun shareLog(text: String) {
@@ -703,13 +771,13 @@ class SettingsActivity : AppCompatActivity(),
         // 辅助方法
         // ------------------------------------------------------------------
 
-        private fun refreshBrailleTypeSummary() {
+        private fun refreshBrailleTableSummary() {
             val sharedPrefs: SharedPreferences =
                 androidx.preference.PreferenceManager.getDefaultSharedPreferences(requireActivity())
-            val prefKey = getString(R.string.pref_braille_type_key)
-            val prefDefault = getString(R.string.pref_braille_type_six_dot_value)
+            val prefKey = getString(R.string.pref_braille_table_key)
+            val prefDefault = getString(R.string.table_value_default)
             val prefValue = sharedPrefs.getString(prefKey, prefDefault)
-            updateListPreferenceSummary(mBrailleTypePreference, prefValue)
+            updateListPreferenceSummary(mTablePreference, prefValue)
         }
 
         private fun updateListPreferenceSummary(
@@ -717,8 +785,13 @@ class SettingsActivity : AppCompatActivity(),
             if (listPreference == null) {
                 return false
             }
-            val index = listPreference.findIndexOfValue(newValue)
             val entries = listPreference.entries
+            // 盲文表列表由翻译服务异步填充。列表还没就绪时值为空属正常状态，
+            // 不能当成未知取值报错（否则每次进入设置页都会刷两条 ERROR）。
+            if (entries == null || entries.isEmpty()) {
+                return false
+            }
+            val index = listPreference.findIndexOfValue(newValue)
             if (index < 0 || index >= entries.size) {
                 LogUtils.log(this, Log.ERROR,
                     "Unknown preference value for %s: %s", listPreference.key, newValue)

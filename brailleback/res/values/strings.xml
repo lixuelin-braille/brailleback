@@ -74,7 +74,7 @@
     <!-- Label for the Device preferences category. Contains preferences specific to a user's Braille display. [CHAR_LIMIT=45] -->
     <string name="pref_category_device_title">Device</string>
     <string name="pref_category_device_summary">Connection status, protocol and keyboard help</string>
-    <string name="pref_connection_protocol_title">Connection protocol</string>
+    <string name="pref_connection_protocol_title">Connection type</string>
     <string name="pref_auto_connect_title">Auto-connect display</string>
     <string name="pref_auto_connect_summary">Connect automatically at startup, when the screen or Bluetooth turns on, or when a paired display is discovered; retry briefly after a drop and wait for the display to reconnect</string>
     <string name="pref_setup_service_title">Enable braille service</string>
@@ -137,7 +137,7 @@
     <string name="braille_reader_goto_hint">1 - %1$d</string>
     <string name="pref_chinese_segmentation_title">Chinese word segmentation</string>
     <string name="pref_chinese_segmentation_summary">Split Chinese text into words before translating to braille (recommended)</string>
-    <string name="pref_connection_protocol_default" translatable="false">auto</string>
+    <string name="pref_connection_protocol_default" translatable="false">bluetooth</string>
     <string name="pref_connection_protocol_auto_label">Auto (HID first, then Bluetooth serial)</string>
     <string name="pref_connection_protocol_hid_label">HID (new protocol)</string>
     <string name="pref_connection_protocol_rfcomm_label">Bluetooth serial (old protocol)</string>
@@ -162,6 +162,11 @@
     <string name="pref_eight_dot_braille_table_title">Computer braille table</string>
     <!-- Label for the braille word wrap preference. Switches between enabling and disabling word wrap. [CHAR_LIMIT=45] -->
     <string name="pref_braille_word_wrap_title">Enable word wrapping</string>
+    <string name="pref_braille_table_title">Braille table</string>
+    <string name="table_name_eight_dot">%1$s (8-dot)</string>
+    <string name="pref_cursor_dots_title">Show cursor dots</string>
+    <string name="pref_cursor_dots_summary_on">On. The cell at the cursor or focused item gets dots 7 and 8, and blinks while editing.</string>
+    <string name="pref_cursor_dots_summary_off">Off. No extra dots are added to the braille cells, and nothing blinks.</string>
     <!-- Label for the contracted mode preference. Switches between contracted (grade 2) and uncontracted (grade 1) braille. [CHAR_LIMIT=45] -->
     <string name="pref_braille_contracted_mode_title">Contracted braille</string>
     <string name="pref_motion_mode_title">Motion mode</string>
@@ -181,11 +186,11 @@
     <string name="pref_motion_mode_summary_off">Refresh the display on every update</string>
 
     <string name="pref_volume_gestures_enabled_title">Volume key gestures</string>
-    <string name="pref_volume_gestures_enabled_summary_on">On. Volume keys still change the system volume; long press and double press also run the actions below.</string>
-    <string name="pref_volume_gestures_enabled_summary_off">Off. Volume keys only change the system volume.</string>
+    <string name="pref_volume_gestures_enabled_summary_on">On. A slow press changes the volume by one step about 0.3 s after you release the key; a long press or a fast double press only runs the action below and never changes the volume. A slot set to None still behaves as an ordinary press.</string>
+    <string name="pref_volume_gestures_enabled_summary_off">Off. Volume keys behave exactly as stock Android, including long-press continuous adjustment; no custom action runs.</string>
     <string name="pref_volume_long_press_up_title">Long press volume up</string>
     <string name="pref_volume_long_press_down_title">Long press volume down</string>
-    <string name="pref_volume_double_press_title">Double press volume key</string>
+    <string name="pref_volume_double_press_title">Fast double press (same key)</string>
     <string name="pref_volume_action_none_label">None</string>
     <string name="pref_volume_action_pause_label">Pause / resume display</string>
     <string name="pref_volume_action_grade_label">Toggle contracted braille</string>
@@ -232,11 +237,18 @@
     <!-- Developer options: view / export the file log. -->
     <string name="pref_view_log_title">View debug log</string>
     <string name="pref_view_log_summary">Show the log file; share or copy it to report a problem</string>
+    <string name="pref_share_log_title">Share debug log</string>
+    <string name="pref_share_log_summary">Send the current log directly to another app</string>
+    <string name="pref_copy_log_title">Copy debug log</string>
+    <string name="pref_copy_log_summary">Copy the current log to the clipboard</string>
     <string name="pref_clear_log_title">Clear debug log</string>
     <string name="pref_clear_log_summary">Delete all saved log files</string>
     <string name="debug_log_view_title">Debug log</string>
     <string name="debug_log_empty">No log entries yet.</string>
     <string name="debug_log_share">Share</string>
+    <string name="debug_log_copy">Copy log</string>
+    <string name="debug_log_copied">Log copied to clipboard</string>
+    <string name="debug_log_copy_fail">Could not copy the log</string>
     <string name="debug_log_clear_confirm">Clear all debug log files?</string>
     <string name="debug_log_cleared">Debug log cleared</string>
     <string name="debug_log_share_fail">No app available to share the log</string>

@@ -38,10 +38,18 @@
     <string name="key_wujie_page_next">Next page</string>
     <string name="key_wujie_page_previous">Previous page</string>
     <string name="pref_connection_protocol_wujie_label">Wujie BLE GATT (vendor protocol)</string>
+    <string name="pref_connection_protocol_bluetooth_label">Bluetooth connection</string>
     <!-- Wired USB (brltty USB backend) connection path. -->
-    <string name="pref_connection_protocol_usb_label">USB wired (OTG / brltty)</string>
+    <string name="pref_connection_protocol_usb_label">USB connection</string>
     <string name="connprog_trying_usb">Connecting via wired USB…</string>
     <string name="connprog_usb_failed">Wired USB connection failed: %1$s</string>
+    <!-- Wired USB HID (Android 15+ system Braille HID standard). -->
+    <string name="pref_connection_protocol_usbhid_label">USB HID wired (Android 15+)</string>
+    <string name="connprog_trying_usb_hid">Connecting via wired USB HID…</string>
+    <string name="connprog_usb_hid_unavailable">Wired USB HID requires Android 15 or later with the accessibility service enabled.</string>
+    <string name="connprog_usb_hid_not_found">No wired USB HID braille display detected. Connect the display and try again.</string>
+    <string name="connprog_usb_hid_permission_denied">USB permission was denied. Allow access when prompted, then reconnect.</string>
+    <string name="connprog_usb_hid_failed">Wired USB HID connection failed (error %1$d).</string>
 </resources>
 
 

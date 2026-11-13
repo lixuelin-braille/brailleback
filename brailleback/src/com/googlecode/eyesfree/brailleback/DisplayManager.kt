@@ -42,6 +42,7 @@ import com.googlecode.eyesfree.utils.SharedPreferencesUtils
 import java.lang.ref.WeakReference
 import java.util.Arrays
 import java.util.Comparator
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Keeps track of the current display content and handles panning.
@@ -64,6 +65,15 @@ class DisplayManager(
     /** Dot pattern used to overlay characters in a focused element. */
     // TODO: Make customizable.
     private val FOCUS_DOTS = 0xC0
+
+    /**
+     * 是否在盲文格上叠加光标点/焦点点（第 7、8 点）。
+     *
+     * 默认关闭：八点显示器上这些点会真的凸起来，焦点落在第 1 方时容易被当成
+     * 内容里多了几个点。关闭只影响叠加点，光标位置仍然参与自动平移。
+     */
+    @Volatile
+    private var cursorDotsEnabled = false
 
     /**
      * Callback interface for notifying interested callers when the display is
@@ -467,6 +477,45 @@ class DisplayManager(
     private var displayedBrailleToTextPositions: IntArray = IntArray(0)
     private var blinkNeeded = false
     /**
+     * 刷新链路心跳：每 5 秒一行，冻结时用来判断上层是否还在产生新的点阵。
+     * 同时记录被 connected/frozen/motion 三个条件拦下的刷新次数。
+     */
+    private val TELEMETRY_INTERVAL_MS = 5000L
+    @Volatile private var statRefreshOk = 0
+    @Volatile private var statContent = 0
+    @Volatile private var statRetranslate = 0
+    @Volatile private var statBlockedNotConnected = 0
+    @Volatile private var statBlockedFrozen = 0
+    @Volatile private var statBlockedMotion = 0
+    @Volatile private var statLastCells = 0
+    @Volatile private var statLastDigest = 0
+    /**
+     * 独立守护线程上报：即使 DisplayManager 的 handler 线程卡死，这里仍会输出，
+     * 日志里表现为某项计数不再增长，从而区分「上层不刷新」和「线程被卡住」。
+     */
+    private val telemetryRunning = AtomicBoolean(true)
+    private val telemetryThread = Thread {
+        while (telemetryRunning.get()) {
+            try {
+                Thread.sleep(TELEMETRY_INTERVAL_MS)
+            } catch (e: InterruptedException) {
+                break
+            }
+            LogUtils.i(this@DisplayManager,
+                "refresh stats: conn=%s content=%d retranslate=%d ok=%d " +
+                    "cells=%d digest=%08X " +
+                    "blocked(nc=%d frozen=%d motion=%d) frozen=%s motion=%s",
+                connected, statContent, statRetranslate, statRefreshOk,
+                statLastCells, statLastDigest,
+                statBlockedNotConnected, statBlockedFrozen, statBlockedMotion,
+                mFrozen, mMotionMode)
+        }
+    }.apply {
+        isDaemon = true
+        name = "DisplayStats"
+        start()
+    }
+    /**
      * 选区/光标覆盖到的盲文格下标，每次重算覆盖点前清空。
      *
      * 只有它们参与闪烁判定：焦点标记不该闪（详见 [BlinkPolicy]）。
@@ -522,6 +571,8 @@ class DisplayManager(
 
     fun shutdown() {
         sharedPreferences.unregisterOnSharedPreferenceChangeListener(this)
+        telemetryRunning.set(false)
+        telemetryThread.interrupt()
         displayHandler.stop()
         // Discard callbacks that were queued before shutdown.
         callbackHandler.removeCallbacksAndMessages(null)
@@ -582,12 +633,15 @@ class DisplayManager(
             if (end > brailleContent.size) {
                 extendContentForCursor()
             }
-            copyOverlaidContent()
-            var i = start
-            while (i < end && i < overlaidBrailleContent.size) {
-                overlaidBrailleContent[i] = (overlaidBrailleContent[i].toInt() or SELECTION_DOTS).toByte()
-                selectionCells.add(i)
-                ++i
+            if (cursorDotsEnabled) {
+                copyOverlaidContent()
+                var i = start
+                while (i < end && i < overlaidBrailleContent.size) {
+                    overlaidBrailleContent[i] =
+                        (overlaidBrailleContent[i].toInt() or SELECTION_DOTS).toByte()
+                    selectionCells.add(i)
+                    ++i
+                }
             }
             if (selectionStart == -1) {
                 selectionStart = start
@@ -629,8 +683,11 @@ class DisplayManager(
                 textToDisplayPosition(
                     currentTranslationResult, cursorPositionToTranslate, spanned.getSpanStart(span))
             if (start >= 0 && start < overlaidBrailleContent.size) {
-                copyOverlaidContent()
-                overlaidBrailleContent[start] = (overlaidBrailleContent[start].toInt() or FOCUS_DOTS).toByte()
+                if (cursorDotsEnabled) {
+                    copyOverlaidContent()
+                    overlaidBrailleContent[start] =
+                        (overlaidBrailleContent[start].toInt() or FOCUS_DOTS).toByte()
+                }
                 if (focusStart == -1) {
                     focusStart = start
                 }
@@ -752,6 +809,7 @@ class DisplayManager(
         }
 
         private fun handleSetContent(content: Content) {
+            statContent += 1
             val oldContent = currentContent
             currentContent = content
             updateWrapStrategy()
@@ -809,6 +867,7 @@ class DisplayManager(
         }
 
         private fun handleRetranslate() {
+            statRetranslate += 1
             val oldTextPosition =
                 displayToTextPosition(
                     currentTranslationResult, cursorPositionToTranslate,
@@ -1124,16 +1183,35 @@ class DisplayManager(
         }
     }
 
+    /**
+     * 设置是否在盲文格上叠加光标点（第 7、8 点）。
+     *
+     * 关闭后不再加任何额外点位，也不闪烁；光标位置仍用于自动平移，
+     * 编辑长文本时视野照样跟着走。
+     */
+    fun setCursorDotsEnabled(enabled: Boolean) {
+        displayHandler.post {
+            if (cursorDotsEnabled == enabled) {
+                return@post
+            }
+            cursorDotsEnabled = enabled
+            displayHandler.retranslate()
+        }
+    }
+
     private fun refresh() {
         if (!connected) {
+            statBlockedNotConnected += 1
             return
         }
         if (mFrozen) {
             // Output paused: keep the last content on the display.
+            statBlockedFrozen += 1
             return
         }
         if (mMotionMode) {
             // Coalesce rapid updates: refresh once after scrolling settles.
+            statBlockedMotion += 1
             displayHandler.removeCallbacks(mMotionModeRefreshRunnable)
             displayHandler.postDelayed(
                     mMotionModeRefreshRunnable, MOTION_MODE_DEBOUNCE_MS)
@@ -1152,6 +1230,9 @@ class DisplayManager(
             } else {
                 displayedBraille
             }
+        statRefreshOk += 1
+        statLastCells = toDisplay.size
+        statLastDigest = Arrays.hashCode(toDisplay)
         display?.displayDots(toDisplay, displayedText, displayedBrailleToTextPositions)
         if (blinkNeeded) {
             displayHandler.schedulePulse()
@@ -1167,7 +1248,7 @@ class DisplayManager(
      * 判断的话，只要屏上有焦点就会无限闪（详见 [BlinkPolicy]）。
      */
     private fun blinkNeeded(): Boolean =
-        BlinkPolicy.shouldBlink(
+        cursorDotsEnabled && BlinkPolicy.shouldBlink(
             selectionCells, wrapStrategy.getDisplayStart(), wrapStrategy.getDisplayEnd())
 
     /**

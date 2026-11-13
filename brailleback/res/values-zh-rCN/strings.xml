@@ -32,7 +32,7 @@
     <string name="pref_category_device_title" msgid="8644919099122845217">"设备"</string>
     <string name="pref_category_device_summary">"连接状态、协议与键盘帮助"</string>
     <string name="pref_connection_status_title" msgid="8350285056432214602">"状态"</string>
-    <string name="pref_connection_protocol_title">"连接协议"</string>
+    <string name="pref_connection_protocol_title">"连接方式"</string>
     <string name="pref_connection_protocol_auto_label">"自动（先 HID，再蓝牙串口）"</string>
     <string name="pref_connection_protocol_hid_label">"HID（新协议）"</string>
     <string name="pref_connection_protocol_rfcomm_label">"蓝牙串口（旧协议）"</string>
@@ -108,6 +108,11 @@
     <string name="pref_six_dot_braille_table_title" msgid="4612604998154279310">"书面盲文表格"</string>
     <string name="pref_eight_dot_braille_table_title" msgid="1960546664278216814">"计算机盲文表格"</string>
     <string name="pref_braille_word_wrap_title" msgid="6481878403472323874">"启用文字换行功能"</string>
+    <string name="pref_braille_table_title">"盲文表"</string>
+    <string name="table_name_eight_dot">"%1$s（八点）"</string>
+    <string name="pref_cursor_dots_title">"显示光标点"</string>
+    <string name="pref_cursor_dots_summary_on">"已开启。光标和焦点所在的那一格会加上第 7、8 点，编辑时闪烁。"</string>
+    <string name="pref_cursor_dots_summary_off">"已关闭。盲文格上不会多出额外点位，也不会闪烁。"</string>
     <string name="pref_braille_contracted_mode_title">缩写模式</string>
     <string name="pref_motion_mode_title">运动模式</string>
     <string name="pref_quiet_navigation_title">仅盲文移动（不朗读）</string>
@@ -126,11 +131,11 @@
     <string name="pref_motion_mode_summary_off">每次更新立即刷新点显</string>
 
     <string name="pref_volume_gestures_enabled_title">音量键手势</string>
-    <string name="pref_volume_gestures_enabled_summary_on">已开启。音量键照常调节系统音量，长按和双击会同时执行下方动作，触发手势时音量也会随之变化。</string>
-    <string name="pref_volume_gestures_enabled_summary_off">已关闭。音量键完全交给系统，只用于调节音量。</string>
+    <string name="pref_volume_gestures_enabled_summary_on">已开启。慢一点的普通按压在松手约 0.3 秒后调一格音量；长按和快速双击只执行下方设定的动作，不会改变音量。设为「关闭」的槽位仍按普通按压调音量。</string>
+    <string name="pref_volume_gestures_enabled_summary_off">已关闭。音量键完全交还系统，可长按连续调音量，不执行任何自定义动作。</string>
     <string name="pref_volume_long_press_up_title">长按音量上键</string>
     <string name="pref_volume_long_press_down_title">长按音量下键</string>
-    <string name="pref_volume_double_press_title">双击音量键</string>
+    <string name="pref_volume_double_press_title">快速双击音量键（同一键）</string>
     <string name="pref_volume_action_none_label">关闭</string>
     <string name="pref_volume_action_pause_label">暂停/继续点显</string>
     <string name="pref_volume_action_grade_label">切换缩写模式</string>
@@ -159,11 +164,18 @@
     <string name="pref_log_level_label" msgid="3161296593165404029">"日志输出级别"</string>
     <string name="pref_view_log_title">"查看调试日志"</string>
     <string name="pref_view_log_summary">"显示日志文件，可分享或复制以反馈问题"</string>
+    <string name="pref_share_log_title">"分享日志"</string>
+    <string name="pref_share_log_summary">"直接把当前日志发送到其他应用"</string>
+    <string name="pref_copy_log_title">"复制日志"</string>
+    <string name="pref_copy_log_summary">"把当前日志复制到剪贴板"</string>
     <string name="pref_clear_log_title">"清除调试日志"</string>
     <string name="pref_clear_log_summary">"删除已保存的全部日志文件"</string>
     <string name="debug_log_view_title">"调试日志"</string>
     <string name="debug_log_empty">"暂无日志记录"</string>
     <string name="debug_log_share">"分享"</string>
+    <string name="debug_log_copy">"复制日志"</string>
+    <string name="debug_log_copied">"日志已复制到剪贴板"</string>
+    <string name="debug_log_copy_fail">"复制日志失败"</string>
     <string name="debug_log_clear_confirm">"确定清除全部调试日志？"</string>
     <string name="debug_log_cleared">"调试日志已清除"</string>
     <string name="debug_log_share_fail">"没有可用的应用分享日志"</string>

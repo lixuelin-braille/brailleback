@@ -60,28 +60,25 @@
             app:key="@string/pref_category_braille_type_key"
             app:title="@string/pref_category_braille_type_title">
 
+            <!-- 盲文表的条目由服务动态填充（见 SettingsActivity.addTableList），
+                 不在 XML 里写 entries/summary，避免服务未就绪时显示 %s 占位。
+                 六点表与八点（计算机）表合并成一个列表，不再单独设置“计算机盲文”。 -->
             <ListPreference
-                app:key="@string/pref_braille_type_key"
-                app:title="@string/pref_braille_type_title"
-                app:defaultValue="@string/pref_braille_type_default"
-                app:entries="@array/pref_braille_type_entries"
-                app:entryValues="@array/pref_braille_type_values" />
-
-            <!-- 六点/八点表的条目由服务动态填充（见 SettingsActivity.addTableList），
-                 不在 XML 里写 entries/summary，避免服务未就绪时显示 %s 占位。 -->
-            <ListPreference
-                app:key="@string/pref_six_dot_braille_table_key"
-                app:title="@string/pref_six_dot_braille_table_title"
-                app:defaultValue="@string/table_value_default" />
-            <ListPreference
-                app:key="@string/pref_eight_dot_braille_table_key"
-                app:title="@string/pref_eight_dot_braille_table_title"
+                app:key="@string/pref_braille_table_key"
+                app:title="@string/pref_braille_table_title"
                 app:defaultValue="@string/table_value_default" />
 
             <SwitchPreferenceCompat
                 app:key="@string/pref_braille_word_wrap_key"
                 app:title="@string/pref_braille_word_wrap_title"
                 app:defaultValue="@bool/pref_braille_word_wrap_default" />
+
+            <SwitchPreferenceCompat
+                app:key="@string/pref_cursor_dots_key"
+                app:title="@string/pref_cursor_dots_title"
+                app:summaryOn="@string/pref_cursor_dots_summary_on"
+                app:summaryOff="@string/pref_cursor_dots_summary_off"
+                app:defaultValue="false" />
 
             <CheckBoxPreference
                 app:key="@string/pref_braille_contracted_mode_key"
@@ -222,6 +219,16 @@
                 app:key="@string/pref_view_log_key"
                 app:title="@string/pref_view_log_title"
                 app:summary="@string/pref_view_log_summary" />
+
+            <Preference
+                app:key="@string/pref_share_log_key"
+                app:title="@string/pref_share_log_title"
+                app:summary="@string/pref_share_log_summary" />
+
+            <Preference
+                app:key="@string/pref_copy_log_key"
+                app:title="@string/pref_copy_log_title"
+                app:summary="@string/pref_copy_log_summary" />
 
             <Preference
                 app:key="@string/pref_clear_log_key"

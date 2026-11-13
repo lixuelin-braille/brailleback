@@ -103,7 +103,18 @@ public class BrlttyWrapper {
     }
 
     public BrailleDisplayProperties getDisplayProperties() {
-        BrailleKeyBinding[] keyBindings = getKeyMap();
+        BrailleKeyBinding[] keyBindings;
+        try {
+            keyBindings = getKeyMap();
+        } catch (RuntimeException ex) {
+            // A single unnamed key used to abort the whole key map listing and
+            // the resulting exception killed the driver thread (and therefore
+            // the process). The display itself is initialised at this point,
+            // so report it without key bindings instead of crashing.
+            Log.e(LOG_TAG, "Couldn't read key map; continuing without key "
+                    + "bindings", ex);
+            keyBindings = new BrailleKeyBinding[0];
+        }
         return new BrailleDisplayProperties(
             getTextCellsNative(), getStatusCellsNative(),
             keyBindings, getFriendlyKeyNames(keyBindings));

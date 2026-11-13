@@ -121,6 +121,50 @@ object LogUtils {
     }
 
     /**
+     * Logs with an explicit tag instead of deriving one from the source object.
+     * Used by adapters such as the Timber tree so third-party log calls keep
+     * their original tags in both logcat and the persisted file log.
+     */
+    @JvmStatic
+    fun logWithTag(priority: Int, tag: String, format: String, vararg args: Any?) {
+        logWithTag(priority, tag, null, format, *args)
+    }
+
+    /** Logs with an explicit tag and an optional throwable. */
+    @JvmStatic
+    fun logWithTag(
+        priority: Int,
+        tag: String,
+        throwable: Throwable?,
+        format: String,
+        vararg args: Any?
+    ) {
+        if (priority < sLogLevel) {
+            return
+        }
+        try {
+            var message = String.format(format, *args)
+            if (throwable != null) {
+                message = String.format("%s\n%s", message, Log.getStackTraceString(throwable))
+            }
+            Log.println(priority, tag, message)
+            sFileLogListener?.onLog(priority, tag, message)
+        } catch (e: IllegalFormatException) {
+            Log.e(TAG, "Bad formatting string: \"$format\"", e)
+        }
+    }
+
+    /**
+     * Writes directly to the persistent file sink, bypassing the console level
+     * filter. Used for native (BRLTTY) records which must remain in an exported
+     * log even when logcat is configured to a stricter level.
+     */
+    @JvmStatic
+    fun logToFile(priority: Int, tag: String, message: String) {
+        sFileLogListener?.onLog(priority, tag, message)
+    }
+
+    /**
      * Logs a formatted string to the console using the default tag (see [TAG]).
      *
      * @param priority The log entry priority, see [Log.println].
