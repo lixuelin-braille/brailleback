@@ -18,6 +18,10 @@ LOCAL_PATH := $(call my-dir)
 WRAPPER_PATH := $(LOCAL_PATH)
 BRLTTY_PATH := $(WRAPPER_PATH)/third_party/brltty
 
+# Some driver Makefile.in files contain standalone build/clean rules that
+# conflict with the NDK build system.  Only the driver metadata is needed here.
+ANDROID_NDK_BUILD := 1
+
 include $(WRAPPER_PATH)/driver/driver.mk
 
 # Uncomment the second line below and comment out the first one
@@ -41,6 +45,30 @@ $(call build-braille-drivers,\
 	Alva \
 	Seika \
 	HandyTech \
+	Metec \
+	Albatross \
+	BrailleNote \
+	Canute \
+	Cebra \
+	DotPad \
+	EuroBraille \
+	FrankAudiodata \
+	Hedo \
+	Inceptor \
+	MDV \
+	Pegasus \
+	VisioBraille \
+	CombiBraille \
+	TSI \
+	BrailComm \
+	BrailleLite \
+	Braudi \
+	EcoBraille \
+	LogText \
+	MiniBraille \
+	MultiBraille \
+	TechniBraille \
+	NinePoint \
 	HID \
        )
 
@@ -56,6 +84,7 @@ LOCAL_LDLIBS := -llog
 LOCAL_C_INCLUDES := $(BRLTTY_PATH)/Headers
 LOCAL_CFLAGS := -I$(WRAPPER_PATH)/.. -D__ANDROID__
 LOCAL_SRC_FILES:= \
+	AppLogBridge.c \
 	BrlttyWrapper.c \
 	libbrltty.c \
 	bluetooth_android.c \
@@ -73,7 +102,8 @@ LOCAL_PATH := $(BRLTTY_PATH)
 
 LOCAL_C_INCLUDES:= $(BRLTTY_PATH) \
 	$(BRLTTY_PATH)/Programs \
-	$(BRLTTY_PATH)/Headers
+	$(BRLTTY_PATH)/Headers \
+	$(WRAPPER_PATH)
 
 LOCAL_CFLAGS+=-DHAVE_CONFIG_H $(VISIBILITY)
 LOCAL_CFLAGS+=-D__ANDROID__
@@ -140,6 +170,10 @@ LOCAL_SRC_FILES+= \
 # Other, not sure where they come from.
 LOCAL_SRC_FILES+= \
 	Programs/cmdline.c \
+	Programs/cmdbase.c \
+	Programs/cmdput.c \
+	Programs/color.c \
+	Programs/match.c \
 	Programs/pgmprivs_none.c \
 	Programs/service_none.c \
 	Programs/spk_input.c \
@@ -253,7 +287,10 @@ LOCAL_SRC_FILES+= \
 	Programs/datafile.c \
 	Programs/dataarea.c \
 	Programs/cmd_queue.c \
-	Programs/hidkeys.c
+	Programs/hidkeys.c \
+	Programs/crc_generate.c \
+	Programs/ezusb.c \
+	Programs/ihex.c
 
 LOCAL_MODULE := brltty
 LOCAL_WHOLE_STATIC_LIBRARIES := $(DRIVER_MODULES)

@@ -32,8 +32,11 @@
 #include <string.h>
 
 #include "bluetooth_android.h"
+#include "AppLogBridge.h"
 #include "libbrltty.h"
 #include "third_party/brltty/Headers/brl_cmds.h"
+#include "third_party/brltty/Headers/log.h"
+#include "third_party/brltty/Headers/system_java.h"
 #include "usb_android.h"
 #include "third_party/brltty/Programs/bluetooth_internal.h"
 #include "third_party/brltty/Programs/usb_devices.h"
@@ -151,6 +154,10 @@ static jclass getGlobalClassRef(JNIEnv* env, const char *name);
 static jboolean initCommandTables(JNIEnv* env);
 
 jboolean JNIMETHOD(initNative)(JNIEnv* env, jobject thiz, jobject context) {
+  // Must run on a Java-attached thread so the sink class resolves through
+  // the app's class loader. Later native threads reuse the cached class.
+  brlttyAppLogInit(env);
+
   NativeData *nat = calloc(1, sizeof(*nat));
   if (!nat) {
     (*env)->ThrowNew(env, class_OutOfMemoryError, NULL);
@@ -357,6 +364,10 @@ jint JNIMETHOD(readCommandNative)(JNIEnv* env, jobject thiz) {
       readDelayMillis = innerDelayMillis;
     }
     if (brlttyCommand == EOF || brlttyCommand == BRL_CMD_RESTARTBRL) {
+      if (brlttyCommand == BRL_CMD_RESTARTBRL) {
+        logMessage(LOG_ERR,
+                   "brltty requested RESTARTBRL; restart is not implemented");
+      }
       ret = -1;
       break;
     }
@@ -524,8 +535,11 @@ static ssize_t writeDataToDevice(BluetoothAndroidConnection* conn,
                                  size_t size) {
   //LOGV("Writing %zu bytes to bluetooth", size);
   NativeData *nat = conn->data;
-  JNIEnv* env;
-  (*nat->vm)->GetEnv(nat->vm, (void**)&env, nat->envVer);
+  JNIEnv* env = getJavaNativeInterface();
+  if (!env) {
+    errno = EIO;
+    return -1;
+  }
   jbyteArray byteArray = (*env)->NewByteArray(env, size);
   if (!byteArray) {
     errno = ENOMEM;

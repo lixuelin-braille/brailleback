@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include <time.h>
 #include <sys/ioctl.h>
 #include <linux/usbdevice_fs.h>
 
@@ -43,12 +44,27 @@
 #define JAVA_SIG_CONTEXT JAVA_SIG_OBJECT("android/content/Context")
 
 typedef struct {
-  JNIEnv *env;
   jobject device;
   UsbDeviceDescriptor descriptor;
 } UsbHostDevice;
 
 static Queue *usbHostDevices = NULL;
+
+/*
+ * Diagnostic timing. Android USB transfers have a 1000 ms default timeout and
+ * are executed synchronously on the brltty driver thread, so reporting slow
+ * transfers is the only way to tell whether a stalled display refresh is
+ * waiting inside the USB layer.
+ */
+#define USB_SLOW_TRANSFER_MILLIS 50
+
+static long
+usbMonotonicMillis (void) {
+  struct timespec now;
+
+  if (clock_gettime(CLOCK_MONOTONIC, &now) == -1) return 0;
+  return ((long) now.tv_sec * 1000L) + (now.tv_nsec / 1000000L);
+}
 
 struct UsbDeviceExtensionStruct {
   const UsbHostDevice *host;
@@ -77,6 +93,13 @@ usbAndroidSetContext(jobject* context) {
 static int
 usbFindHelperClass (JNIEnv *env) {
   return findJavaClass(env, &usbHelperClass, "com/googlecode/eyesfree/braille/service/display/UsbHelper");
+}
+
+// JNIEnv is thread-scoped.  Never cache it in a structure which may be used
+// or released by another thread: get the interface for the calling thread.
+static JNIEnv *
+usbGetThreadEnv (void) {
+  return getJavaNativeInterface();
 }
 
 static jobject
@@ -128,6 +151,7 @@ usbGetDeviceInterface (JNIEnv *env, jobject device, jint identifier) {
 
       if (interface) return interface;
       clearJavaException(env, 1);
+      logMessage(LOG_ERR, "USB: device interface %d not available", (int) identifier);
       errno = EIO;
     }
   }
@@ -149,6 +173,7 @@ usbGetInterfaceEndpoint (JNIEnv *env, jobject interface, jint address) {
 
       if (endpoint) return endpoint;
       clearJavaException(env, 1);
+      logMessage(LOG_ERR, "USB: endpoint %02X not available", (unsigned int) address);
       errno = EIO;
     }
   }
@@ -415,29 +440,38 @@ static int
 usbOpenConnection (UsbDeviceExtension *devx) {
   if (devx->connection) return 1;
 
-  {
+  JNIEnv *env = usbGetThreadEnv();
+
+  if (env) {
     const UsbHostDevice *host = devx->host;
-    jobject connection = usbOpenDeviceConnection(host->env, host->device);
+    jobject connection = usbOpenDeviceConnection(env, host->device);
 
     if (connection) {
-      devx->connection = (*host->env)->NewGlobalRef(host->env, connection);
+      devx->connection = (*env)->NewGlobalRef(env, connection);
 
-      (*host->env)->DeleteLocalRef(host->env, connection);
+      (*env)->DeleteLocalRef(env, connection);
       connection = NULL;
 
       if (devx->connection) return 1;
       logMallocError();
-      clearJavaException(host->env, 0);
+      clearJavaException(env, 0);
     }
   }
 
+  logMessage(LOG_ERR,
+    "USB: couldn't open device connection: Vendor:%04X Product:%04X",
+    getLittleEndian16(devx->host->descriptor.idVendor),
+    getLittleEndian16(devx->host->descriptor.idProduct)
+  );
   return 0;
 }
 
 static int
 usbGetFileDescriptor (UsbDeviceExtension *devx) {
   if (devx->fileDescriptor != INVALID_FILE_DESCRIPTOR) return 1;
-  JNIEnv *env = devx->host->env;
+  JNIEnv *env = usbGetThreadEnv();
+
+  if (!env) return 0;
 
   if (usbFindConnectionClass(env)) {
     static jmethodID method = 0;
@@ -453,6 +487,11 @@ usbGetFileDescriptor (UsbDeviceExtension *devx) {
     }
   }
 
+  logMessage(LOG_ERR,
+    "USB: file descriptor unavailable: Vendor:%04X Product:%04X",
+    getLittleEndian16(devx->host->descriptor.idVendor),
+    getLittleEndian16(devx->host->descriptor.idProduct)
+  );
   errno = EIO;
   return 0;
 }
@@ -460,7 +499,9 @@ usbGetFileDescriptor (UsbDeviceExtension *devx) {
 static void
 usbUnsetInterface (UsbDeviceExtension *devx) {
   if (devx->interface) {
-    JNIEnv *env = devx->host->env;
+    JNIEnv *env = usbGetThreadEnv();
+
+    if (!env) return;
 
     (*env)->DeleteGlobalRef(env, devx->interface);
     devx->interface = NULL;
@@ -469,7 +510,9 @@ usbUnsetInterface (UsbDeviceExtension *devx) {
 
 static int
 usbSetInterface (UsbDeviceExtension *devx, uint8_t identifier) {
-  JNIEnv *env = devx->host->env;
+  JNIEnv *env = usbGetThreadEnv();
+
+  if (!env) return 0;
 
   if (devx->interface) {
     uint8_t id;
@@ -493,6 +536,7 @@ usbSetInterface (UsbDeviceExtension *devx, uint8_t identifier) {
     }
   }
 
+  logMessage(LOG_ERR, "USB: interface %u not found", (unsigned int) identifier);
   return 0;
 }
 
@@ -519,12 +563,17 @@ usbClaimInterface (UsbDevice *device, unsigned char interface) {
 
   if (usbSetInterface(devx, interface)) {
     if (usbOpenConnection(devx)) {
-      if (usbDoClaimInterface(devx->host->env, devx->connection, devx->interface)) {
-        return 1;
+      JNIEnv *env = usbGetThreadEnv();
+
+      if (env) {
+        if (usbDoClaimInterface(env, devx->connection, devx->interface)) {
+          return 1;
+        }
       }
     }
   }
 
+  logMessage(LOG_ERR, "USB: claim interface failed: %u", (unsigned int) interface);
   return 0;
 }
 
@@ -536,8 +585,12 @@ usbReleaseInterface (UsbDevice *device, unsigned char interface) {
 
   if (usbSetInterface(devx, interface)) {
     if (usbOpenConnection(devx)) {
-      if (usbDoReleaseInterface(devx->host->env, devx->connection, devx->interface)) {
-        return 1;
+      JNIEnv *env = usbGetThreadEnv();
+
+      if (env) {
+        if (usbDoReleaseInterface(env, devx->connection, devx->interface)) {
+          return 1;
+        }
       }
     }
   }
@@ -603,36 +656,64 @@ usbControlTransfer (
 ) {
   ssize_t result = -1;
   UsbDeviceExtension *devx = device->extension;
+  const long started = usbMonotonicMillis();
 
   if (usbOpenConnection(devx)) {
-    const UsbHostDevice *host = devx->host;
-    jbyteArray bytes = (*host->env)->NewByteArray(host->env, length);
+    JNIEnv *env = usbGetThreadEnv();
+
+    if (!env) return -1;
+
+    jbyteArray bytes = (*env)->NewByteArray(env, length);
 
     if (bytes) {
       if (direction == UsbControlDirection_Output) {
-        (*host->env)->SetByteArrayRegion(host->env, bytes, 0, length, buffer);
+        (*env)->SetByteArrayRegion(env, bytes, 0, length, buffer);
         if (length) logBytes(LOG_CATEGORY(USB_IO), "control output", buffer, length);
       }
 
-      result = usbDoControlTransfer(host->env, devx->connection,
+      result = usbDoControlTransfer(env, devx->connection,
                                     direction | recipient | type,
                                     request, value, index,
                                     bytes, length, timeout);
 
       if (direction == UsbControlDirection_Input) {
         if (result > 0) {
-          (*host->env)->GetByteArrayRegion(host->env, bytes, 0, result, buffer);
+          (*env)->GetByteArrayRegion(env, bytes, 0, result, buffer);
           logBytes(LOG_CATEGORY(USB_IO), "control input", buffer, result);
+        } else if (result >= 0 && result < (int) length) {
+          logMessage(LOG_WARNING,
+            "USB control input short read: request:%02X expected:%u got:%d",
+            (unsigned int) request, (unsigned int) length, (int) result
+          );
         }
       }
 
-      (*host->env)->DeleteLocalRef(host->env, bytes);
+      (*env)->DeleteLocalRef(env, bytes);
     } else {
       logMallocError();
     }
   }
 
-  if (result == -1) logSystemError("USB control transfer");
+  if (result == -1) {
+    logMessage(LOG_ERR,
+      "USB control transfer failed: type:%02X request:%02X value:%04X index:%04X length:%u",
+      (unsigned int) (direction | recipient | type),
+      (unsigned int) request, (unsigned int) value,
+      (unsigned int) index, (unsigned int) length
+    );
+  }
+  {
+    const long elapsed = usbMonotonicMillis() - started;
+
+    if (elapsed >= USB_SLOW_TRANSFER_MILLIS) {
+      logMessage(LOG_DEBUG,
+        "USB control transfer slow: type:%02X request:%02X length:%u result:%d elapsed:%ldms",
+        (unsigned int) (direction | recipient | type),
+        (unsigned int) request, (unsigned int) length,
+        (int) result, elapsed
+      );
+    }
+  }
   return result;
 }
 
@@ -682,6 +763,7 @@ usbReadEndpoint (
   int timeout
 ) {
   ssize_t result = -1;
+  const long started = usbMonotonicMillis();
   UsbEndpoint *endpoint = usbGetInputEndpoint(device, endpointNumber);
 
   logMessage(LOG_CATEGORY(USB_IO), "reading endpoint: %u", endpointNumber);
@@ -690,8 +772,9 @@ usbReadEndpoint (
     UsbDeviceExtension *devx = device->extension;
 
     if (usbOpenConnection(devx)) {
-      const UsbHostDevice *host = devx->host;
-      JNIEnv *env = host->env;
+      JNIEnv *env = usbGetThreadEnv();
+
+      if (!env) return -1;
       jbyteArray bytes = (*env)->NewByteArray(env, length);
 
       if (bytes) {
@@ -720,6 +803,18 @@ usbReadEndpoint (
     if (errno != EAGAIN) logSystemError("USB bulk read");
   }
 
+  {
+    const long elapsed = usbMonotonicMillis() - started;
+
+    if (elapsed >= USB_SLOW_TRANSFER_MILLIS) {
+      logMessage(LOG_DEBUG,
+        "USB bulk read slow: endpoint:%u length:%u result:%d elapsed:%ldms",
+        (unsigned int) endpointNumber, (unsigned int) length,
+        (int) result, elapsed
+      );
+    }
+  }
+
   return result;
 }
 
@@ -732,6 +827,7 @@ usbWriteEndpoint (
   int timeout
 ) {
   ssize_t result = -1;
+  const long started = usbMonotonicMillis();
   UsbEndpoint *endpoint = usbGetOutputEndpoint(device, endpointNumber);
 
   if (endpoint) {
@@ -740,8 +836,9 @@ usbWriteEndpoint (
     usbLogEndpointData(endpoint, "output", buffer, length);
 
     if (usbOpenConnection(devx)) {
-      const UsbHostDevice *host = devx->host;
-      JNIEnv *env = host->env;
+      JNIEnv *env = usbGetThreadEnv();
+
+      if (!env) return -1;
       jbyteArray bytes = (*env)->NewByteArray(env, length);
 
       if (bytes) {
@@ -759,6 +856,18 @@ usbWriteEndpoint (
   }
 
   if (result == -1) logSystemError("USB bulk write");
+
+  {
+    const long elapsed = usbMonotonicMillis() - started;
+
+    if (elapsed >= USB_SLOW_TRANSFER_MILLIS) {
+      logMessage(LOG_DEBUG,
+        "USB bulk write slow: endpoint:%u length:%u result:%d elapsed:%ldms",
+        (unsigned int) endpointNumber, (unsigned int) length,
+        (int) result, elapsed
+      );
+    }
+  }
   return result;
 }
 
@@ -774,8 +883,9 @@ usbAllocateEndpointExtension (UsbEndpoint *endpoint) {
   const UsbInterfaceDescriptor *interface = endpoint->interface;
 
   UsbDeviceExtension *devx = device->extension;
-  const UsbHostDevice *host = devx->host;
-  JNIEnv *env = host->env;
+  JNIEnv *env = usbGetThreadEnv();
+
+  if (!env) return 0;
 
   if (usbSetInterface(devx, interface->bInterfaceNumber)) {
     jobject localReference = usbGetInterfaceEndpoint(env, devx->interface, endpoint->descriptor->bEndpointAddress);
@@ -807,7 +917,8 @@ usbAllocateEndpointExtension (UsbEndpoint *endpoint) {
         clearJavaException(env, 0);
       }
     } else {
-      logMessage(LOG_ERR, "couldn't get endpoint object");
+      logMessage(LOG_ERR, "couldn't get endpoint object: %02X",
+                 (unsigned int) endpoint->descriptor->bEndpointAddress);
       errno = EIO;
     }
   } else {
@@ -819,13 +930,9 @@ usbAllocateEndpointExtension (UsbEndpoint *endpoint) {
 
 void
 usbDeallocateEndpointExtension (UsbEndpointExtension *eptx) {
-  UsbEndpoint *endpoint = eptx->endpoint;
-  UsbDevice *device = endpoint->device;
-  UsbDeviceExtension *devx = device->extension;
-  const UsbHostDevice *host = devx->host;
-  JNIEnv *env = host->env;
+  JNIEnv *env = usbGetThreadEnv();
 
-  if (eptx->object) {
+  if (env && eptx->object) {
     (*env)->DeleteGlobalRef(env, eptx->object);
     eptx->object = NULL;
   }
@@ -838,10 +945,12 @@ usbDeallocateDeviceExtension (UsbDeviceExtension *devx) {
   usbUnsetInterface(devx);
 
   if (devx->connection) {
-    const UsbHostDevice *host = devx->host;
+    JNIEnv *env = usbGetThreadEnv();
 
-    usbCloseDeviceConnection(host->env, devx->connection);
-    (*host->env)->DeleteGlobalRef(host->env, devx->connection);
+    if (env) {
+      usbCloseDeviceConnection(env, devx->connection);
+      (*env)->DeleteGlobalRef(env, devx->connection);
+    }
     devx->connection = NULL;
   }
 
@@ -851,8 +960,13 @@ usbDeallocateDeviceExtension (UsbDeviceExtension *devx) {
 static void
 usbDeallocateHostDevice (void *item, void *data) {
   UsbHostDevice *host = item;
+  JNIEnv *env = usbGetThreadEnv();
 
-  (*host->env)->DeleteGlobalRef(host->env, host->device);
+  if (env && host->device) {
+    (*env)->DeleteGlobalRef(env, host->device);
+    host->device = NULL;
+  }
+
   free(host);
 }
 
@@ -862,18 +976,17 @@ usbAddHostDevice (JNIEnv *env, jobject device) {
 
   if ((host = malloc(sizeof(*host)))) {
     memset(host, 0, sizeof(*host));
-    host->env = env;
 
     host->descriptor.bLength = UsbDescriptorSize_Device;
     host->descriptor.bDescriptorType = UsbDescriptorType_Device;
     host->descriptor.bNumConfigurations = 1;
 
-    if ((host->device = (*host->env)->NewGlobalRef(host->env, device))) {
-      if (usbGetDeviceVendor(host->env, host->device, &host->descriptor)) {
-        if (usbGetDeviceProduct(host->env, host->device, &host->descriptor)) {
-          if (usbGetDeviceClass(host->env, host->device, &host->descriptor)) {
-            if (usbGetDeviceSubclass(host->env, host->device, &host->descriptor)) {
-              if (usbGetDeviceProtocol(host->env, host->device, &host->descriptor)) {
+    if ((host->device = (*env)->NewGlobalRef(env, device))) {
+      if (usbGetDeviceVendor(env, host->device, &host->descriptor)) {
+        if (usbGetDeviceProduct(env, host->device, &host->descriptor)) {
+          if (usbGetDeviceClass(env, host->device, &host->descriptor)) {
+            if (usbGetDeviceSubclass(env, host->device, &host->descriptor)) {
+              if (usbGetDeviceProtocol(env, host->device, &host->descriptor)) {
                 if (enqueueItem(usbHostDevices, host)) {
                   return 1;
                 }
@@ -883,7 +996,7 @@ usbAddHostDevice (JNIEnv *env, jobject device) {
         }
       }
 
-      (*host->env)->DeleteGlobalRef(host->env, host->device);
+      (*env)->DeleteGlobalRef(env, host->device);
     }
 
     free(host);
@@ -953,7 +1066,7 @@ usbFindDevice (UsbDeviceChooser *chooser, UsbChooseChannelData *data) {
       }
 
       if (!ok) {
-        deallocateQueue(usbHostDevices);
+        destroyQueue(usbHostDevices);
         usbHostDevices = NULL;
       }
     }
@@ -975,7 +1088,7 @@ usbFindDevice (UsbDeviceChooser *chooser, UsbChooseChannelData *data) {
 void
 usbForgetDevices (void) {
   if (usbHostDevices) {
-    deallocateQueue(usbHostDevices);
+    destroyQueue(usbHostDevices);
     usbHostDevices = NULL;
   }
 }

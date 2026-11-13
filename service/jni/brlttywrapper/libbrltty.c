@@ -24,6 +24,7 @@
 #include "third_party/brltty/Headers/prologue.h"  // NOLINT Must include first
 
 #include "libbrltty.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "third_party/brltty/Programs/core.h"
@@ -99,8 +100,9 @@ listKeyContext(const KeyContext *context, const KeyTable* keyTable,
 static int
 listKeyBinding(const KeyBinding *binding, const KeyTable* keyTable,
                KeyMapEntryCallback callback, void* data);
-static const char*
-findKeyName(const KeyTable* keyTable, const KeyValue* value);
+static int
+findKeyName(const KeyTable* keyTable, const KeyValue* value,
+            char *buffer, size_t bufferSize);
 
 static void
 deallocateCommandQueueItem (void *item, void *data);
@@ -201,10 +203,11 @@ brltty_destroy(void) {
   if (braille == NULL) {
     // braille might has been null because starting failed.
     logMessage(LOG_ERR, "Double destruction of braille driver");
+    forgetDevices();
     return 0;
   }
 
-  deallocateQueue(commandQueue);
+  destroyQueue(commandQueue);
   commandQueue = NULL;
 
   popCommandHandler();
@@ -232,8 +235,9 @@ brltty_readCommand(int *readDelayMillis) {
   // delay. This allows us to deal with long-press and autorepeat.
   // TODO: Make long-pressing on routing keys work again.
   asyncWait(1);
-  if (brailleDisplay.keyTable->release.command != BRL_CMD_NOOP ||
-       brailleDisplay.keyTable->longPress.command != BRL_CMD_NOOP) {
+  if (brailleDisplay.keyTable != NULL &&
+      (brailleDisplay.keyTable->release.command != BRL_CMD_NOOP ||
+       brailleDisplay.keyTable->longPress.command != BRL_CMD_NOOP)) {
     // Essentially, loop and re-read at 1/2 of the repeat interval.
     // The interval pref is in csec; we want msec: x * 10 / 2 = x * 5.
     *readDelayMillis = prefs.autorepeatInterval * 5;
@@ -393,6 +397,7 @@ listKeyBinding(const KeyBinding *binding, const KeyTable *keyTable,
                KeyMapEntryCallback callback, void *data) {
   // Allow room for all modifiers, the immediate key and a terminating NULL.
   const char *keys[MAX_MODIFIERS_PER_COMBINATION + 2];
+  char keyNames[MAX_MODIFIERS_PER_COMBINATION + 2][0X100];
   int i;
   const KeyCombination *combination = &binding->keyCombination;
   for (i = 0; i < combination->modifierCount; ++i) {
@@ -401,18 +406,18 @@ listKeyBinding(const KeyBinding *binding, const KeyTable *keyTable,
     // keys were entered in the keymap file and maps to the sort order.
     int position = combination->modifierPositions[i];
     const KeyValue* value = &combination->modifierKeys[position];
-    const char *name = findKeyName(keyTable, value);
-    if (name == NULL) {
+    if (!findKeyName(keyTable, value, keyNames[i], sizeof(keyNames[i]))) {
       return 0;
     }
-    keys[i] = name;
+    keys[i] = keyNames[i];
   }
   if (combination->flags & KCF_IMMEDIATE_KEY) {
-    const char *name = findKeyName(keyTable, &combination->immediateKey);
-    if (name == NULL) {
+    if (!findKeyName(keyTable, &combination->immediateKey,
+                     keyNames[i], sizeof(keyNames[i]))) {
       return 0;
     }
-    keys[i++] = name;
+    keys[i] = keyNames[i];
+    i += 1;
   }
   keys[i] = NULL;
   int ret = callback(binding->primaryCommand.value, i, keys, 0 /*isLongPress*/,
@@ -444,20 +449,42 @@ compareValueToKeyNameEntry(const void *key, const void *element) {
   return compareKeyValues(value, &(*nameEntry)->value);
 }
 
-static const char *
-findKeyName(const KeyTable *keyTable, const KeyValue *value) {
+static int
+findKeyName(const KeyTable *keyTable, const KeyValue *value,
+            char *buffer, size_t bufferSize) {
   const KeyNameEntry **entries = keyTable->keyNames.table;
   int entryCount = keyTable->keyNames.count;
   const KeyNameEntry **entry = bsearch(value, entries, entryCount,
                                       sizeof(KeyNameEntry*),
                                       compareValueToKeyNameEntry);
   if (entry != NULL) {
-    return (*entry)->name;
-  } else {
-    logMessage(LOG_ERR, "No key name for key [%d, %d]",
-               value->group, value->number);
-    return NULL;
+    snprintf(buffer, bufferSize, "%s", (*entry)->name);
+    return 1;
   }
+
+  // A key name table may name a whole key group instead of every key in it
+  // (KEY_GROUP_ENTRY stores KTB_KEY_ANY as the key number). Drivers such as
+  // Metec only publish group level names, so an exact lookup fails for each
+  // routing key. Upstream handles this in formatKeyName() by falling back to
+  // the group entry and suffixing the one based key number; do the same here
+  // instead of failing the whole key map listing.
+  if (value->number != KTB_KEY_ANY) {
+    const KeyValue anyValue = {
+      .group = value->group,
+      .number = KTB_KEY_ANY
+    };
+    entry = bsearch(&anyValue, entries, entryCount, sizeof(KeyNameEntry*),
+                    compareValueToKeyNameEntry);
+    if (entry != NULL) {
+      snprintf(buffer, bufferSize, "%s.%u",
+               (*entry)->name, (unsigned int)(value->number + 1));
+      return 1;
+    }
+  }
+
+  logMessage(LOG_ERR, "No key name for key [%d, %d]",
+             value->group, value->number);
+  return 0;
 }
 
 static void
