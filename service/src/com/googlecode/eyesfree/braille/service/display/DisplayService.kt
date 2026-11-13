@@ -835,7 +835,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
                 return false
             }
             try {
-                address = devices.get(0).getBluetoothDevice().getAddress()
+                address = devices[0].getBluetoothDevice()?.address
             } catch (e: SecurityException) {
                 Log.w(LOG_TAG,
                         "BLUETOOTH_CONNECT permission denied reading address",

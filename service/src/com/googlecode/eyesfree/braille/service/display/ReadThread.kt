@@ -74,7 +74,7 @@ class ReadThread(
         }
         if (mSocket != null && mConnectedDeviceInfo != null) {
             val info = mConnectedDeviceInfo!!
-            val bthDev = info.bluetoothDevice
+            val bthDev = info.getBluetoothDevice()!!
             mDisplayService.setConnectionProgress(
                 mResources.getString(R.string.connprog_initializing, deviceName(bthDev))
             )
@@ -120,7 +120,7 @@ class ReadThread(
                 if (mDisconnecting) {
                     return
                 }
-                val bthDev = dev.bluetoothDevice
+                val bthDev = dev.getBluetoothDevice()!!
                 val address = try {
                     bthDev.address
                 } catch (ex: SecurityException) {
@@ -139,10 +139,10 @@ class ReadThread(
                 Log.d(LOG_TAG, "Trying to connect to braille device: $name")
                 var socket: BluetoothSocket? = null
                 try {
-                    val newSocket = if (dev.connectSecurely) {
-                        bthDev.createRfcommSocketToServiceRecord(dev.sdpUuid)
+                    val newSocket = if (dev.getConnectSecurely()) {
+                        bthDev.createRfcommSocketToServiceRecord(dev.getSdpUuid()!!)
                     } else {
-                        bthDev.createInsecureRfcommSocketToServiceRecord(dev.sdpUuid)
+                        bthDev.createInsecureRfcommSocketToServiceRecord(dev.getSdpUuid()!!)
                     }
                     socket = newSocket
                     newSocket.connect()
@@ -219,7 +219,7 @@ class ReadThread(
                 disconnect()
                 return
             }
-            val bthDev = info.bluetoothDevice
+            val bthDev = info.getBluetoothDevice()!!
             mDisplayService.setConnectionProgress(
                 mResources.getString(
                     R.string.connprog_failed_to_initialize,
