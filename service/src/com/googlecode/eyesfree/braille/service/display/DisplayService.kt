@@ -765,13 +765,13 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
 
     /** Tries the wireless transports in order: Wujie BLE, HID, then RFCOMM. */
     private fun connectBluetooth() {
-        if (!mWujieTried && mPendingBluetoothAddress == null) {
-            val wujieAddress = findNamedWujieAddress()
-            if (wujieAddress != null) {
-                mWujieTried = true
-                connectWujie(wujieAddress)
-                return
-            }
+        if (!mWujieTried && isWujieTarget()) {
+            mWujieTried = true
+            // connectWujie() prefers mPendingBluetoothAddress, so a display
+            // found by discovery is dialled directly instead of being
+            // re-scanned for.
+            connectWujie()
+            return
         }
         if (!mHidTried) {
             if (tryConnectHid()) {
@@ -1373,6 +1373,65 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
     }
 
     /**
+     * True when the display this cycle is about to reach is a Wujie / Orbit
+     * device, which only answers the vendor BLE GATT protocol.
+     *
+     * <p>The pending address must be inspected, not just its absence: a
+     * discovery result or a fresh bond sets {@link #mPendingBluetoothAddress},
+     * and the old "pending is null" precondition made a rediscovered display
+     * skip the Wujie path entirely and fall through to the standard Braille
+     * HID path, which the vendor BLE mode never answers.
+     */
+    private fun isWujieTarget(): Boolean {
+        val pending = mPendingBluetoothAddress
+        if (pending == null) {
+            return findNamedWujieAddress() != null
+        }
+        if (isWujieName(readRemoteDeviceName(pending))) {
+            return true
+        }
+        // Fallback through the bonded scan: the remote name can be
+        // unavailable without BLUETOOTH_CONNECT, and a user-renamed display
+        // still matches by address.
+        val bonded = findNamedWujieAddress()
+        if (bonded != null && bonded.equals(pending, ignoreCase = true)) {
+            return true
+        }
+        // Deliberately not falling back to the lastConnected preference: it
+        // records the last display of ANY protocol, so treating it as Wujie
+        // evidence would send a plain RFCOMM display through a doomed BLE
+        // attempt on every reconnect.
+        return false
+    }
+
+    /** Name match shared by the bonded scan and the pending-address check. */
+    private fun isWujieName(name: String?): Boolean {
+        if (name == null) {
+            return false
+        }
+        val lower = name.lowercase(java.util.Locale.US)
+        return lower.contains("orbit") || lower.contains("wujie")
+                || name.contains("无界")
+    }
+
+    /** Cached remote name of a bonded device, or null when unreadable. */
+    private fun readRemoteDeviceName(address: String): String? {
+        val adapter = BluetoothAdapter.getDefaultAdapter()
+        if (adapter == null) {
+            return null
+        }
+        return try {
+            adapter.getRemoteDevice(address).getName()
+        } catch (e: SecurityException) {
+            Log.w(LOG_TAG, "BLUETOOTH_CONNECT permission denied reading name", e)
+            null
+        } catch (e: IllegalArgumentException) {
+            Log.w(LOG_TAG, "Invalid Bluetooth address $address")
+            null
+        }
+    }
+
+    /**
      * Returns the address of a bonded Wujie / Orbit display. Name matching is
      * deliberately broad because the display advertises as "Orbit wujie 30"
      * and the user may have renamed it.
@@ -1406,9 +1465,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
                 if (name == null) {
                     continue
                 }
-                val lower = name.lowercase(java.util.Locale.US)
-                if (lower.contains("orbit") || lower.contains("wujie")
-                        || name.contains("无界")) {
+                if (isWujieName(name)) {
                     return device.getAddress()
                 }
             }

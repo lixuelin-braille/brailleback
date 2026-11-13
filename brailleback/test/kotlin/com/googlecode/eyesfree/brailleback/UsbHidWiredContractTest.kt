@@ -156,11 +156,22 @@ class UsbHidWiredContractTest {
 
     @Test
     fun bluetoothEntryPointCoversWujieHidAndRfcomm() {
-        val bluetooth = methodBody(displayServiceSource(), "fun connectBluetooth()")
-        assertTrue(bluetooth.contains("findNamedWujieAddress()"))
-        assertTrue(bluetooth.contains("connectWujie(wujieAddress)"))
+        val source = displayServiceSource()
+        val bluetooth = methodBody(source, "fun connectBluetooth()")
+        // The bonded Wujie probe moved one level down into isWujieTarget(),
+        // which decides from the pending address as well. Assert both halves
+        // and keep the ordering guarantee, so the entry point still can not
+        // reach HID before the Wujie BLE attempt.
+        assertTrue(bluetooth.contains("isWujieTarget()"))
+        assertTrue(bluetooth.contains("connectWujie("))
         assertTrue(bluetooth.contains("tryConnectHid()"))
         assertTrue(bluetooth.contains("ReadThread("))
+        assertTrue(
+            "Wujie BLE must be attempted before HID",
+            bluetooth.indexOf("connectWujie(") < bluetooth.indexOf("tryConnectHid()"),
+        )
+        val target = methodBody(source, "fun isWujieTarget()")
+        assertTrue(target.contains("findNamedWujieAddress()"))
     }
 
     @Test
