@@ -14,24 +14,24 @@
  * the License.
  */
 
-package com.googlecode.eyesfree.braille.service.display;
+package com.googlecode.eyesfree.braille.service.display
 
 /** Pure eligibility rules for the short Bluetooth discovery window. */
-final class BluetoothDiscoveryPolicy {
-    private BluetoothDiscoveryPolicy() {}
-
-    static boolean shouldStartDiscovery(
-            boolean autoConnectEnabled,
-            boolean autoReconnectSuppressed,
-            boolean haveClients,
-            boolean dataFilesReady,
-            boolean connectionActive,
-            boolean connectPending,
-            boolean waitingForHidController,
-            boolean screenInteractive,
-            boolean adapterEnabled,
-            boolean scanPermissionGranted) {
-        return autoConnectEnabled
+class BluetoothDiscoveryPolicy private constructor() {
+    companion object {
+        @JvmStatic
+        fun shouldStartDiscovery(
+            autoConnectEnabled: Boolean,
+            autoReconnectSuppressed: Boolean,
+            haveClients: Boolean,
+            dataFilesReady: Boolean,
+            connectionActive: Boolean,
+            connectPending: Boolean,
+            waitingForHidController: Boolean,
+            screenInteractive: Boolean,
+            adapterEnabled: Boolean,
+            scanPermissionGranted: Boolean
+        ): Boolean = autoConnectEnabled
                 && !autoReconnectSuppressed
                 && haveClients
                 && dataFilesReady
@@ -40,6 +40,6 @@ final class BluetoothDiscoveryPolicy {
                 && !waitingForHidController
                 && screenInteractive
                 && adapterEnabled
-                && scanPermissionGranted;
+                && scanPermissionGranted
     }
 }
