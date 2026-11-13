@@ -84,14 +84,15 @@ class LargeClassConversionContractTest {
     @Test
     fun deviceFinderKeepsEverySupportedDeviceMatcher() {
         val src = text(display + "DeviceFinder.kt")
-        // 15 个 NameRegexSupportedDevice 条目、16 个 Pattern.compile（HandyTech 有 2 个正则）。
+        // 16 个 NameRegexSupportedDevice 条目、17 个 Pattern.compile（HandyTech 有 2 个正则）。
+        // Orbit（无界）点显器走后，条目由 15 增至 16。
         assertEquals(
             "设备支持表条目数漂移",
-            15, Regex("""NameRegexSupportedDevice\(""").findAll(src).count()
+            16, Regex("""NameRegexSupportedDevice\(""").findAll(src).count()
         )
         assertEquals(
             "设备名正则数漂移",
-            16, Regex("""Pattern\.compile\(""").findAll(src).count()
+            17, Regex("""Pattern\.compile\(""").findAll(src).count()
         )
         for (driver in listOf("\"vo\"", "\"eu\"", "\"fs\"", "\"hw\"", "\"hm\"",
                 "\"bm\"", "\"pm\"", "\"al\"", "\"ht\"", "\"sk\"")) {

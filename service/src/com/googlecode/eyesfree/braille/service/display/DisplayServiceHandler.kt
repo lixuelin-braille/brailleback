@@ -227,7 +227,11 @@ class MainHandler(service: DisplayService) :
                 handleOnDisplayDisconnected(service)
             }
             MSG_SET_CONNECTION_PROGRESS -> {
-                handleSetConnectionProgress(service, msg.obj as String)
+                // Null is a legitimate value here: ReadThread clears the
+                // "connecting…" string once the socket attempt ends. A
+                // non-null cast used to throw NullPointerException right after
+                // the RFCOMM link came up.
+                handleSetConnectionProgress(service, msg.obj as? String)
             }
             MSG_ON_INPUT_EVENT -> {
                 handleOnInputEvent(service, msg.obj as BrailleInputEvent)

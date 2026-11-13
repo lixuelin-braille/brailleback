@@ -24,6 +24,7 @@ import android.os.HandlerThread
 import android.os.Looper
 import android.os.Message
 import android.os.PowerManager
+import android.os.SystemClock
 import android.preference.PreferenceManager
 import android.text.Spanned
 import android.util.Log
@@ -43,6 +44,7 @@ import java.lang.ref.WeakReference
 import java.util.Arrays
 import java.util.Comparator
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Keeps track of the current display content and handles panning.
@@ -487,8 +489,22 @@ class DisplayManager(
     @Volatile private var statBlockedNotConnected = 0
     @Volatile private var statBlockedFrozen = 0
     @Volatile private var statBlockedMotion = 0
+    @Volatile private var statBlockedIdentical = 0
+    @Volatile private var statCoalesced = 0
+    @Volatile private var statBlockedEmpty = 0
     @Volatile private var statLastCells = 0
     @Volatile private var statLastDigest = 0
+    /**
+     * 上一次真正送到点显器的内容指纹。无障碍框架在窗口重绘时会重复下发
+     * 完全相同的内容，重译整屏会让点显器闪一下，指纹相同即丢弃。
+     * 只在 [doRefresh] 成功下发后更新：连接未建立 / 冻结期间不能记录，
+     * 否则恢复后第一帧会被自己丢掉，显示停在旧内容。
+     */
+    @Volatile private var lastDisplayedFingerprint: String? = null
+    /** 当前 [currentContent] 的指纹，等 [doRefresh] 下发时转正。 */
+    @Volatile private var pendingFingerprint: String? = null
+    /** 上次真正送到点显器的时间戳（[SystemClock.uptimeMillis]），用于限速。 */
+    @Volatile private var lastRefreshUptime = 0L
     /**
      * 独立守护线程上报：即使 DisplayManager 的 handler 线程卡死，这里仍会输出，
      * 日志里表现为某项计数不再增长，从而区分「上层不刷新」和「线程被卡住」。
@@ -504,11 +520,13 @@ class DisplayManager(
             LogUtils.i(this@DisplayManager,
                 "refresh stats: conn=%s content=%d retranslate=%d ok=%d " +
                     "cells=%d digest=%08X " +
-                    "blocked(nc=%d frozen=%d motion=%d) frozen=%s motion=%s",
+                    "blocked(nc=%d frozen=%d motion=%d identical=%d empty=%d) " +
+                    "coalesced=%d frozen=%s motion=%s",
                 connected, statContent, statRetranslate, statRefreshOk,
                 statLastCells, statLastDigest,
                 statBlockedNotConnected, statBlockedFrozen, statBlockedMotion,
-                mFrozen, mMotionMode)
+                statBlockedIdentical, statBlockedEmpty,
+                statCoalesced, mFrozen, mMotionMode)
         }
     }.apply {
         isDaemon = true
@@ -771,8 +789,31 @@ class DisplayManager(
     }
 
     private inner class DisplayHandler(looper: Looper) : Handler(looper) {
+        /**
+         * 待处理的内容。setContent 由调用方线程进入，消息在 display handler
+         * 线程消费，所以用原子引用而不是普通字段。窗口内只保留最后一帧。
+         */
+        private val pendingContent = AtomicReference<Content?>(null)
+        /** 是否已有一个 MSG_SET_CONTENT 在队列里等待消费。 */
+        private val coalescePending = AtomicBoolean(false)
+
         fun setContent(content: Content) {
-            obtainMessage(MSG_SET_CONTENT, content).sendToTarget()
+            val superseded = pendingContent.getAndSet(content)
+            if (superseded != null) {
+                // 定时器已在跑，只换内容、不重置定时器：事件洪流下首帧
+                // 延迟上限恒为 CONTENT_MIN_INTERVAL_MILLIS，不会永远轮不到。
+                statCoalesced += 1
+                // 被替换掉的那帧不会再显示，它的节点引用必须归还。
+                callbackHandler.recycleContent(superseded)
+                return
+            }
+            if (!coalescePending.compareAndSet(false, true)) {
+                return
+            }
+            // 距上次真正刷屏已够久就立即显示，密集时顺延到最小间隔。
+            val elapsed = SystemClock.uptimeMillis() - lastRefreshUptime
+            val delay = (CONTENT_MIN_INTERVAL_MILLIS - elapsed).coerceAtLeast(0)
+            sendEmptyMessageDelayed(MSG_SET_CONTENT, delay)
         }
 
         fun retranslate() {
@@ -798,7 +839,13 @@ class DisplayManager(
 
         override fun handleMessage(msg: Message) {
             when (msg.what) {
-                MSG_SET_CONTENT -> handleSetContent(msg.obj as Content)
+                MSG_SET_CONTENT -> {
+                    coalescePending.set(false)
+                    val content = pendingContent.getAndSet(null)
+                    if (content != null) {
+                        handleSetContent(content)
+                    }
+                }
                 MSG_RETRANSLATE -> handleRetranslate()
                 MSG_PULSE -> handlePulse()
                 MSG_STOP -> handleStop()
@@ -810,6 +857,15 @@ class DisplayManager(
 
         private fun handleSetContent(content: Content) {
             statContent += 1
+            val fingerprint = contentFingerprint(content)
+            if (fingerprint == lastDisplayedFingerprint) {
+                // 文本、选区、焦点、平移策略全都没变：这只是窗口重绘触发的
+                // 重复下发，重新翻译并整屏重推会让点显器白白闪一次。
+                statBlockedIdentical += 1
+                callbackHandler.recycleContent(content)
+                return
+            }
+            pendingFingerprint = fingerprint
             val oldContent = currentContent
             currentContent = content
             updateWrapStrategy()
@@ -892,8 +948,47 @@ class DisplayManager(
         }
 
         private fun handleStop() {
+            // 合并窗口里还没处理的那一帧也要归还，不能随 handler 一起丢弃。
+            val pending = pendingContent.getAndSet(null)
+            if (pending != null) {
+                callbackHandler.recycleContent(pending)
+            }
             display?.shutdown()
             handlerThread.quit()
+        }
+    }
+
+    /**
+     * 内容指纹：文本 + 三类标记的区间 + 平移/收缩/分段/可编辑标志。
+     *
+     * 用来识别「无障碍框架重复下发了完全一样的内容」。只比文本不够：
+     * 光标在同一文本上移动、选区变化、平移策略从 PAN_KEEP 变 PAN_RESET
+     * 都必须重新显示，否则点显器会停在错误位置。
+     */
+    private fun contentFingerprint(content: Content): String {
+        val text = content.getText() ?: return ""
+        val builder = StringBuilder(text.length + 48)
+        builder.append(text)
+        builder.append('\u0000').append(content.getPanStrategy())
+        builder.append('\u0000').append(content.getContractionMode())
+        builder.append('\u0000').append(content.isEditable())
+        builder.append('\u0000').append(content.isSplitParagraphs())
+        val spanned = content.getSpanned()
+        if (spanned != null) {
+            appendSpanRanges(builder, spanned, DisplaySpans.SelectionSpan::class.java)
+            appendSpanRanges(builder, spanned, DisplaySpans.FocusSpan::class.java)
+            appendSpanRanges(builder, spanned, DisplaySpans.BrailleSpan::class.java)
+        }
+        return builder.toString()
+    }
+
+    private fun <T> appendSpanRanges(builder: StringBuilder, spanned: Spanned,
+                                     type: Class<T>) {
+        for (span in spanned.getSpans(0, spanned.length, type)) {
+            builder.append('\u0000')
+                .append(spanned.getSpanStart(span))
+                .append(':')
+                .append(spanned.getSpanEnd(span))
         }
     }
 
@@ -1230,10 +1325,19 @@ class DisplayManager(
             } else {
                 displayedBraille
             }
+        if (toDisplay.isEmpty() && statLastCells > 0) {
+            // 空数组会被编码成一整屏空白，点显器先清屏再画，看起来就是闪一下。
+            // 焦点在两个节点之间切换时会短暂下发空内容，此时保持原屏更稳。
+            statBlockedEmpty += 1
+            return
+        }
         statRefreshOk += 1
         statLastCells = toDisplay.size
         statLastDigest = Arrays.hashCode(toDisplay)
         display?.displayDots(toDisplay, displayedText, displayedBrailleToTextPositions)
+        lastRefreshUptime = SystemClock.uptimeMillis()
+        // 指纹在这里转正：只有真的送达点显器，重复下发才允许被丢弃。
+        lastDisplayedFingerprint = pendingFingerprint
         if (blinkNeeded) {
             displayHandler.schedulePulse()
         } else {
@@ -1446,6 +1550,17 @@ class DisplayManager(
         private const val BLINK_ON_MILLIS: Long = 600
 
         private const val MOTION_MODE_DEBOUNCE_MS: Long = 350
+
+        /**
+         * 两次整屏刷新之间的最小间隔。
+         *
+         * 无障碍框架在桌面重绘、快速滚动时会连续下发内容，实测峰值约
+         * 5.6 帧/秒，逐帧整屏重推会让点显器持续闪烁。这里只对「密集」
+         * 情况生效：距上次刷新已超过该间隔的内容立即显示（单次焦点变化
+         * 零延迟），密集时把上限压到约 4 帧/秒。因为定时器只在没有待
+         * 处理内容时启动，事件洪流下延迟也不会超过该间隔。
+         */
+        private const val CONTENT_MIN_INTERVAL_MILLIS: Long = 250
 
         private const val MSG_SET_CONTENT = 1
         private const val MSG_RETRANSLATE = 2

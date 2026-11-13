@@ -25,6 +25,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.preference.PreferenceManager
 import android.util.Log
+import com.googlecode.eyesfree.braille.display.BluetoothDeviceEntry
 import com.googlecode.eyesfree.braille.service.R
 import java.util.ArrayList
 import java.util.Collections
@@ -190,12 +191,13 @@ class DeviceFinder(context: Context) {
                 if (dev == null) {
                     continue
                 }
-                for (matcher in SUPPORTED_DEVICES) {
-                    val matched = matcher.match(dev)
-                    if (matched != null) {
-                        ret.add(matched)
-                    }
+                // The hand-written table wins: it carries per-device key names
+                // and the secure/insecure choice. Only devices it does not know
+                // are handed to BRLTTY's own name table.
+                if (addMatches(dev, SUPPORTED_DEVICES, ret)) {
+                    continue
                 }
+                addMatches(dev, brlttyDevices(), ret)
             }
         } catch (e: SecurityException) {
             Log.w(LOG_TAG, "BLUETOOTH_CONNECT permission denied; no devices", e)
@@ -223,6 +225,27 @@ class DeviceFinder(context: Context) {
             }
         }
         return ret
+    }
+
+    /**
+     * Appends every entry in [matchers] that recognises [dev].
+     *
+     * @return true when at least one matcher matched.
+     */
+    private fun addMatches(
+            dev: BluetoothDevice,
+            matchers: List<SupportedDevice>,
+            into: MutableList<DeviceInfo>
+    ): Boolean {
+        var found = false
+        for (matcher in matchers) {
+            val matched = matcher.match(dev)
+            if (matched != null) {
+                into.add(matched)
+                found = true
+            }
+        }
+        return found
     }
 
     /** Returns true if the app can read the bonded Bluetooth devices. */
@@ -374,6 +397,44 @@ private class NameRegexSupportedDevice : SupportedDevice {
     }
 }
 
+/**
+ * Matches a bonded device against one entry of BRLTTY's own bluetooth name
+ * table, read from the prebuilt native library.
+ *
+ * <p>The app's [SUPPORTED_DEVICES] list is a hand-written subset: it covers
+ * ten driver codes and carries friendly key names. BRLTTY's table covers far
+ * more device families (Inceptor `ic`, KGS `mm`, more HandyTech/HumanWare/
+ * Baum variants, ...), so it is used as a fallback for devices the hand
+ * written list does not recognise.
+ *
+ * <p>Two things are lost relative to a curated entry: the friendly key names
+ * (an empty map means keys keep their raw names) and the per-device
+ * secure/insecure choice (secure is used, matching the app's default
+ * preference).
+ */
+private class BrlttyNameSupportedDevice(
+        private val mEntry: BluetoothDeviceEntry
+) : SupportedDevice {
+
+    override fun match(bluetoothDevice: BluetoothDevice): DeviceFinder.DeviceInfo? {
+        val name: String? = try {
+            bluetoothDevice.name
+        } catch (e: SecurityException) {
+            Log.w(LOG_TAG,
+                    "BLUETOOTH_CONNECT permission denied reading device name",
+                    e)
+            return null
+        }
+        if (name == null || !name.startsWith(mEntry.name)) {
+            return null
+        }
+        return DeviceFinder.DeviceInfo(bluetoothDevice, mEntry.driver,
+                SERIAL_BOARD_UUID, true, emptyMap<String, Int>())
+    }
+
+    override fun toString(): String = mEntry.driver + " " + mEntry.name + "*"
+}
+
 private class KeyNameMapBuilder {
     private val mNameMap: MutableMap<String, Int> = HashMap()
 
@@ -427,10 +488,36 @@ private class KeyNameMapBuilder {
 }
 
 // ADD_DEVICE_SUPPORT
+/**
+ * BRLTTY's bluetooth name table, read lazily from the prebuilt native library.
+ *
+ * <p>Lazy because loading and initialising the native driver layer must not
+ * happen on the class-init path of the display service, and a stale or missing
+ * {@code .so} has to degrade to "no fallback entries" rather than crash.
+ */
+private val sBrlttyDevices: List<SupportedDevice> by lazy {
+    try {
+        BrlttyWrapper.getBluetoothDriverTable().map { BrlttyNameSupportedDevice(it) }
+    } catch (t: Throwable) {
+        Log.w(LOG_TAG, "Could not read the native bluetooth driver table", t)
+        emptyList<SupportedDevice>()
+    }
+}
+
+private fun brlttyDevices(): List<SupportedDevice> = sBrlttyDevices
+
 private val SUPPORTED_DEVICES: List<SupportedDevice> =
         mutableListOf<SupportedDevice>().apply {
             // TODO: Follow up on why secure connections can't be established
             // with some devices.
+
+            // Orbit（无界）系列点显器。固件走经典蓝牙 SPP，序列协议与
+            // BRLTTY 的 Baum 驱动（码 bm，上游名称表把 "Orbit Reader" 映
+            // 射到 bm）兼容，因此直接按 bm 连接，显示与按键都走串口。
+            // 名称前缀匹配 "Orbit"，覆盖 "Orbit wujie 30" 这类型号名。
+            add(NameRegexSupportedDevice("bm", true,
+                    KeyNameMapBuilder().dots8().build(),
+                    Pattern.compile("Orbit")))
 
             // BraillePen
             add(NameRegexSupportedDevice("vo", true,

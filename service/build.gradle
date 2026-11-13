@@ -1,3 +1,13 @@
+import org.gradle.api.DefaultTask
+import org.gradle.api.GradleException
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.provider.MapProperty
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputDirectory
+import org.gradle.api.tasks.PathSensitive
+import org.gradle.api.tasks.PathSensitivity
+import org.gradle.api.tasks.TaskAction
+
 apply plugin: 'com.android.library'
 
 android {
@@ -65,4 +75,109 @@ dependencies {
     androidTestImplementation 'androidx.test:rules:1.5.0'
     testImplementation 'junit:junit:4.13.2'
 }
+
+/**
+ * 挡住「改了 C 但忘了重编」。
+ *
+ * AGP 9 不支持在库模块内跑 ndk-build，所以 service 的 native 库是手动流程：
+ * `ndk-build -C service/jni ... NDK_LIBS_OUT=jniLibs`，产物靠人复制进 jniLibs，
+ * 再由 AGP 当成预编译库打包。中间任何一次漏做都不会报错，只会让旧 .so 进包。
+ *
+ * 判据：某个库对应的源码树里最新文件的修改时间，比 jniLibs 里那份 .so 还新，
+ * 就说明 .so 落后于源码。留 2 秒容差，避免 git checkout 同一批文件的秒级抖动。
+ */
+abstract class VerifyNativeLibsUpdated extends DefaultTask {
+
+    @InputDirectory
+    @PathSensitive(PathSensitivity.RELATIVE)
+    abstract DirectoryProperty getJniDir()
+
+    @InputDirectory
+    @PathSensitive(PathSensitivity.RELATIVE)
+    abstract DirectoryProperty getJniLibsDir()
+
+    /** 库文件名 -> 源码子目录（相对 jni 根目录）。 */
+    @Input
+    abstract MapProperty<String, String> getLibrarySources()
+
+    private static final List<String> SOURCE_EXTENSIONS =
+            ['.c', '.cc', '.cpp', '.h', '.hpp', '.mk']
+    private static final long TOLERANCE_MS = 2000L
+
+    @TaskAction
+    void verify() {
+        File jniRoot = jniDir.get().asFile
+        File libsRoot = jniLibsDir.get().asFile
+        Map<String, Long> newestSources = [:]
+        librarySources.get().each { String lib, String subPath ->
+            long newest = collectNewest(new File(jniRoot, subPath), true)
+            // Android.mk / Application.mk / alog.h 在 jni 根目录，共同影响所有库。
+            newest = Math.max(newest, collectNewest(jniRoot, false))
+            newestSources[lib] = newest
+        }
+
+        List<String> problems = []
+        libsRoot.eachDir { File abiDir ->
+            librarySources.get().each { String lib, String subPath ->
+                File so = new File(abiDir, lib)
+                if (!so.isFile()) {
+                    problems << "  ${abiDir.name}/${lib}: 缺失".toString()
+                    return
+                }
+                long sourceTime = newestSources[lib] ?: 0L
+                if (sourceTime - so.lastModified() > TOLERANCE_MS) {
+                    def fmt = new java.text.SimpleDateFormat('yyyy-MM-dd HH:mm:ss')
+                    problems << ("  ${abiDir.name}/${lib}: 源码更新于 "
+                            + fmt.format(new Date(sourceTime))
+                            + "，.so 仍为 " + fmt.format(new Date(so.lastModified()))).toString()
+                }
+            }
+        }
+
+        if (!problems.isEmpty()) {
+            throw new GradleException(
+                    "native 库落后于源码，本次改动不会进包：\n"
+                    + problems.join("\n") + "\n"
+                    + "请重编并覆盖 jniLibs（两条 ABI 都要）：\n"
+                    + "  ndk-build -C service/jni APP_ABI=arm64-v8a  NDK_OUT=jni/obj NDK_LIBS_OUT=jniLibs -j4\n"
+                    + "  ndk-build -C service/jni APP_ABI=armeabi-v7a NDK_OUT=jni/obj NDK_LIBS_OUT=jniLibs -j4\n"
+                    + "（本任务只做校验，不改打包逻辑；确认 .so 无需更新时可 -x verifyNativeLibs）")
+        }
+    }
+
+    // 注意：不能写成 private。Gradle 会给任务类生成装饰子类，
+    // Groovy 的动态派发在子类实例上找不到父类的 private 方法。
+    long collectNewest(File dir, boolean recursive) {
+        long newest = 0L
+        if (dir == null || !dir.exists()) {
+            return newest
+        }
+        dir.eachFile { File f ->
+            if (f.isFile()) {
+                if (SOURCE_EXTENSIONS.any { f.name.endsWith(it) }) {
+                    newest = Math.max(newest, f.lastModified())
+                }
+            } else if (recursive && f.isDirectory()
+                    && f.name != 'obj' && f.name != 'build' && f.name != 'jniLibs'
+                    // third_party 下的 *_backup* 是人工留的旧版副本，不参与编译。
+                    && !f.name.toLowerCase().contains('backup')) {
+                newest = Math.max(newest, collectNewest(f, true))
+            }
+        }
+        return newest
+    }
+}
+
+tasks.register('verifyNativeLibs', VerifyNativeLibsUpdated) {
+    group = 'verification'
+    description = '校验 jniLibs 里的 .so 没有落后于 service/jni 下的源码'
+    jniDir.set(layout.projectDirectory.dir('jni'))
+    jniLibsDir.set(layout.projectDirectory.dir('jniLibs'))
+    librarySources.set([
+            'libbrlttywrap.so': 'brlttywrapper',
+            'liblouiswrap.so' : 'liblouiswrapper',
+    ])
+}
+
+tasks.named('preBuild').configure { dependsOn 'verifyNativeLibs' }
 

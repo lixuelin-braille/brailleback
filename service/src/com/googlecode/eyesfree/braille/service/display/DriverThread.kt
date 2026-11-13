@@ -155,7 +155,7 @@ class DriverThread(
                 // retry.
                 val properties = try {
                     if (mBrlttyWrapper.start()) {
-                        mBrlttyWrapper.displayProperties
+                        mBrlttyWrapper.getDisplayProperties()
                     } else {
                         null
                     }

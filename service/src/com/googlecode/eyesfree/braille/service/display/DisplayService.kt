@@ -69,6 +69,29 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         @JvmField
         val LOG_TAG: String = DisplayService::class.java.simpleName
 
+        /**
+         * 【临时诊断开关 2026-11-13】为验证 brltty 标准驱动能否自己认这台点显器，
+         * 置 true 时完全跳过厂商私有 BLE（Wujie GATT），强制回落到标准 Braille
+         * HID → RFCOMM。诊断结束改回 false 即恢复，不需要动别的地方。
+         *
+         * 注意：这个开关只影响「要不要走厂商私有协议」，不改任何驱动实现。
+         * 打开后日志里不会再出现 "Creating custom GATT connection"。
+         */
+        const val DISABLE_VENDOR_BLE_TEMP = true
+
+        /**
+         * 置 true 时，识别为 Wujie/Orbit 的点显器跳过标准 Braille HID，
+         * 直接走经典蓝牙 SPP（RFCOMM）+ brltty 的 bm（Baum）驱动。
+         *
+         * 原因：该固件的 HOGP 通道只声明输入报告、实际从不推送按键
+         * （实机验证：按遍所有键，onInput 回调 0 次），而串口通道是
+         * 完整双向的。沉淀链路为「显示 + 按键都走 SPP」，按键由 bm
+         * 驱动解析后经 readCommand 回传，不再依赖 HID 输入报告。
+         *
+         * 置 false 即恢复「HID 优先、RFCOMM 兜底」的旧顺序。
+         */
+        const val PREFER_RFCOMM_FOR_WUJIE = true
+
         const val STATE_DISCONNECTED = 0
         const val STATE_CONNECTED = 1
         /**
@@ -773,7 +796,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
             connectWujie()
             return
         }
-        if (!mHidTried) {
+        if (!mHidTried && !shouldSkipHidForWujie()) {
             if (tryConnectHid()) {
                 // A Braille HID connection attempt was started (async).
                 return
@@ -1383,6 +1406,13 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
      * HID path, which the vendor BLE mode never answers.
      */
     private fun isWujieTarget(): Boolean {
+        // 临时诊断：厂商私有 BLE 已被 DISABLE_VENDOR_BLE_TEMP 关掉，
+        // 一律按「不是 Wujie」处理，让连接落到标准 Braille HID / RFCOMM。
+        if (DISABLE_VENDOR_BLE_TEMP) {
+            Timber.i("Vendor BLE disabled by DISABLE_VENDOR_BLE_TEMP; "
+                    + "falling back to standard HID/RFCOMM")
+            return false
+        }
         val pending = mPendingBluetoothAddress
         if (pending == null) {
             return findNamedWujieAddress() != null
@@ -1402,6 +1432,31 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         // evidence would send a plain RFCOMM display through a doomed BLE
         // attempt on every reconnect.
         return false
+    }
+
+    /**
+     * True when this connection cycle targets a Wujie/Orbit display and the
+     * serial SPP path must be used instead of the standard Braille HID path.
+     *
+     * <p>Mirrors [isWujieTarget] but deliberately ignores
+     * [DISABLE_VENDOR_BLE_TEMP]: that switch only gates the vendor GATT
+     * protocol, while this decision is about HID versus RFCOMM. The firmware
+     * declares an HID input report but never sends it, so HID would give a
+     * display-only link with dead keys; SPP carries both directions.
+     */
+    private fun shouldSkipHidForWujie(): Boolean {
+        if (!PREFER_RFCOMM_FOR_WUJIE) {
+            return false
+        }
+        val pending = mPendingBluetoothAddress
+        if (pending != null) {
+            if (isWujieName(readRemoteDeviceName(pending))) {
+                return true
+            }
+            val bonded = findNamedWujieAddress()
+            return bonded != null && bonded.equals(pending, ignoreCase = true)
+        }
+        return findNamedWujieAddress() != null
     }
 
     /** Name match shared by the bonded scan and the pending-address check. */
