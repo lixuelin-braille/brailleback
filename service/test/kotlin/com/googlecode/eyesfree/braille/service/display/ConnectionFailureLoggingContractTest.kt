@@ -29,13 +29,13 @@ class ConnectionFailureLoggingContractTest {
     @Test
     fun timberIsForwardedToTheFileLogInReleaseToo() {
         val display = text(
-            "service/src/com/googlecode/eyesfree/braille/service/display/DisplayService.java",
+            "service/src/com/googlecode/eyesfree/braille/service/display/DisplayService.kt",
         )
-        assertTrue(display.contains("Timber.plant(new LogUtilsTimberTree())"))
+        assertTrue(display.contains("Timber.plant(LogUtilsTimberTree())"))
         assertFalse(display.contains("BuildConfig.DEBUG && Timber.treeCount() == 0"))
 
         val tree = text(
-            "service/src/com/googlecode/eyesfree/braille/service/display/LogUtilsTimberTree.java",
+            "service/src/com/googlecode/eyesfree/braille/service/display/LogUtilsTimberTree.kt",
         )
         assertTrue(tree.contains("LogUtils.logWithTag("))
 
@@ -50,10 +50,10 @@ class ConnectionFailureLoggingContractTest {
         // must install the same single file sink instead of only logging to
         // logcat. Both run in one process, hence init must stay idempotent.
         val display = text(
-            "service/src/com/googlecode/eyesfree/braille/service/display/DisplayService.java",
+            "service/src/com/googlecode/eyesfree/braille/service/display/DisplayService.kt",
         )
-        assertTrue(display.contains("configureProcessLogging();"))
-        assertTrue(display.contains("LogFileWriter.init(this);"))
+        assertTrue(display.contains("configureProcessLogging()"))
+        assertTrue(display.contains("LogFileWriter.init(this)"))
         assertTrue(display.contains("LogUtils.setLogLevel("))
     }
 
@@ -63,10 +63,10 @@ class ConnectionFailureLoggingContractTest {
         // immutable PendingIntent loses EXTRA_PERMISSION_GRANTED, which looks
         // exactly like the user pressing "deny" after allowing the device.
         val serial = text(
-            "service/src/com/googlecode/eyesfree/braille/service/display/UsbDisplayConnection.java",
+            "service/src/com/googlecode/eyesfree/braille/service/display/UsbDisplayConnection.kt",
         )
         val hid = text(
-            "service/src/com/googlecode/eyesfree/braille/service/display/HidDisplayConnection.java",
+            "service/src/com/googlecode/eyesfree/braille/service/display/HidDisplayConnection.kt",
         )
         assertTrue(serial.contains("PendingIntent.FLAG_MUTABLE"))
         assertTrue(hid.contains("PendingIntent.FLAG_MUTABLE"))
@@ -77,7 +77,7 @@ class ConnectionFailureLoggingContractTest {
     @Test
     fun usbSerialFailureIsWrittenToTheFileLog() {
         val usb = text(
-            "service/src/com/googlecode/eyesfree/braille/service/display/UsbDisplayConnection.java",
+            "service/src/com/googlecode/eyesfree/braille/service/display/UsbDisplayConnection.kt",
         )
         assertTrue(usb.contains("LogUtils.w(this, \"USB connection failed: \" + reason)"))
         assertTrue(text("service/build.gradle").contains("project(':libraries:utils')"))

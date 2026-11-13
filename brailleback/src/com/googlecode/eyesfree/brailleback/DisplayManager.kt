@@ -1435,9 +1435,8 @@ class DisplayManager(
 
     private fun updateWrapStrategy() {
         val contentEditable = currentContent.isEditable()
-        val imeOpen =
-            context.imeNavigationMode != null
-                && context.imeNavigationMode.isImeOpen()
+        val imeMode = context.imeNavigationMode
+        val imeOpen = imeMode != null && imeMode.isImeOpen()
         val editing = contentEditable && imeOpen
         wrapStrategy = if (editing) editingWrapStrategy else preferredWrapStrategy
     }

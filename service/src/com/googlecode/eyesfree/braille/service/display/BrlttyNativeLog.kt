@@ -8,9 +8,9 @@
  * http://www.apache.org/licenses/LICENSE-2.0
  */
 
-package com.googlecode.eyesfree.braille.service.display;
+package com.googlecode.eyesfree.braille.service.display
 
-import com.googlecode.eyesfree.utils.LogUtils;
+import com.googlecode.eyesfree.utils.LogUtils
 
 /**
  * Receives BRLTTY's native log records.
@@ -19,22 +19,20 @@ import com.googlecode.eyesfree.utils.LogUtils;
  * {@code log.c} forwards each record here so USB initialization failures also
  * reach {@code brailleback.log}. Called from native code.
  */
-final class BrlttyNativeLog {
-    private static final String TAG = "brltty";
-
-    private BrlttyNativeLog() {
-    }
+object BrlttyNativeLog {
+    private const val TAG = "brltty"
 
     /** Called from {@code AppLogBridge.c}. */
-    @SuppressWarnings("unused")
-    public static void log(int priority, String message) {
+    @Suppress("unused")
+    @JvmStatic
+    fun log(priority: Int, message: String?) {
         if (message == null || message.isEmpty()) {
-            return;
+            return
         }
 
         // Respect the user's level here too. brltty is configured with
         // LOG_DEBUG, so an unconditional file write would reinstate the
         // verbose flood that the level filter exists to prevent.
-        LogUtils.logWithTag(priority, TAG, (Throwable) null, "%s", message);
+        LogUtils.logWithTag(priority, TAG, null as Throwable?, "%s", message)
     }
 }

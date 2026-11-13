@@ -42,7 +42,7 @@ class UsbHidWiredContractTest {
 
     private fun text(path: String) = projectFile(path).readText()
 
-    /** 抽出单个 Java 方法体，避免蓝牙路径里的同名调用造成假通过。 */
+    /** 抽出单个 Kotlin 方法体，避免蓝牙路径里的同名调用造成假通过。 */
     private fun methodBody(source: String, signature: String): String {
         val start = source.indexOf(signature)
         check(start >= 0) { "找不到方法 $signature" }
@@ -88,7 +88,7 @@ class UsbHidWiredContractTest {
         .joinToString("\n")
 
     private fun displayServiceSource() = text(
-        "service/src/com/googlecode/eyesfree/braille/service/display/DisplayService.java",
+        "service/src/com/googlecode/eyesfree/braille/service/display/DisplayService.kt",
     )
 
     private fun arrayBlock(name: String): String {
@@ -125,43 +125,40 @@ class UsbHidWiredContractTest {
     @Test
     fun displayServiceRoutesUsbThroughUnifiedEntryPoint() {
         val source = displayServiceSource()
-        val connectBraille = methodBody(source, "private void connectBraille()")
+        val connectBraille = methodBody(source, "fun connectBraille()")
         assertTrue(connectBraille.contains("if (isUsbProtocol()) {"))
-        assertTrue(connectBraille.contains("connectUsbUnified();"))
-        assertTrue(connectBraille.contains("connectBluetooth();"))
-        assertTrue(source.contains("private void connectUsbUnified()"))
+        assertTrue(connectBraille.contains("connectUsbUnified()"))
+        assertTrue(connectBraille.contains("connectBluetooth()"))
+        assertTrue(source.contains("fun connectUsbUnified()"))
     }
 
     @Test
     fun usbFallsBackToHidWhenSerialBackendFindsNoDevice() {
         val source = displayServiceSource()
-        val fallback = methodBody(
-            source,
-            "public void onUsbConnectFailed(UsbDisplayConnection source,",
-        )
+        val fallback = methodBody(source, "fun onUsbConnectFailed(")
         assertTrue(fallback.contains("isUsbProtocol() && !mUsbHidTried && canUseUsbHid()"))
-        assertTrue(fallback.contains("connectUsbHid();"))
-        assertTrue(source.contains("private void connectUsbHid()"))
+        assertTrue(fallback.contains("connectUsbHid()"))
+        assertTrue(source.contains("fun connectUsbHid()"))
     }
 
     @Test
     fun bluetoothEntryPointCoversWujieHidAndRfcomm() {
-        val bluetooth = methodBody(displayServiceSource(), "private void connectBluetooth()")
+        val bluetooth = methodBody(displayServiceSource(), "fun connectBluetooth()")
         assertTrue(bluetooth.contains("findNamedWujieAddress()"))
-        assertTrue(bluetooth.contains("connectWujie(wujieAddress);"))
+        assertTrue(bluetooth.contains("connectWujie(wujieAddress)"))
         assertTrue(bluetooth.contains("tryConnectHid()"))
-        assertTrue(bluetooth.contains("new ReadThread("))
+        assertTrue(bluetooth.contains("ReadThread("))
     }
 
     @Test
     fun usbHidUsesFrameworkUsbDeviceOverload() {
         val source = text(
             "service/src/com/googlecode/eyesfree/braille/service/display/" +
-                "HidDisplayConnection.java",
+                "HidDisplayConnection.kt",
         )
-        val connectUsb = methodBody(source, "public void connectUsb(")
-        val finishUsbConnect = methodBody(source, "private void finishUsbConnect(")
-        val requestUsbPermission = methodBody(source, "private void requestUsbPermission(")
+        val connectUsb = methodBody(source, "fun connectUsb(")
+        val finishUsbConnect = methodBody(source, "fun finishUsbConnect(")
+        val requestUsbPermission = methodBody(source, "fun requestUsbPermission(")
         assertTrue(connectUsb.contains("UsbHidDevicePolicy.firstCompatible"))
         assertTrue(connectUsb.contains("requestUsbPermission("))
         assertTrue(requestUsbPermission.contains("requestPermission("))
@@ -174,7 +171,7 @@ class UsbHidWiredContractTest {
     fun usbHidReusesNativeHidDriverInsteadOfSerialBackend() {
         val source = text(
             "service/src/com/googlecode/eyesfree/braille/service/display/" +
-                "HidDisplayConnection.java",
+                "HidDisplayConnection.kt",
         )
         assertTrue(source.contains("DeviceFinder.DeviceInfo.forUsb(\"hid\", \"hid:name=unused\")"))
         // The serial usb: backend belongs to UsbDisplayConnection only.
@@ -184,8 +181,8 @@ class UsbHidWiredContractTest {
     @Test
     fun wiredProtocolTriggersOnUsbAttachAndSkipsBluetoothGate() {
         val source = displayServiceSource()
-        assertTrue(source.contains("private boolean isWiredProtocol()"))
-        assertTrue(source.contains("return isUsbProtocol();"))
+        assertTrue(source.contains("fun isWiredProtocol()"))
+        assertTrue(source.contains("return isUsbProtocol()"))
         assertTrue(source.contains("if (isWiredProtocol() && !isConnectionActive())"))
         assertTrue(source.contains("if (isWiredProtocol()) {"))
 
@@ -204,7 +201,7 @@ class UsbHidWiredContractTest {
      */
     @Test
     fun usbHidFailureReportsOnceInsteadOfSpinning() {
-        val handler = methodBody(displayServiceSource(), "private void handleOnHidConnectFailed(")
+        val handler = methodBody(displayServiceSource(), "fun handleOnHidConnectFailed(")
         val branch = block(
             handler,
             "if (service.mHidConnectionIsUsb && service.isUsbProtocol()) {",
@@ -213,19 +210,19 @@ class UsbHidWiredContractTest {
         assertTrue(code.contains("getUsbHidFailureMessage(event.error)"))
         assertTrue(code.contains("setConnectionProgress("))
         assertTrue(code.contains("scheduleAutoReconnectIfNeeded()"))
-        assertTrue(code.contains("return;"))
+        assertTrue(Regex("""\breturn\b""").containsMatchIn(code))
         assertFalse(
             "USB HID 失败分支不得立即重连，否则形成主线程死循环",
             code.contains("connectBraille()"),
         )
-        assertTrue(displayServiceSource().contains("private String getUsbHidFailureMessage(int error)"))
+        assertTrue(displayServiceSource().contains("fun getUsbHidFailureMessage("))
     }
 
     @Test
     fun usbHidFailureMessageDistinguishesNoDeviceAndPermission() {
         val body = methodBody(
             displayServiceSource(),
-            "private String getUsbHidFailureMessage(",
+            "fun getUsbHidFailureMessage(",
         )
         assertTrue(body.contains("error == -7"))
         assertTrue(body.contains("error == -8"))
@@ -238,9 +235,9 @@ class UsbHidWiredContractTest {
     fun usbHidRetriesWhenAnInputDeviceAppears() {
         val body = methodBody(
             displayServiceSource(),
-            "private void retryHidWhenInputDeviceAppears()",
+            "fun retryHidWhenInputDeviceAppears()",
         )
-        assertTrue(body.contains("boolean wiredUsbHid = isUsbProtocol();"))
+        assertTrue(body.contains("val wiredUsbHid = isUsbProtocol()"))
         assertTrue(body.contains("prepareAutomaticRetry("))
     }
 

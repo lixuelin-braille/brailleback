@@ -10,7 +10,7 @@ import java.io.File
  * Static contract for the volume-key isolation wiring.
  *
  * The pure state machine is covered by [VolumeKeyGesturePolicyTest]; this file
- * makes sure the Java service actually honours it. In particular it locks down
+ * makes sure the service actually honours it. In particular it locks down
  * the user-visible promise: a long press and a fast double press run their
  * configured action and **never** call [adjustSystemVolume]. Only the slow
  * press branch (and its delayed runnable) may touch the volume.
@@ -18,7 +18,7 @@ import java.io.File
 class VolumeKeyIsolationContractTest {
 
     private companion object {
-        const val SERVICE = "brailleback/src/com/googlecode/eyesfree/brailleback/BrailleBackService.java"
+        const val SERVICE = "brailleback/src/com/googlecode/eyesfree/brailleback/BrailleBackService.kt"
         const val POLICY = "brailleback/src/com/googlecode/eyesfree/brailleback/VolumeKeyGesturePolicy.kt"
         const val STRINGS = "brailleback/res/values/strings.xml"
         const val STRINGS_ZH = "brailleback/res/values-zh-rCN/strings.xml"
@@ -46,7 +46,7 @@ class VolumeKeyIsolationContractTest {
         }
         .joinToString("\n")
 
-    /** 抽出单个 Java 方法体（按花括号配对）。 */
+    /** 抽出单个 Kotlin 方法体／初始化块（按花括号配对）。 */
     private fun methodBody(source: String, signature: String): String {
         val start = source.indexOf(signature)
         check(start >= 0) { "找不到方法 $signature" }
@@ -64,22 +64,22 @@ class VolumeKeyIsolationContractTest {
         error("方法 $signature 括号不匹配")
     }
 
-    /** 抽出 switch 中某个 case 分支，直到下一个 case / default。 */
-    private fun switchBranch(source: String, caseName: String): String {
-        val start = source.indexOf("case $caseName:")
-        check(start >= 0) { "找不到分支 $caseName" }
-        val tail = source.substring(start + 1)
-        val ends = listOf(tail.indexOf("case "), tail.indexOf("default:"))
-            .filter { it >= 0 }
-        val end = start + 1 + (ends.minOrNull() ?: tail.length)
+    /** 抽出 when 中某个分支体，直到下一个分支标签（或 else）。 */
+    private fun whenBranch(source: String, branchName: String): String {
+        val start = source.indexOf(branchName)
+        check(start >= 0) { "找不到分支 $branchName" }
+        val arrow = source.indexOf("->", start)
+        check(arrow >= 0) { "分支 $branchName 没有 ->" }
+        val nextArrow = source.indexOf("->", arrow + 2)
+        val end = if (nextArrow >= 0) nextArrow else source.length
         return source.substring(start, end)
     }
 
     @Test
     fun onKeyEventDelegatesConsumptionToPolicy() {
-        val body = methodBody(serviceCode(), "public boolean onKeyEvent(")
+        val body = methodBody(serviceCode(), "override fun onKeyEvent(")
         assertTrue(body.contains("shouldConsumeVolumeKeyEvent(gesturesEnabled)"))
-        assertTrue(body.contains("return consume;"))
+        assertTrue(body.contains("return consume"))
         assertFalse(
             "旧的无参 shouldConsumeVolumeKeyEvent() 会把手势启用时的按键也放行",
             body.contains("shouldConsumeVolumeKeyEvent()"),
@@ -98,20 +98,20 @@ class VolumeKeyIsolationContractTest {
 
     @Test
     fun gesturesOffRestoresStockAndroid() {
-        val body = methodBody(serviceCode(), "private boolean hasVolumeGestures()")
+        val body = methodBody(serviceCode(), "private fun hasVolumeGestures(): Boolean")
         assertTrue(body.contains("pref_volume_gestures_enabled_key"))
         // 三个槽位全为 none 时必须整体放行，恢复系统原生的长按连调。
         assertTrue(body.contains("isNoneVolumeAction(readVolumeAction(GESTURE_LONG_UP))"))
         assertTrue(body.contains("isNoneVolumeAction(readVolumeAction(GESTURE_LONG_DOWN))"))
         assertTrue(body.contains("isNoneVolumeAction(readVolumeAction(GESTURE_DOUBLE))"))
-        val onKeyEvent = methodBody(serviceCode(), "public boolean onKeyEvent(")
+        val onKeyEvent = methodBody(serviceCode(), "override fun onKeyEvent(")
         assertTrue(onKeyEvent.contains("clearVolumeGestureState()"))
     }
 
     @Test
     fun longPressRunsActionAndNeverAdjustsVolume() {
         val source = serviceCode()
-        val runnable = methodBody(source, "private final Runnable mVolumeLongPressRunnable")
+        val runnable = methodBody(source, "private val mVolumeLongPressRunnable = object : Runnable")
         assertTrue(runnable.contains("performVolumeAction(action)"))
         assertTrue(runnable.contains("cancelPendingSlowPress()"))
         assertFalse("长按分支不得调音量", runnable.contains("adjustSystemVolume("))
@@ -120,24 +120,24 @@ class VolumeKeyIsolationContractTest {
 
     @Test
     fun doublePressCancelsPendingStepAndNeverAdjustsVolume() {
-        val body = methodBody(serviceCode(), "private void onVolumeKeyUp(")
+        val body = methodBody(serviceCode(), "private fun onVolumeKeyUp(")
         assertTrue(body.contains("VolumeKeyGesturePolicy.classifyTap("))
-        val branch = switchBranch(body, "RUN_DOUBLE_ACTION")
+        val branch = whenBranch(body, "VolumeKeyGesturePolicy.TapOutcome.RUN_DOUBLE_ACTION")
         assertTrue(branch.contains("cancelPendingSlowPress()"))
         assertTrue(branch.contains("performVolumeAction(readVolumeAction(GESTURE_DOUBLE))"))
         assertFalse("双击分支不得调音量", branch.contains("adjustSystemVolume("))
 
-        val suppressed = switchBranch(body, "SUPPRESS_AFTER_LONG_PRESS")
+        val suppressed = whenBranch(body, "VolumeKeyGesturePolicy.TapOutcome.SUPPRESS_AFTER_LONG_PRESS")
         assertFalse("长按后的抬键不得调音量", suppressed.contains("adjustSystemVolume("))
     }
 
     @Test
     fun onlySlowPressBranchesMayAdjustVolume() {
         val source = serviceCode()
-        val upBody = methodBody(source, "private void onVolumeKeyUp(")
-        val nowBranch = switchBranch(upBody, "ADJUST_VOLUME_NOW")
+        val upBody = methodBody(source, "private fun onVolumeKeyUp(")
+        val nowBranch = whenBranch(upBody, "VolumeKeyGesturePolicy.TapOutcome.ADJUST_VOLUME_NOW")
         assertTrue(nowBranch.contains("adjustSystemVolume(keyCode)"))
-        val slowRunnable = methodBody(source, "private final Runnable mSlowPressRunnable")
+        val slowRunnable = methodBody(source, "private val mSlowPressRunnable = object : Runnable")
         assertTrue(slowRunnable.contains("adjustSystemVolume(mPendingSlowPressKeyCode)"))
 
         // 定义 1 次 + 慢按立即分支 1 次 + 慢按延时 runnable 1 次，多一次都算回归。
@@ -150,8 +150,8 @@ class VolumeKeyIsolationContractTest {
 
     @Test
     fun slowPressIsDelayedOnlyWhenDoubleActionEnabled() {
-        val body = methodBody(serviceCode(), "private void onVolumeKeyUp(")
-        val branch = switchBranch(body, "SCHEDULE_SLOW_PRESS")
+        val body = methodBody(serviceCode(), "private fun onVolumeKeyUp(")
+        val branch = whenBranch(body, "VolumeKeyGesturePolicy.TapOutcome.SCHEDULE_SLOW_PRESS")
         assertTrue(branch.contains("postDelayed(mSlowPressRunnable"))
         assertTrue(branch.contains("DOUBLE_PRESS_TIMEOUT_MS"))
         assertTrue(branch.contains("mPendingSlowPressKeyCode = keyCode"))
@@ -159,7 +159,7 @@ class VolumeKeyIsolationContractTest {
 
     @Test
     fun volumeStepUsesAudioManagerAndStreamPolicy() {
-        val body = methodBody(serviceCode(), "private void adjustSystemVolume(")
+        val body = methodBody(serviceCode(), "private fun adjustSystemVolume(")
         assertTrue(body.contains("adjustStreamVolume(streamType, direction"))
         assertTrue(body.contains("AudioManager.FLAG_SHOW_UI"))
         assertTrue(body.contains("VolumeKeyGesturePolicy.volumeStream(inCall)"))
@@ -170,9 +170,9 @@ class VolumeKeyIsolationContractTest {
 
     @Test
     fun audioManagerIsInitializedBeforeKeysAreConsumed() {
-        val body = methodBody(serviceCode(), "public void onServiceConnected()")
-        assertTrue(body.contains("mAudioManager = (AudioManager) getSystemService"))
-        val destroy = methodBody(serviceCode(), "public void onDestroy()")
+        val body = methodBody(serviceCode(), "override fun onServiceConnected()")
+        assertTrue(body.contains("mAudioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager"))
+        val destroy = methodBody(serviceCode(), "override fun onDestroy()")
         assertTrue(destroy.contains("mVolumeKeyHandler.removeCallbacksAndMessages(null)"))
     }
 

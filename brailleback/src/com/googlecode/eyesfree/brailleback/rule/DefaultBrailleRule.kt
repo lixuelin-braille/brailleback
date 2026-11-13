@@ -119,7 +119,7 @@ internal class DefaultBrailleRule : BrailleRule {
         if (Build.VERSION.SDK_INT >= CustomLabelManager.MIN_API_LEVEL) {
             val service = BrailleBackService.getActiveInstance()
             if (service != null) {
-                return service.labelManager
+                return service.getLabelManager()
             }
         }
         return null

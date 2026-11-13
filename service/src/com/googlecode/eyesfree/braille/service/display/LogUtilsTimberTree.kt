@@ -8,23 +8,24 @@
  * http://www.apache.org/licenses/LICENSE-2.0
  */
 
-package com.googlecode.eyesfree.braille.service.display;
+package com.googlecode.eyesfree.braille.service.display
 
-import com.googlecode.eyesfree.utils.LogUtils;
+import com.googlecode.eyesfree.utils.LogUtils
 
-import timber.log.Timber;
+import timber.log.Timber
 
 /**
  * Forwards Timber events to {@link LogUtils}, which writes to logcat and to
  * the app's persistent log file. The display service shares the app process,
  * so it reuses the single file sink installed in {@code DisplayService#onCreate()}.
  */
-final class LogUtilsTimberTree extends Timber.Tree {
-    private static final String FALLBACK_TAG = "BrailleService";
+class LogUtilsTimberTree : Timber.Tree() {
+    companion object {
+        private const val FALLBACK_TAG = "BrailleService"
+    }
 
-    @Override
-    protected void log(int priority, String tag, String message, Throwable t) {
-        LogUtils.logWithTag(priority, tag != null ? tag : FALLBACK_TAG,
-                t, message);
+    override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+        LogUtils.logWithTag(priority, tag ?: FALLBACK_TAG,
+                t, message)
     }
 }
