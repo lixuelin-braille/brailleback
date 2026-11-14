@@ -168,9 +168,9 @@ class BrailleSegmenterRegressionTest {
         // 12345 中不应出现空格（即原字符 5 个连续无空格）
         val idx = r.text.indexOf("12345")
         assertTrue(idx >= 0)
-        // 数字后跟"个"是词（数字 token 之后是独立"个"词）
+        // 数字后跟"个"是词：数字与汉字之间用连接号 ⠤，不加空格
         val after = r.text.substring(idx + 5).trim()
-        assertTrue(after.startsWith("个"))
+        assertTrue("数字与汉字之间应有连接号: ${r.text}", after.startsWith("\u2824个"))
     }
 
     @Test

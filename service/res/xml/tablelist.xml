@@ -470,18 +470,21 @@
          locale="zh_TW"
          dots="8"
          fileName="zh-tw.ctb" />
-    <!-- Chinese (mainland, simplified) -->
+    <!-- Chinese (mainland, simplified). zhcn-cbs-full is a strict superset of
+         zhcn-cbs with identical values for every common character, so it is the
+         grade 0 default; the common-character table stays for explicit choice. -->
     <table
          id="zh-CN-cbs"
          locale="zh_CN"
          dots="6"
-         grade="0"
+         grade="1"
          variant="国家通用盲文方案"
          fileName="zhcn-cbs.ctb" />
   <table
   id="zh-CN-cbs-full"
   locale="zh_CN"
   dots="6"
+  grade="0"
   variant="国家通用盲文方案（全字符）"
 fileName="zhcn-cbs-full.ctb" />
     <table

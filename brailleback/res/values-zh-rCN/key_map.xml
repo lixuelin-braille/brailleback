@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 按键自定义动作中文名：顺序必须与 values/key_map.xml 的 key_map_action_values 一一对应。 -->
+<resources>
+    <string-array name="key_map_action_labels">
+        <item>向左平移</item>
+        <item>向右平移</item>
+        <item>上一项</item>
+        <item>下一项</item>
+        <item>上一行</item>
+        <item>下一行</item>
+        <item>向后滚动</item>
+        <item>向前滚动</item>
+        <item>跳到开头</item>
+        <item>跳到末尾</item>
+        <item>激活当前项</item>
+        <item>长按当前项</item>
+        <item>上一个区块</item>
+        <item>下一个区块</item>
+        <item>上一个控件</item>
+        <item>下一个控件</item>
+        <item>上一个列表</item>
+        <item>下一个列表</item>
+        <item>切换屏幕搜索</item>
+        <item>切换标签菜单</item>
+        <item>切换盲文等级</item>
+        <item>回车</item>
+        <item>退格</item>
+        <item>向前删除</item>
+        <item>返回</item>
+        <item>主屏幕</item>
+        <item>最近任务</item>
+        <item>通知栏</item>
+        <item>打开按键帮助</item>
+    </string-array>
+</resources>

@@ -49,6 +49,13 @@
   Java_com_googlecode_eyesfree_braille_service_display_BrlttyWrapper_##fn
 #define CUSTOM_KEY (BRL_KEY_FUNCTION+100)
 
+/*
+ * Upper bound on in-place driver rebuilds per read call. A driver that keeps
+ * reporting BRL_CMD_RESTARTBRL after a successful rebuild (a device that is
+ * really gone) must not spin here forever; the Java side reconnects instead.
+ */
+#define MAX_DRIVER_RESTARTS 3
+
 // Data structures for command and key code mapping from the brltty constants
 // to java constant fields.
 
@@ -356,6 +363,7 @@ out:
 jint JNIMETHOD(readCommandNative)(JNIEnv* env, jobject thiz) {
   int ret = -1;
   int readDelayMillis = -1;
+  int restartCount = 0;
   while (ret < 0) {
     int innerDelayMillis = -1;
     int brlttyCommand = brltty_readCommand(&innerDelayMillis);
@@ -363,11 +371,33 @@ jint JNIMETHOD(readCommandNative)(JNIEnv* env, jobject thiz) {
         (innerDelayMillis > 0 && innerDelayMillis < readDelayMillis)) {
       readDelayMillis = innerDelayMillis;
     }
-    if (brlttyCommand == EOF || brlttyCommand == BRL_CMD_RESTARTBRL) {
-      if (brlttyCommand == BRL_CMD_RESTARTBRL) {
+    if (brlttyCommand == BRL_CMD_RESTARTBRL) {
+      /*
+       * brltty's own main loop answers this request by rebuilding the driver
+       * (disableBrailleDriver + enableBrailleDriver). Keep that behaviour so a
+       * single failed status poll does not leave the display without input.
+       */
+      if (restartCount < MAX_DRIVER_RESTARTS) {
+        restartCount += 1;
+        logMessage(LOG_WARNING,
+                   "brltty requested a driver restart (%d/%d)",
+                   restartCount, MAX_DRIVER_RESTARTS);
+        if (brltty_restart()) {
+          continue;
+        }
+        logMessage(LOG_ERR, "braille driver restart failed");
+      } else {
         logMessage(LOG_ERR,
-                   "brltty requested RESTARTBRL; restart is not implemented");
+                   "braille driver keeps requesting restarts; giving up");
       }
+      /*
+       * -1 means "no command right now" for this API, so a dead driver needs a
+       * distinct value. Java turns it into a controlled reconnect.
+       */
+      ret = -2;
+      break;
+    }
+    if (brlttyCommand == EOF) {
       ret = -1;
       break;
     }

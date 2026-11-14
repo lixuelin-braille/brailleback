@@ -57,8 +57,28 @@ class UsbDisplayConnection : DriverThread.OnInitListener {
         /** Fallback in case the permission broadcast is not delivered. */
         private const val PERMISSION_POLL_MILLIS = 500L
         private const val PERMISSION_POLL_MAX = 60
+        /**
+         * Poll interval used once the system prompt has already been shown
+         * for a device. Asking again from a background service cannot show
+         * a dialog, it only makes the reconnect loop re-show it forever.
+         */
+        private const val SILENT_PERMISSION_POLL_MILLIS = 2000L
         /** Let the failed driver finish its native teardown before retrying. */
         private const val DRIVER_FALLBACK_DELAY_MILLIS = 300L
+
+        /**
+         * Device name of the last device the system prompt was shown for.
+         * The prompt is only shown again after the device is re-attached or
+         * the user opens the app, which proves somebody can answer it.
+         */
+        @Volatile
+        private var sPromptedDeviceName: String? = null
+
+        /** Called when the user returns to the app or plugs the device in. */
+        @JvmStatic
+        fun allowPermissionPromptAgain() {
+            sPromptedDeviceName = null
+        }
     }
 
     /** Callbacks are always delivered on the main thread. */
@@ -82,6 +102,7 @@ class UsbDisplayConnection : DriverThread.OnInitListener {
     @Volatile private var mDisconnecting = false
     @Volatile private var mPermissionSettled = false
     @Volatile private var mFailed = false
+    @Volatile private var mSilentPermissionWait = false
     private var mDevice: UsbDevice? = null
     private var mDriverCode: String? = null
     private var mDriverCandidates: List<String>? = null
@@ -110,6 +131,20 @@ class UsbDisplayConnection : DriverThread.OnInitListener {
             if (mUsbManager!!.hasPermission(mDevice!!)) {
                 LogUtils.i(this, "USB permission detected by fallback poll")
                 onPermissionGranted()
+                return
+            }
+            if (mSilentPermissionWait) {
+                // The prompt was already shown for this device. Ask again
+                // only once the user has signalled that they are present.
+                if (sPromptedDeviceName != mDevice!!.getDeviceName()) {
+                    LogUtils.i(this,
+                            "App is in the foreground; asking for USB permission again")
+                    mSilentPermissionWait = false
+                    mPermissionPollCount = 0
+                    requestPermission()
+                } else {
+                    mHandler.postDelayed(this, SILENT_PERMISSION_POLL_MILLIS)
+                }
                 return
             }
             if (++mPermissionPollCount >= PERMISSION_POLL_MAX) {
@@ -211,7 +246,12 @@ class UsbDisplayConnection : DriverThread.OnInitListener {
         }
 
         if (!mUsbManager!!.hasPermission(mDevice!!)) {
-            requestPermission()
+            if (sPromptedDeviceName == mDevice!!.getDeviceName()) {
+                startSilentPermissionWait()
+            } else {
+                sPromptedDeviceName = mDevice!!.getDeviceName()
+                requestPermission()
+            }
             return
         }
         startDriver()
@@ -220,6 +260,9 @@ class UsbDisplayConnection : DriverThread.OnInitListener {
     private fun requestPermission() {
         LogUtils.i(this, "Requesting USB permission for device id="
                 + mDevice!!.getDeviceId())
+        // A receiver from an earlier request may still be registered when
+        // the prompt is asked again; keep exactly one at a time.
+        unregisterPermissionReceiver()
         val filter = IntentFilter(ACTION_USB_PERMISSION)
         mPermissionReceiver = mPermissionBroadcastReceiver
         if (Build.VERSION.SDK_INT >= 33) {
@@ -247,11 +290,31 @@ class UsbDisplayConnection : DriverThread.OnInitListener {
         mHandler.postDelayed(mPermissionPollRunnable, PERMISSION_POLL_MILLIS)
     }
 
+    /**
+     * Waits for the permission state without calling requestPermission().
+     * Used when the prompt has already been shown for this device, so a
+     * background reconnect cannot keep re-showing the system dialog.
+     */
+    private fun startSilentPermissionWait() {
+        if (mDisconnecting || mFailed || mPermissionSettled) {
+            return
+        }
+        if (!mSilentPermissionWait) {
+            LogUtils.i(this, "USB permission still pending; waiting without prompting")
+            mSilentPermissionWait = true
+        }
+        mPermissionPollCount = 0
+        mHandler.removeCallbacks(mPermissionPollRunnable)
+        mHandler.postDelayed(mPermissionPollRunnable, SILENT_PERMISSION_POLL_MILLIS)
+    }
+
     private fun onPermissionGranted() {
         if (mPermissionSettled || mDisconnecting || mFailed) {
             return
         }
         mPermissionSettled = true
+        mSilentPermissionWait = false
+        sPromptedDeviceName = null
         mHandler.removeCallbacks(mPermissionPollRunnable)
         unregisterPermissionReceiver()
         startDriver()
@@ -317,6 +380,12 @@ class UsbDisplayConnection : DriverThread.OnInitListener {
         })
     }
 
+    override fun onDriverFailed() {
+        // Called on the driver thread; fail() hands the notification back to
+        // this connection's handler.
+        fail("brltty USB driver stopped unexpectedly")
+    }
+
     /** Sends a braille window to the display. */
     fun writeWindow(patterns: ByteArray) {
         val dt = mDriverThread
@@ -336,6 +405,7 @@ class UsbDisplayConnection : DriverThread.OnInitListener {
             return
         }
         mDisconnecting = true
+        mSilentPermissionWait = false
         LogUtils.i(this, "Disconnecting USB braille display")
         mHandler.removeCallbacks(mInputPollRunnable)
         mHandler.removeCallbacks(mPermissionPollRunnable)
@@ -369,6 +439,7 @@ class UsbDisplayConnection : DriverThread.OnInitListener {
             return
         }
         mFailed = true
+        mSilentPermissionWait = false
         LogUtils.w(this, "USB connection failed: " + reason)
         mHandler.removeCallbacks(mInputPollRunnable)
         mHandler.removeCallbacks(mPermissionPollRunnable)

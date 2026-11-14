@@ -42,6 +42,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.googlecode.eyesfree.braille.display.BrailleInputEvent
 import com.googlecode.eyesfree.braille.display.Display
+import com.googlecode.eyesfree.braille.service.display.ConnectionProtocolPolicy
 import com.googlecode.eyesfree.braille.service.display.HidBridge
 import com.googlecode.eyesfree.brailleback.rule.BrailleRuleRepository
 import com.googlecode.eyesfree.brailleback.utils.PreferenceUtils
@@ -141,6 +142,9 @@ class BrailleBackService : AccessibilityService(),
             } else if (state == Display.STATE_CONNECTED) {
                 feedbackManager!!.emitFeedback(FeedbackManager.TYPE_DISPLAY_CONNECTED)
             }
+        }
+        if (state == Display.STATE_CONNECTED && displayManager != null) {
+            applyMotionModeDefault(PreferenceManager.getDefaultSharedPreferences(this))
         }
         if (focusTracker != null) {
             focusTracker!!.onConnectionStateChanged(state)
@@ -802,8 +806,7 @@ class BrailleBackService : AccessibilityService(),
                 this /*inputEventListener*/)
         displayManager!!.setContent(DisplayManager.Content(getString(R.string.display_connected)))
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
-        displayManager!!.setMotionMode(prefs.getBoolean(
-                getString(R.string.pref_motion_mode_key), false))
+        applyMotionModeDefault(prefs)
         displayManager!!.setPauseClear(
                 getString(R.string.pref_pause_behavior_clear_value)
                         .equals(prefs.getString(
@@ -812,6 +815,27 @@ class BrailleBackService : AccessibilityService(),
                 prefs.getString(getString(R.string.pref_idle_clear_key), "3") ?: "3"))
         displayManager!!.setCursorDotsEnabled(prefs.getBoolean(
                 getString(R.string.pref_cursor_dots_key), false))
+    }
+
+    /**
+     * 运动模式按连接方式取默认值：USB 默认开启，蓝牙默认关闭。
+     * 用户在设置里手动拨过开关后，这个显式选择优先，不再随连接方式变化。
+     */
+    private fun applyMotionModeDefault(prefs: SharedPreferences) {
+        val motionKey = getString(R.string.pref_motion_mode_key)
+        val value = if (prefs.getBoolean(
+                        getString(R.string.pref_motion_mode_explicit_key), false)) {
+            prefs.getBoolean(motionKey, false)
+        } else {
+            val protocol = ConnectionProtocolPolicy.normalize(
+                    prefs.getString(getString(R.string.pref_connection_protocol_key), null))
+            val usb = ConnectionProtocolPolicy.USB == protocol
+            if (prefs.getBoolean(motionKey, !usb) != usb) {
+                prefs.edit().putBoolean(motionKey, usb).apply()
+            }
+            usb
+        }
+        displayManager!!.setMotionMode(value)
     }
 
     private fun initializeNavigationMode() {

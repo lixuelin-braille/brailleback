@@ -34,6 +34,9 @@ import com.googlecode.eyesfree.braille.display.Display
 import com.googlecode.eyesfree.braille.display.DisplayClient
 import com.googlecode.eyesfree.braille.translate.BrailleTranslator
 import com.googlecode.eyesfree.braille.translate.TranslationResult
+import com.googlecode.eyesfree.brailleback.keymap.CustomKeyMapStore
+import com.googlecode.eyesfree.brailleback.wrapping.HeadingLayout
+import com.googlecode.eyesfree.brailleback.wrapping.ParagraphIndent
 import com.googlecode.eyesfree.brailleback.wrapping.SimpleWrapStrategy
 import com.googlecode.eyesfree.brailleback.wrapping.WordWrapStrategy
 import com.googlecode.eyesfree.brailleback.wrapping.WrapStrategy
@@ -176,6 +179,9 @@ class DisplayManager(
         private var panStrategy = PAN_RESET
         private var contractionMode = CONTRACT_DEFAULT
         private var splitParagraphs = false
+        private var paragraphIndent = false
+        private var firstParagraphIndent = false
+        private var heading = false
         private var editable = false
 
         constructor()
@@ -243,6 +249,42 @@ class DisplayManager(
 
         fun isSplitParagraphs(): Boolean {
             return splitParagraphs
+        }
+
+        /**
+         * 是否按“空行分段”的阅读文本排版：段首空两方，并强制下一段从
+         * 行首开始。与 [splitParagraphs] 不同，单个换行不算段边界。
+         */
+        fun setParagraphIndent(value: Boolean): Content {
+            paragraphIndent = value
+            return this
+        }
+
+        fun isParagraphIndent(): Boolean {
+            return paragraphIndent
+        }
+
+        /**
+         * 整块内容就是一段正文时（公众号每段一个节点），段首（下标 0）
+         * 也补两方空白；与 [setParagraphIndent] 配合使用。
+         */
+        fun setFirstParagraphIndent(value: Boolean): Content {
+            firstParagraphIndent = value
+            return this
+        }
+
+        fun isFirstParagraphIndent(): Boolean {
+            return firstParagraphIndent
+        }
+
+        /** 整块内容是一个标题：翻译后按点显器宽度居中。 */
+        fun setHeading(value: Boolean): Content {
+            heading = value
+            return this
+        }
+
+        fun isHeading(): Boolean {
+            return heading
         }
 
         fun setEditable(value: Boolean): Content {
@@ -564,6 +606,13 @@ class DisplayManager(
         doRefresh()
     }
 
+    /**
+     * 用户自定义的「原始命令码 → 目标命令码」映射，默认空表（全部保持出厂行为）。
+     * 设置页写入偏好后由 [onSharedPreferenceChanged] 原子替换，读写分属不同线程，
+     * 因此用 AtomicReference 保证可见性；表本身是不可变 Map，构造完不再修改。
+     */
+    private val customKeyMap = AtomicReference<Map<Int, Int>>(emptyMap())
+
     init {
         translatorManager.addOnTablesChangedListener(this)
         val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -585,6 +634,7 @@ class DisplayManager(
         sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
         sharedPreferences.registerOnSharedPreferenceChangeListener(this)
         updateWrapStrategyFromPreferences()
+        reloadCustomKeyMap()
     }
 
     fun shutdown() {
@@ -733,13 +783,32 @@ class DisplayManager(
         keepAwake()
         resetIdleTimer()
         LogUtils.log(this, Log.VERBOSE, "InputEvent: %s", event)
+        // 自定义按键映射必须发生在所有分发之前：panLeft/panRight 在本类内被本地拦截，
+        // sendMappedEvent 还会对带位置参数的命令做坐标换算，晚一步都会走错分支。
+        // 这里是 brltty/JNI 主路径与 BLE 旁路（WujieGattConnection）的唯一汇聚点。
+        val effectiveEvent = applyCustomKeyMap(event)
         // We're called from within the handler thread, so we forward
         // the call only if we are going to invoke the user's callback.
-        when (event.command) {
+        when (effectiveEvent.command) {
             BrailleInputEvent.CMD_NAV_PAN_LEFT -> panLeft()
             BrailleInputEvent.CMD_NAV_PAN_RIGHT -> panRight()
-            else -> sendMappedEvent(event)
+            else -> sendMappedEvent(effectiveEvent)
         }
+    }
+
+    /** 单层查表替换命令码；白名单保证源命令不带位置/点位参数，argument 原样保留。 */
+    private fun applyCustomKeyMap(event: BrailleInputEvent): BrailleInputEvent {
+        val target = customKeyMap.get()[event.command] ?: return event
+        if (target == event.command) {
+            return event
+        }
+        LogUtils.log(this, Log.VERBOSE, "CustomKeyMap: %d -> %d", event.command, target)
+        return BrailleInputEvent(target, event.argument, event.eventTime)
+    }
+
+    /** 从 SharedPreferences 重建运行时表；坏数据由纯逻辑层静默过滤。 */
+    private fun reloadCustomKeyMap() {
+        customKeyMap.set(CustomKeyMapStore.runtimeMap(context))
     }
 
     override fun onTablesChanged() {
@@ -973,6 +1042,9 @@ class DisplayManager(
         builder.append('\u0000').append(content.getContractionMode())
         builder.append('\u0000').append(content.isEditable())
         builder.append('\u0000').append(content.isSplitParagraphs())
+        builder.append('\u0000').append(content.isParagraphIndent())
+        builder.append('\u0000').append(content.isFirstParagraphIndent())
+        builder.append('\u0000').append(content.isHeading())
         val spanned = content.getSpanned()
         if (spanned != null) {
             appendSpanRanges(builder, spanned, DisplaySpans.SelectionSpan::class.java)
@@ -1076,12 +1148,30 @@ class DisplayManager(
         // editing text, but instruct contracted translaters to uncontract
         // the braille for the word under the cursor.
         val translator = translatorManager.getTranslator()
-        currentTranslationResult =
+        var translation =
             currentContent.translateWithVerbatimBraille(
                 translator, cursorPositionToTranslate,
                 uncontractBrailleAtCursor(currentContent))
 
-        wrapStrategy.setContent(currentContent, currentTranslationResult, getNumTextCells())
+        val numTextCells = getNumTextCells()
+        if (currentContent.isParagraphIndent()
+            && numTextCells > ParagraphIndent.INDENT_CELLS
+        ) {
+            // 段首空两方。缩进必须加在翻译之后：一个汉字最终占几方由盲文
+            // 表决定（现行盲文一字一方，双拼两方），在原文里插空格不能
+            // 保证正好是两方空白。
+            translation = ParagraphIndent.apply(
+                currentContent.getText(),
+                translation,
+                currentContent.isFirstParagraphIndent())
+        }
+        if (currentContent.isHeading()) {
+            // 标题居中：按显示区的实际方数在左侧补空白。
+            translation = HeadingLayout.center(translation, numTextCells)
+        }
+
+        currentTranslationResult = translation
+        wrapStrategy.setContent(currentContent, currentTranslationResult, numTextCells)
         brailleContent = currentTranslationResult.cells
         overlaidBrailleContent = brailleContent
     }
@@ -1270,9 +1360,13 @@ class DisplayManager(
      */
     fun setMotionMode(motionMode: Boolean) {
         displayHandler.post {
+            if (mMotionMode == motionMode) {
+                return@post
+            }
             mMotionMode = motionMode
             if (!mMotionMode) {
                 // Apply any deferred content immediately.
+                displayHandler.removeCallbacks(mMotionModeRefreshRunnable)
                 refresh()
             }
         }
@@ -1521,6 +1615,10 @@ class DisplayManager(
         val wordWrapPrefKey = context.getString(R.string.pref_braille_word_wrap_key)
         if (key != null && key == wordWrapPrefKey) {
             updateWrapStrategyFromPreferences()
+        }
+        if (key != null && key == CustomKeyMapStore.preferenceKey(context)) {
+            // 设置页保存后立即生效，无需重启无障碍服务或重连点显器。
+            reloadCustomKeyMap()
         }
     }
 

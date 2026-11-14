@@ -63,7 +63,6 @@ class DriverThread(
     private val mHandlerThread: HandlerThread
 
     private val statRequested = AtomicInteger()
-    @Volatile private var statReportedRequested = 0
     @Volatile private var statExecuted = 0
     @Volatile private var statEmptyDrops = 0
     @Volatile private var statNativeOk = 0
@@ -94,13 +93,13 @@ class DriverThread(
                 statNativeFail, statLastElapsedMs, statLastCells,
                 statLastDigest, statReads, statLastReadMs)
             val idle = SystemClock.uptimeMillis() - lastExecutedAt
-            if (requested > statReportedRequested && idle > STALL_WARN_MILLIS) {
+            val pending = requested - statExecuted
+            if (pending > 0 && idle > STALL_WARN_MILLIS) {
                 LogUtils.w(this@DriverThread,
                     "window refresh stalled: %d request(s) waiting, " +
                         "last write %dms ago",
-                    requested - statReportedRequested, idle)
+                    pending, idle)
             }
-            statReportedRequested = requested
         }
     }.apply {
         isDaemon = true
@@ -132,6 +131,12 @@ class DriverThread(
          * is `null`.
          */
         fun onInit(displayProperties: BrailleDisplayProperties?)
+
+        /**
+         * Called when the native driver stopped working after a successful
+         * initialization and could not be rebuilt in place.
+         */
+        fun onDriverFailed() {}
     }
 
     /**
@@ -302,6 +307,11 @@ class DriverThread(
                     var count = 0
                     while (count < MAX_COMMANDS_PER_WAKE) {
                         val command = mBrlttyWrapper.readCommand()
+                        if (command == BrlttyWrapper.COMMAND_DRIVER_FAILED) {
+                            Log.e(LOG_TAG, "Braille driver stopped unexpectedly")
+                            initListener.onDriverFailed()
+                            return
+                        }
                         if (command < 0) {
                             break
                         }

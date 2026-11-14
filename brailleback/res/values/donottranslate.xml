@@ -4,10 +4,23 @@
     <string name="pref_category_device_key">category_device</string>
     <string name="pref_connection_status_key">connection_status</string>
     <string name="pref_key_bindings_key">key_bindings</string>
+    <!-- 自定义按键映射：整张表序列化后存这一个偏好项 -->
+    <string name="pref_custom_key_map_key">custom_key_map</string>
     <string name="pref_category_braille_key">category_braille</string>
     <string name="pref_category_braille_type_key">category_braille_type</string>
     <string name="pref_category_volume_key">category_volume</string>
     <string name="pref_category_behavior_key">category_behavior</string>
+    <!-- 设置页重规划：主屏分组容器与新增的平级子屏容器。
+         这些 key 只用于 Preference 层级导航，不写入 SharedPreferences，
+         改动它们不会造成用户设置丢失。 -->
+    <string name="pref_category_start_key">category_start</string>
+    <string name="pref_category_settings_key">category_settings</string>
+    <string name="pref_category_features_key">category_features</string>
+    <string name="pref_category_keys_key">category_keys</string>
+    <string name="pref_category_sound_behavior_key">category_sound_behavior</string>
+    <string name="pref_category_display_keys_key">category_display_keys</string>
+    <string name="pref_category_sound_feedback_key">category_sound_feedback</string>
+    <string name="pref_category_log_key">category_log</string>
     <string name="pref_braille_type_key">braille_type</string>
     <string name="pref_chinese_segmentation_key">chinese_segmentation</string>
     <string name="pref_six_dot_braille_table_key">six_dot_braille_table</string>
@@ -25,7 +38,8 @@
         <item>@string/pref_braille_type_six_dot_label</item>
     </string-array>
     <string name="pref_category_miscellaneous_key">category_miscellaneous</string>
-    <string name="pref_category_developer_key">category_developer</string>    <string name="pref_connection_protocol_key">connection_protocol</string>
+    <string name="pref_category_developer_key">category_developer</string>
+    <string name="pref_connection_protocol_key">connection_protocol</string>
     <string name="pref_auto_connect_key">auto_connect</string>
     <string name="pref_setup_service_key">setup_service</string>
     
@@ -47,6 +61,7 @@
     <string name="pref_cursor_dots_key">cursor_dots</string>
     <string name="pref_braille_contracted_mode_key">braille_contracted_mode</string>
     <string name="pref_motion_mode_key">motion_mode</string>
+    <string name="pref_motion_mode_explicit_key">motion_mode_explicit</string>
     <string name="pref_quiet_navigation_key">quiet_navigation</string>
     <bool name="pref_quiet_navigation_default">true</bool>
     <string name="pref_pause_behavior_key">pause_behavior</string>

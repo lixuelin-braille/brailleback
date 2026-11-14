@@ -1,239 +1,276 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    设置页（androidx.preference 全量）：设备与连接 / 盲文显示 / 声音 / 高级。
-    老框架设置页（BrailleBackPreferencesActivity）已退役。
-    数据层共用同一个 SharedPreferences（key 与迁移前完全一致）。
+    设置页（androidx.preference 全量）。
+
+    信息架构（重规划后）：主屏只负责导航，按「开始使用 / 设置分类 / 功能与内容」
+    三个语义分组组织；设置分类下是五个平级子屏，全部为两层结构，
+    单屏朗读节点不超过 8 个。参考 TalkBack preferences.xml 的分组导航做法。
+
+    兼容性约束：所有 app:key（含 @string/pref_*_key 的实际取值）与迁移前完全一致，
+    数据层共用同一个 SharedPreferences；本次只移动位置、补分组与摘要，
+    不改动任何键名，因此老用户的设置不会丢失。
 -->
 <PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <!-- 启用服务引导（受限设置引导）：服务未启用时显示引导，点击跳系统无障碍设置 -->
-    <Preference
-        app:key="@string/pref_setup_service_key"
-        app:title="@string/pref_setup_service_title"
-        app:summary="@string/pref_setup_service_summary" />
+    <!-- ==================== 开始使用 ==================== -->
+    <PreferenceCategory
+        app:key="@string/pref_category_start_key"
+        app:title="@string/pref_category_start_title">
 
-    <Preference
-        app:key="@string/pref_bookshelf_key"
-        app:title="@string/pref_bookshelf_title"
-        app:summary="@string/pref_bookshelf_summary" />
-
-    <!-- 屏幕盲文键盘（移植自 TalkBack）：点击进入键盘设置页 -->
-    <Preference
-        app:key="pref_braille_keyboard_key"
-        app:title="@string/pref_braille_keyboard_title"
-        app:summary="@string/pref_braille_keyboard_summary" />
-
-    <!-- 分类入口 1：设备与连接 -->
-    <PreferenceScreen
-        app:key="@string/pref_category_device_key"
-        app:title="@string/pref_category_device_title"
-        app:summary="@string/pref_category_device_summary">
-
+        <!-- 启用服务引导：服务未启用时提示跳系统无障碍设置 -->
         <Preference
-            app:key="@string/pref_connection_status_key"
-            app:title="@string/pref_connection_status_title" />
-        <Preference
-            app:key="@string/pref_key_bindings_key"
-            app:title="@string/pref_key_bindings_title" />
-        <ListPreference
-            app:key="@string/pref_connection_protocol_key"
-            app:title="@string/pref_connection_protocol_title"
-            app:summary="%s"
-            app:defaultValue="@string/pref_connection_protocol_default"
-            app:entries="@array/pref_connection_protocol_entries"
-            app:entryValues="@array/pref_connection_protocol_values" />
-        <SwitchPreferenceCompat
-            app:key="@string/pref_auto_connect_key"
-            app:title="@string/pref_auto_connect_title"
-            app:summary="@string/pref_auto_connect_summary"
-            app:defaultValue="@bool/pref_auto_connect_default" />
+            app:key="@string/pref_setup_service_key"
+            app:title="@string/pref_setup_service_title"
+            app:summary="@string/pref_setup_service_summary" />
 
-    </PreferenceScreen>
+    </PreferenceCategory>
 
-    <!-- 分类入口 2：盲文显示 -->
-    <PreferenceScreen
-        app:key="@string/pref_category_braille_key"
-        app:title="@string/pref_category_braille_title"
-        app:summary="@string/pref_category_braille_summary">
+    <!-- ==================== 设置分类（五个平级子屏） ==================== -->
+    <PreferenceCategory
+        app:key="@string/pref_category_settings_key"
+        app:title="@string/pref_category_settings_title">
 
-        <PreferenceCategory
-            app:key="@string/pref_category_braille_type_key"
-            app:title="@string/pref_category_braille_type_title">
+        <!-- 1. 设备与连接 -->
+        <PreferenceScreen
+            app:key="@string/pref_category_device_key"
+            app:title="@string/pref_category_device_title"
+            app:summary="@string/pref_category_device_summary">
 
-            <!-- 盲文表的条目由服务动态填充（见 SettingsActivity.addTableList），
-                 不在 XML 里写 entries/summary，避免服务未就绪时显示 %s 占位。
-                 六点表与八点（计算机）表合并成一个列表，不再单独设置“计算机盲文”。 -->
+            <Preference
+                app:key="@string/pref_connection_status_key"
+                app:title="@string/pref_connection_status_title"
+                app:summary="@string/pref_connection_status_summary" />
+
             <ListPreference
-                app:key="@string/pref_braille_table_key"
-                app:title="@string/pref_braille_table_title"
-                app:defaultValue="@string/table_value_default" />
+                app:key="@string/pref_connection_protocol_key"
+                app:title="@string/pref_connection_protocol_title"
+                app:summary="%s"
+                app:defaultValue="@string/pref_connection_protocol_default"
+                app:entries="@array/pref_connection_protocol_entries"
+                app:entryValues="@array/pref_connection_protocol_values" />
 
             <SwitchPreferenceCompat
-                app:key="@string/pref_braille_word_wrap_key"
-                app:title="@string/pref_braille_word_wrap_title"
-                app:defaultValue="@bool/pref_braille_word_wrap_default" />
+                app:key="@string/pref_auto_connect_key"
+                app:title="@string/pref_auto_connect_title"
+                app:summary="@string/pref_auto_connect_summary"
+                app:defaultValue="@bool/pref_auto_connect_default" />
 
-            <SwitchPreferenceCompat
-                app:key="@string/pref_cursor_dots_key"
-                app:title="@string/pref_cursor_dots_title"
-                app:summaryOn="@string/pref_cursor_dots_summary_on"
-                app:summaryOff="@string/pref_cursor_dots_summary_off"
-                app:defaultValue="false" />
+        </PreferenceScreen>
 
-            <CheckBoxPreference
-                app:key="@string/pref_braille_contracted_mode_key"
-                app:title="@string/pref_braille_contracted_mode_title"
-                app:summaryOn="@string/pref_braille_contracted_mode_summary_on"
-                app:summaryOff="@string/pref_braille_contracted_mode_summary_off"
-                app:defaultValue="false" />
+        <!-- 2. 按键与手势 -->
+        <PreferenceScreen
+            app:key="@string/pref_category_keys_key"
+            app:title="@string/pref_category_keys_title"
+            app:summary="@string/pref_category_keys_summary">
 
-            <SwitchPreferenceCompat
-                app:key="@string/pref_chinese_segmentation_key"
-                app:title="@string/pref_chinese_segmentation_title"
-                app:summary="@string/pref_chinese_segmentation_summary"
-                app:defaultValue="@bool/pref_chinese_segmentation_default" />
+            <PreferenceCategory
+                app:key="@string/pref_category_display_keys_key"
+                app:title="@string/pref_category_display_keys_title">
 
-        </PreferenceCategory>
+                <!-- 只读的默认按键说明；连接后才可用 -->
+                <Preference
+                    app:key="@string/pref_key_bindings_key"
+                    app:title="@string/pref_key_bindings_title"
+                    app:summary="@string/pref_key_bindings_summary" />
 
-        <PreferenceCategory
-            app:key="@string/pref_category_volume_key"
-            app:title="@string/pref_category_volume_title">
+                <!-- 自定义按键：把点显器按键改成其它动作（默认不改，改完即时生效） -->
+                <Preference
+                    app:key="@string/pref_custom_key_map_key"
+                    app:title="@string/pref_custom_key_map_title"
+                    app:summary="@string/pref_custom_key_map_summary" />
 
-            <SwitchPreferenceCompat
-                app:key="@string/pref_volume_gestures_enabled_key"
-                app:title="@string/pref_volume_gestures_enabled_title"
-                app:summaryOn="@string/pref_volume_gestures_enabled_summary_on"
-                app:summaryOff="@string/pref_volume_gestures_enabled_summary_off"
-                app:defaultValue="@bool/pref_volume_gestures_enabled_default" />
+            </PreferenceCategory>
 
-            <ListPreference
-                app:key="@string/pref_volume_long_press_up_key"
-                app:title="@string/pref_volume_long_press_up_title"
-                app:summary="%s"
-                app:entries="@array/pref_volume_action_entries"
-                app:entryValues="@array/pref_volume_action_values"
-                app:defaultValue="@string/pref_volume_action_pause_value" />
+            <PreferenceCategory
+                app:key="@string/pref_category_volume_key"
+                app:title="@string/pref_category_volume_title">
 
-            <ListPreference
-                app:key="@string/pref_volume_long_press_down_key"
-                app:title="@string/pref_volume_long_press_down_title"
-                app:summary="%s"
-                app:entries="@array/pref_volume_action_entries"
-                app:entryValues="@array/pref_volume_action_values"
-                app:defaultValue="@string/pref_volume_action_none_value" />
+                <SwitchPreferenceCompat
+                    app:key="@string/pref_volume_gestures_enabled_key"
+                    app:title="@string/pref_volume_gestures_enabled_title"
+                    app:summaryOn="@string/pref_volume_gestures_enabled_summary_on"
+                    app:summaryOff="@string/pref_volume_gestures_enabled_summary_off"
+                    app:defaultValue="@bool/pref_volume_gestures_enabled_default" />
 
-            <ListPreference
-                app:key="@string/pref_volume_double_press_key"
-                app:title="@string/pref_volume_double_press_title"
-                app:summary="%s"
-                app:entries="@array/pref_volume_action_entries"
-                app:entryValues="@array/pref_volume_action_values"
-                app:defaultValue="@string/pref_volume_action_grade_value" />
+                <ListPreference
+                    app:key="@string/pref_volume_long_press_up_key"
+                    app:title="@string/pref_volume_long_press_up_title"
+                    app:summary="%s"
+                    app:entries="@array/pref_volume_action_entries"
+                    app:entryValues="@array/pref_volume_action_values"
+                    app:defaultValue="@string/pref_volume_action_pause_value" />
 
-        </PreferenceCategory>
+                <ListPreference
+                    app:key="@string/pref_volume_long_press_down_key"
+                    app:title="@string/pref_volume_long_press_down_title"
+                    app:summary="%s"
+                    app:entries="@array/pref_volume_action_entries"
+                    app:entryValues="@array/pref_volume_action_values"
+                    app:defaultValue="@string/pref_volume_action_none_value" />
 
-        <PreferenceCategory
-            app:key="@string/pref_category_behavior_key"
-            app:title="@string/pref_category_behavior_title">
+                <ListPreference
+                    app:key="@string/pref_volume_double_press_key"
+                    app:title="@string/pref_volume_double_press_title"
+                    app:summary="%s"
+                    app:entries="@array/pref_volume_action_entries"
+                    app:entryValues="@array/pref_volume_action_values"
+                    app:defaultValue="@string/pref_volume_action_grade_value" />
 
-            <ListPreference
-                app:key="@string/pref_pause_behavior_key"
-                app:title="@string/pref_pause_behavior_title"
-                app:summary="%s"
-                app:entries="@array/pref_pause_behavior_entries"
-                app:entryValues="@array/pref_pause_behavior_values"
-                app:defaultValue="@string/pref_pause_behavior_clear_value" />
+            </PreferenceCategory>
 
-            <ListPreference
-                app:key="@string/pref_idle_clear_key"
-                app:title="@string/pref_idle_clear_title"
-                app:summary="%s"
-                app:entries="@array/pref_idle_clear_entries"
-                app:entryValues="@array/pref_idle_clear_values"
-                app:defaultValue="@string/pref_idle_clear_3min_value" />
+        </PreferenceScreen>
 
-            <CheckBoxPreference
-                app:key="@string/pref_motion_mode_key"
-                app:title="@string/pref_motion_mode_title"
-                app:summaryOn="@string/pref_motion_mode_summary_on"
-                app:summaryOff="@string/pref_motion_mode_summary_off"
-                app:defaultValue="false" />
+        <!-- 3. 盲文显示 -->
+        <PreferenceScreen
+            app:key="@string/pref_category_braille_key"
+            app:title="@string/pref_category_braille_title"
+            app:summary="@string/pref_category_braille_summary">
 
-            <SwitchPreferenceCompat
-                app:key="@string/pref_quiet_navigation_key"
-                app:title="@string/pref_quiet_navigation_title"
-                app:summaryOn="@string/pref_quiet_navigation_summary_on"
-                app:summaryOff="@string/pref_quiet_navigation_summary_off"
-                app:defaultValue="@bool/pref_quiet_navigation_default" />
+            <PreferenceCategory
+                app:key="@string/pref_category_braille_type_key"
+                app:title="@string/pref_category_braille_type_title">
 
-        </PreferenceCategory>
+                <!-- 盲文表的条目由服务动态填充（见 SettingsActivity.addTableList）。
+                     刻意不写 summary="%s"：服务未就绪时会朗读出字面量 "%s"。
+                     当前表名由 refreshBrailleTableSummary() 写入。 -->
+                <ListPreference
+                    app:key="@string/pref_braille_table_key"
+                    app:title="@string/pref_braille_table_title"
+                    app:defaultValue="@string/table_value_default" />
 
-    </PreferenceScreen>
+                <SwitchPreferenceCompat
+                    app:key="@string/pref_braille_word_wrap_key"
+                    app:title="@string/pref_braille_word_wrap_title"
+                    app:summaryOn="@string/pref_braille_word_wrap_summary_on"
+                    app:summaryOff="@string/pref_braille_word_wrap_summary_off"
+                    app:defaultValue="@bool/pref_braille_word_wrap_default" />
 
-    <!-- 分类入口 3：声音 -->
-    <PreferenceScreen
-        app:key="pref_category_sound"
-        app:title="@string/pref_sound_category_title"
-        app:summary="@string/pref_sound_category_summary">
+                <SwitchPreferenceCompat
+                    app:key="@string/pref_cursor_dots_key"
+                    app:title="@string/pref_cursor_dots_title"
+                    app:summaryOn="@string/pref_cursor_dots_summary_on"
+                    app:summaryOff="@string/pref_cursor_dots_summary_off"
+                    app:defaultValue="false" />
 
-        <SwitchPreferenceCompat
-            app:key="@string/pref_sound_enabled_key"
-            app:title="@string/pref_sound_enabled_title"
-            app:summaryOn="@string/pref_sound_enabled_summary_on"
-            app:summaryOff="@string/pref_sound_enabled_summary_off"
-            app:defaultValue="true" />
+                <CheckBoxPreference
+                    app:key="@string/pref_braille_contracted_mode_key"
+                    app:title="@string/pref_braille_contracted_mode_title"
+                    app:summaryOn="@string/pref_braille_contracted_mode_summary_on"
+                    app:summaryOff="@string/pref_braille_contracted_mode_summary_off"
+                    app:defaultValue="false" />
 
-        <Preference
-            app:key="@string/pref_sound_volume_key"
-            app:title="@string/pref_sound_volume_title"
-            app:summary="@string/pref_sound_volume_summary" />
+                <SwitchPreferenceCompat
+                    app:key="@string/pref_chinese_segmentation_key"
+                    app:title="@string/pref_chinese_segmentation_title"
+                    app:summary="@string/pref_chinese_segmentation_summary"
+                    app:defaultValue="@bool/pref_chinese_segmentation_default" />
 
-    </PreferenceScreen>
+            </PreferenceCategory>
 
-    <!-- 分类入口 4：高级 -->
-    <PreferenceScreen
-        app:key="@string/pref_category_miscellaneous_key"
-        app:title="@string/pref_category_miscellaneous_title"
-        app:summary="@string/pref_category_miscellaneous_summary">
+        </PreferenceScreen>
 
-        <Preference
-            app:key="@string/pref_os_license_key"
-            app:title="@string/pref_os_license_title" />
+        <!-- 4. 声音与行为 -->
+        <PreferenceScreen
+            app:key="@string/pref_category_sound_behavior_key"
+            app:title="@string/pref_category_sound_behavior_title"
+            app:summary="@string/pref_category_sound_behavior_summary">
 
+            <PreferenceCategory
+                app:key="@string/pref_category_sound_feedback_key"
+                app:title="@string/pref_sound_category_title">
+
+                <SwitchPreferenceCompat
+                    app:key="@string/pref_sound_enabled_key"
+                    app:title="@string/pref_sound_enabled_title"
+                    app:summaryOn="@string/pref_sound_enabled_summary_on"
+                    app:summaryOff="@string/pref_sound_enabled_summary_off"
+                    app:defaultValue="true" />
+
+                <Preference
+                    app:key="@string/pref_sound_volume_key"
+                    app:title="@string/pref_sound_volume_title"
+                    app:summary="@string/pref_sound_volume_summary" />
+
+            </PreferenceCategory>
+
+            <PreferenceCategory
+                app:key="@string/pref_category_behavior_key"
+                app:title="@string/pref_category_behavior_title">
+
+                <ListPreference
+                    app:key="@string/pref_pause_behavior_key"
+                    app:title="@string/pref_pause_behavior_title"
+                    app:summary="%s"
+                    app:entries="@array/pref_pause_behavior_entries"
+                    app:entryValues="@array/pref_pause_behavior_values"
+                    app:defaultValue="@string/pref_pause_behavior_clear_value" />
+
+                <ListPreference
+                    app:key="@string/pref_idle_clear_key"
+                    app:title="@string/pref_idle_clear_title"
+                    app:summary="%s"
+                    app:entries="@array/pref_idle_clear_entries"
+                    app:entryValues="@array/pref_idle_clear_values"
+                    app:defaultValue="@string/pref_idle_clear_3min_value" />
+
+                <CheckBoxPreference
+                    app:key="@string/pref_motion_mode_key"
+                    app:title="@string/pref_motion_mode_title"
+                    app:summaryOn="@string/pref_motion_mode_summary_on"
+                    app:summaryOff="@string/pref_motion_mode_summary_off" />
+
+                <SwitchPreferenceCompat
+                    app:key="@string/pref_quiet_navigation_key"
+                    app:title="@string/pref_quiet_navigation_title"
+                    app:summaryOn="@string/pref_quiet_navigation_summary_on"
+                    app:summaryOff="@string/pref_quiet_navigation_summary_off"
+                    app:defaultValue="@bool/pref_quiet_navigation_default" />
+
+            </PreferenceCategory>
+
+        </PreferenceScreen>
+
+        <!-- 5. 开发者选项（原「其他 → 开发者选项」提为一级，消除三层嵌套） -->
         <PreferenceScreen
             app:key="@string/pref_category_developer_key"
             app:title="@string/pref_category_developer_title"
             app:summary="@string/pref_category_developer_summary">
 
-            <!-- Forced to VERBOSE in debug builds. -->
-            <ListPreference
-                app:key="@string/pref_log_level_key"
-                app:title="@string/pref_log_level_label"
-                app:dialogTitle="@string/pref_log_level_label"
-                app:summary="%s"
-                app:defaultValue="@string/pref_log_level_default"
-                app:entries="@array/pref_log_level_entries"
-                app:entryValues="@array/pref_log_level_values" />
+            <PreferenceCategory
+                app:key="@string/pref_category_log_key"
+                app:title="@string/pref_category_log_title">
 
-            <Preference
-                app:key="@string/pref_view_log_key"
-                app:title="@string/pref_view_log_title"
-                app:summary="@string/pref_view_log_summary" />
+                <!-- Forced to VERBOSE in debug builds. -->
+                <ListPreference
+                    app:key="@string/pref_log_level_key"
+                    app:title="@string/pref_log_level_label"
+                    app:dialogTitle="@string/pref_log_level_label"
+                    app:summary="%s"
+                    app:defaultValue="@string/pref_log_level_default"
+                    app:entries="@array/pref_log_level_entries"
+                    app:entryValues="@array/pref_log_level_values" />
 
-            <Preference
-                app:key="@string/pref_share_log_key"
-                app:title="@string/pref_share_log_title"
-                app:summary="@string/pref_share_log_summary" />
+                <Preference
+                    app:key="@string/pref_view_log_key"
+                    app:title="@string/pref_view_log_title"
+                    app:summary="@string/pref_view_log_summary" />
 
-            <Preference
-                app:key="@string/pref_copy_log_key"
-                app:title="@string/pref_copy_log_title"
-                app:summary="@string/pref_copy_log_summary" />
+                <Preference
+                    app:key="@string/pref_share_log_key"
+                    app:title="@string/pref_share_log_title"
+                    app:summary="@string/pref_share_log_summary" />
 
-            <Preference
-                app:key="@string/pref_clear_log_key"
-                app:title="@string/pref_clear_log_title"
-                app:summary="@string/pref_clear_log_summary" />
+                <Preference
+                    app:key="@string/pref_copy_log_key"
+                    app:title="@string/pref_copy_log_title"
+                    app:summary="@string/pref_copy_log_summary" />
+
+                <Preference
+                    app:key="@string/pref_clear_log_key"
+                    app:title="@string/pref_clear_log_title"
+                    app:summary="@string/pref_clear_log_summary" />
+
+            </PreferenceCategory>
 
             <PreferenceCategory
                 app:key="@string/pref_category_braille_overlay_key"
@@ -242,17 +279,42 @@
                 <CheckBoxPreference
                     app:key="@string/pref_braille_overlay_key"
                     app:title="@string/pref_braille_overlay_title"
+                    app:summary="@string/pref_braille_overlay_summary"
                     app:defaultValue="@bool/pref_braille_overlay_default" />
 
                 <Preference
                     app:key="@string/pref_braille_overlay_tutorial_key"
                     app:title="@string/pref_braille_overlay_tutorial_title"
+                    app:summary="@string/pref_braille_overlay_tutorial_summary"
                     app:dependency="@string/pref_braille_overlay_key" />
 
             </PreferenceCategory>
 
         </PreferenceScreen>
 
-    </PreferenceScreen>
+    </PreferenceCategory>
+
+    <!-- ==================== 功能与内容（打开功能，不是设置开关） ==================== -->
+    <PreferenceCategory
+        app:key="@string/pref_category_features_key"
+        app:title="@string/pref_category_features_title">
+
+        <Preference
+            app:key="@string/pref_bookshelf_key"
+            app:title="@string/pref_bookshelf_title"
+            app:summary="@string/pref_bookshelf_summary" />
+
+        <!-- 屏幕盲文键盘（移植自 TalkBack）：点击进入键盘设置页 -->
+        <Preference
+            app:key="pref_braille_keyboard_key"
+            app:title="@string/pref_braille_keyboard_title"
+            app:summary="@string/pref_braille_keyboard_summary" />
+
+        <Preference
+            app:key="@string/pref_os_license_key"
+            app:title="@string/pref_os_license_title"
+            app:summary="@string/pref_os_license_summary" />
+
+    </PreferenceCategory>
 
 </PreferenceScreen>

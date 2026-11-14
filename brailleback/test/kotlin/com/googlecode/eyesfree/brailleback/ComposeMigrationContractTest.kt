@@ -1,0 +1,300 @@
+/*
+ * Copyright (C) 2026 盲文服务 (Braille Service)
+ */
+
+package com.googlecode.eyesfree.brailleback
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.io.File
+
+/**
+ * Jetpack Compose 分批迁移的静态契约。
+ *
+ * 第一批「设备与连接」、第二批「按键与手势」、第三批「盲文显示」、
+ * 第四批「声音与行为」、第五批「开发者选项」（五屏全部收官）；
+ * 护栏要同时防两件事：
+ * 1) 迁移后读屏语义退化（开关没状态、分组不能按标题导航、整行被拆成多个焦点）；
+ * 2) 批次越界，顺手把还没验证过的其它子屏也改掉，或改动 SharedPreferences 键。
+ * 第二、三、四、五批的专项护栏见 KeysGesturesContractTest /
+ * BrailleDisplayContractTest / SoundBehaviorContractTest /
+ * DeveloperOptionsContractTest。
+ *
+ * 纯 JVM 单测读不了 Android 资源，直接对源码/构建脚本文本做断言。
+ */
+class ComposeMigrationContractTest {
+
+    private fun projectFile(path: String): File {
+        val candidates = listOf(File(path), File("..", path), File("../..", path))
+        return candidates.firstOrNull { it.isFile }
+            ?: error("找不到 $path（cwd=${System.getProperty("user.dir")}）")
+    }
+
+    private fun text(path: String) = projectFile(path).readText()
+
+    private val base = "brailleback/"
+    private val composeDir = base + "src/com/googlecode/eyesfree/brailleback/compose/"
+
+    private fun compose(name: String) = text(composeDir + name)
+
+    /**
+     * 根与模块都叫 build.gradle，且单测 cwd 可能是模块目录；
+     * 用「含 apply false 的插件声明」这一特征定位根脚本，不能只按文件名取第一个。
+     */
+    private fun rootGradle(): String = listOf(
+        File("build.gradle"), File("..", "build.gradle"), File("../..", "build.gradle")
+    ).firstOrNull { it.isFile && it.readText().contains("apply false") }?.readText()
+        ?: error("找不到根 build.gradle（cwd=${System.getProperty("user.dir")}）")
+
+    // -------------------------------------------------------------- 构建链
+
+    @Test
+    fun composeCompilerPluginMatchesBuiltInKotlin() {
+        val root = rootGradle()
+        assertTrue(
+            "根构建脚本必须声明 Compose 编译器插件，且版本与 AGP 9.2 内置 Kotlin 2.2.10 一致",
+            root.contains("id 'org.jetbrains.kotlin.plugin.compose' version '2.2.10' apply false")
+        )
+        val module = text(base + "build.gradle")
+        listOf(
+            "apply plugin: 'org.jetbrains.kotlin.plugin.compose'",
+            "compose = true",
+            "androidx.activity:activity-compose:1.9.3",
+            "androidx.compose.ui:ui:1.7.6",
+            "androidx.compose.foundation:foundation:1.7.6",
+            "androidx.compose.material3:material3:1.3.1"
+        ).forEach { fragment ->
+            assertTrue("brailleback/build.gradle 缺少：$fragment", module.contains(fragment))
+        }
+    }
+
+    // ------------------------------------------------------------ 无障碍语义
+
+    @Test
+    fun reusableComponentsCarryTalkBackSemantics() {
+        val components = compose("SettingsComponents.kt")
+        listOf(
+            "semantics { heading() }",
+            // 必须锚定真实代码行：只写 "Role.Switch" 会被注释里的同一句话满足，
+            // 导致把开关降级成 Button 的变异溜过去（变异检验实测发现过）。
+            "role = Role.Switch",
+            "stateDescription = state",
+            "semantics(mergeDescendants = true)",
+            "role = Role.RadioButton",
+            "role = Role.Button",
+            "onClickLabel = clickLabel",
+            "contentDescription = backLabel",
+            "LazyColumn(",
+            "isSystemInDarkTheme()"
+        ).forEach { fragment ->
+            assertTrue("组件底座缺少读屏语义：$fragment", components.contains(fragment))
+        }
+        assertEquals(
+            "整行朗读只应由 mergeDescendants + stateDescription 组合；" +
+                "手写 contentDescription 会吞掉 role / stateDescription 的组合播报",
+            1, // 只允许返回按钮那一处
+            Regex("""contentDescription\s*=""").findAll(components).count()
+        )
+    }
+
+    @Test
+    fun scaffoldUsesLazyColumnWithoutPagingButtons() {
+        val components = compose("SettingsComponents.kt")
+        assertTrue(components.contains("content: LazyListScope.() -> Unit"))
+        assertFalse(
+            "设置列表必须一次加载，不能有「下一页」按钮",
+            components.contains("\"next page\"") || components.contains("\"下一页\"")
+        )
+    }
+
+    // -------------------------------------------------------------- 试点屏
+
+    @Test
+    fun pilotScreenKeepsExactlyThreeLegacyKeys() {
+        val screen = compose("DeviceConnectionScreen.kt")
+        listOf(
+            DeviceConnectionKeys.STATUS,
+            DeviceConnectionKeys.PROTOCOL,
+            DeviceConnectionKeys.AUTO_CONNECT
+        ).forEach { key ->
+            assertTrue("试点屏缺少原设置项 $key", screen.contains("KEY_${key.uppercase()}"))
+        }
+        assertEquals("试点屏只应有三个设置项", 3, Regex("""\bitem\(key =""").findAll(screen).count())
+        val activity = compose("DeviceConnectionComposeActivity.kt")
+        assertTrue(
+            "协议写入必须回写原 key",
+            activity.contains("prefs.edit().putString(protocolKey, value).apply()")
+        )
+        assertTrue(
+            "自动连接写入必须回写原 key",
+            activity.contains("prefs.edit().putBoolean(autoConnectKey, value).apply()")
+        )
+    }
+
+    @Test
+    fun pilotScreenReusesServiceProtocolPolicyAndRefreshesConnection() {
+        val logic = compose("DeviceConnectionLogic.kt")
+        assertTrue(
+            "协议归一化必须复用服务端策略，不能复制第二份",
+            logic.contains("ConnectionProtocolPolicy.normalize(value)")
+        )
+        val activity = compose("DeviceConnectionComposeActivity.kt")
+        assertTrue("刷新状态必须调用 poll()", activity.contains("displayClient?.poll()"))
+        assertTrue("必须监听连接状态", activity.contains("Display.OnConnectionStateChangeListener"))
+        assertTrue("退出必须释放点显器客户端", activity.contains("displayClient?.shutdown()"))
+        assertTrue("必须复用旧协议值迁移", activity.contains("normalizeProtocol(rawProtocol)"))
+    }
+
+    // -------------------------------------------------------------- 接线边界
+
+    @Test
+    fun settingsActivityRoutesFiveMigratedScreensToCompose() {
+        val settings = text(base + "src/com/googlecode/eyesfree/brailleback/SettingsActivity.kt")
+        assertTrue(
+            "设备子屏入口必须改跳 Compose Activity",
+            settings.contains("""getString(R.string.pref_category_device_key) -> {""")
+        )
+        assertTrue(
+            settings.contains("Intent(this, DeviceConnectionComposeActivity::class.java)")
+        )
+        assertTrue(
+            settings.contains("Intent(this, KeysGesturesComposeActivity::class.java)")
+        )
+        assertTrue(
+            settings.contains("Intent(this, BrailleDisplayComposeActivity::class.java)")
+        )
+        assertTrue(
+            settings.contains("Intent(this, SoundBehaviorComposeActivity::class.java)")
+        )
+        assertTrue(
+            settings.contains("Intent(this, DeveloperOptionsComposeActivity::class.java)")
+        )
+        val onStartScreen = settings.substringAfter("override fun onPreferenceStartScreen(")
+            .substringBefore("val args = Bundle()")
+        assertEquals(
+            "五个已迁移的子屏应各有一条 startActivity 分支",
+            5,
+            Regex("""startActivity\(""").findAll(onStartScreen).count()
+        )
+        assertTrue(
+            "第五批收官：开发者选项子屏也必须改跳 Compose Activity",
+            onStartScreen.contains("category_developer")
+        )
+    }
+
+    @Test
+    fun manifestRegistersComposeActivities() {
+        val manifest = text(base + "AndroidManifest.xml")
+        assertTrue(
+            manifest.contains("""android:name=".compose.DeveloperOptionsComposeActivity"""")
+        )
+        assertTrue(
+            manifest.contains("android:name=\".compose.DeviceConnectionComposeActivity\"")
+        )
+        assertTrue(
+            manifest.contains("android:name=\".compose.KeysGesturesComposeActivity\"")
+        )
+        assertTrue(
+            manifest.contains("android:name=\".compose.BrailleDisplayComposeActivity\"")
+        )
+        assertTrue(
+            manifest.contains("android:name=\".compose.SoundBehaviorComposeActivity\"")
+        )
+        assertTrue(manifest.contains("android:theme=\"@style/BraillebackSettingsTheme\""))
+    }
+
+    @Test
+    fun allFiveLegacySubScreensRemainInXmlForRollback() {
+        val xml = text(base + "res/xml/settings.xml")
+        // 五屏的 XML 定义一律保留：五个子屏现已全部不再走 PreferenceFragment，
+        // 但旧实现必须随时可回退。
+        listOf(
+            "pref_category_device_key",
+            "pref_category_keys_key",
+            "pref_category_braille_key",
+            "pref_category_sound_behavior_key",
+            "pref_category_developer_key"
+        ).forEach { key ->
+            assertTrue("子屏 XML 必须完整保留以便回退：$key", xml.contains("@string/$key"))
+        }
+        // 已迁移子屏的入口与全部 key 仍保留：两代 UI 共用同一份偏好数据，可随时回退。
+        listOf(
+            "pref_category_device_key",
+            "pref_connection_status_key",
+            "pref_connection_protocol_key",
+            "pref_auto_connect_key",
+            "pref_category_keys_key",
+            "pref_key_bindings_key",
+            "pref_custom_key_map_key",
+            "pref_volume_gestures_enabled_key",
+            "pref_category_braille_key",
+            "pref_braille_table_key",
+            "pref_braille_word_wrap_key",
+            "pref_cursor_dots_key",
+            "pref_braille_contracted_mode_key",
+            "pref_chinese_segmentation_key",
+            "pref_sound_enabled_key",
+            "pref_sound_volume_key",
+            "pref_pause_behavior_key",
+            "pref_idle_clear_key",
+            "pref_motion_mode_key",
+            "pref_quiet_navigation_key",
+            "pref_log_level_key",
+            "pref_view_log_key",
+            "pref_share_log_key",
+            "pref_copy_log_key",
+            "pref_clear_log_key",
+            "pref_braille_overlay_key",
+            "pref_braille_overlay_tutorial_key"
+        ).forEach { key ->
+            assertTrue("已迁移子屏的偏好 key 不得丢失：$key", xml.contains("@string/$key"))
+        }
+        assertEquals(
+            "主屏仍应是五个平级子屏（入口层级不变）",
+            5,
+            Regex("""<PreferenceScreen""").findAll(xml).count() - 1
+        )
+    }
+
+    // --------------------------------------------------------------- 文案
+
+    @Test
+    fun composeStringsAreLocalizedInBothLocales() {
+        val english = text(base + "res/values/strings.xml")
+        val chinese = text(base + "res/values-zh-rCN/strings.xml")
+        listOf(
+            "compose_settings_back", "compose_settings_section_connection",
+            "compose_settings_refresh", "compose_settings_choose",
+            "compose_settings_protocol_dialog_title", "compose_settings_cancel",
+            "compose_settings_on", "compose_settings_off",
+            "compose_settings_selected", "compose_settings_unselected",
+            "compose_table_picker_title", "compose_table_group_auto",
+            "compose_table_group_generic", "compose_table_loading",
+            "compose_table_empty", "compose_table_refresh_hint",
+            "compose_settings_cursor_dots_summary_on",
+            "compose_settings_cursor_dots_summary_off",
+            "compose_settings_sound_summary_on",
+            "compose_settings_sound_summary_off",
+            "compose_settings_adjust_hint",
+            "compose_settings_volume_decrease",
+            "compose_settings_volume_increase",
+            "compose_settings_confirm",
+            "compose_settings_log_action_hint",
+            "compose_settings_log_level_locked",
+            "compose_settings_log_preview_hint",
+            "compose_settings_overlay_tutorial_disabled"
+        ).forEach { name ->
+            val pattern = """<string name="$name">""".toRegex()
+            assertTrue("英文缺少 $name", pattern.containsMatchIn(english))
+            assertTrue("中文缺少 $name", pattern.containsMatchIn(chinese))
+        }
+    }
+
+    private object DeviceConnectionKeys {
+        const val STATUS = "connection_status"
+        const val PROTOCOL = "connection_protocol"
+        const val AUTO_CONNECT = "auto_connect"
+    }
+}

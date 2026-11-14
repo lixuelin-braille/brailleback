@@ -178,6 +178,132 @@ fun includeChildren(node, context): Boolean        // 是否继续追加子节�
 
 > **扩展点**：加新规则 = 实现 `BrailleRule` + 在 `BrailleRuleRepository.find()` 里注册（注意顺序，先匹配的优先）。
 
+#### 无障碍长文本的段落排版（`wrapping/ParagraphIndent.kt`）
+
+点显器上没有“行”的概念，整段文字是一串连续的格；现行盲文表还把换行
+定义成 0 方，所以微信读书这类阅读器的段落会直接粘在一起。现在对
+无障碍路径上“单个长文本 + 空行分段”的内容启用排版：
+
+1. `NodeBrailler` 生成内容后调用 `ParagraphIndent.shouldFormat()`：
+   长度 ≥ 80 字，且存在“两个及以上换行（中间可夹空格）”的空行。
+2. 命中时 `Content.setParagraphIndent(true)`。
+3. `DisplayManager.translateCurrentContent()` 在**翻译之后**调用
+   `ParagraphIndent.apply()`，在每个段首插入 **2 方空白**
+   （GB/T 15720-2008 7.2 正文抬头空两方），并同步平移
+   `textToBraillePositions` / `brailleToTextPositions` 与光标。
+4. `WrapStrategy` 把段首登记为强制换行点（位置在缩进之前），
+   下一段从行首开始，不会接着上一段的余下格。
+
+约束与取舍：
+
+- **第一段不缩进**：分页阅读的页首可能是上一段的续行，缩进会伪造段首。
+- **单个换行不算段落**：只把空行当段边界，避免把软换行的每个视觉行都缩进。
+- 短节点、按钮/菜单、自带 .brf 阅读器与 `BrailleSpan` 原文盲文不受影响。
+- 标题居中由 `HeadingRules` 的语义/文字规则处理；微信读书正文节点本身
+  不提供 heading 语义，章节名需命中“第X章”等规则才会居中。
+
+实测微信读书正文：1 个 `FrameLayout` 节点、`content-desc` 274 字、
+4 段，段间为“空格 + `\n\n`”。旧逻辑只剩 1 方空白；新逻辑得到 3 个
+段首，各空 2 方。
+
+#### 公众号正文：每段一个节点（`wrapping/ParagraphBlock.kt`）
+
+微信公众号文章的正文结构与微信读书不同（2026-11-14 实测，页面共 364 个
+节点）：
+
+- 每个段落是独立的 `android.view.View`（可聚焦、可点击），文字在
+  `content-desc`；子 `TextView` 的 `text` 与父节点完全相同。
+- 可见正文 26 个段块，段长 4–59 字（平均 30.8 字），节点里**没有换行符**。
+- 标题是 `resource-id=activity-name` 的 `TextView`，作者 `js_author_name`，
+  `publish_time` 是时间，均无 heading 语义。
+
+因此新增 `ParagraphBlock`：
+
+1. 判定“WebView 祖先 + 整屏宽（≥60%）+ 文字 ≥10 字 + 非标题”的节点为
+   正文段块，按钮、图片、作者/时间等窄节点不参与。
+2. `NodeBrailler` 命中时设置 `setParagraphIndent(true)` 与
+   `setFirstParagraphIndent(true)`：整块内容就是一段，下标 0 也补两方。
+3. 父节点 `content-desc` 与子节点文本相同时跳过子节点，避免同一段被拼
+   两遍（实测 26 个段块全部是这种父子同文结构）。
+
+限制：段落内含行内链接时会被拆成多个 `TextView`，只要外层容器整体满足
+条件仍会缩进；标题居中由 `HeadingRules` 的 `activity-name` 规则处理。
+
+#### 原生阅读页：知乎回答（每段一个 TextView）
+
+知乎回答不在 WebView 里（2026-11-14 实测，页面共 110 个节点）：
+
+- 正文是 3 个独立 `TextView`（165 / 34 / 221 字），宽度 990/1080，
+  节点里没有换行符。
+- 每段的结构是 `FrameLayout(可点击) → ViewGroup(id=holder_text) →
+  TextView(可聚焦、不可点击、无 view id)`，外层是 `RecyclerView`。
+- 问题标题同样整屏宽，但 `clickable=true`；作者简介 523/1080、时间栏
+  302/1080，均低于宽度阈值。
+
+`ParagraphBlock.shouldIndentNative()` 的判定：`TextView` 或
+`android.view.View`（Compose/自定义控件的文本语义节点）+ 可聚焦 +
+不可点击 + 无 view id + 宽度 ≥60% + ≥10 字，并且向上 4 层内存在一个
+装着 ≥2 个阅读块的容器。单条长文本、没有同构邻居的页面不缩进，避免
+误伤聊天页和设置页。
+
+#### 天坦百宝箱：可点击段容器 + 重复 view id
+
+`net.tatans.tools`（天坦百宝箱）的 `BookReadingActivity` 是另一种结构
+（2026-11-14 只读快照，页面共 47 个节点）：
+
+- 每段是 `FrameLayout`（可聚焦、**可点击**），正文在 `content-desc`；
+  子节点 `TextView(id=text1)` 的文本与父节点完全相同。
+- 15 段、3165 字，宽度 1024/1080，节点内无换行、无段首空格。
+- 底部是“目录/读书笔记/进度/更多/听书”5 个按钮，均带 view id。
+
+为此补了两条规则，避免放宽整个判定：
+
+1. **可点击段容器**：`FrameLayout`/`LinearLayout`/`RelativeLayout`/
+   `ViewGroup`/`View` + 可聚焦 + 宽度 ≥60% + ≥10 字，并且必须有一个
+   子节点文本与父节点完全相同（`isParagraphContainerShape()`）。
+2. **重复 view id 的正文模板**：正文节点带 view id 时，只有同一个 id
+   在向上 4 层的容器里出现 ≥2 次才放行（`isRepeatedViewIdAllowed()`）。
+   天坦每段都是 `id/text1`，因此通过；页面装饰的唯一 id 仍被排除。
+
+#### 控件覆盖范围与边界
+
+当前排版不绑定具体 App 或具体控件类，按“节点是否把文字暴露给无障碍”
+统一判定，因此可覆盖以下结构：
+
+- WebView 阅读器：整页一个长文本（空行分段），或每段一个
+  `View`/`TextView`（公众号）；
+- 原生阅读器：每段一个 `TextView`（知乎、多数阅读 App）；
+- Compose / 自定义控件：只要文本节点是 `android.view.View` 且带
+  `text` 或 `content-desc`，同样按原生段块处理；
+- 父子同文结构：父 `content-desc` 与子文本相同则只保留一份。
+
+无法覆盖的情况：
+
+- 文字直接画在 Canvas/图片上、没有无障碍文本节点（读屏本身也读不到）；
+- 扫描件、DRM 保护页面；
+- 标题既不上报 `isHeading`、又不匹配章节文字规则时，不居中；
+- 整页只有一个文本节点且只用单个 `\n` 分段时，不缩进（避免把软换行
+  当成段落）；需要该结构时按“空行分段”或“每段一个节点”适配。
+
+#### 统一标题识别与居中（`wrapping/HeadingRules.kt`、`HeadingLayout.kt`）
+
+Android 9（API 28）起 `AccessibilityNodeInfo.isHeading()` 可以被读屏读取：
+WebView 把 `h1`~`h6` 映射为 heading，原生控件可设置
+`android:accessibilityHeading="true"`。识别顺序：
+
+1. `node.isHeading`：覆盖大多数现代网页和 App；
+2. `resource-id=activity-name`：微信公众号文章标题；
+3. 文字规则兜底：第X章/节/回/卷/篇/部/集、序/序言/跋、前言/后记/尾声/
+   引言/结语/目录、Chapter/Part/Section N。
+
+命中且整块内容只有一个节点、长度 ≤60 字时，`Content.setHeading(true)`；
+`DisplayManager` 在翻译后调用 `HeadingLayout.center()`，按点显器实际方数
+左侧补 `(显示方数 - 标题方数) / 2` 方空白。标题放不下时保持原样，交给
+换行策略处理。
+
+限制：不上报 heading、又不匹配文字规则的标题（例如部分原生 App 的问题
+标题）不会居中；当前不区分标题级别（h1/h2 一律居中）。
+
 ---
 
 ### 3.5 排版折行：`wrapping/` —— 国标避头点/避尾点

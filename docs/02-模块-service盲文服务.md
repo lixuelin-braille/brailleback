@@ -213,7 +213,8 @@ newBtt[c] = seg.segToOrig[ btt[c] ]
 
 ### 3.5 `JiebaDict`（272 行）—— 自实现 jieba 分词器
 
-**零第三方依赖**，算法等同 jieba（`HMM=false`）：词典词频 → DAG → 动态规划最大概率路径。
+**零第三方依赖**，算法与 jieba 一致：词典词频 → DAG → 动态规划最大概率路径，
+再按 jieba `__cut_DAG` 的语义对未登录词缓冲区跑 finalseg HMM。
 
 | 成员 | 说明 |
 |:---|:---|
@@ -226,7 +227,9 @@ newBtt[c] = seg.segToOrig[ btt[c] ]
 | `delWord(word)` | 删词（让应分写的词被切开） |
 | `isWord(word)` | 是否为完整词（freq > 0） |
 | `buildDag(sentence)` | 每个位置 k → 可到达的结束位置列表 |
-| `segmentWithPos(sentence)` | 分词并返回 `[word, start, end]`（**BrailleSegmenter 用这个**） |
+| `segmentWithPos(sentence)` | 纯 DAG 分词，返回 `[word, start, end]` |
+| `loadHmm(InputStream)` | 载入 `assets/hmm_emit.txt`；失败只告警，退回纯 DAG |
+| `withHmm(words, protected)` | 未登录词识别（BMES Viterbi），`protected` 保护用户词典边界 |
 | `segment(sentence)` | 只要词列表 |
 
 评分公式：`score = log(freq) - logTotal + score[x+1]`，从后往前 DP。

@@ -88,11 +88,11 @@ class RealDictSegmentationTest {
 
         private fun seg(text: String): String {
             val r = segmenter.segment(text)
-            // 去空格后应与原文一致（分词只插空格，不丢字符）
-            val stripped = r.text.filter { it != ' ' }
+            // 去空格/合成连接号后应与原文一致（分词只插分隔符，不丢字符）
+            val stripped = r.text.filter { it != ' ' && it != '\u2824' }
             assertTrue(
                 "分词丢失/改变了字符: 原文[$text] 结果[${r.text}]",
-                stripped == text
+                stripped == text.filter { it != ' ' }
             )
             println("  「$text」  ->  「${r.text}」")
             return r.text

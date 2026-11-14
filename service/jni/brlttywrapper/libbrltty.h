@@ -69,6 +69,16 @@ int
 brltty_destroy(void);
 
 /*
+ * Rebuilds the currently active driver with the settings that were passed to
+ * the last successful brltty_initialize().  This is what brltty's own main
+ * loop does when a driver reports BRL_CMD_RESTARTBRL (for example after a
+ * transient USB I/O error).  Must be called from the driver thread.
+ * Returns non-zero on success.
+ */
+int
+brltty_restart(void);
+
+/*
  * Polls the driver for a single key command.  This call is non-blocking.
  * If no command is available, EOF is returned.
  * If readDelay is >0 on return, a new call will be scheduled after that

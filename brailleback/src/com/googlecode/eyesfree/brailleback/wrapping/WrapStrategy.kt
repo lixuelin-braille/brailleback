@@ -132,12 +132,23 @@ abstract class WrapStrategy {
     private fun calculateSplitPoints() {
         val content = mContent ?: return
         val translation = mTranslation ?: return
-        if (!content.isSplitParagraphs()) {
-            return
-        }
         val text = content.getText() ?: return
         val textToCell = translation.textToBraillePositions
         val numCells = translation.cells.size
+        if (content.isParagraphIndent()) {
+            // 段首空两方：段首字符的格坐标已经包含插入的两方，换行点要
+            // 落在缩进之前，否则这一行会以两方空白以外的位置开头。
+            for (start in ParagraphIndent.findStarts(text)) {
+                val cell = if (start < textToCell.size) textToCell[start] else numCells
+                mSplitPoints.append(
+                    (cell - ParagraphIndent.INDENT_CELLS).coerceIn(0, numCells),
+                    SPLIT_POINT)
+            }
+            return
+        }
+        if (!content.isSplitParagraphs()) {
+            return
+        }
         for (i in 0 until text.length - 1) {
             if (text[i] == '\n') {
                 val cell = if (i + 1 < textToCell.size) textToCell[i + 1] else numCells

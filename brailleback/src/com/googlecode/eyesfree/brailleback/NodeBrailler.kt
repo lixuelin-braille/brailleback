@@ -15,6 +15,9 @@ import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import com.googlecode.eyesfree.brailleback.rule.BrailleRule
 import com.googlecode.eyesfree.brailleback.rule.BrailleRuleRepository
 import com.googlecode.eyesfree.brailleback.utils.StringUtils
+import com.googlecode.eyesfree.brailleback.wrapping.HeadingRules
+import com.googlecode.eyesfree.brailleback.wrapping.ParagraphBlock
+import com.googlecode.eyesfree.brailleback.wrapping.ParagraphIndent
 import com.googlecode.eyesfree.utils.AccessibilityNodeInfoRef
 import com.googlecode.eyesfree.utils.AccessibilityNodeInfoUtils
 import com.googlecode.eyesfree.utils.LogUtils
@@ -51,6 +54,22 @@ class NodeBrailler(
                 formatSubtree(n, sb, focusNode)
             }
             content = DisplayManager.Content(sb)
+            val heading = toFormat.size == 1 && HeadingRules.isHeading(node, sb)
+            // 阅读类长文本（微信读书等把整页正文放在一个 content-desc 里，
+            // 段间用空行分隔）按段落排版：段首空两方，下一段从行首开始。
+            // 短节点、单换行文本不受影响。
+            if (heading) {
+                // 标题（WebView h1~h6、原生 accessibilityHeading、公众号
+                // activity-name、第X章/节等）：整块居中，不做段首缩进。
+                content.setHeading(true)
+            } else if (ParagraphIndent.shouldFormat(sb)) {
+                content.setParagraphIndent(true)
+            } else if (ParagraphBlock.isBodyBlock(node, mContext, sb.trim().length)) {
+                // 公众号这类“每段一个节点”的网页正文：整块内容就是一段，
+                // 段首（下标 0）也要补两方。
+                content.setParagraphIndent(true)
+                content.setFirstParagraphIndent(true)
+            }
             content.setFirstNode(toFormat[0])
                 .setLastNode(toFormat[toFormat.size - 1])
             AccessibilityNodeInfoUtils.recycleNodes(*toFormat.toTypedArray())
@@ -102,6 +121,10 @@ class NodeBrailler(
                 if (child == null) {
                     continue
                 }
+                if (isDuplicateOfParentText(node, child)) {
+                    child.recycle()
+                    continue
+                }
                 formatSubtree(child, subtreeResult, focusNode)
                 child.recycle()
             }
@@ -126,6 +149,23 @@ class NodeBrailler(
             addNodeSpanForUncovered(node, subtreeResult)
             StringUtils.appendWithSpaces(result, subtreeResult)
         }
+    }
+
+    /**
+     * 网页正文常见“父节点 content-desc 与子 TextView 文本完全相同”的结构
+     * （微信公众号每段都是这样）。父节点已经输出过同一段文字时跳过子节点，
+     * 否则同一段会被拼两遍。
+     */
+    private fun isDuplicateOfParentText(
+        parent: AccessibilityNodeInfoCompat,
+        child: AccessibilityNodeInfoCompat
+    ): Boolean {
+        if (child.childCount > 0) {
+            return false
+        }
+        return ParagraphBlock.isDuplicateText(
+            parent.contentDescription,
+            AccessibilityNodeInfoUtils.getNodeText(child))
     }
 
     /** Adds `node` as a span on `content` if not already fully covered. */

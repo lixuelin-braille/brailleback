@@ -56,3 +56,16 @@ _re/
 
 # --- 误产生的空文件（PowerShell 重定向残留） ---
 $null
+
+# --- 本地诊断/调试产物（只忽略，不删除、不移动；文件在工作区保持原样） ---
+# 注：仓库已有 addon/ 与 service/res/raw/ 下的 .zip 资源包并已跟踪，
+# 所以这里只点名本地驱动资料包，不能用 *.zip 通配。
+.tmp-*
+日志五-*.txt
+/清华点显器驱动.zip
+/driver_cp210x/
+service/jni/brlttywrapper/third_party/brltty_backup_*/
+# service/jniLibs 是唯一入库的预编译 .so 副本；jni/ 下这份是本地编译产物
+service/jni/jniLibs/
+tools/_so_check/
+tools/*.dll

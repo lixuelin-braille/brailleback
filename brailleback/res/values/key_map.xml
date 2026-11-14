@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    盲文显示器按键自定义的命令清单（英文默认）。
+    唯一真源是 BrailleKeyMapPolicy.kt 中的白名单；KeyMapResourceContractTest
+    静态锁定本文件与 Kotlin 常量一致，改动必须两边同步。
+
+    key_map_source_values : 允许被重新定义的按键（24 条）
+    key_map_action_values : 允许选择的目标动作（24 条 + 5 条系统动作 = 29 条）
+    key_map_action_labels : 与 action_values 一一对应的显示名；前 24 条同时用作按键名，
+                            中文版在 values-zh-rCN/key_map.xml。
+    虚拟动作 "DEFAULT"（保持默认）不写在这里，由界面在列表首位动态插入。
+-->
+<resources>
+    <string-array name="key_map_source_values" translatable="false">
+        <item>CMD_NAV_PAN_LEFT</item>
+        <item>CMD_NAV_PAN_RIGHT</item>
+        <item>CMD_NAV_ITEM_PREVIOUS</item>
+        <item>CMD_NAV_ITEM_NEXT</item>
+        <item>CMD_NAV_LINE_PREVIOUS</item>
+        <item>CMD_NAV_LINE_NEXT</item>
+        <item>CMD_SCROLL_BACKWARD</item>
+        <item>CMD_SCROLL_FORWARD</item>
+        <item>CMD_NAV_TOP</item>
+        <item>CMD_NAV_BOTTOM</item>
+        <item>CMD_ACTIVATE_CURRENT</item>
+        <item>CMD_LONG_PRESS_CURRENT</item>
+        <item>CMD_SECTION_PREVIOUS</item>
+        <item>CMD_SECTION_NEXT</item>
+        <item>CMD_CONTROL_PREVIOUS</item>
+        <item>CMD_CONTROL_NEXT</item>
+        <item>CMD_LIST_PREVIOUS</item>
+        <item>CMD_LIST_NEXT</item>
+        <item>CMD_TOGGLE_INCREMENTAL_SEARCH</item>
+        <item>CMD_TOGGLE_BRAILLE_MENU</item>
+        <item>CMD_TOGGLE_BRAILLE_GRADE</item>
+        <item>CMD_KEY_ENTER</item>
+        <item>CMD_KEY_DEL</item>
+        <item>CMD_KEY_FORWARD_DEL</item>
+    </string-array>
+
+    <string-array name="key_map_action_values" translatable="false">
+        <item>CMD_NAV_PAN_LEFT</item>
+        <item>CMD_NAV_PAN_RIGHT</item>
+        <item>CMD_NAV_ITEM_PREVIOUS</item>
+        <item>CMD_NAV_ITEM_NEXT</item>
+        <item>CMD_NAV_LINE_PREVIOUS</item>
+        <item>CMD_NAV_LINE_NEXT</item>
+        <item>CMD_SCROLL_BACKWARD</item>
+        <item>CMD_SCROLL_FORWARD</item>
+        <item>CMD_NAV_TOP</item>
+        <item>CMD_NAV_BOTTOM</item>
+        <item>CMD_ACTIVATE_CURRENT</item>
+        <item>CMD_LONG_PRESS_CURRENT</item>
+        <item>CMD_SECTION_PREVIOUS</item>
+        <item>CMD_SECTION_NEXT</item>
+        <item>CMD_CONTROL_PREVIOUS</item>
+        <item>CMD_CONTROL_NEXT</item>
+        <item>CMD_LIST_PREVIOUS</item>
+        <item>CMD_LIST_NEXT</item>
+        <item>CMD_TOGGLE_INCREMENTAL_SEARCH</item>
+        <item>CMD_TOGGLE_BRAILLE_MENU</item>
+        <item>CMD_TOGGLE_BRAILLE_GRADE</item>
+        <item>CMD_KEY_ENTER</item>
+        <item>CMD_KEY_DEL</item>
+        <item>CMD_KEY_FORWARD_DEL</item>
+        <item>CMD_GLOBAL_BACK</item>
+        <item>CMD_GLOBAL_HOME</item>
+        <item>CMD_GLOBAL_RECENTS</item>
+        <item>CMD_GLOBAL_NOTIFICATIONS</item>
+        <item>CMD_HELP</item>
+    </string-array>
+
+    <string-array name="key_map_action_labels">
+        <item>Pan left</item>
+        <item>Pan right</item>
+        <item>Previous item</item>
+        <item>Next item</item>
+        <item>Previous line</item>
+        <item>Next line</item>
+        <item>Scroll backward</item>
+        <item>Scroll forward</item>
+        <item>Top of page</item>
+        <item>Bottom of page</item>
+        <item>Activate current item</item>
+        <item>Long press current item</item>
+        <item>Previous section</item>
+        <item>Next section</item>
+        <item>Previous control</item>
+        <item>Next control</item>
+        <item>Previous list</item>
+        <item>Next list</item>
+        <item>Toggle on-screen search</item>
+        <item>Toggle labeling menu</item>
+        <item>Toggle braille grade</item>
+        <item>Enter</item>
+        <item>Backspace</item>
+        <item>Delete forward</item>
+        <item>Back</item>
+        <item>Home</item>
+        <item>Recent apps</item>
+        <item>Notifications</item>
+        <item>Keyboard help</item>
+    </string-array>
+</resources>

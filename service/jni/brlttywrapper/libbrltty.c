@@ -77,6 +77,15 @@ static char** driverParameters = NULL;
  */
 static Queue *commandQueue = NULL;
 
+/*
+ * Copies of the settings passed to brltty_initialize(). They are kept so that
+ * brltty_restart() can rebuild the driver without the caller having to tear
+ * down and recreate the whole JNI wrapper.
+ */
+static char *savedDriverCode = NULL;
+static char *savedBrailleDevice = NULL;
+static char *savedTablesDir = NULL;
+
 static const PreferenceSettings prefSettings = {
              .autoreleaseTime = DEFAULT_AUTORELEASE_TIME,
              .autorepeatInterval = 30, // 30 centiseconds = 300 ms
@@ -87,6 +96,13 @@ static const PreferenceSettings prefSettings = {
 
 static void
 freeDriverParameters(void);
+
+static void
+freeSavedDriverSettings(void);
+
+static int
+saveDriverSettings(const char* driverCode, const char* brailleDevice,
+                   const char* tablesDir);
 
 static int
 compileKeys(const char* tablesDir);
@@ -107,11 +123,44 @@ findKeyName(const KeyTable* keyTable, const KeyValue* value,
 static void
 deallocateCommandQueueItem (void *item, void *data);
 
+static void
+freeSavedDriverSettings (void) {
+  free(savedDriverCode);
+  savedDriverCode = NULL;
+  free(savedBrailleDevice);
+  savedBrailleDevice = NULL;
+  free(savedTablesDir);
+  savedTablesDir = NULL;
+}
+
+static int
+saveDriverSettings (const char* driverCode, const char* brailleDevice,
+                    const char* tablesDir) {
+  char *code = strdup(driverCode);
+  char *device = strdup(brailleDevice);
+  char *tables = strdup(tablesDir);
+
+  if (!code || !device || !tables) {
+    free(code);
+    free(device);
+    free(tables);
+    logMallocError();
+    return 0;
+  }
+
+  freeSavedDriverSettings();
+  savedDriverCode = code;
+  savedBrailleDevice = device;
+  savedTablesDir = tables;
+  return 1;
+}
+
 int
 brltty_initialize (const char* driverCode, const char* brailleDevice,
                    const char* tablesDir) {
   int ret = 0;
   systemLogLevel = LOG_DEBUG;
+  saveDriverSettings(driverCode, brailleDevice, tablesDir);
   forgetDevices();
   setPreferences(&prefSettings);
 
@@ -221,6 +270,41 @@ brltty_destroy(void) {
 
   forgetDevices();
   return 0;
+}
+
+int
+brltty_restart(void) {
+  if (braille == NULL) {
+    return 0;
+  }
+  if (!savedDriverCode || !savedBrailleDevice || !savedTablesDir) {
+    logMessage(LOG_ERR, "Cannot restart braille driver: settings unavailable");
+    return 0;
+  }
+
+  /*
+   * brltty_initialize() overwrites the saved copies, so hand it private
+   * duplicates. The wrap-style driver's destruct() releases the transport
+   * before the new driver opens it again.
+   */
+  char *driverCode = strdup(savedDriverCode);
+  char *brailleDevice = strdup(savedBrailleDevice);
+  char *tablesDir = strdup(savedTablesDir);
+  int ok = 0;
+
+  if (driverCode && brailleDevice && tablesDir) {
+    logMessage(LOG_WARNING, "Restarting braille driver %s on %s",
+               driverCode, brailleDevice);
+    brltty_destroy();
+    ok = brltty_initialize(driverCode, brailleDevice, tablesDir);
+  } else {
+    logMallocError();
+  }
+
+  free(driverCode);
+  free(brailleDevice);
+  free(tablesDir);
+  return ok;
 }
 
 int

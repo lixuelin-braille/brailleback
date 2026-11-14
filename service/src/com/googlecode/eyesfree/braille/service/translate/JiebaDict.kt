@@ -2,7 +2,8 @@
  * Copyright (C) 2026 盲文服务 (Braille Service)
  *
  * JiebaDict - 基于 jieba 词典的 DAG + 最大概率路径中文分词器（自实现，零第三方依赖）。
- * 算法与 jieba (HMM=False) 一致：词典加载 freq + 前缀表 -> DAG -> 动态规划最大概率路径。
+ * 算法与 jieba 一致：词典加载 freq + 前缀表 -> DAG -> 动态规划最大概率路径，
+ * 再按 jieba `__cut_DAG` 的语义对未登录词缓冲区跑 finalseg HMM（可关闭）。
  * （Kotlin 版，与原 Java 版逻辑完全一致）
  */
 
@@ -17,6 +18,8 @@ class JiebaDict {
 
     private val freqMap = HashMap<String, Int>()
     private var logTotal = 0.0
+    // jieba finalseg HMM：未登录词识别。加载失败时保持关闭，分词退回纯 DAG。
+    private val hmm = HmmSegmenter()
     @Volatile
     private var initialized = false
 
@@ -177,6 +180,143 @@ class JiebaDict {
         return if (f != null && f > 0) f else 0
     }
 
+    /**
+     * 加载 HMM 发射概率表（assets/hmm_emit.txt）。
+     * 失败只告警并保持 HMM 关闭，不影响 DAG 分词与翻译。
+     *
+     * @return 读入的字符数，0 表示失败
+     */
+    @Synchronized
+    fun loadHmm(stream: InputStream): Int {
+        val n = hmm.load(stream)
+        if (n <= 0) {
+            Log.w(LOG_TAG, "hmm load failed, fallback to DAG only")
+            return 0
+        }
+        Log.i(LOG_TAG, "hmm loaded, chars=" + n)
+        return n
+    }
+
+    /** HMM 是否可用（发射概率表已成功加载）。 */
+    fun isHmmReady(): Boolean {
+        return hmm.isReady()
+    }
+
+    /**
+     * 按 jieba `__cut_DAG` 的语义补做未登录词识别。
+     *
+     * 只有「连续单字 token 组成的缓冲区」才会被送进 HMM，且缓冲区整体
+     * 命中词典时仍逐字输出——这与 jieba 的 `if not FREQ.get(buf)` 判断一致。
+     *
+     * [protectedBoundary] 中为 true 的下标 i 表示第 i 个 token 之前不允许合并，
+     * 用于保护用户词典命中的词面边界。
+     */
+    fun withHmm(
+        words: List<Array<String>>,
+        protectedBoundary: BooleanArray? = null
+    ): List<Array<String>> {
+        if (!hmm.isReady() || words.size < 2) {
+            return words
+        }
+        val out = ArrayList<Array<String>>(words.size)
+        var bufFrom = -1
+        var bufTo = -1
+        for (i in words.indices) {
+            val surface = words[i][0]
+            val singleCjk = surface.length == 1 && isCjkChar(surface[0])
+            if (!singleCjk) {
+                flushHmmBuffer(out, words, bufFrom, bufTo)
+                bufFrom = -1
+                bufTo = -1
+                out.add(words[i])
+                continue
+            }
+            if (bufFrom < 0) {
+                bufFrom = i
+                bufTo = i
+                continue
+            }
+            if (protectedBoundary != null && i < protectedBoundary.size
+                && protectedBoundary[i]
+            ) {
+                flushHmmBuffer(out, words, bufFrom, bufTo)
+                bufFrom = i
+                bufTo = i
+            } else {
+                bufTo = i
+            }
+        }
+        flushHmmBuffer(out, words, bufFrom, bufTo)
+        return out
+    }
+
+    private fun flushHmmBuffer(
+        out: MutableList<Array<String>>,
+        words: List<Array<String>>,
+        from: Int,
+        to: Int
+    ) {
+        if (from < 0 || to < from) {
+            return
+        }
+        if (from == to) {
+            out.add(words[from])
+            return
+        }
+        val sb = StringBuilder(to - from + 1)
+        for (k in from..to) {
+            sb.append(words[k][0])
+        }
+        val text = sb.toString()
+        // 缓冲区本身是词典词：保持 jieba 的逐字输出，不交给 HMM。
+        if (isWord(text)) {
+            for (k in from..to) {
+                out.add(words[k])
+            }
+            return
+        }
+        var pos = words[from][1].toIntOrNull() ?: 0
+        for (piece in hmm.cut(text)) {
+            // 盲文专用约束：虚词不领起未登录词，也不夹在词中。
+            // 「而致」「之气」「所作」「可致」「阳而致」这类合并会把虚词和
+            // 内容粘成一个盲文词；词典已确认的（如「可使」「可达」）照常合并。
+            if (piece.length > 1 && !isWord(piece) && hasFunctionBoundary(piece)) {
+                for (c in piece) {
+                    out.add(arrayOf(c.toString(), pos.toString(), (pos + 1).toString()))
+                    pos++
+                }
+            } else {
+                out.add(arrayOf(piece, pos.toString(), (pos + piece.length).toString()))
+                pos += piece.length
+            }
+        }
+    }
+
+    private fun isCjkChar(c: Char): Boolean {
+        return c.code in 0x4E00..0x9FFF
+    }
+
+    /**
+     * 未登录词里是否含「不该连写」的虚词位置。
+     *
+     * 词首虚词（而致、之气、所作）和词中虚词（阳而致、阴而腑）都会让盲文
+     * 出现错误词块；词尾虚词不拦——「多因」「起于」「痛者」「甚则」是
+     * 正常搭配，拦了反而把真词拆散。
+     */
+    private fun hasFunctionBoundary(piece: String): Boolean {
+        if (FUNC_LEAD.indexOf(piece[0]) >= 0) {
+            return true
+        }
+        var k = 1
+        while (k < piece.length - 1) {
+            if (FUNC_LEAD.indexOf(piece[k]) >= 0) {
+                return true
+            }
+            k++
+        }
+        return false
+    }
+
     /** 构建 DAG：每个位置 k -> 可达结束位置列表（含 k 自身）。 */
     private fun buildDag(sentence: String): Map<Int, List<Int>> {
         val dag = HashMap<Int, List<Int>>()
@@ -285,5 +425,15 @@ class JiebaDict {
 
     companion object {
         private const val LOG_TAG = "JiebaDict"
+
+        /**
+         * 不允许领起 HMM 未登录词的虚词/介词/连词。
+         *
+         * 依据真实教材语料校准：HMM 合并里有 8.5% 以这些字开头且不在词典，
+         * 基本都是「虚词 + 内容词」的错误粘连。而「无 / 不 / 过 / 向 / 对 / 会」
+         * 会组成「无汗」「不节」「过多」「向外」「对侧」「会宗」等真词，故不列入。
+         */
+        private const val FUNC_LEAD =
+            "的了在是为因使及与和或而就都也把被从由以于其之者所则若如虽但并且令让给替地得着可能有"
     }
 }

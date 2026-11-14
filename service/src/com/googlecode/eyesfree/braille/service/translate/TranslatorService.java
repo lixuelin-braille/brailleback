@@ -31,6 +31,7 @@ import com.googlecode.eyesfree.braille.translate.TranslationResult;
 import com.googlecode.eyesfree.braille.translate.TranslatorClient;
 import com.googlecode.eyesfree.braille.utils.ZipResourceExtractor;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.lang.ref.WeakReference;
@@ -66,6 +67,8 @@ public class TranslatorService extends Service {
     // while the segmenter is still loading.
     private volatile boolean mWarnedUnsegmented = false;
     private static final String SEG_TAG = "BrailleSegmenter";
+    /** 用户分词词库文件名，放在应用私有目录下，重启服务后生效。 */
+    private static final String USER_SEG_FILE = "user_seg.txt";
     /** Whether word segmentation is applied for Chinese tables. Controlled by
      * the "chinese_segmentation" preference; defaults to on. */
     private volatile boolean mChineseSegmentationEnabled = true;
@@ -155,6 +158,22 @@ public class TranslatorService extends Service {
                         } catch (Exception e) {
                             Log.w(LOG_TAG, "Segment overrides load failed", e);
                         }
+                        // 加载 HMM 发射概率表（未登录词识别）。失败只告警，退回纯 DAG。
+                        try {
+                            InputStream hs = getAssets().open("hmm_emit.txt");
+                            try {
+                                int chars = mJiebaDict.loadHmm(hs);
+                                Log.i(LOG_TAG, "HMM emit table loaded, chars=" + chars);
+                            } finally {
+                                try {
+                                    hs.close();
+                                } catch (Exception e) {
+                                    Log.w(LOG_TAG, "Failed to close hmm emit stream", e);
+                                }
+                            }
+                        } catch (Exception e) {
+                            Log.w(LOG_TAG, "HMM emit table load failed, fallback to DAG", e);
+                        }
                         mSegmenter = new BrailleSegmenter(mJiebaDict);
                         // 加载阳光强制分写词库
                         try {
@@ -171,6 +190,24 @@ public class TranslatorService extends Service {
                         } catch (Exception e) {
                             Log.w(LOG_TAG, "Split dict load failed", e);
                         }
+                        // liblouis 多音字词组：避免词间空格拆散 always 规则
+                        try {
+                            InputStream lp = getAssets().open("liblouis_phrases.txt");
+                            try {
+                                int added = mSegmenter.loadProtectedPhrases(lp);
+                                Log.i(LOG_TAG, "Liblouis phrase protection loaded, added=" + added);
+                            } finally {
+                                try {
+                                    lp.close();
+                                } catch (Exception e) {
+                                    Log.w(LOG_TAG, "Failed to close liblouis phrase stream", e);
+                                }
+                            }
+                        } catch (Exception e) {
+                            Log.w(LOG_TAG, "Liblouis phrase protection load failed", e);
+                        }
+                        // 用户分词词库（可选）：外部私有目录优先，其次内部私有目录。
+                        loadUserSegDict();
                         mSegmenterReady = true;
                         Log.i(LOG_TAG, "Braille segmenter ready");
                     }
@@ -180,6 +217,29 @@ public class TranslatorService extends Service {
             }
         }, "BrailleSegmenterInit");
         t.start();
+    }
+
+    /**
+     * 加载可选的用户分词词库。文件不存在时静默跳过；格式为每行
+     * "词面\t分片1 分片2"，单字段行表示整体连写。
+     */
+    private void loadUserSegDict() {
+        File externalDir = getExternalFilesDir(null);
+        File external = externalDir == null ? null : new File(externalDir, USER_SEG_FILE);
+        File internal = new File(getFilesDir(), USER_SEG_FILE);
+        File source = external != null && external.isFile() ? external
+                : (internal.isFile() ? internal : null);
+        if (source == null) {
+            return;
+        }
+        try (InputStream in = new FileInputStream(source)) {
+            int applied = mSegmenter.loadUserSegDict(in);
+            Timber.tag(SEG_TAG).i("User segment dict loaded: %s (%d entries)",
+                    source.getAbsolutePath(), applied);
+        } catch (Exception e) {
+            Timber.tag(SEG_TAG).w(e, "User segment dict load failed: %s",
+                    source.getAbsolutePath());
+        }
     }
 
     private boolean isChineseTable(String tableName) {

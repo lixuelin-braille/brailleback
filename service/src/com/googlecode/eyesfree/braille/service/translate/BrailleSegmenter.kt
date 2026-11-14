@@ -10,6 +10,7 @@ package com.googlecode.eyesfree.braille.service.translate
 import java.io.BufferedReader
 import java.io.InputStream
 import java.io.InputStreamReader
+import java.text.Normalizer
 import java.util.regex.Pattern
 
 class BrailleSegmenter(private val dict: JiebaDict) {
@@ -18,6 +19,11 @@ class BrailleSegmenter(private val dict: JiebaDict) {
     private val splitDict = HashMap<String, Array<String>>()
     // 规则词最大长度，限制相邻 token 拼接匹配的窗口。
     private var splitDictMaxLen = 0
+    // liblouis 多音字词组：保持词组连续，避免词间空格让 always 规则失效。
+    private val protectedPhrases = HashSet<String>()
+    private var protectedMaxLen = 0
+    // 用户分词覆盖表：显式指定词面应当如何切分，优先级最高。
+    private val userSegDict = UserSegDict()
 
     init {
         for (w in SPLIT4) {
@@ -70,6 +76,54 @@ class BrailleSegmenter(private val dict: JiebaDict) {
         }
     }
 
+    /** 加载用户分词词库：每行 "词面\t分片1 分片2"，单字段行表示整体连写。 */
+    fun loadUserSegDict(inputStream: InputStream?): Int {
+        return userSegDict.load(inputStream)
+    }
+
+    /**
+     * 加载受保护词组（liblouis 中文表 always 规则里的多音字词面）：
+     * 每行一个纯汉字词组。分词后若相邻 token 拼起来命中词组，就合并为
+     * 一个片段，保证 liblouis 的词组规则能连续匹配。
+     */
+    @Synchronized
+    fun loadProtectedPhrases(inputStream: InputStream?): Int {
+        if (inputStream == null) {
+            return 0
+        }
+        var added = 0
+        try {
+            BufferedReader(InputStreamReader(inputStream, "UTF-8")).use { br ->
+                var firstLine = true
+                while (true) {
+                    var line = br.readLine() ?: break
+                    if (firstLine) {
+                        if (line.isNotEmpty() && line[0] == '\uFEFF') {
+                            line = line.substring(1)
+                        }
+                        firstLine = false
+                    }
+                    val w = line.trim()
+                    if (w.length < 2 || w.startsWith("#")) {
+                        continue
+                    }
+                    if (w.any { it < '\u4E00' || it > '\u9FFF' }) {
+                        continue
+                    }
+                    if (protectedPhrases.add(w)) {
+                        added++
+                        if (w.length > protectedMaxLen) {
+                            protectedMaxLen = w.length
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // 词表损坏不阻塞分词
+        }
+        return added
+    }
+
     class Result {
         @JvmField
         var text: String = ""
@@ -79,7 +133,16 @@ class BrailleSegmenter(private val dict: JiebaDict) {
         var segToOrig: IntArray = IntArray(0)
     }
 
-    private class Tok(val start: Int, val end: Int, val punct: Boolean)
+    /**
+     * 一个待输出片段。start/end 是原文区间；joinerAt 非负时表示在该
+     * 原文位置前插入一个合成连接号 ⠤（用于“字母+汉字”复合词边界）。
+     */
+    private class Tok(
+        val start: Int,
+        val end: Int,
+        val punct: Boolean,
+        val joinerAt: Int = -1
+    )
 
     private fun isPunct(s: String?): Boolean {
         if (s == null || s.isEmpty()) {
@@ -201,6 +264,255 @@ class BrailleSegmenter(private val dict: JiebaDict) {
         toks.addAll(merged)
     }
 
+    /**
+     * 数字 + 字母单位：把紧邻的「数字 token + 纯字母 token」合成一个词，
+     * 如 3.5kg / 1.5cm / 100mg。整数形式（3kg）已由 [mergeAsciiAlnum]
+     * 覆盖，这里补上带小数、千分位或全角分隔符的数字。
+     *
+     * 与 Brailix 一致，不维护单位白名单：数字后紧邻的拉丁字母串一律
+     * 连写（3.5foo 与 3.5kg 结构相同）。字母串之后的汉字仍走词间
+     * 空格（3.5kg 重）。百分数（50%）是完整词，不参与合并。
+     */
+    private fun mergeNumberUnit(toks: MutableList<Tok>, text: String) {
+        if (toks.size < 2) {
+            return
+        }
+        val merged = ArrayList<Tok>(toks.size)
+        var i = 0
+        while (i < toks.size) {
+            val first = toks[i]
+            var end = first.end
+            var j = i + 1
+            if (!first.punct && isNumberSurface(text, first)) {
+                while (j < toks.size && toks[j].start == end && !toks[j].punct
+                    && FOREIGN_LETTER_RE.matches(
+                        text.substring(toks[j].start, toks[j].end)
+                    )) {
+                    end = toks[j].end
+                    j++
+                }
+            }
+            if (j > i + 1) {
+                merged.add(Tok(first.start, end, false))
+            } else {
+                merged.add(first)
+            }
+            i = j
+        }
+        toks.clear()
+        toks.addAll(merged)
+    }
+
+    /**
+     * 受保护词组合并：把相邻 token 拼成的最长词面命中 [protectedPhrases]
+     * 时合并为一个片段。用户分词词库显式要求切开同一词面时不合并。
+     */
+    private fun mergeProtectedPhrases(toks: MutableList<Tok>, text: String) {
+        if (protectedPhrases.isEmpty() || protectedMaxLen < 2 || toks.size < 2) {
+            return
+        }
+        val merged = ArrayList<Tok>(toks.size)
+        var i = 0
+        while (i < toks.size) {
+            val first = toks[i]
+            if (first.punct) {
+                merged.add(first)
+                i++
+                continue
+            }
+            var end = first.end
+            var bestEnd = -1
+            var bestNext = i + 1
+            var j = i + 1
+            while (j < toks.size) {
+                val t = toks[j]
+                if (t.punct || t.start != end) {
+                    break
+                }
+                end = t.end
+                if (end - first.start > protectedMaxLen) {
+                    break
+                }
+                val cand = text.substring(first.start, end)
+                if (protectedPhrases.contains(cand) && !userSegDict.isSplit(cand)) {
+                    bestEnd = end
+                    bestNext = j + 1
+                }
+                j++
+            }
+            if (bestEnd > 0) {
+                merged.add(Tok(first.start, bestEnd, false))
+                i = bestNext
+            } else {
+                merged.add(first)
+                i++
+            }
+        }
+        toks.clear()
+        toks.addAll(merged)
+    }
+
+    /**
+     * 字母/汉字复合词边界：相邻的外文字母 token 与汉字 token 在原文中
+     * 直接相接，且拼接后的词面命中复合词表时，把两者合并并在边界插入
+     * 连接号 ⠤（U+2824，点 36）。未命中的组合（A4纸、3D打印）保持
+     * 词间空格；复合词表故意保持精简，漏词只会退回原有空格行为。
+     */
+    private fun mergeLetterHanziCompounds(toks: MutableList<Tok>, text: String) {
+        if (toks.isEmpty()) {
+            return
+        }
+        val merged = ArrayList<Tok>(toks.size)
+        var i = 0
+        while (i < toks.size) {
+            val cur = toks[i]
+            // jieba 词典本身可能已收有整词（如「γ射线」），此时没有相邻
+            // token 可供匹配，需要在单词内部找到字母/汉字边界。
+            if (!cur.punct) {
+                val surface = text.substring(cur.start, cur.end)
+                val boundary = compoundBoundaryIn(surface)
+                if (boundary > 0 && isCompoundKey(surface)) {
+                    merged.add(Tok(cur.start, cur.end, false, cur.start + boundary))
+                    i++
+                    continue
+                }
+            }
+            if (i + 1 < toks.size) {
+                val next = toks[i + 1]
+                if (!cur.punct && !next.punct && cur.end == next.start) {
+                    val a = text.substring(cur.start, cur.end)
+                    val b = text.substring(next.start, next.end)
+                    if (isLetterHanziCompound(a, b)) {
+                        merged.add(Tok(cur.start, next.end, false, next.start))
+                        i += 2
+                        continue
+                    }
+                }
+            }
+            merged.add(cur)
+            i++
+        }
+        toks.clear()
+        toks.addAll(merged)
+    }
+
+    private fun isLetterHanziCompound(a: String, b: String): Boolean {
+        val letterThenHanzi = FOREIGN_LETTER_RE.matches(a) && HANZI_RE.matches(b)
+        val hanziThenLetter = HANZI_RE.matches(a) && FOREIGN_LETTER_RE.matches(b)
+        if (!letterThenHanzi && !hanziThenLetter) {
+            return false
+        }
+        return isCompoundKey(a + b)
+    }
+
+    /** 全角字母按半角查表（Ｘ光 -> X光），输出仍保留原文写法。 */
+    private fun isCompoundKey(s: String): Boolean {
+        if (s.length < 2) {
+            return false
+        }
+        val key = Normalizer.normalize(s, Normalizer.Form.NFKC)
+        return key in LETTER_HANZI_COMPOUNDS
+    }
+
+    /**
+     * 返回单词内部字母→汉字或汉字→字母的交界下标（0 表示无交界）。
+     * 复合词只有一侧是连续外文字母，因此最长字母前缀/后缀即可定位。
+     */
+    private fun compoundBoundaryIn(s: String): Int {
+        var k = 0
+        while (k < s.length && isForeignLetter(s[k])) {
+            k++
+        }
+        if (k > 0 && k < s.length && HANZI_RE.matches(s.substring(k))) {
+            return k
+        }
+        var h = 0
+        while (h < s.length && isHanzi(s[h])) {
+            h++
+        }
+        if (h > 0 && h < s.length && FOREIGN_LETTER_RE.matches(s.substring(h))) {
+            return h
+        }
+        return 0
+    }
+
+    private fun isForeignLetter(c: Char): Boolean {
+        return (c in 'A'..'Z') || (c in 'a'..'z') ||
+            (c in '\uFF21'..'\uFF3A') || (c in '\uFF41'..'\uFF5A') ||
+            (c in '\u0391'..'\u03A9') || (c in '\u03B1'..'\u03C9')
+    }
+
+    private fun isHanzi(c: Char): Boolean {
+        return (c in '\u3400'..'\u4DBF') || (c in '\u4E00'..'\u9FFF') ||
+            (c in '\uF900'..'\uFAFF')
+    }
+
+    /**
+     * 数字/汉字边界：
+     * - 数字后紧跟汉字 → 连接号 ⠤（10页 -> 10⠤页、3个 -> 3⠤个），
+     *   避免数字格与汉字首格混淆；百分数（50%）本身是完整词，后面仍用空格；
+     * - 年份标记「年」按规范直接连写（2026年），不加连接号；
+     * - 反向「汉字 + 数字」默认仍是词间空格，只有序数前缀「第」直接连写
+     *   （第3 / 第2026年）。
+     */
+    private fun mergeNumberHanziBounds(toks: MutableList<Tok>, text: String) {
+        if (toks.isEmpty()) {
+            return
+        }
+        val merged = ArrayList<Tok>(toks.size)
+        var i = 0
+        while (i < toks.size) {
+            val cur = toks[i]
+            var end = cur.end
+            var joiner = -1
+            var nextIndex = i + 1
+            // 序数前缀「第」+ 数字：直接连写，不留空格。
+            if (!cur.punct) {
+                val curSurface = text.substring(cur.start, cur.end)
+                if (HANZI_RE.matches(curSurface) && curSurface.endsWith("第")
+                    && nextIndex < toks.size) {
+                    val n = toks[nextIndex]
+                    if (!n.punct && n.start == end && isNumberSurface(text, n)) {
+                        end = n.end
+                        nextIndex++
+                    }
+                }
+            }
+            // 数字 + 汉字：连接号；「年」直接连写；百分数不连接。
+            val numTok = toks[nextIndex - 1]
+            if (!numTok.punct && isNumberSurface(text, numTok)
+                && nextIndex < toks.size) {
+                val h = toks[nextIndex]
+                if (!h.punct && h.start == end) {
+                    val hanzi = text.substring(h.start, h.end)
+                    if (HANZI_RE.matches(hanzi)) {
+                        end = h.end
+                        joiner = if (hanzi == "年") -1 else h.start
+                        nextIndex++
+                    }
+                }
+            }
+            if (nextIndex > i + 1) {
+                merged.add(Tok(cur.start, end, false, joiner))
+                i = nextIndex
+                continue
+            }
+            merged.add(cur)
+            i++
+        }
+        toks.clear()
+        toks.addAll(merged)
+    }
+
+    /** 纯数字 token（可带小数/千分位/百分号）；字母数字混合词不算。 */
+    private fun isNumberSurface(text: String, tok: Tok): Boolean {
+        val s = text.substring(tok.start, tok.end)
+        if (s.endsWith('%') || s.endsWith('％')) {
+            return false
+        }
+        return NUM_PAT.matcher(s).matches()
+    }
+
     /** 普通段：先保护 URL/邮箱，再做数字/字母分段与 jieba。 */
     private fun addPlainTokens(toks: MutableList<Tok>, text: String, from: Int, to: Int) {
         if (from >= to) {
@@ -251,7 +563,7 @@ class BrailleSegmenter(private val dict: JiebaDict) {
         addJiebaTokens(toks, text, from + last, to)
     }
 
-    /** jieba 分词 + 附成分合并 + 2+2 分写。 */
+    /** jieba 分词 + 用户覆盖 + 附成分合并 + 2+2 分写。 */
     private fun addJiebaTokens(toks: MutableList<Tok>, text: String, from: Int, to: Int) {
         if (from >= to) {
             return
@@ -260,10 +572,26 @@ class BrailleSegmenter(private val dict: JiebaDict) {
         if (seg.isEmpty()) {
             return
         }
-        val words = dict.segmentWithPos(seg)
+        val raw = dict.segmentWithPos(seg)
+        // jieba finalseg 的未登录词识别：只对连续单字且整段不在词典的缓冲区生效，
+        // 用户词典命中的词面边界不跨越。
+        val words = dict.withHmm(raw, userProtectedBoundaries(raw))
         val merged = ArrayList<Array<String>>()
         var wi = 0
         while (wi < words.size) {
+            // 用户词库是显式覆盖：命中后直接按用户分片输出，不再进入
+            // 阳光分写、后附成分合并或 2+2 语节规则。
+            val userMatch = userSegDict.match(words, wi)
+            if (userMatch != null) {
+                var pos = words[wi][1].toInt()
+                for (part in userMatch.pieces) {
+                    val next = pos + part.length
+                    merged.add(arrayOf(part, pos.toString(), next.toString()))
+                    pos = next
+                }
+                wi = userMatch.endIndex
+                continue
+            }
             // 阳光强制分写词库命中：jieba 可能把规则词切成多个 token，
             // 因此按相邻 token 拼接后再匹配，避免规则因前期切分不同而失效。
             val splitMatch = matchSplitRule(words, wi)
@@ -330,6 +658,35 @@ class BrailleSegmenter(private val dict: JiebaDict) {
     }
 
     /**
+     * 用户词典命中的 token 区间不能被子 HMM 合并跨越：用户词条只在 token
+     * 边界上匹配，一旦边界被合并，词条就会失效。返回 true 的下标 i 表示
+     * 第 i 个 token 之前不允许合并。
+     */
+    private fun userProtectedBoundaries(words: List<Array<String>>): BooleanArray? {
+        if (userSegDict.size() == 0 || words.size < 2) {
+            return null
+        }
+        var any = false
+        val blocked = BooleanArray(words.size + 1)
+        var i = 0
+        while (i < words.size) {
+            val m = userSegDict.match(words, i)
+            if (m == null) {
+                i++
+                continue
+            }
+            var b = i
+            while (b <= m.endIndex && b < blocked.size) {
+                blocked[b] = true
+                b++
+            }
+            any = true
+            i = m.endIndex
+        }
+        return if (any) blocked else null
+    }
+
+    /**
      * 从 jieba 的第 start 个 token 起，按相邻 token 拼接匹配阳光分写规则。
      * 返回命中的规则分段和消耗的 token 数；多个候选取最长匹配。
      * CONNECT 中的连写词优先，不允许被阳光规则拆开。
@@ -380,9 +737,15 @@ class BrailleSegmenter(private val dict: JiebaDict) {
         }
         addPlainTokens(toks, text, last, text.length)
 
+        // 多音字词组保护：liblouis always 规则要求词组连续出现。
+        mergeProtectedPhrases(toks, text)
+
         // 字母数字标识符（MP3/A4/3D/COVID-19）与化学式保护
         mergeAsciiAlnum(toks, text)
+        mergeNumberUnit(toks, text)
         mergeChemFormulas(toks, text)
+        mergeLetterHanziCompounds(toks, text)
+        mergeNumberHanziBounds(toks, text)
 
         // 拼装带空格文本 + 映射
         val sb = StringBuilder()
@@ -399,6 +762,9 @@ class BrailleSegmenter(private val dict: JiebaDict) {
                     sb.append(' ')
                 }
                 for (i in t.start until t.end) {
+                    if (i == t.joinerAt) {
+                        sb.append(CONNECTOR)
+                    }
                     sb.append(text[i])
                     origToSeg[i] = sb.length - 1
                 }
@@ -492,6 +858,25 @@ class BrailleSegmenter(private val dict: JiebaDict) {
             "Rf", "Db", "Sg", "Bh", "Hs", "Mt", "Ds", "Rg", "Cn", "Nh", "Fl", "Mc", "Lv", "Ts", "Og"
         )
 
+        // 字母/汉字复合词（参考 Brailix Studio Apache-2.0 的 compounds 设计，
+        // 按同一语义独立整理）。只有这些明确词条使用连接号，未命中退回空格。
+        private val LETTER_HANZI_COMPOUND_ARR = arrayOf(
+            "x轴", "y轴", "z轴", "X轴", "Y轴", "Z轴",
+            "T恤", "T台", "T型",
+            "X光", "X射线",
+            "B超",
+            "U盘", "U盾",
+            "pH值",
+            "卡拉OK",
+            "AA制",
+            "维生素A", "维生素B", "维生素C", "维生素D", "维生素E",
+            "α粒子", "β粒子", "γ射线", "γ刀"
+        )
+
+        // 合成连接号：U+2824 ⠤（点 36）。braille-patterns.cti 已把它定义
+        // 为 36，可直接作为文本交给 liblouis。
+        private const val CONNECTOR = '\u2824'
+
         private const val PUNCT_STR =
             "，。、；：？！“”‘’（）《》〈〉—…··,.;:!?()[]{} "
 
@@ -503,6 +888,8 @@ class BrailleSegmenter(private val dict: JiebaDict) {
         private val NAMESET = HashSet<String>(listOf(*NAMES_ARR))
         private val SPLIT4_INNER = HashSet<String>(listOf(*SPLIT4_INNER_ARR))
         private val ELEMENTS = HashSet<String>(listOf(*ELEMENTS_ARR))
+        private val LETTER_HANZI_COMPOUNDS =
+            HashSet<String>(listOf(*LETTER_HANZI_COMPOUND_ARR))
 
         private val NUM_PAT = Pattern.compile(
             "([-－]?[0-9０-９]{1,3}(?:[,，][0-9０-９]{3})+(?:[.．][0-9０-９]+)?[%％]?|[-－]?[0-9０-９]+(?:[.．][0-9０-９]+)?[%％]?)")
@@ -513,6 +900,12 @@ class BrailleSegmenter(private val dict: JiebaDict) {
                 "|[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}")
         private val ALNUM_RE = Regex(
             "[A-Za-z0-9０-９Ａ-Ｚａ-ｚ\\u2080-\\u2089－-]+")
+        // 外文字母侧：拉丁字母（半角/全角）+ 希腊字母（α β γ 等）
+        private val FOREIGN_LETTER_RE =
+            Regex("[A-Za-zＡ-Ｚａ-ｚ\u0391-\u03A9\u03B1-\u03C9]+")
+        // 汉字侧：基本区 + 扩展 A + 兼容区
+        private val HANZI_RE =
+            Regex("[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF]+")
 
         init {
             for (c in SUFFIX_STR.toCharArray()) {

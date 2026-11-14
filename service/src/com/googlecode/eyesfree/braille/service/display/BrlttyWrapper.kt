@@ -134,7 +134,8 @@ class BrlttyWrapper(
 
     /**
      * Polls the driver for a single key command, returning -1 if no command is
-     * available.
+     * available. [COMMAND_DRIVER_FAILED] means the native driver could not be
+     * rebuilt and the connection has to be re-established.
      *
      * This is typically used when more input data from the device has been
      * detected. This call does not block indefinitely, but it can still block
@@ -244,6 +245,9 @@ class BrlttyWrapper(
     // End callbacks.
 
     companion object {
+
+        /** readCommand() result meaning "the native driver gave up". */
+        const val COMMAND_DRIVER_FAILED = -2
 
         private const val LOG_TAG = "BrlttyWrapper"
         private const val START_TIMEOUT_FACTOR = 2f

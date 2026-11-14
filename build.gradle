@@ -2,6 +2,8 @@
 plugins {
     id 'com.android.application' version '9.2.0' apply false
     id 'com.android.library' version '9.2.0' apply false
+    // Compose 编译器插件版本必须与 AGP 9.2 内置的 Kotlin 2.2.10 严格一致。
+    id 'org.jetbrains.kotlin.plugin.compose' version '2.2.10' apply false
 }
 
 allprojects {

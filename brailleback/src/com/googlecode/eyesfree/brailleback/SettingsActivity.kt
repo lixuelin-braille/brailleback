@@ -3,7 +3,12 @@
  *
  * 设置页（androidx.preference 全量迁移）。
  *
- * 覆盖全部四个分类：设备与连接 / 盲文显示 / 声音 / 高级。
+ * 信息架构：主屏按「开始使用 / 设置分类 / 功能与内容」分组，设置分类下是
+ * 设备与连接、按键与手势、盲文显示、声音与行为、开发者选项五个平级子屏，
+ * 全部为两层导航；子屏标题与返回按钮随层级更新，便于读屏用户定位。
+ * Jetpack Compose 分批迁移中：设备与连接、按键与手势、盲文显示三个子屏已改由
+ * compose 包下的独立 Activity 渲染，其余两个仍是本文件的 Fragment。
+ * 每批只加一条接线分支，XML 中的旧子屏完整保留，可随时回退。
  * 老框架设置页（BrailleBackPreferencesActivity）已退役。
  * 数据层与迁移前共用同一个 SharedPreferences（key 完全一致），值不丢失。
  */
@@ -14,8 +19,6 @@ import android.Manifest
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.AlertDialog
 import android.content.BroadcastReceiver
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.DialogInterface
@@ -28,6 +31,7 @@ import android.os.Bundle
 import android.provider.Settings
 import android.text.TextUtils
 import android.util.Log
+import android.view.MenuItem
 import android.view.accessibility.AccessibilityManager
 import android.widget.ScrollView
 import android.widget.SeekBar
@@ -42,8 +46,15 @@ import androidx.preference.PreferenceScreen
 import com.googlecode.eyesfree.braille.display.Display
 import com.googlecode.eyesfree.braille.display.DisplayClient
 import com.googlecode.eyesfree.braille.service.display.ConnectionProtocolPolicy
+import com.googlecode.eyesfree.braille.service.display.UsbDisplayConnection
 import com.googlecode.eyesfree.braille.translate.TableInfo
+import com.googlecode.eyesfree.brailleback.compose.BrailleDisplayComposeActivity
+import com.googlecode.eyesfree.brailleback.compose.DeviceConnectionComposeActivity
+import com.googlecode.eyesfree.brailleback.compose.DeveloperOptionsComposeActivity
+import com.googlecode.eyesfree.brailleback.compose.KeysGesturesComposeActivity
+import com.googlecode.eyesfree.brailleback.compose.SoundBehaviorComposeActivity
 import com.googlecode.eyesfree.brailleback.sound.SoundSchemeManager
+import com.googlecode.eyesfree.brailleback.utils.DebugLogActions
 import com.googlecode.eyesfree.brailleback.utils.LogFileWriter
 import com.googlecode.eyesfree.brailleback.utils.PreferenceUtils
 import com.googlecode.eyesfree.utils.LogUtils
@@ -82,6 +93,9 @@ class SettingsActivity : AppCompatActivity(),
      *  真实变化才播报（Activity 级客户端在分类切换时不会产生状态回调）。 */
     private var mFirstConnectionState = true
 
+    /** 上一次主动播报过的子屏标题，避免同一屏重复朗读。 */
+    private var mLastAnnouncedScreenTitle: CharSequence? = null
+
     /** 当前可见 fragment（用于推送连接状态渲染 UI）。 */
     var mConnectionStatusUi: ConnectionStatusUi? = null
 
@@ -100,6 +114,26 @@ class SettingsActivity : AppCompatActivity(),
         supportFragmentManager.beginTransaction()
             .replace(android.R.id.content, SettingsFragment())
             .commit()
+    }
+
+    /** 点击标题栏返回箭头时回到上一级子屏；主屏无返回箭头，交给系统。 */
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        if (item.itemId == android.R.id.home &&
+            supportFragmentManager.backStackEntryCount > 0
+        ) {
+            supportFragmentManager.popBackStack()
+            return true
+        }
+        return super.onOptionsItemSelected(item)
+    }
+
+    /** 进入子屏时主动朗读子屏标题，让读屏用户知道当前所在分类。 */
+    fun announceSubScreenTitle(title: CharSequence) {
+        if (title.isEmpty() || title == mLastAnnouncedScreenTitle) {
+            return
+        }
+        mLastAnnouncedScreenTitle = title
+        window.decorView.announceForAccessibility(title)
     }
 
     override fun onDestroy() {
@@ -164,6 +198,30 @@ class SettingsActivity : AppCompatActivity(),
         caller: PreferenceFragmentCompat,
         preferenceScreen: PreferenceScreen
     ): Boolean {
+        // Compose 分批迁移：五个子屏全部交给独立 Activity（第五批收官）。
+        // 入口、主屏层级完全不变，五屏 XML 原样保留，保证可随时回退。
+        when (preferenceScreen.key) {
+            getString(R.string.pref_category_device_key) -> {
+                startActivity(Intent(this, DeviceConnectionComposeActivity::class.java))
+                return true
+            }
+            getString(R.string.pref_category_keys_key) -> {
+                startActivity(Intent(this, KeysGesturesComposeActivity::class.java))
+                return true
+            }
+            getString(R.string.pref_category_braille_key) -> {
+                startActivity(Intent(this, BrailleDisplayComposeActivity::class.java))
+                return true
+            }
+            getString(R.string.pref_category_sound_behavior_key) -> {
+                startActivity(Intent(this, SoundBehaviorComposeActivity::class.java))
+                return true
+            }
+            getString(R.string.pref_category_developer_key) -> {
+                startActivity(Intent(this, DeveloperOptionsComposeActivity::class.java))
+                return true
+            }
+        }
         val args = Bundle().apply {
             putString(
                 PreferenceFragmentCompat.ARG_PREFERENCE_ROOT,
@@ -199,6 +257,7 @@ class SettingsActivity : AppCompatActivity(),
         private var mOverlayTutorialPreference: Preference? = null
         private var mLicensesPreference: Preference? = null
         private var mLogLevelPreference: ListPreference? = null
+        private var mMotionPreference: Preference? = null
         private var mSoundVolumePreference: Preference? = null
         private var mSetupServicePreference: Preference? = null
         private var mViewLogPreference: Preference? = null
@@ -253,6 +312,10 @@ class SettingsActivity : AppCompatActivity(),
             mLogLevelPreference =
                 findPreference<ListPreference>(getString(R.string.pref_log_level_key))
             mLogLevelPreference?.setOnPreferenceChangeListener(this)
+
+            mMotionPreference =
+                findPreference<Preference>(getString(R.string.pref_motion_mode_key))
+            mMotionPreference?.setOnPreferenceChangeListener(this)
             // Debug builds used to pin this preference to VERBOSE. Testers
             // must be able to raise the level themselves while reproducing a
             // problem, so keep it editable and only show the computed default
@@ -315,6 +378,9 @@ class SettingsActivity : AppCompatActivity(),
 
         override fun onResume() {
             super.onResume()
+            updateScreenTitle()
+            // 用户回到本界面说明本人在场，允许下一次连接再弹一次 USB 授权框。
+            UsbDisplayConnection.allowPermissionPromptAgain()
             requestBluetoothPermissions()
 
             // 点显器客户端在 Activity 级持有（onCreate 创建、onDestroy 关闭）。
@@ -362,6 +428,29 @@ class SettingsActivity : AppCompatActivity(),
             }
         }
 
+        /**
+         * 子屏导航的读屏定位：进入分类子屏时把 ActionBar 标题改成该分类名，
+         * 并显示返回箭头；回到主屏恢复应用标题、隐藏箭头。
+         *
+         * setPreferencesFromResource(R.xml.settings, rootKey) 会把 rootKey 对应的
+         * PreferenceScreen 设为当前 preferenceScreen，因此它的 title 就是子屏标题；
+         * 主屏根节点没有 title，据此区分两级，不需要额外维护标题栈。
+         */
+        private fun updateScreenTitle() {
+            val host = requireActivity() as SettingsActivity
+            val subScreenTitle = preferenceScreen?.title
+            val isSubScreen = parentFragmentManager.backStackEntryCount > 0
+            host.title = if (subScreenTitle.isNullOrEmpty()) {
+                getString(R.string.brailleback_setup_title)
+            } else {
+                subScreenTitle
+            }
+            host.supportActionBar?.setDisplayHomeAsUpEnabled(isSubScreen)
+            if (isSubScreen && !subScreenTitle.isNullOrEmpty()) {
+                host.announceSubScreenTitle(subScreenTitle)
+            }
+        }
+
         // ------------------------------------------------------------------
         // 连接状态（UI 渲染；真实状态与播报由 Activity 级 DisplayClient 提供）
         // ------------------------------------------------------------------
@@ -392,11 +481,12 @@ class SettingsActivity : AppCompatActivity(),
             addTableList(mTablePreference)
         }
 
-        /** Assigns the appropriate intent to the key bindings preference. */
+        /** Assigns the appropriate intents to the key bindings / custom key map preferences. */
         private fun assignKeyBindingsIntent() {
-            val pref = findPreference<Preference>(getString(R.string.pref_key_bindings_key))
-            val intent = Intent(requireActivity(), KeyBindingsActivity::class.java)
-            pref?.intent = intent
+            findPreference<Preference>(getString(R.string.pref_key_bindings_key))?.intent =
+                Intent(requireActivity(), KeyBindingsActivity::class.java)
+            findPreference<Preference>(getString(R.string.pref_custom_key_map_key))?.intent =
+                Intent(requireActivity(), CustomKeyMapActivity::class.java)
         }
 
         private fun addTableList(pref: ListPreference?) {
@@ -482,6 +572,17 @@ class SettingsActivity : AppCompatActivity(),
         // ------------------------------------------------------------------
 
         override fun onPreferenceChange(preference: Preference, newValue: Any?): Boolean {
+            // 运动模式：只要用户手动拨过开关，就按显式选择处理，
+            // 之后不再随 USB / 蓝牙的默认值变化。
+            if (preference === mMotionPreference) {
+                androidx.preference.PreferenceManager
+                    .getDefaultSharedPreferences(requireContext())
+                    .edit()
+                    .putBoolean(
+                        getString(R.string.pref_motion_mode_explicit_key), true)
+                    .apply()
+            }
+
             // Always update the summary based on the list preference value.
             if (preference is ListPreference) {
                 val updated = updateListPreferenceSummary(
@@ -552,9 +653,7 @@ class SettingsActivity : AppCompatActivity(),
                     AlertDialog.Builder(requireActivity())
                         .setMessage(R.string.debug_log_clear_confirm)
                         .setPositiveButton(android.R.string.ok) { _, _ ->
-                            LogFileWriter.clear(requireActivity())
-                            Toast.makeText(requireActivity(), R.string.debug_log_cleared,
-                                Toast.LENGTH_SHORT).show()
+                            DebugLogActions.clear(requireActivity())
                         }
                         .setNegativeButton(android.R.string.cancel, null)
                         .show()
@@ -568,26 +667,14 @@ class SettingsActivity : AppCompatActivity(),
         // Debug log view / export
         // ------------------------------------------------------------------
 
-        /** 直接从开发者选项分享当前日志，省去先打开查看对话框的一步。 */
+        /** 直接从开发者选项分享当前日志；动作实现统一在 DebugLogActions。 */
         private fun shareCurrentLog() {
-            val log = LogFileWriter.readAll(requireActivity())
-            if (log.isBlank()) {
-                Toast.makeText(requireActivity(), R.string.debug_log_empty,
-                    Toast.LENGTH_SHORT).show()
-                return
-            }
-            shareLog(log)
+            DebugLogActions.shareCurrentLog(requireActivity())
         }
 
         /** 直接从开发者选项把当前日志复制到剪贴板。 */
         private fun copyCurrentLog() {
-            val log = LogFileWriter.readAll(requireActivity())
-            if (log.isBlank()) {
-                Toast.makeText(requireActivity(), R.string.debug_log_empty,
-                    Toast.LENGTH_SHORT).show()
-                return
-            }
-            copyLogToClipboard(log)
+            DebugLogActions.copyCurrentLog(requireActivity())
         }
 
         /** 弹出调试日志对话框：ScrollView 展示 + 分享 / 复制按钮。 */
@@ -620,37 +707,11 @@ class SettingsActivity : AppCompatActivity(),
 
         /** 把日志文本复制到剪贴板，便于直接粘贴到聊天或反馈里。 */
         private fun copyLogToClipboard(text: String) {
-            val context = requireActivity()
-            val manager = context.getSystemService(Context.CLIPBOARD_SERVICE)
-                as? ClipboardManager
-            if (manager == null) {
-                Toast.makeText(context, R.string.debug_log_copy_fail,
-                    Toast.LENGTH_SHORT).show()
-                return
-            }
-            try {
-                manager.setPrimaryClip(
-                    ClipData.newPlainText(getString(R.string.debug_log_view_title), text))
-                Toast.makeText(context, R.string.debug_log_copied,
-                    Toast.LENGTH_SHORT).show()
-            } catch (e: Exception) {
-                Toast.makeText(context, R.string.debug_log_copy_fail,
-                    Toast.LENGTH_SHORT).show()
-            }
+            DebugLogActions.copyLogToClipboard(requireActivity(), text)
         }
 
         private fun shareLog(text: String) {
-            val intent = Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"
-                putExtra(Intent.EXTRA_TEXT, text)
-            }
-            try {
-                startActivity(Intent.createChooser(intent,
-                    getString(R.string.debug_log_share)))
-            } catch (e: Exception) {
-                Toast.makeText(requireActivity(), R.string.debug_log_share_fail,
-                    Toast.LENGTH_SHORT).show()
-            }
+            DebugLogActions.shareLog(requireActivity(), text)
         }
 
         private fun dp(v: Int): Int =

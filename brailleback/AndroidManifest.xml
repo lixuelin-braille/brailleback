@@ -195,6 +195,47 @@
             </intent-filter>
         </activity>
 
+        <!-- 盲文显示器按键自定义：默认全部保持原动作，修改后立即生效 -->
+        <activity
+            android:name=".CustomKeyMapActivity"
+            android:label="@string/custom_key_map_title"
+            android:theme="@style/BraillebackSettingsTheme"
+            android:exported="false" />
+
+        <!-- Jetpack Compose 分批迁移：设备与连接（第一批）、按键与手势（第二批）、
+             盲文显示（第三批）、声音与行为（第四批）、开发者选项（第五批）。
+             五个子屏现已全部由独立 Activity 渲染；五个子屏的旧 XML 定义
+             全部保留，随时可回退。 -->
+        <activity
+            android:name=".compose.DeviceConnectionComposeActivity"
+            android:label="@string/pref_category_device_title"
+            android:theme="@style/BraillebackSettingsTheme"
+            android:exported="false" />
+
+        <activity
+            android:name=".compose.KeysGesturesComposeActivity"
+            android:label="@string/pref_category_keys_title"
+            android:theme="@style/BraillebackSettingsTheme"
+            android:exported="false" />
+
+        <activity
+            android:name=".compose.BrailleDisplayComposeActivity"
+            android:label="@string/pref_category_braille_title"
+            android:theme="@style/BraillebackSettingsTheme"
+            android:exported="false" />
+
+        <activity
+            android:name=".compose.SoundBehaviorComposeActivity"
+            android:label="@string/pref_category_sound_behavior_title"
+            android:theme="@style/BraillebackSettingsTheme"
+            android:exported="false" />
+
+        <activity
+            android:name=".compose.DeveloperOptionsComposeActivity"
+            android:label="@string/pref_category_developer_title"
+            android:theme="@style/BraillebackSettingsTheme"
+            android:exported="false" />
+
         <activity
              android:name=".IMESetupWizardActivity"
              android:label="@string/ime_setup_wizard_name"

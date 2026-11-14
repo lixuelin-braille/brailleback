@@ -219,6 +219,8 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
                     // Wired displays only: a USB stick or keyboard must not
                     // disturb a working Bluetooth connection.
                     if (isWiredProtocol() && !isConnectionActive()) {
+                        // 重新插入属于新的枚举，可以再问一次 USB 授权。
+                        UsbDisplayConnection.allowPermissionPromptAgain()
                         Timber.i("USB device attached; trying wired connection");
                         autoConnectBraille()
                     }

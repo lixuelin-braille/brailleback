@@ -72,8 +72,8 @@
     <string name="permission_bluetooth_title">Bluetooth permission needed</string>
     <string name="permission_bluetooth_message">To connect to your braille display, brailleback盲文 needs access to Bluetooth. Please grant it in Settings.</string>
     <!-- Label for the Device preferences category. Contains preferences specific to a user's Braille display. [CHAR_LIMIT=45] -->
-    <string name="pref_category_device_title">Device</string>
-    <string name="pref_category_device_summary">Connection status, protocol and keyboard help</string>
+    <string name="pref_category_device_title">Device and connection</string>
+    <string name="pref_category_device_summary">Connection status, protocol and auto-reconnect</string>
     <string name="pref_connection_protocol_title">Connection type</string>
     <string name="pref_auto_connect_title">Auto-connect display</string>
     <string name="pref_auto_connect_summary">Connect automatically at startup, when the screen or Bluetooth turns on, or when a paired display is discovered; retry briefly after a drop and wait for the display to reconnect</string>
@@ -146,8 +146,8 @@
     <!-- Label for the Key Bindings preference. Displays an activity that shows the user key bindings for their device. [CHAR_LIMIT=45] -->
     <string name="pref_key_bindings_title">Keyboard help</string>
     <!-- Label for the Braille preferences category. Contains settings for braille translation. [CHAR_LIMIT=45] -->
-    <string name="pref_category_braille_title">Braille</string>
-    <string name="pref_category_braille_summary">Braille type, tables and display behavior</string>
+    <string name="pref_category_braille_title">Braille display</string>
+    <string name="pref_category_braille_summary">Braille table, word wrap, cursor dots and Chinese segmentation</string>
     <!-- Sub-category for braille type / tables / wrap. -->
     <string name="pref_category_braille_type_title">Braille type</string>
     <!-- Sub-category for volume key actions. -->
@@ -182,8 +182,8 @@
     <string name="pref_idle_clear_3min_label">3 minutes</string>
     <string name="pref_idle_clear_5min_label">5 minutes</string>
 
-    <string name="pref_motion_mode_summary_on">Coalesce display updates during fast scrolling</string>
-    <string name="pref_motion_mode_summary_off">Refresh the display on every update</string>
+    <string name="pref_motion_mode_summary_on">Coalesce display updates during fast scrolling. On by default for USB connections</string>
+    <string name="pref_motion_mode_summary_off">Refresh the display on every update. The default for Bluetooth connections</string>
 
     <string name="pref_volume_gestures_enabled_title">Volume key gestures</string>
     <string name="pref_volume_gestures_enabled_summary_on">On. A slow press changes the volume by one step about 0.3 s after you release the key; a long press or a fast double press only runs the action below and never changes the volume. A slot set to None still behaves as an ordinary press.</string>
@@ -221,7 +221,7 @@
     <string name="pref_category_miscellaneous_summary">Advanced options and licenses</string>
     <!-- Label for the Developer options category. Contains settings for debugging and demos. [CHAR_LIMIT=25] -->
     <string name="pref_category_developer_title">Developer options</string>
-    <string name="pref_category_developer_summary">Log level and on-screen overlay</string>
+    <string name="pref_category_developer_summary">Log level, log export and on-screen overlay</string>
     <!-- Label for the On-screen overlay category. Appears within developer options. [CHAR_LIMIT=30] -->
     <string name="pref_category_braille_overlay_title">On-screen overlay</string>
     <!-- Label for the on-screen overlay checkbox preference. [CHAR_LIMIT=45] -->
@@ -393,12 +393,12 @@
     <string name="sound_scheme_tatans">天坦</string>
 
     <!-- 音效设置 -->
-    <string name="pref_sound_category_title">音效</string>
-    <string name="pref_sound_category_summary">启用或关闭音效反馈</string>
-    <string name="pref_sound_enabled_title">启用音效</string>
-    <string name="pref_sound_enabled_summary_on">已开启音效反馈</string>
-    <string name="pref_sound_enabled_summary_off">已关闭音效反馈</string>
-    <string name="pref_sound_volume_title">音效音量</string>
+    <string name="pref_sound_category_title">Sound feedback</string>
+    <string name="pref_sound_category_summary">Enable sound feedback and set its volume</string>
+    <string name="pref_sound_enabled_title">Enable sound feedback</string>
+    <string name="pref_sound_enabled_summary_on">Sound feedback is on</string>
+    <string name="pref_sound_enabled_summary_off">Sound feedback is off</string>
+    <string name="pref_sound_volume_title">Sound volume</string>
 
     <!-- 音效事件名称 -->
     <string name="sound_name_focus">不可点击焦点</string>
@@ -431,7 +431,7 @@
     <string name="sound_name_add_success">追加复制</string>
 
     <!-- 音效方案编辑器（保留音量字符串供设置页使用） -->
-    <string name="sound_editor_volume">音效音量：%1$d</string>
+    <string name="sound_editor_volume">Sound volume: %1$d</string>
 
     <!-- 音效设置 key -->
     <string name="pref_sound_enabled_key" translatable="false">pref_sound_enabled</string>
@@ -474,4 +474,87 @@
     <string name="bookshelf_item_desc_no_time">%1$s, %2$s</string>
 
     <string name="pref_braille_reader_title">Braille reader</string>
+
+    <!-- 盲文显示器按键自定义：设置入口与编辑页 -->
+    <string name="pref_custom_key_map_title">Customize display keys</string>
+    <string name="pref_custom_key_map_summary">Change what keys on your braille display do</string>
+    <string name="custom_key_map_title">Customize display keys</string>
+    <string name="custom_key_map_instructions">Choose a key, then pick the action it should perform. Changes take effect immediately. Routing keys, braille input dots and system keys cannot be reassigned, but any other key can be set to a system action such as Back.</string>
+    <string name="custom_key_map_instructions_title">How it works</string>
+    <string name="custom_key_map_category_title">Keys you can customize</string>
+    <string name="custom_key_map_default_action">Keep default (no change)</string>
+    <string name="custom_key_map_dialog_title">Action for %1$s</string>
+    <string name="custom_key_map_current_summary">Current: %1$s. Default: %2$s.</string>
+    <string name="custom_key_map_device_key">Physical key: %1$s</string>
+    <string name="custom_key_map_no_device">Connect a braille display to see its physical key names.</string>
+    <string name="custom_key_map_conflict">Note: %1$d groups of keys now perform the same action.</string>
+    <string name="custom_key_map_saved">Saved: %1$s now performs %2$s</string>
+    <string name="custom_key_map_reset_title">Reset all keys to default</string>
+    <string name="custom_key_map_reset_summary">Clear every custom key mapping</string>
+    <string name="custom_key_map_reset_confirm_title">Reset all keys?</string>
+    <string name="custom_key_map_reset_confirm_message">Every customized key will return to its default action. This cannot be undone.</string>
+    <string name="custom_key_map_reset_done">All keys reset to default</string>
+
+    <!-- 设置页重规划：主屏分组与平级子屏（两层导航） -->
+    <string name="pref_category_start_title">Getting started</string>
+    <string name="pref_category_settings_title">Settings</string>
+    <string name="pref_category_features_title">Features and content</string>
+    <string name="pref_category_keys_title">Keys and gestures</string>
+    <string name="pref_category_keys_summary">Display key reference, custom key map and volume-key shortcuts</string>
+    <string name="pref_category_sound_behavior_title">Sound and behavior</string>
+    <string name="pref_category_sound_behavior_summary">Sound feedback, pause and idle clearing, motion mode</string>
+    <string name="pref_category_display_keys_title">Braille display keys</string>
+    <string name="pref_category_log_title">Logs</string>
+    <string name="pref_connection_status_summary">Reading connection status</string>
+    <string name="pref_key_bindings_summary">View the default action of each display key; requires a connected display</string>
+    <string name="pref_braille_word_wrap_summary_on">Wrap at word boundaries, long words are not split</string>
+    <string name="pref_braille_word_wrap_summary_off">Wrap at the display width</string>
+    <string name="pref_os_license_summary">View open source license notices</string>
+    <string name="pref_braille_overlay_summary">Show braille content as an on-screen overlay</string>
+    <string name="pref_braille_overlay_tutorial_summary">Learn how to use the on-screen overlay</string>
+
+    <!-- Jetpack Compose 迁移试点屏（设备与连接）及可复用组件底座 -->
+    <string name="compose_settings_back">Back</string>
+    <string name="compose_settings_section_connection">Connection</string>
+    <string name="compose_settings_refresh">Double-tap to refresh connection status</string>
+    <string name="compose_settings_choose">Double-tap to choose</string>
+    <string name="compose_settings_protocol_dialog_title">Choose connection type</string>
+    <string name="compose_settings_cancel">Cancel</string>
+    <string name="compose_settings_on">On</string>
+    <string name="compose_settings_off">Off</string>
+    <string name="compose_settings_selected">Selected</string>
+    <string name="compose_settings_unselected">Not selected</string>
+
+    <!-- 第二批：按键与手势子屏。
+         开关状态由 stateDescription 播报，这两条摘要刻意不含 On./Off. 前缀，
+         避免读屏把同一个状态念两遍。 -->
+    <string name="compose_settings_open_hint">Double-tap to open</string>
+    <string name="compose_settings_gestures_summary_on">A slow press changes the volume by one step about 0.3 s after you release the key; a long press or a fast double press only runs the action below and never changes the volume. A slot set to None still behaves as an ordinary press.</string>
+    <string name="compose_settings_gestures_summary_off">Volume keys behave exactly as stock Android, including long-press continuous adjustment; no custom action runs.</string>
+
+    <!-- 第三批：盲文显示子屏 + 按国家/地区分组的盲文表选择器 -->
+    <string name="compose_table_picker_title">Choose braille table</string>
+    <string name="compose_table_group_auto">Automatic</string>
+    <string name="compose_table_group_generic"> (Generic)</string>
+    <string name="compose_table_loading">Reading braille tables</string>
+    <string name="compose_table_empty">No braille tables available yet</string>
+    <string name="compose_table_refresh_hint">Double-tap to reload tables</string>
+    <!-- 状态由 stateDescription 播报，这两条摘要刻意不含 On./Off. 前缀 -->
+    <string name="compose_settings_cursor_dots_summary_on">The cell at the cursor or focused item gets dots 7 and 8, and blinks while editing.</string>
+    <string name="compose_settings_cursor_dots_summary_off">No extra dots are added to the braille cells, and nothing blinks.</string>
+
+    <!-- 第四批：声音与行为子屏 + 音量调节对话框。
+         音效开关的摘要刻意不含 On./Off. 前缀，状态由 stateDescription 播报。 -->
+    <string name="compose_settings_sound_summary_on">Plays earcons for key, focus and scroll events</string>
+    <string name="compose_settings_sound_summary_off">All event earcons muted; braille output and speech are unaffected</string>
+    <string name="compose_settings_adjust_hint">Double-tap to adjust volume</string>
+    <string name="compose_settings_volume_decrease">Minus 1</string>
+    <string name="compose_settings_volume_increase">Plus 1</string>
+    <string name="compose_settings_confirm">OK</string>
+
+    <!-- 第五批：开发者选项子屏 + 日志查看 / 二次确认对话框 -->
+    <string name="compose_settings_log_action_hint">Double-tap to run this action</string>
+    <string name="compose_settings_log_level_locked">This diagnostic build has a fixed log level and cannot be changed here</string>
+    <string name="compose_settings_log_preview_hint">Showing only the most recent part of the log. Use copy or share for the full log.</string>
+    <string name="compose_settings_overlay_tutorial_disabled">Turn on the on-screen braille overlay first</string>
 </resources>
