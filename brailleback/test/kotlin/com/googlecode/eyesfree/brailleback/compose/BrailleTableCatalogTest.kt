@@ -9,11 +9,18 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** 按国家/地区分组盲文表的纯逻辑行为测试（不依赖 Android）。 */
+/**
+ * 按语言分组、两级全屏盲文表的纯逻辑行为测试（不依赖 Android）。
+ *
+ * 分组维度由第三批的「国家/地区」改为「语言」后，这些测试守住：
+ * 语言码是稳定 key、系统语言置顶、同语言跨国家的表聚在一组且不丢、
+ * 条目名走合规地区映射、等级统计仍按 locale 而不是按语言。
+ */
 class BrailleTableCatalogTest {
 
     private val labels = BrailleTableCatalog.TableLabels(
         genericGroupSuffix = "（通用）",
+        localePattern = "%1\$s（%2\$s）",
         eightDot = "%1\$s（八点）",
         variant = "%1\$s（%2\$s）",
         grade = "%1\$s - %2\$d 级",
@@ -42,10 +49,15 @@ class BrailleTableCatalogTest {
         variant = variant,
     )
 
-    private val chinese = seed("zh-CN-cbs", "zh", "CN", "中文", "中国", "中文 (中国)", variant = "国家通用盲文方案")
-    private val englishUs = seed("en-US-g1", "en", "US", "英语", "美国", "英语 (美国)")
-    private val englishUk = seed("en-GB-g1", "en", "GB", "英语", "英国", "英语 (英国)")
-    private val norwegian = seed("nb-g1", "nb", "", "挪威语")
+    private val chinese = seed(
+        "zh-CN-cbs", "zh", "CN", "中文", "中国", "中文（中国）",
+        variant = "国家通用盲文方案",
+    )
+    private val chineseTw = seed("zh-TW-g1", "zh", "TW", "中文", "中国台湾", "中文（中国台湾）")
+    private val chineseGeneric = seed("zh-g1", "zh", "", "中文", localeName = "中文（通用）")
+    private val englishUs = seed("en-US-g1", "en", "US", "英语", "美国", "英语（美国）")
+    private val englishUk = seed("en-GB-g1", "en", "GB", "英语", "英国", "英语（英国）")
+    private val norwegian = seed("nb-g1", "nb", "", "挪威语", localeName = "挪威语（通用）")
 
     // ------------------------------------------------------------ 合规地区名
 
@@ -67,52 +79,86 @@ class BrailleTableCatalogTest {
         assertEquals("", BrailleTableCatalog.regionName("", "anything", true))
     }
 
-    // -------------------------------------------------------------- 分组标题
-
     @Test
-    fun groupTitleUsesCountryNameWhenPresent() {
-        assertEquals("中国", BrailleTableCatalog.groupTitle(chinese, "（通用）"))
-        assertEquals("美国", BrailleTableCatalog.groupTitle(englishUs, "（通用）"))
+    fun compliantLocaleNameUsesMappedRegionNeverSystemDisplayName() {
+        assertEquals(
+            "中文（中国台湾）",
+            BrailleTableCatalog.compliantLocaleName(chineseTw, labels)
+        )
+        assertEquals(
+            "中文（中国）",
+            BrailleTableCatalog.compliantLocaleName(chinese, labels)
+        )
     }
 
     @Test
-    fun groupTitleFallsBackToLanguageForTablesWithoutCountry() {
-        assertEquals("挪威语（通用）", BrailleTableCatalog.groupTitle(norwegian, "（通用）"))
+    fun compliantLocaleNameMarksTablesWithoutCountryAsGeneric() {
+        assertEquals(
+            "挪威语（通用）",
+            BrailleTableCatalog.compliantLocaleName(norwegian, labels)
+        )
+        // 无国家码的通用表与有国家码的地区表必须能靠文字区分。
+        assertFalse(
+            BrailleTableCatalog.compliantLocaleName(chineseGeneric, labels) ==
+                BrailleTableCatalog.compliantLocaleName(chinese, labels)
+        )
+    }
+
+    // -------------------------------------------------------------- 分组标题
+
+    @Test
+    fun languageTitleIsJustTheLanguageName() {
+        assertEquals("中文", BrailleTableCatalog.languageTitle(chinese))
+        assertEquals("中文", BrailleTableCatalog.languageTitle(chineseTw))
+        assertEquals("英语", BrailleTableCatalog.languageTitle(englishUs))
+        assertEquals("挪威语", BrailleTableCatalog.languageTitle(norwegian))
     }
 
     // -------------------------------------------------------------- 分组结构
 
     @Test
-    fun buildGroupsByCountryAndKeepsDifferentLanguagesInTheSameRegion() {
-        val canadianEnglish = seed("en-CA-comp8", "en", "CA", "英语", "加拿大", isEightDot = true)
+    fun buildGroupsByLanguageNotByCountry() {
+        val canadianEnglish = seed(
+            "en-CA-comp8", "en", "CA", "英语", "加拿大", isEightDot = true
+        )
         val canadianFrench = seed("fr-CA-g1", "fr", "CA", "法语", "加拿大")
         val groups = BrailleTableCatalog.build(
-            listOf(canadianEnglish, canadianFrench, chinese), "nb", "", labels
+            listOf(canadianEnglish, canadianFrench, chinese), "xx", labels
         )
-        assertEquals("加拿大 / 中国 两组", 2, groups.size)
-        assertEquals("加拿大", groups[0].title)
-        assertEquals(2, groups[0].choices.size)
+        assertEquals("加拿大英语/法语现在分属英语组/法语组，共三组", 3, groups.size)
+        assertEquals(setOf("en", "fr", "zh"), groups.map { it.language }.toSet())
+        assertEquals(1, groups.single { it.language == "en" }.choices.size)
+        assertEquals(1, groups.single { it.language == "fr" }.choices.size)
     }
 
     @Test
-    fun buildPutsSystemLocaleGroupFirst() {
+    fun buildKeepsDifferentCountriesOfOneLanguageInOneGroup() {
         val groups = BrailleTableCatalog.build(
-            listOf(englishUs, englishUk, chinese, norwegian), "zh", "CN", labels
+            listOf(chinese, chineseTw, chineseGeneric, englishUs), "xx", labels
         )
-        assertEquals("中国", groups.first().title)
-        assertEquals(1, groups.first().choices.size)
+        val zh = groups.single { it.language == "zh" }
+        assertEquals(3, zh.choices.size)
+        assertEquals(setOf("zh-CN-cbs", "zh-TW-g1", "zh-g1"), zh.choices.map { it.id }.toSet())
+    }
+
+    @Test
+    fun buildPutsSystemLanguageGroupFirst() {
+        val groups = BrailleTableCatalog.build(
+            listOf(englishUs, englishUk, chinese, norwegian), "zh", labels
+        )
+        assertEquals("中文", groups.first().title)
+        assertEquals("zh", groups.first().language)
         assertEquals("zh-CN-cbs", groups.first().choices.single().id)
     }
 
     @Test
-    fun buildPutsSystemLanguageGroupFirstWhenCountryDoesNotMatch() {
+    fun buildPutsSystemLanguageFirstEvenWhenItHasNoCountryCode() {
+        // 谷歌 AddLanguageActivity 只按 language 置顶，不看 country。
         val groups = BrailleTableCatalog.build(
-            listOf(chinese, englishUs, norwegian), "en", "AU", labels
+            listOf(chinese, englishUs, norwegian), "nb", labels
         )
-        assertTrue(
-            "系统语言是 en 时，英语（美国）应排在中国之前",
-            groups.indexOfFirst { it.title == "美国" } < groups.indexOfFirst { it.title == "中国" }
-        )
+        assertEquals("挪威语", groups.first().title)
+        assertEquals("nb", groups.first().language)
     }
 
     @Test
@@ -120,24 +166,24 @@ class BrailleTableCatalogTest {
         val seeds = (1..72).map { index ->
             seed("t$index", "lang${index % 9}", "", "语言${index % 9}", grade = index % 4)
         }
-        val groups = BrailleTableCatalog.build(seeds, "xx", "", labels)
+        val groups = BrailleTableCatalog.build(seeds, "xx", labels)
         val ids = groups.flatMap { it.choices }.map { it.id }
         assertEquals(72, ids.size)
         assertEquals(72, ids.toSet().size)
     }
 
     @Test
-    fun gradeCountUsesLocaleNotCountry() {
-        // 加拿大同时有英语和法语表；按国家合并分组，但等级判断必须仍按 locale，
+    fun gradeCountUsesLocaleNotLanguage() {
+        // 英语组里同时有美国/英国表；等级判断必须仍按 locale，
         // 否则两张各自唯一的表都会被误标成「1 级 / 2 级」。
-        val en = seed("en-CA-g1", "en", "CA", "英语", "加拿大", "英语 (加拿大)")
-        val fr = seed("fr-CA-g1", "fr", "CA", "法语", "加拿大", "法语 (加拿大)")
-        val groups = BrailleTableCatalog.build(listOf(en, fr), "xx", "", labels)
+        val us = seed("en-US-g1", "en", "US", "英语", "美国", "英语（美国）")
+        val uk = seed("en-GB-g1", "en", "GB", "英语", "英国", "英语（英国）")
+        val groups = BrailleTableCatalog.build(listOf(us, uk), "xx", labels)
         val rendered = groups.flatMap { it.choices }.map { it.label }
         assertEquals(1, groups.size)
         assertEquals(2, rendered.size)
         assertTrue(
-            "同国家不同语言不能互相抬高等级：实际 $rendered",
+            "同语言不同国家不能互相抬高等级：实际 $rendered",
             rendered.none { it.contains("级") }
         )
     }
@@ -147,8 +193,19 @@ class BrailleTableCatalogTest {
         val eight = seed("eight", "de", "DE", "德语", "德国", isEightDot = true, grade = 0)
         val g2 = seed("g2", "de", "DE", "德语", "德国", grade = 2)
         val g0 = seed("g0", "de", "DE", "德语", "德国", grade = 0)
-        val groups = BrailleTableCatalog.build(listOf(eight, g2, g0), "de", "DE", labels)
+        val groups = BrailleTableCatalog.build(listOf(eight, g2, g0), "de", labels)
         assertEquals(listOf("g0", "g2", "eight"), groups.single().choices.map { it.id })
+    }
+
+    @Test
+    fun buildSortsGenericTablesBeforeRegionalOnesWithinLanguage() {
+        val groups = BrailleTableCatalog.build(
+            listOf(chinese, chineseGeneric, chineseTw), "zh", labels
+        )
+        assertEquals(
+            listOf("zh-g1", "zh-CN-cbs", "zh-TW-g1"),
+            groups.single().choices.map { it.id }
+        )
     }
 
     // -------------------------------------------------------------- 条目命名
@@ -156,13 +213,13 @@ class BrailleTableCatalogTest {
     @Test
     fun entryLabelMatchesLegacyEightDotRule() {
         val eight = chinese.copy(id = "eight", isEightDot = true, variant = "")
-        assertEquals("中文 (中国)（八点）", BrailleTableCatalog.entryLabel(eight, 3, labels))
+        assertEquals("中文（中国）（八点）", BrailleTableCatalog.entryLabel(eight, 3, labels))
     }
 
     @Test
     fun entryLabelMatchesLegacyChineseVariantRule() {
         assertEquals(
-            "中文 (中国)（国家通用盲文方案）",
+            "中文（中国）（国家通用盲文方案）",
             BrailleTableCatalog.entryLabel(chinese, 5, labels)
         )
     }
@@ -171,15 +228,15 @@ class BrailleTableCatalogTest {
     fun entryLabelAddsGradeOnlyWhenSameLocaleHasSeveralSixDotTables() {
         val first = englishUs.copy(id = "a", grade = 1)
         val second = englishUs.copy(id = "b", grade = 2)
-        assertEquals("英语 (美国)", BrailleTableCatalog.entryLabel(first, 1, labels))
-        assertEquals("英语 (美国) - 2 级", BrailleTableCatalog.entryLabel(second, 2, labels))
+        assertEquals("英语（美国）", BrailleTableCatalog.entryLabel(first, 1, labels))
+        assertEquals("英语（美国） - 2 级", BrailleTableCatalog.entryLabel(second, 2, labels))
     }
 
     @Test
     fun entryLabelUsesVariantGradeTemplateWhenBothArePresent() {
         val table = englishUs.copy(grade = 2, variant = "UEB")
         assertEquals(
-            "英语 (美国)（UEB）- 2 级",
+            "英语（美国）（UEB）- 2 级",
             BrailleTableCatalog.entryLabel(table, 2, labels)
         )
     }
@@ -188,16 +245,16 @@ class BrailleTableCatalogTest {
 
     @Test
     fun labelForValueReturnsAutoLabelForAutoOrEmpty() {
-        val groups = BrailleTableCatalog.build(listOf(chinese), "zh", "CN", labels)
+        val groups = BrailleTableCatalog.build(listOf(chinese), "zh", labels)
         assertEquals("自动（中文）", BrailleTableCatalog.labelForValue("auto", "自动（中文）", groups, "读取中"))
         assertEquals("自动（中文）", BrailleTableCatalog.labelForValue("", "自动（中文）", groups, "读取中"))
     }
 
     @Test
     fun labelForValueFindsTableById() {
-        val groups = BrailleTableCatalog.build(listOf(chinese), "zh", "CN", labels)
+        val groups = BrailleTableCatalog.build(listOf(chinese), "zh", labels)
         assertEquals(
-            "中文 (中国)（国家通用盲文方案）",
+            "中文（中国）（国家通用盲文方案）",
             BrailleTableCatalog.labelForValue("zh-CN-cbs", "自动", groups, "读取中")
         )
     }
@@ -215,18 +272,22 @@ class BrailleTableCatalogTest {
     }
 
     @Test
-    fun buildOutputHasNonBlankTitlesAndLabels() {
+    fun buildOutputHasNonBlankLanguageCodesTitlesAndLabels() {
         val groups = BrailleTableCatalog.build(
-            listOf(chinese, englishUs, englishUk, norwegian), "zh", "CN", labels
+            listOf(chinese, chineseTw, chineseGeneric, englishUs, englishUk, norwegian),
+            "zh", labels
         )
         groups.forEach { group ->
-            assertTrue("分组标题不能为空", group.title.isNotBlank())
-            assertTrue("分组不能是空壳", group.choices.isNotEmpty())
+            assertTrue("语言码不能为空", group.language.isNotBlank())
+            assertEquals(group.language.lowercase(), group.language)
+            assertTrue("语言标题不能为空", group.title.isNotBlank())
+            assertTrue("语言组不能是空壳", group.choices.isNotEmpty())
             group.choices.forEach { choice ->
                 assertTrue("条目 ID 不能为空", choice.id.isNotBlank())
                 assertTrue("条目名不能为空：${choice.id}", choice.label.isNotBlank())
             }
         }
+        assertEquals(groups.size, groups.map { it.language }.toSet().size)
         assertFalse(
             "「自动」由界面单独渲染，不能被当成真实盲文表塞进分组",
             groups.flatMap { it.choices }.any { it.id == BrailleTableCatalog.AUTO_VALUE }

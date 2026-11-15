@@ -26,6 +26,8 @@
     <string name="pref_six_dot_braille_table_key">six_dot_braille_table</string>
     <string name="pref_eight_dot_braille_table_key">eight_dot_braille_table</string>
     <string name="pref_braille_table_key">braille_table</string>
+    <!-- 多选启用的盲文方案 ID 集合；braille_table 仍保存当前正在使用的方案。 -->
+    <string name="pref_preferred_codes_key">preferred_braille_codes</string>
     <!-- Used when the user hasn't specified any table and it is determined by the user locale. -->
     <string name="table_value_default">auto</string>
     <string name="pref_braille_type_six_dot_value">six_dot</string>

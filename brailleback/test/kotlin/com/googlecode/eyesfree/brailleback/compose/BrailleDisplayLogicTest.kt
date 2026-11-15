@@ -75,4 +75,71 @@ class BrailleDisplayLogicTest {
         )
         assertFalse(BrailleDisplayLogic.defaultBoolean("unknown", true, true))
     }
+
+    // ------------------------------------------------------- 两级全屏导航
+
+    private val groups = listOf(
+        BrailleTableCatalog.TableGroup(
+            "zh", "中文",
+            listOf(BrailleTableCatalog.TableChoice("zh-CN-cbs", "中文（中国）")),
+        ),
+        BrailleTableCatalog.TableGroup(
+            "en", "英语",
+            listOf(BrailleTableCatalog.TableChoice("en-US-g1", "英语（美国）")),
+        ),
+    )
+
+    @Test
+    fun backWalksThreeRoutesInOrder() {
+        val tables = BrailleDisplayLogic.TableRoute.Tables("zh")
+        assertEquals(
+            BrailleDisplayLogic.TableRoute.Languages,
+            BrailleDisplayLogic.back(tables)
+        )
+        assertEquals(
+            BrailleDisplayLogic.TableRoute.Settings,
+            BrailleDisplayLogic.back(BrailleDisplayLogic.TableRoute.Languages)
+        )
+        // 到设置列表后不再吞返回键，交还系统退出 Activity。
+        assertEquals(
+            BrailleDisplayLogic.TableRoute.Settings,
+            BrailleDisplayLogic.back(BrailleDisplayLogic.TableRoute.Settings)
+        )
+    }
+
+    @Test
+    fun isPickerOnlyTrueForTheTwoFullScreenRoutes() {
+        assertFalse(BrailleDisplayLogic.isPicker(BrailleDisplayLogic.TableRoute.Settings))
+        assertTrue(BrailleDisplayLogic.isPicker(BrailleDisplayLogic.TableRoute.Languages))
+        assertTrue(BrailleDisplayLogic.isPicker(BrailleDisplayLogic.TableRoute.Tables("zh")))
+    }
+
+    @Test
+    fun tableRouteCarriesLanguageCodeNotDisplayName() {
+        assertEquals("zh", BrailleDisplayLogic.TableRoute.Tables("zh").language)
+        assertEquals(
+            BrailleDisplayLogic.TableRoute.Tables("zh"),
+            BrailleDisplayLogic.TableRoute.Tables("zh")
+        )
+    }
+
+    @Test
+    fun groupForLanguageIsCaseInsensitiveAndSafeForUnknown() {
+        assertEquals("zh", BrailleDisplayLogic.groupForLanguage(groups, "ZH")?.language)
+        assertFalse(BrailleDisplayLogic.groupForLanguage(groups, "fr") != null)
+    }
+
+    @Test
+    fun languageOfTableLocatesCurrentSelection() {
+        assertEquals("zh", BrailleDisplayLogic.languageOfTable(groups, "zh-CN-cbs"))
+        assertEquals("en", BrailleDisplayLogic.languageOfTable(groups, "en-US-g1"))
+    }
+
+    @Test
+    fun languageOfTableReturnsNullForAutoEmptyOrUnknown() {
+        assertEquals(null, BrailleDisplayLogic.languageOfTable(groups, "auto"))
+        assertEquals(null, BrailleDisplayLogic.languageOfTable(groups, ""))
+        assertEquals(null, BrailleDisplayLogic.languageOfTable(groups, "no-such-table"))
+        assertEquals(null, BrailleDisplayLogic.languageOfTable(emptyList(), "zh-CN-cbs"))
+    }
 }

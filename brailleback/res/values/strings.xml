@@ -532,13 +532,26 @@
     <string name="compose_settings_gestures_summary_on">A slow press changes the volume by one step about 0.3 s after you release the key; a long press or a fast double press only runs the action below and never changes the volume. A slot set to None still behaves as an ordinary press.</string>
     <string name="compose_settings_gestures_summary_off">Volume keys behave exactly as stock Android, including long-press continuous adjustment; no custom action runs.</string>
 
-    <!-- 第三批：盲文显示子屏 + 按国家/地区分组的盲文表选择器 -->
-    <string name="compose_table_picker_title">Choose braille table</string>
+    <!-- 第三批：盲文显示子屏 + 按语言两级全屏的多选方案列表（复刻谷歌 AddLanguageActivity / LocaleLanguageActivity） -->
+    <string name="compose_table_picker_title">Manage braille codes by language</string>
     <string name="compose_table_group_auto">Automatic</string>
     <string name="compose_table_group_generic"> (Generic)</string>
+    <string name="compose_table_locale_pattern">%1$s (%2$s)</string>
+    <string name="compose_code_language_summary">%1$d codes, %2$d enabled%3$s</string>
+    <string name="compose_table_language_current">, current code is in this language</string>
+    <string name="compose_table_language_open_hint">Double-tap to open %1$s braille codes</string>
     <string name="compose_table_loading">Reading braille tables</string>
     <string name="compose_table_empty">No braille tables available yet</string>
     <string name="compose_table_refresh_hint">Double-tap to reload tables</string>
+    <string name="compose_code_eight_dot">%1$s 8-dot Computer Braille</string>
+    <string name="compose_code_summary_six">6-dot literary braille</string>
+    <string name="compose_code_summary_eight">8-dot computer braille</string>
+    <string name="compose_code_enabled">Enabled</string>
+    <string name="compose_code_disabled">Not enabled</string>
+    <string name="compose_code_current_suffix">, currently in use</string>
+    <string name="compose_code_current_title">Current code</string>
+    <string name="compose_code_current_hint">Double-tap to choose the current code</string>
+    <string name="compose_code_current_dialog">Choose current code</string>
     <!-- 状态由 stateDescription 播报，这两条摘要刻意不含 On./Off. 前缀 -->
     <string name="compose_settings_cursor_dots_summary_on">The cell at the cursor or focused item gets dots 7 and 8, and blinks while editing.</string>
     <string name="compose_settings_cursor_dots_summary_off">No extra dots are added to the braille cells, and nothing blinks.</string>

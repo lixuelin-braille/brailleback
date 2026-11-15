@@ -7,16 +7,22 @@ package com.googlecode.eyesfree.brailleback.compose
 import java.text.Collator
 
 /**
- * 按国家/地区整理盲文表的纯逻辑，零 Android 依赖，便于 JVM 单测。
+ * 按语言整理盲文表的纯逻辑，零 Android 依赖，便于 JVM 单测。
  *
- * 参考两条既有实现：
- * - 谷歌读屏 `AddLanguageActivity`：按语言分组、系统语言所在组置顶、Collator 排序；
- *   本项目把分组维度换成「国家/地区」，无国家码的语言以「语言名（通用）」兜底。
- * - 本项目盲文输入法的命名风格（`code_user_facing_name_*`）：条目名里带国家名，
- *   如「中文通用盲文（中国）」，因此组内仍沿用旧的完整表名，不丢语言信息。
+ * 严格复刻谷歌读屏 `AddLanguageActivity` → `LocaleLanguageActivity` 的两级结构：
+ * - 第一级（[build]）按语言分组，系统语言置顶，其余按 Collator 排语言显示名
+ *   （谷歌源码 AddLanguageActivity.java:78-101 的 locales.sort + add(0, remove(idx))）；
+ * - 第二级是全屏的该语言表列表，平铺、没有分组标题，条目名自带国家/地区
+ *   （谷歌源码 LocaleLanguageActivity.java:84-99 用 getUserFacingName 区分 locale）。
  *
- * 条目名严格复刻 `SettingsActivity.createTableDisplayName` 的四条规则
- * （八点 / 中文变体 / 同 locale 多等级 / 单等级），避免迁移后出现两套命名。
+ * 与谷歌有两点差别，都由本项目数据决定：
+ * 1) 语言清单来自运行时 `TranslatorClient.getTables()`，不是静态 Code 枚举；
+ * 2) 国家/地区名必须过 [regionName] 的合规映射，中国台湾/中国香港/中国澳门
+ *    显式带「中国」前缀，不能直接用系统 `Locale.getDisplayName()`。
+ *
+ * 条目名仍复用旧的 `table_name_*` 模板资源，与旧 Fragment 一一对应；
+ * 只是 [TableSeed.localeName] 改由 [compliantLocaleName] 生成，避免系统
+ * 本地化字符串绕过合规映射。
  */
 object BrailleTableCatalog {
 
@@ -27,7 +33,7 @@ object BrailleTableCatalog {
         val id: String,
         val language: String,
         val country: String,
-        /** `TableInfo.locale.getDisplayName()`，如「中文 (中国)」。 */
+        /** 「语言（国家/地区）」或「语言（通用）」，由 [compliantLocaleName] 生成。 */
         val localeName: String,
         val languageName: String,
         /** 已按合规规则处理过的国家/地区名；无国家码时为空串。 */
@@ -42,8 +48,10 @@ object BrailleTableCatalog {
 
     /** 旧的 `table_name_*` 模板资源，注入进来让纯逻辑不碰 Context。 */
     data class TableLabels(
-        /** 无国家码语言的分组后缀，如「（通用）」。 */
+        /** 无国家码语言的后缀，如「（通用）」；也用作第二级条目名的兜底。 */
         val genericGroupSuffix: String,
+        /** 有国家码时「语言（地区）」的模板：中文全角括号、英文半角括号各一套。 */
+        val localePattern: String,
         val eightDot: String,
         val variant: String,
         val grade: String,
@@ -52,7 +60,16 @@ object BrailleTableCatalog {
 
     data class TableChoice(val id: String, val label: String)
 
-    data class TableGroup(val title: String, val choices: List<TableChoice>)
+    /**
+     * 第一级的一项 = 一种语言。
+     * [language] 是稳定 key（语言码），[title] 才是本地化显示名；
+     * 第二级全屏页用语言码定位，界面语言切换后不会指错组。
+     */
+    data class TableGroup(
+        val language: String,
+        val title: String,
+        val choices: List<TableChoice>,
+    )
 
     /**
      * 中国台湾/中国香港/中国澳门必须显式带「中国」前缀，
@@ -76,13 +93,21 @@ object BrailleTableCatalog {
             ?: localizedName.ifEmpty { country.uppercase() }
     }
 
-    /** 分组标题：有国家/地区用地区名；没有则用「语言名 + 通用后缀」。 */
-    fun groupTitle(seed: TableSeed, genericGroupSuffix: String): String =
-        if (seed.countryName.isNotEmpty()) {
-            seed.countryName
+    /**
+     * 第二级条目名的「语言（国家/地区）」部分。
+     *
+     * 不能用 `Locale.getDisplayName()`：它对中国台湾/中国香港/中国澳门可能给出
+     * 不合规表述，且无国家码时与同语言的地区表同名、读屏无法区分。
+     */
+    fun compliantLocaleName(seed: TableSeed, labels: TableLabels): String =
+        if (seed.country.isEmpty()) {
+            seed.languageName + labels.genericGroupSuffix
         } else {
-            seed.languageName + genericGroupSuffix
+            labels.localePattern.format(seed.languageName, seed.countryName)
         }
+
+    /** 第一级标题就是语言名；国家/地区层级只体现在第二级条目里。 */
+    fun languageTitle(seed: TableSeed): String = seed.languageName
 
     /** 单张表的显示名，与旧版 `createTableDisplayName` 一一对应。 */
     fun entryLabel(seed: TableSeed, siblingGradeCount: Int, labels: TableLabels): String {
@@ -112,15 +137,16 @@ object BrailleTableCatalog {
     }
 
     /**
-     * 生成按国家/地区分组、一次性加载的选择列表。
+     * 生成按语言分组、一次性加载的两级列表。
      *
-     * 排序规则：系统 locale 完全匹配的组 → 同语言的组 → 其余组；
-     * 同级用 Collator 按分组标题排序。组内六点先于八点、等级升序、变体按 Collator。
+     * 排序规则（照抄谷歌 `AddLanguageActivity`）：系统语言所在组置顶，
+     * 其余组用 Collator 按语言显示名排序。组内（第二级）先按国家/地区名聚拢
+     * （无国家码的通用表排最前），再六点先于八点、等级升序、变体按 Collator；
+     * 组内不产生任何分组标题，整屏平铺。
      */
     fun build(
         seeds: List<TableSeed>,
         systemLanguage: String,
-        systemCountry: String,
         labels: TableLabels,
     ): List<TableGroup> {
         val collator = Collator.getInstance()
@@ -130,35 +156,30 @@ object BrailleTableCatalog {
             .groupingBy { it.localeKey() }
             .eachCount()
 
+        // 按语言码聚合，不用显示名当 key：界面语言切换后仍是同一组。
         val grouped = LinkedHashMap<String, MutableList<TableSeed>>()
         seeds.forEach { seed ->
-            val title = groupTitle(seed, labels.genericGroupSuffix)
-            grouped.getOrPut(title) { ArrayList() }.add(seed)
+            grouped.getOrPut(seed.language.lowercase()) { ArrayList() }.add(seed)
         }
 
         data class Ranked(val rank: Int, val group: TableGroup)
 
-        return grouped.map { (title, members) ->
+        return grouped.map { (language, members) ->
             val sorted = members.sortedWith(
                 compareBy<TableSeed>(
+                    { collator.getCollationKey(it.countryName) },
                     { it.isEightDot },
                     { it.grade },
                     { collator.getCollationKey(it.variant) },
                 )
             )
-            val rank = when {
-                systemCountry.isNotEmpty() && sorted.any {
-                    it.language.equals(systemLanguage, ignoreCase = true) &&
-                        it.country.equals(systemCountry, ignoreCase = true)
-                } -> 0
-                sorted.any { it.language.equals(systemLanguage, ignoreCase = true) } -> 1
-                else -> 2
-            }
+            val rank = if (language.equals(systemLanguage, ignoreCase = true)) 0 else 1
             Ranked(
                 rank,
                 TableGroup(
-                    title,
-                    sorted.map {
+                    language = language,
+                    title = languageTitle(sorted.first()),
+                    choices = sorted.map {
                         TableChoice(
                             it.id,
                             entryLabel(it, gradeCounts[it.localeKey()] ?: 0, labels),

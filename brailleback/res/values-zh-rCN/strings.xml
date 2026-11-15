@@ -340,13 +340,26 @@
     <string name="compose_settings_gestures_summary_on">慢一点的普通按压在松手约 0.3 秒后调一格音量；长按和快速双击只执行下方设定的动作，不会改变音量。设为「关闭」的槽位仍按普通按压调音量。</string>
     <string name="compose_settings_gestures_summary_off">音量键完全交还系统，可长按连续调音量，不执行任何自定义动作。</string>
 
-    <!-- 第三批：盲文显示子屏 + 按国家/地区分组的盲文表选择器 -->
-    <string name="compose_table_picker_title">选择盲文表</string>
+    <!-- 第三批：盲文显示子屏 + 按语言两级全屏的多选方案列表（复刻谷歌 AddLanguageActivity / LocaleLanguageActivity） -->
+    <string name="compose_table_picker_title">按语言管理盲文方案</string>
     <string name="compose_table_group_auto">自动选择</string>
     <string name="compose_table_group_generic">（通用）</string>
+    <string name="compose_table_locale_pattern">%1$s（%2$s）</string>
+    <string name="compose_code_language_summary">共 %1$d 个方案，已启用 %2$d 个%3$s</string>
+    <string name="compose_table_language_current">，当前方案在此语言</string>
+    <string name="compose_table_language_open_hint">双击打开 %1$s 的盲文方案</string>
     <string name="compose_table_loading">正在读取盲文表</string>
     <string name="compose_table_empty">尚未读取到盲文表</string>
     <string name="compose_table_refresh_hint">双击重新读取盲文表</string>
+    <string name="compose_code_eight_dot">%1$s八点计算机盲文</string>
+    <string name="compose_code_summary_six">六点文学盲文</string>
+    <string name="compose_code_summary_eight">八点计算机盲文</string>
+    <string name="compose_code_enabled">已启用</string>
+    <string name="compose_code_disabled">未启用</string>
+    <string name="compose_code_current_suffix">，当前正在使用</string>
+    <string name="compose_code_current_title">当前方案</string>
+    <string name="compose_code_current_hint">双击选择当前方案</string>
+    <string name="compose_code_current_dialog">选择当前方案</string>
     <!-- 状态由 stateDescription 播报，这两条摘要刻意不含「已开启。/已关闭。」前缀 -->
     <string name="compose_settings_cursor_dots_summary_on">光标和焦点所在的那一格会加上第 7、8 点，编辑时闪烁。</string>
     <string name="compose_settings_cursor_dots_summary_off">盲文格上不会多出额外点位，也不会闪烁。</string>

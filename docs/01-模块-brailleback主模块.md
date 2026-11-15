@@ -372,6 +372,30 @@ AIDL 在 `:client` 模块：`ISelfBrailleService.aidl` / `WriteData.aidl`。
 
 ---
 
+---
+
+### 3.9a 设置页状态托管：`compose/BrailleDisplayViewModel.kt`
+
+「盲文显示」子屏的偏好类状态（当前方案、首选池、四个开关、当前方案对话框）集中在这里，
+`StateFlow` 是唯一读口径，写入只经它的方法。
+
+| 组成 | 作用 |
+|:---|:---|
+| `BrailleSettingsState` | 界面消费的不可变快照 |
+| `BrailleSettingsKeys` | 键名与默认值（Activity 从资源解析后注入，key 是 ABI） |
+| `BrailleSettingsStore` | 偏好读写窄接口，使逻辑可纯 JVM 测试 |
+| `SharedPreferencesBrailleSettingsStore` | 生产实现，写回仍用 `apply()` |
+
+`BrailleDisplayComposeActivity` 只剩「表清单 + 派生文案 + 三段路由」，通过
+`viewModel.state.collectAsState()` 拿状态；`viewModel.reconcileCodes()` 承担谷歌
+`readCurrentActiveInputCodeAndCorrect` 语义的对账（池管当前码 + 首次迁移并入一次）。
+
+不变量（由 `BrailleCodeContractTest` / `BrailleDisplayContractTest` 与
+`BrailleDisplayViewModelTest` 同时盯着）：**Activity 不再直接读写偏好**；池不会把当前码补进去；
+无变化时不写偏好（避免与服务端的偏好监听形成回环）。
+
+---
+
 ### 3.10 模拟点显器（开发/教学用）
 
 | 类 | 行数 | 说明 |

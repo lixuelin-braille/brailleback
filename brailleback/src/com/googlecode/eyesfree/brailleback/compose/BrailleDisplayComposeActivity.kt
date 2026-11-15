@@ -1,10 +1,10 @@
 /*
  * Copyright (C) 2026 盲文服务 (Braille Service)
  *
- * Compose 迁移第三批：「盲文显示」子屏。
+ * Compose 迁移第三批：「盲文显示」子屏；本批升级为谷歌式多选方案（Code）模型。
  *
  * 与旧 Fragment 的三处等价关系，缺一不可：
- * 1) 表列表来自 TranslatorClient.getTables()，服务初始化完成后由
+ * 1) 表清单来自 TranslatorClient.getTables()，服务初始化完成后由
  *    TranslatorManager.OnTablesChangedListener 回调才有值，不能静态写死；
  * 2) 本 Activity 自己持有 TranslatorManager：它同时是
  *    SharedPreferences.OnSharedPreferenceChangeListener，写入盲文表偏好后
@@ -20,11 +20,12 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.SharedPreferences
 import android.os.Bundle
 import android.text.TextUtils
 import androidx.activity.compose.setContent
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -58,39 +59,53 @@ internal data class BrailleDisplayLabels(
     val off: String,
     val selected: String,
     val unselected: String,
+    /** 第一级全屏的标题：按语言管理方案。 */
     val pickerTitle: String,
-    val autoGroupTitle: String,
+    /** 服务未就绪时「自动」行的兜底标题，不能朗读空白。 */
+    val autoFallback: String,
     val loadingLabel: String,
     val emptyLabel: String,
     val refreshHint: String,
+    val currentCodeTitle: String,
+    val currentCodeHint: String,
+    val currentCodeDialog: String,
+    val enabledLabel: String,
+    val disabledLabel: String,
+    val currentSuffix: String,
+    val cancel: String,
 )
 
 class BrailleDisplayComposeActivity : AppCompatActivity(),
     TranslatorManager.OnTablesChangedListener {
 
-    private lateinit var prefs: SharedPreferences
-    private lateinit var tableKey: String
     private lateinit var tableLabels: BrailleTableCatalog.TableLabels
+    private lateinit var codeLabels: BrailleCodeCatalog.CodeLabels
 
     private var translatorManager: TranslatorManager? = null
 
     // 服务回调来自 Binder 线程，统一切回主线程再驱动重组。
     private var tables by mutableStateOf<List<BrailleTableCatalog.TableSeed>>(emptyList())
     private var autoLabel by mutableStateOf("")
-    private var currentTable by mutableStateOf(BrailleDisplayLogic.DEFAULT_TABLE)
-    private var wordWrap by mutableStateOf(true)
-    private var cursorDots by mutableStateOf(false)
-    private var contractedMode by mutableStateOf(false)
-    private var chineseSegmentation by mutableStateOf(true)
-    private var pickerOpen by mutableStateOf(false)
+    // 偏好类状态（当前方案、首选池、四个开关、当前方案对话框）全部由 ViewModel 持有；
+    // 这里只留「表清单」和「派生文案」这两件不属于偏好、且依赖服务回调的展示状态。
+    private val viewModel: BrailleDisplayViewModel by viewModels {
+        BrailleDisplayViewModel.factory(
+            SharedPreferencesBrailleSettingsStore(
+                PreferenceManager.getDefaultSharedPreferences(this)
+            ),
+            BrailleDisplayComposeActivity.keys(this),
+        )
+    }
+    // 三段路由：设置列表 → 语言列表 → 某一语言的方案列表（后两段各占满全屏）。
+    private var route by mutableStateOf<BrailleDisplayLogic.TableRoute>(
+        BrailleDisplayLogic.TableRoute.Settings
+    )
 
     private val refreshReceiver: BroadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent) {
             if (TextUtils.equals(intent.action, SettingsActivity.INTENT_REFRESH_DISPLAY)) {
                 runOnUiThread {
-                    currentTable = BrailleDisplayLogic.initialTable(
-                        prefs.getString(tableKey, BrailleDisplayLogic.DEFAULT_TABLE)
-                    )
+                    viewModel.refreshFromStore()
                     refreshTables()
                 }
             }
@@ -102,40 +117,30 @@ class BrailleDisplayComposeActivity : AppCompatActivity(),
         // 标题栏交给 Compose 的 TopAppBar，避免两个标题栏叠加、读屏重复朗读。
         supportActionBar?.hide()
 
-        prefs = PreferenceManager.getDefaultSharedPreferences(this)
-        tableKey = getString(R.string.pref_braille_table_key)
-        val boolKeys = listOf(
-            BrailleDisplayLogic.KEY_WORD_WRAP,
-            BrailleDisplayLogic.KEY_CURSOR_DOTS,
-            BrailleDisplayLogic.KEY_CONTRACTED_MODE,
-            BrailleDisplayLogic.KEY_CHINESE_SEGMENTATION,
-        )
-        val wordWrapDefault = resources.getBoolean(R.bool.pref_braille_word_wrap_default)
-        val segmentationDefault =
-            resources.getBoolean(R.bool.pref_chinese_segmentation_default)
-        val initial = boolKeys.associateWith { key ->
-            prefs.getBoolean(
-                key,
-                BrailleDisplayLogic.defaultBoolean(key, wordWrapDefault, segmentationDefault),
-            )
-        }
-        wordWrap = initial.getValue(BrailleDisplayLogic.KEY_WORD_WRAP)
-        cursorDots = initial.getValue(BrailleDisplayLogic.KEY_CURSOR_DOTS)
-        contractedMode = initial.getValue(BrailleDisplayLogic.KEY_CONTRACTED_MODE)
-        chineseSegmentation = initial.getValue(BrailleDisplayLogic.KEY_CHINESE_SEGMENTATION)
-        currentTable = BrailleDisplayLogic.initialTable(
-            prefs.getString(getString(R.string.pref_braille_table_key), null)
-        )
+        // ViewModel 已经在首次访问时按当前偏好构造好状态，这里不再重复读偏好：
+        // 读口径一旦有两份实现，就会出现「界面按 A 显示、服务按 B 干活」的老问题。
 
         tableLabels = BrailleTableCatalog.TableLabels(
             genericGroupSuffix = getString(R.string.compose_table_group_generic),
+            localePattern = getString(R.string.compose_table_locale_pattern),
             eightDot = getString(R.string.table_name_eight_dot),
             variant = getString(R.string.table_name_variant),
             grade = getString(R.string.table_name_grade),
             variantGrade = getString(R.string.table_name_variant_grade),
         )
+        codeLabels = BrailleCodeCatalog.CodeLabels(
+            eightDotName = getString(R.string.compose_code_eight_dot),
+            sixDotSummary = getString(R.string.compose_code_summary_six),
+            eightDotSummary = getString(R.string.compose_code_summary_eight),
+            enabled = getString(R.string.compose_code_enabled),
+            disabled = getString(R.string.compose_code_disabled),
+            currentSuffix = getString(R.string.compose_code_current_suffix),
+        )
 
         setContent {
+            // 偏好类状态唯一来源：StateFlow → Compose。写入一律走 viewModel 的方法，
+            // 屏幕上的开关、当前方案、首选池因此不会与偏好里的值分叉。
+            val settings by viewModel.state.collectAsState()
             val labels = BrailleDisplayLabels(
                 title = getString(R.string.pref_category_braille_title),
                 back = getString(R.string.compose_settings_back),
@@ -163,47 +168,123 @@ class BrailleDisplayComposeActivity : AppCompatActivity(),
                 selected = getString(R.string.compose_settings_selected),
                 unselected = getString(R.string.compose_settings_unselected),
                 pickerTitle = getString(R.string.compose_table_picker_title),
-                autoGroupTitle = getString(R.string.compose_table_group_auto),
+                autoFallback = getString(R.string.compose_table_group_auto),
                 loadingLabel = getString(R.string.compose_table_loading),
                 emptyLabel = getString(R.string.compose_table_empty),
                 refreshHint = getString(R.string.compose_table_refresh_hint),
+                currentCodeTitle = getString(R.string.compose_code_current_title),
+                currentCodeHint = getString(R.string.compose_code_current_hint),
+                currentCodeDialog = getString(R.string.compose_code_current_dialog),
+                enabledLabel = getString(R.string.compose_code_enabled),
+                disabledLabel = getString(R.string.compose_code_disabled),
+                currentSuffix = getString(R.string.compose_code_current_suffix),
+                cancel = getString(R.string.compose_settings_cancel),
             )
-            val groups = BrailleTableCatalog.build(
+            val systemLanguage = Locale.getDefault().language
+            val tableGroups = BrailleTableCatalog.build(
                 tables,
-                Locale.getDefault().language,
-                Locale.getDefault().country,
+                systemLanguage,
                 tableLabels,
             )
+            val codeGroups = BrailleCodeCatalog.build(
+                tableGroups,
+                tables,
+                tableLabels,
+                codeLabels,
+            )
+            // 只做过滤 + 空池兜底；当前方案由 refreshTables() 里的对账纠正并写回，
+            // 不在这里把当前方案补进池（否则会出现用户没勾过的「已启用」）。
+            val normalized = BrailleCodeCatalog.normalize(
+                settings.enabledCodes,
+                codeGroups,
+                systemLanguage,
+            )
+            val currentTable = settings.currentTable
+            val currentRoute = route
+            val currentLanguage = BrailleCodeCatalog.languageOfCode(codeGroups, currentTable)
+            val languageRows = codeGroups.map { group ->
+                BrailleDisplayLogic.LanguageRow(
+                    language = group.language,
+                    title = group.title,
+                    summary = getString(
+                        R.string.compose_code_language_summary,
+                        group.codes.size,
+                        BrailleCodeCatalog.enabledCount(codeGroups, normalized, group.language),
+                        if (group.language == currentLanguage) {
+                            getString(R.string.compose_table_language_current)
+                        } else {
+                            ""
+                        },
+                    ),
+                    enabledCount = BrailleCodeCatalog.enabledCount(
+                        codeGroups, normalized, group.language
+                    ),
+                    openHint = getString(
+                        R.string.compose_table_language_open_hint, group.title
+                    ),
+                )
+            }
+            val visibleCodes = (currentRoute as? BrailleDisplayLogic.TableRoute.Tables)
+                ?.let { BrailleCodeCatalog.groupForLanguage(codeGroups, it.language)?.codes }
+                .orEmpty()
+            val currentCodeOptions = visibleCodes.filter { it.id in normalized }
+                .ifEmpty {
+                    codeGroups.asSequence()
+                        .flatMap { it.codes.asSequence() }
+                        .filter { it.id in normalized }
+                        .toList()
+                }
+            val screenTitle = when (currentRoute) {
+                BrailleDisplayLogic.TableRoute.Settings -> labels.title
+                BrailleDisplayLogic.TableRoute.Languages -> labels.pickerTitle
+                is BrailleDisplayLogic.TableRoute.Tables ->
+                    BrailleCodeCatalog.groupForLanguage(codeGroups, currentRoute.language)?.title
+                        ?: labels.pickerTitle
+            }
             BrailleDisplayScreen(
                 labels = labels,
-                groups = groups,
+                route = currentRoute,
+                languageRows = languageRows,
+                codes = visibleCodes,
+                enabledCodes = normalized,
+                currentCodeOptions = currentCodeOptions,
+                currentCodeLabel = BrailleCodeCatalog.labelForCode(
+                    currentTable, autoLabel, codeGroups, labels.loadingLabel
+                ),
+                showCurrentDialog = settings.showCurrentDialog,
+                title = screenTitle,
                 autoLabel = autoLabel,
-                currentTableLabel = BrailleTableCatalog.labelForValue(
-                    currentTable, autoLabel, groups, labels.loadingLabel
+                currentTableLabel = BrailleCodeCatalog.labelForCode(
+                    currentTable, autoLabel, codeGroups, labels.loadingLabel
                 ),
                 currentTable = currentTable,
-                wordWrap = wordWrap,
-                cursorDots = cursorDots,
-                contractedMode = contractedMode,
-                chineseSegmentation = chineseSegmentation,
-                pickerOpen = pickerOpen,
-                onOpenPicker = { pickerOpen = true },
-                onClosePicker = { pickerOpen = false },
+                wordWrap = settings.wordWrap,
+                cursorDots = settings.cursorDots,
+                contractedMode = settings.contractedMode,
+                chineseSegmentation = settings.chineseSegmentation,
+                onOpenLanguages = {
+                    route = BrailleDisplayLogic.TableRoute.Languages
+                },
+                onOpenLanguage = { language ->
+                    route = BrailleDisplayLogic.TableRoute.Tables(language)
+                },
+                onNavigateBack = { route = BrailleDisplayLogic.back(route) },
                 onRefreshTables = { refreshTables() },
-                onTableSelected = { value ->
-                    currentTable = value
-                    prefs.edit().putString(tableKey, value).apply()
-                    pickerOpen = false
+                onToggleCode = { id, checked ->
+                    viewModel.toggleCode(id, checked, codeGroups, systemLanguage)
+                },
+                onOpenCurrentDialog = { viewModel.openCurrentDialog() },
+                onDismissCurrentDialog = { viewModel.dismissCurrentDialog() },
+                onSelectCurrent = { value ->
+                    viewModel.chooseCurrent(value)
+                    route = BrailleDisplayLogic.TableRoute.Settings
+                },
+                onAutoSelected = {
+                    viewModel.chooseCurrent(BrailleTableCatalog.AUTO_VALUE)
+                    route = BrailleDisplayLogic.TableRoute.Settings
                 },
                 onBooleanChanged = { key, value ->
-                    when (key) {
-                        BrailleDisplayLogic.KEY_WORD_WRAP -> wordWrap = value
-                        BrailleDisplayLogic.KEY_CURSOR_DOTS -> cursorDots = value
-                        BrailleDisplayLogic.KEY_CONTRACTED_MODE -> contractedMode = value
-                        BrailleDisplayLogic.KEY_CHINESE_SEGMENTATION ->
-                            chineseSegmentation = value
-                    }
-                    prefs.edit().putBoolean(key, value).apply()
+                    viewModel.setBoolean(key, value)
                 },
                 onBack = { finish() },
             )
@@ -241,6 +322,15 @@ class BrailleDisplayComposeActivity : AppCompatActivity(),
         }
         tables = seeds
         autoLabel = label
+        if (seeds.isEmpty()) {
+            return
+        }
+        // 表清单就绪才能把「方案池」和「当前方案」对账（逻辑与落盘都在 ViewModel 里，
+        // 这里只负责把分组算出来喂给它）。
+        val systemLanguage = Locale.getDefault().language
+        val tableGroups = BrailleTableCatalog.build(seeds, systemLanguage, tableLabels)
+        val codeGroups = BrailleCodeCatalog.build(tableGroups, seeds, tableLabels, codeLabels)
+        viewModel.reconcileCodes(codeGroups, systemLanguage)
     }
 
     override fun onTablesChanged() {
@@ -256,11 +346,11 @@ class BrailleDisplayComposeActivity : AppCompatActivity(),
             Locale("", country).getDisplayCountry()
         }
         val useChineseNames = Locale.getDefault().language.equals("zh", ignoreCase = true)
-        return BrailleTableCatalog.TableSeed(
+        val seed = BrailleTableCatalog.TableSeed(
             id = id.orEmpty(),
             language = locale.language,
             country = country,
-            localeName = locale.getDisplayName(),
+            localeName = "",
             languageName = Locale(locale.language).getDisplayLanguage(),
             countryName = BrailleTableCatalog.regionName(
                 country, localizedCountry, useChineseNames
@@ -269,6 +359,9 @@ class BrailleDisplayComposeActivity : AppCompatActivity(),
             grade = grade,
             variant = variant,
         )
+        // 不用系统提供的显示名：系统本地化字符串会绕过中国台湾/中国香港/
+        // 中国澳门的合规映射，且无国家码时与同语言地区表同名、读屏无法区分。
+        return seed.copy(localeName = BrailleTableCatalog.compliantLocaleName(seed, tableLabels))
     }
 
     override fun onDestroy() {
@@ -281,5 +374,30 @@ class BrailleDisplayComposeActivity : AppCompatActivity(),
         translatorManager?.shutdown()
         translatorManager = null
         super.onDestroy()
+    }
+
+    private companion object {
+        /**
+         * 偏好键名与默认值仍然只有资源这一处来源：键是 SharedPreferences 的 ABI
+         * （见 SettingsStructureContractTest），默认值来自 `R.bool.*`。
+         */
+        fun keys(context: Context): BrailleSettingsKeys {
+            val wordWrapDefault =
+                context.resources.getBoolean(R.bool.pref_braille_word_wrap_default)
+            val segmentationDefault =
+                context.resources.getBoolean(R.bool.pref_chinese_segmentation_default)
+            fun defaultOf(key: String) =
+                BrailleDisplayLogic.defaultBoolean(key, wordWrapDefault, segmentationDefault)
+            return BrailleSettingsKeys(
+                table = context.getString(R.string.pref_braille_table_key),
+                preferredCodes = context.getString(R.string.pref_preferred_codes_key),
+                booleanDefaults = listOf(
+                    BrailleDisplayLogic.KEY_WORD_WRAP,
+                    BrailleDisplayLogic.KEY_CURSOR_DOTS,
+                    BrailleDisplayLogic.KEY_CONTRACTED_MODE,
+                    BrailleDisplayLogic.KEY_CHINESE_SEGMENTATION,
+                ).associateWith { defaultOf(it) },
+            )
+        }
     }
 }

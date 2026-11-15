@@ -43,6 +43,7 @@ class TranslatorManager(context: Context) :
     private val mPrefBrailleTableKey: String
     private val mLegacySixDotBrailleTableKey: String
     private val mPrefContractedModeKey: String
+    private val mPrefPreferredCodesKey: String
     private val mTableValueDefault: String
 
     private val mSharedPreferences: SharedPreferences
@@ -62,6 +63,7 @@ class TranslatorManager(context: Context) :
         mLegacySixDotBrailleTableKey =
             context.getString(R.string.pref_six_dot_braille_table_key)
         mPrefContractedModeKey = context.getString(R.string.pref_braille_contracted_mode_key)
+        mPrefPreferredCodesKey = context.getString(R.string.pref_preferred_codes_key)
         mTableValueDefault = context.getString(R.string.table_value_default)
 
         mSharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
@@ -313,20 +315,35 @@ class TranslatorManager(context: Context) :
         selectedTableInfo()?.isEightDot == true
 
     /**
-     * 在六点与八点（计算机）盲文表之间切换，供 CMD_TOGGLE_BRAILLE_GRADE 使用。
+     * 在六点与八点（计算机）盲文方案之间切换，供 CMD_TOGGLE_BRAILLE_GRADE 使用。
      *
-     * 返回切换后是否为八点；当前语言没有八点表时保持原状。
+     * 多选方案模型：只在「当前语言 + 已启用方案」里找目标，绝不跨语言。
+     * 旧实现用 `findDefaultTableInfo(!eightDot)` 全局按 matchRank 挑表，中文环境下
+     * 可能跳到英文八点表，再切回也回不到原中文表。找不到目标时保持原状。
+     *
+     * 返回切换后是否为八点。
      */
     fun toggleBrailleDots(): Boolean {
-        val eightDot = isEightDotBrailleSelected()
-        val target = findDefaultTableInfo(!eightDot)
-        if (target == null) {
-            return eightDot
-        }
+        val tables = mTables ?: return false
+        val currentId = mSharedPreferences.getString(mPrefBrailleTableKey, mTableValueDefault)
+        val currentInfo = tables.firstOrNull { it.id == currentId }
+        val wasEightDot = currentInfo?.isEightDot == true
+        // 未初始化过多选列表时按「全部启用」处理，兼容升级前的用户。
+        val enabled = mSharedPreferences.getStringSet(mPrefPreferredCodesKey, null)
+            ?.takeIf { it.isNotEmpty() }
+            ?: tables.mapNotNull { it.id }.toSet()
+        val language = currentInfo?.locale?.language
+            ?: mLocale?.language
+            ?: return wasEightDot
+        val target = tables.firstOrNull { info ->
+            info.locale.language.equals(language, ignoreCase = true) &&
+                info.isEightDot != wasEightDot &&
+                info.id != null && info.id in enabled
+        } ?: return wasEightDot
         mSharedPreferences.edit()
             .putString(mPrefBrailleTableKey, target.id)
             .apply()
-        return !eightDot
+        return target.isEightDot
     }
 
     /** 老版本的“书面盲文表格”并入统一表：只在用户改过表时才迁移。 */
