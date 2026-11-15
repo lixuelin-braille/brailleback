@@ -89,29 +89,16 @@ class SettingsStructureContractTest {
         return out
     }
 
-    private fun screenAncestorCount(element: Element): Int {
-        var count = 0
-        var node: Node? = element.parentNode
-        while (node is Element) {
-            if (node.tagName == "PreferenceScreen") count++
-            node = node.parentNode
-        }
-        return count
-    }
-
     /** 一屏内读屏会朗读到的节点数：叶子项 + 分组标题。 */
     private fun audibleNodes(screen: Element): Int {
         var total = 0
         for (child in screen.children()) {
             when {
                 child.tagName in leafTags -> total++
-                child.tagName == "PreferenceScreen" -> total++
                 child.tagName == "PreferenceCategory" -> {
                     total++ // 分组标题本身也是可聚焦的朗读节点
                     // 分组内既可能有叶子项，也可能有子屏入口（主屏的五个分类）。
-                    total += child.children().count {
-                        it.tagName in leafTags || it.tagName == "PreferenceScreen"
-                    }
+                    total += child.children().count { it.tagName in leafTags }
                 }
             }
         }
@@ -137,42 +124,48 @@ class SettingsStructureContractTest {
     }
 
     @Test
-    fun fiveSubScreensAreFlatWithNoThirdLevel() {
-        val screens = allElements(settingsXml).filter { it.tagName == "PreferenceScreen" }
-        assertEquals("设置分类下应为五个平级子屏", 5, screens.size)
-        screens.forEach { screen ->
+    fun categoryEntriesAreFlatAndNeverScreens() {
+        // 五个子屏的内容已经移出本文件，这里只剩五个入口行。入口行必须是 Preference：
+        // androidx 1.2.1 的 PreferenceScreen.onClick() 在「无 intent、无 fragment、无子项」
+        // 时会直接 return（宁可静默失败也不抛异常）；而且它覆写了 onClick，
+        // setOnPreferenceClickListener 对 PreferenceScreen 无效。归档时就踩过这个坑：
+        // 五个入口点了全部没反应。
+        assertEquals(
+            "settings.xml 不应再有任何子屏，只保留根 PreferenceScreen",
+            0,
+            allElements(settingsXml).count { it.tagName == "PreferenceScreen" }
+        )
+        val entries = settingsXml.children()
+            .filter {
+                it.tagName == "PreferenceCategory" &&
+                    resolveKey(it.getAttribute("app:key")) == "category_settings"
+            }
+            .flatMap { it.children() }
+        assertEquals("设置分类下应为五个平级入口", 5, entries.size)
+        entries.forEach { entry ->
             assertEquals(
-                "子屏 ${screen.getAttribute("app:key")} 嵌套在另一个子屏里，" +
-                    "读屏用户需要按两次返回才能回到主屏",
-                1,
-                screenAncestorCount(screen)
+                "入口 ${entry.getAttribute("app:key")} 必须是 Preference，否则点击不会有反应",
+                "Preference",
+                entry.tagName
             )
         }
         assertEquals(
-            "五个子屏的 key 必须稳定（Activity 用 rootKey 导航）",
+            "五个入口的 key 必须稳定（代码按 key 接线）",
             setOf(
                 "category_device", "category_keys", "category_braille",
                 "category_sound_behavior", "category_developer"
             ),
-            screens.map { resolveKey(it.getAttribute("app:key")) }.toSet()
+            entries.map { resolveKey(it.getAttribute("app:key")) }.toSet()
         )
     }
 
     @Test
     fun everyScreenHasBoundedNodeCount() {
-        val screens = allElements(settingsXml).filter { it.tagName == "PreferenceScreen" }
-        screens.forEach { screen ->
-            val key = resolveKey(screen.getAttribute("app:key"))
-            val count = audibleNodes(screen)
-            // 开发者选项是唯一例外：5 个日志操作 + 2 个叠加层项 + 2 个分组标题 = 9，
-            // 且这些操作不便再拆屏（拆了会让主屏入口变成 6 个）。其余子屏严格不超过 8。
-            val limit = if (key == "category_developer") 9 else 8
-            assertTrue(
-                "子屏 $key 有 $count 个朗读节点，超过上限 $limit 会让线性浏览重新变拥挤",
-                count <= limit
-            )
-        }
-        assertTrue("主屏朗读节点不得超过 12 个", audibleNodes(settingsXml) <= 12)
+        // 归档后只剩一个主屏：3 个分组标题 + 启用服务 + 5 个分类入口 + 3 个功能入口 = 12。
+        assertTrue(
+            "主屏朗读节点不得超过 12 个，超过会让线性浏览重新变拥挤",
+            audibleNodes(settingsXml) <= 12
+        )
     }
 
     @Test
@@ -219,27 +212,34 @@ class SettingsStructureContractTest {
     }
 
     @Test
-    fun subScreenEntriesOnlyPointAtComposeScreens() {
-        // 主屏只留入口行：五个子屏自身不再带任何内容项，否则又会出现两套界面。
-        val screens = allElements(settingsXml).filter { it.tagName == "PreferenceScreen" }
-        assertEquals(5, screens.size)
-        screens.forEach { screen ->
-            assertTrue(
-                "子屏 ${screen.getAttribute("app:key")} 仍带内容项，旧界面没有真正退出",
-                screen.children().none { it.tagName in leafTags } &&
-                    screen.children().none { it.tagName == "PreferenceCategory" }
-            )
-        }
+    fun categoryEntriesWireToComposeScreens() {
+        // 入口行自己不带内容，靠点击监听跳 Compose 页。这里锁的是真正的跳转路径，
+        // 而不只是「编译通过」：五个入口每一个都必须有对应的 wireCategory 接线。
         val wiring = text(base + "src/com/googlecode/eyesfree/brailleback/SettingsActivity.kt")
         listOf(
-            "DeviceConnectionComposeActivity",
-            "KeysGesturesComposeActivity",
-            "BrailleDisplayComposeActivity",
-            "SoundBehaviorComposeActivity",
-            "DeveloperOptionsComposeActivity",
-        ).forEach { activity ->
-            assertTrue("入口行必须仍指向 $activity", wiring.contains(activity))
+            "pref_category_device_key" to "DeviceConnectionComposeActivity",
+            "pref_category_keys_key" to "KeysGesturesComposeActivity",
+            "pref_category_braille_key" to "BrailleDisplayComposeActivity",
+            "pref_category_sound_behavior_key" to "SoundBehaviorComposeActivity",
+            "pref_category_developer_key" to "DeveloperOptionsComposeActivity",
+        ).forEach { (keyRes, activity) ->
+            val pattern = Regex(
+                """wireCategory\(\s*R\.string\.$keyRes,\s*$activity::class\.java"""
+            )
+            assertTrue(
+                "入口 $keyRes 没有接线到 $activity：没有点击监听器的入口点了不会有反应",
+                pattern.containsMatchIn(wiring)
+            )
         }
+        // 回到 PreferenceScreen 导航就等于回到「空屏幕点了没反应」，明确禁止。
+        assertFalse(
+            "不应再依赖 OnPreferenceStartScreenCallback（空 PreferenceScreen 走不到它）",
+            wiring.contains("OnPreferenceStartScreenCallback")
+        )
+        assertTrue(
+            "点击监听器必须真的 startActivity",
+            wiring.contains("startActivity(Intent(requireActivity(), target))")
+        )
     }
 
     @Test

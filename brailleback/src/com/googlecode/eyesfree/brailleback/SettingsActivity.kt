@@ -29,7 +29,6 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
-import androidx.preference.PreferenceScreen
 import com.googlecode.eyesfree.braille.display.Display
 import com.googlecode.eyesfree.braille.display.DisplayClient
 import com.googlecode.eyesfree.braille.service.display.ConnectionProtocolPolicy
@@ -42,7 +41,6 @@ import com.googlecode.eyesfree.brailleback.compose.SoundBehaviorComposeActivity
 import com.googlecode.eyesfree.brailleback.utils.LogFileWriter
 
 class SettingsActivity : AppCompatActivity(),
-    PreferenceFragmentCompat.OnPreferenceStartScreenCallback,
     Display.OnConnectionStateChangeListener,
     Display.OnConnectionChangeProgressListener {
 
@@ -143,51 +141,6 @@ class SettingsActivity : AppCompatActivity(),
         window.decorView.announceForAccessibility(state)
     }
 
-    /**
-     * 嵌套分类（PreferenceScreen）导航：五个子屏全部交给独立 Compose Activity，
-     * 入口与主屏层级不变。旧子屏内容已归档（docs/归档-旧设置界面/），
-     * 未匹配到的分类仍走 PreferenceFragmentCompat 的 rootKey 回退路径。
-     */
-    override fun onPreferenceStartScreen(
-        caller: PreferenceFragmentCompat,
-        preferenceScreen: PreferenceScreen
-    ): Boolean {
-        when (preferenceScreen.key) {
-            getString(R.string.pref_category_device_key) -> {
-                startActivity(Intent(this, DeviceConnectionComposeActivity::class.java))
-                return true
-            }
-            getString(R.string.pref_category_keys_key) -> {
-                startActivity(Intent(this, KeysGesturesComposeActivity::class.java))
-                return true
-            }
-            getString(R.string.pref_category_braille_key) -> {
-                startActivity(Intent(this, BrailleDisplayComposeActivity::class.java))
-                return true
-            }
-            getString(R.string.pref_category_sound_behavior_key) -> {
-                startActivity(Intent(this, SoundBehaviorComposeActivity::class.java))
-                return true
-            }
-            getString(R.string.pref_category_developer_key) -> {
-                startActivity(Intent(this, DeveloperOptionsComposeActivity::class.java))
-                return true
-            }
-        }
-        val args = Bundle().apply {
-            putString(
-                PreferenceFragmentCompat.ARG_PREFERENCE_ROOT,
-                preferenceScreen.key
-            )
-        }
-        val fragment = SettingsFragment().apply { arguments = args }
-        caller.parentFragmentManager.beginTransaction()
-            .replace(android.R.id.content, fragment)
-            .addToBackStack(null)
-            .commit()
-        return true
-    }
-
     class SettingsFragment : PreferenceFragmentCompat(),
         Preference.OnPreferenceClickListener {
 
@@ -229,6 +182,31 @@ class SettingsActivity : AppCompatActivity(),
             mSetupServicePreference =
                 findPreference<Preference>(getString(R.string.pref_setup_service_key))
             mSetupServicePreference?.setOnPreferenceClickListener(this)
+
+            // 五个分类入口跳各自的 Compose 页。
+            // 这里用 Preference + 点击监听器，而不是空 PreferenceScreen：androidx 的
+            // PreferenceScreen.onClick() 在「无 intent、无 fragment、无子项」时直接 return，
+            // 点击会静默失败；而且它覆写了 onClick，setOnPreferenceClickListener 对它无效。
+            wireCategory(
+                R.string.pref_category_device_key,
+                DeviceConnectionComposeActivity::class.java
+            )
+            wireCategory(
+                R.string.pref_category_keys_key,
+                KeysGesturesComposeActivity::class.java
+            )
+            wireCategory(
+                R.string.pref_category_braille_key,
+                BrailleDisplayComposeActivity::class.java
+            )
+            wireCategory(
+                R.string.pref_category_sound_behavior_key,
+                SoundBehaviorComposeActivity::class.java
+            )
+            wireCategory(
+                R.string.pref_category_developer_key,
+                DeveloperOptionsComposeActivity::class.java
+            )
 
             findPreference<Preference>(getString(R.string.pref_bookshelf_key))
                 ?.setOnPreferenceClickListener {
@@ -290,6 +268,15 @@ class SettingsActivity : AppCompatActivity(),
             if (isSubScreen && !subScreenTitle.isNullOrEmpty()) {
                 host.announceSubScreenTitle(subScreenTitle)
             }
+        }
+
+        /** 分类入口统一接线：点一下进入对应的 Compose 子屏 Activity。 */
+        private fun wireCategory(keyRes: Int, target: Class<*>) {
+            findPreference<Preference>(getString(keyRes))
+                ?.setOnPreferenceClickListener {
+                    startActivity(Intent(requireActivity(), target))
+                    true
+                }
         }
 
         override fun onPreferenceClick(preference: Preference): Boolean {

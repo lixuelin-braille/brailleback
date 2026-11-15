@@ -241,19 +241,22 @@ class KeysGesturesContractTest {
     @Test
     fun wiringRoutesFiveScreensToCompose() {
         val settings = text(base + "src/com/googlecode/eyesfree/brailleback/SettingsActivity.kt")
-        val wiring = settings.substringAfter("override fun onPreferenceStartScreen(")
-            .substringBefore("val args = Bundle()")
-        assertTrue(wiring.contains("""getString(R.string.pref_category_device_key) -> {"""))
+        val wiring = settings.substringAfter("// 五个分类入口跳各自的 Compose 页。")
+            .substringBefore("// 屏幕盲文键盘")
         assertTrue(
-            wiring.contains("Intent(this, KeysGesturesComposeActivity::class.java)")
+            "按键与手势入口必须接线到自己的 Compose 页",
+            Regex(
+                """wireCategory\(\s*R\.string\.pref_category_keys_key,\s*"""
+                    + """KeysGesturesComposeActivity::class\.java"""
+            ).containsMatchIn(wiring)
         )
         assertTrue(
-            wiring.contains("Intent(this, DeveloperOptionsComposeActivity::class.java)")
+            wiring.contains("DeveloperOptionsComposeActivity::class.java")
         )
         assertEquals(
-            "第五批收官后共有五条 Compose 接线分支（本批接线仍保留）",
+            "五个分类入口各一条 wireCategory 接线",
             5,
-            Regex("""startActivity\(""").findAll(wiring).count()
+            Regex("""wireCategory\(""").findAll(wiring).count()
         )
         assertTrue(
             "第五批收官：开发者选项子屏也必须被拦截",
@@ -288,8 +291,8 @@ class KeysGesturesContractTest {
         }
         val all = text(base + "res/xml/settings.xml")
         assertEquals(
-            "主屏仍应是五个平级子屏（入口层级不变）",
-            5,
+            "主屏不应再有子屏定义：五个子屏内容已归档，入口改为 Preference + 点击监听",
+            0,
             Regex("""<PreferenceScreen""").findAll(all).count() - 1
         )
     }

@@ -51,10 +51,14 @@ class SoundBehaviorContractTest {
         .substringAfter("""app:key="@string/pref_category_sound_behavior_key"""")
         .substringBefore("""app:key="@string/pref_category_developer_key"""")
 
+    /**
+     * 主屏分类入口的接线区：五个入口现在是 Preference + 点击监听（wireCategory），
+     * 不再是 PreferenceScreen 导航——空 PreferenceScreen 的 onClick 会直接 return。
+     */
     private fun wiring(): String =
         text(base + "src/com/googlecode/eyesfree/brailleback/SettingsActivity.kt")
-            .substringAfter("override fun onPreferenceStartScreen(")
-            .substringBefore("val args = Bundle()")
+            .substringAfter("// 五个分类入口跳各自的 Compose 页。")
+            .substringBefore("// 屏幕盲文键盘")
 
     // -------------------------------------------------------------- 项与键
 
@@ -131,8 +135,8 @@ class SoundBehaviorContractTest {
             assertTrue("旧子屏必须完整保留以便回退：$key", xml.contains("""@string/$key"""))
         }
         assertEquals(
-            "主屏仍应是五个平级子屏（入口层级不变）",
-            5,
+            "主屏不应再有子屏定义：五个子屏内容已归档，入口改为 Preference + 点击监听",
+            0,
             Regex("""<PreferenceScreen""").findAll(text(base + "res/xml/settings.xml")).count() - 1
         )
     }
@@ -397,12 +401,17 @@ class SoundBehaviorContractTest {
     @Test
     fun wiringRoutesFiveScreensToComposeIncludingDeveloper() {
         val wiring = wiring()
-        assertTrue(wiring.contains("""getString(R.string.pref_category_sound_behavior_key) -> {"""))
-        assertTrue(wiring.contains("Intent(this, SoundBehaviorComposeActivity::class.java)"))
+        assertTrue(
+            "声音与行为入口必须接线到自己的 Compose 页",
+            Regex(
+                """wireCategory\(\s*R\.string\.pref_category_sound_behavior_key,\s*"""
+                    + """SoundBehaviorComposeActivity::class\.java"""
+            ).containsMatchIn(wiring)
+        )
         assertEquals(
-            "第五批收官后共有五条 Compose 接线分支",
+            "五个分类入口各一条 wireCategory 接线",
             5,
-            Regex("""startActivity\(""").findAll(wiring).count()
+            Regex("""wireCategory\(""").findAll(wiring).count()
         )
         listOf(
             "DeviceConnectionComposeActivity",

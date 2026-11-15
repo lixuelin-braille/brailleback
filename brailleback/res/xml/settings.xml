@@ -31,32 +31,36 @@
         app:title="@string/pref_category_settings_title">
 
         <!-- 五个子屏只保留入口行：内容全部由 compose 包下的独立 Activity 渲染，
-             旧子屏定义归档在 docs/归档-旧设置界面/settings-legacy.xml。 -->
-        <PreferenceScreen
+             旧子屏定义归档在 docs/归档-旧设置界面/settings-legacy.xml。
+             必须是 Preference 而不是空 PreferenceScreen：androidx 1.2.1 的
+             PreferenceScreen.onClick() 在「无 intent、无 fragment、无子项」时会直接
+             return，点击完全无反应（宁可静默失败也不抛异常，所以问题不易察觉）；
+             同时 PreferenceScreen 覆写了 onClick，setOnPreferenceClickListener 对它无效。
+             Preference 走默认 onClick，点击监听器才会被调用。 -->
+        <Preference
             app:key="@string/pref_category_device_key"
             app:title="@string/pref_category_device_title"
             app:summary="@string/pref_category_device_summary" />
 
-        <PreferenceScreen
+        <Preference
             app:key="@string/pref_category_keys_key"
             app:title="@string/pref_category_keys_title"
             app:summary="@string/pref_category_keys_summary" />
 
-        <PreferenceScreen
+        <Preference
             app:key="@string/pref_category_braille_key"
             app:title="@string/pref_category_braille_title"
             app:summary="@string/pref_category_braille_summary" />
 
-        <PreferenceScreen
+        <Preference
             app:key="@string/pref_category_sound_behavior_key"
             app:title="@string/pref_category_sound_behavior_title"
             app:summary="@string/pref_category_sound_behavior_summary" />
 
-        <PreferenceScreen
+        <Preference
             app:key="@string/pref_category_developer_key"
             app:title="@string/pref_category_developer_title"
             app:summary="@string/pref_category_developer_summary" />
-
 
     </PreferenceCategory>
 

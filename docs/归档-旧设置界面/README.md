@@ -4,6 +4,22 @@
 Activity 渲染，`res/xml/settings.xml` 只保留主屏与五个入口行，本目录保存旧实现原文，
 用于回退与出厂默认值核对。
 
+## 入口行必须是 `Preference`，不能是空 `PreferenceScreen`
+
+归档时曾把五个入口写成空的 `<PreferenceScreen>`，结果真机上五个入口**点击全部没反应**。
+原因在 androidx.preference 1.2.1 源码（`PreferenceScreen.onClick()`）：
+
+```
+if (getIntent() == null && getFragment() == null && getPreferenceCount() == 0) return;
+```
+
+空 `PreferenceScreen` 直接 return，既不导航也不报错；而且它覆写了 `onClick`，
+`setOnPreferenceClickListener` 对它无效——所以「挂监听器」这条路也走不通。
+现在的实现是 `<Preference>` + `SettingsFragment.wireCategory()` 里显式
+`startActivity(Intent(requireActivity(), XxxComposeActivity::class.java))`，
+契约测试 `SettingsStructureContractTest.categoryEntriesWireToComposeScreens` 与
+`ComposeMigrationContractTest.settingsActivityRoutesFiveMigratedScreensToCompose` 锁住这一点。
+
 ## 文件
 
 | 文件 | 内容 |
@@ -15,11 +31,11 @@ Activity 渲染，`res/xml/settings.xml` 只保留主屏与五个入口行，本
 
 ## 回退步骤
 
-1. 打开 `brailleback/res/xml/settings.xml`，把「设置分类」分组里的五个入口行删掉。
+1. 打开 `brailleback/res/xml/settings.xml`，把「设置分类」分组里的五个入口行（`<Preference>`）删掉。
 2. 从 `settings-legacy.xml` 复制五个子屏整段（`<PreferenceScreen app:key="@string/pref_category_device_key"` 起，
    到开发者子屏的 `</PreferenceScreen>` 止），贴回该分组。
-3. 删掉 `SettingsActivity.onPreferenceStartScreen` 里五条 `startActivity(Intent(this, XxxComposeActivity::class.java))` 分支，
-   让嵌套子屏重新走 `PreferenceFragmentCompat` 的 rootKey 导航。
+3. 删掉 `SettingsFragment.onCreate` 里五条 `wireCategory(...)` 调用与 `wireCategory` 方法，
+   让嵌套子屏重新走 `PreferenceFragmentCompat` 的 rootKey 导航（`onPreferenceStartScreen`）。
 4. 从 `SettingsActivity` 的 git 历史里恢复被删的绑定逻辑（`addTableList`、`showVolumeDialog`、
    日志对话框、`onTablesChanged` 等），或直接 `git revert` 归档提交。
 5. 把 `ComposeMigrationContractTest` / `SettingsStructureContractTest` 等契约测试里的

@@ -155,35 +155,37 @@ class ComposeMigrationContractTest {
     @Test
     fun settingsActivityRoutesFiveMigratedScreensToCompose() {
         val settings = text(base + "src/com/googlecode/eyesfree/brailleback/SettingsActivity.kt")
-        assertTrue(
-            "设备子屏入口必须改跳 Compose Activity",
-            settings.contains("""getString(R.string.pref_category_device_key) -> {""")
-        )
-        assertTrue(
-            settings.contains("Intent(this, DeviceConnectionComposeActivity::class.java)")
-        )
-        assertTrue(
-            settings.contains("Intent(this, KeysGesturesComposeActivity::class.java)")
-        )
-        assertTrue(
-            settings.contains("Intent(this, BrailleDisplayComposeActivity::class.java)")
-        )
-        assertTrue(
-            settings.contains("Intent(this, SoundBehaviorComposeActivity::class.java)")
-        )
-        assertTrue(
-            settings.contains("Intent(this, DeveloperOptionsComposeActivity::class.java)")
-        )
-        val onStartScreen = settings.substringAfter("override fun onPreferenceStartScreen(")
-            .substringBefore("val args = Bundle()")
+        // 五个入口是 Preference + 点击监听（wireCategory）。不能用空 PreferenceScreen：
+        // androidx 1.2.1 的 PreferenceScreen.onClick() 在无 intent/fragment/子项时直接 return，
+        // 点击静默失败；这次真机上五个入口全部点了没反应就是这个原因。
+        val wiring = settings.substringAfter("// 五个分类入口跳各自的 Compose 页。")
+            .substringBefore("// 屏幕盲文键盘")
+        listOf(
+            "pref_category_device_key" to "DeviceConnectionComposeActivity",
+            "pref_category_keys_key" to "KeysGesturesComposeActivity",
+            "pref_category_braille_key" to "BrailleDisplayComposeActivity",
+            "pref_category_sound_behavior_key" to "SoundBehaviorComposeActivity",
+            "pref_category_developer_key" to "DeveloperOptionsComposeActivity",
+        ).forEach { (keyRes, activity) ->
+            assertTrue(
+                "$keyRes 未接线到 $activity",
+                Regex(
+                    """wireCategory\(\s*R\.string\.$keyRes,\s*$activity::class\.java"""
+                ).containsMatchIn(wiring)
+            )
+        }
         assertEquals(
-            "五个已迁移的子屏应各有一条 startActivity 分支",
+            "五个已迁移的子屏应各有一条 wireCategory 接线",
             5,
-            Regex("""startActivity\(""").findAll(onStartScreen).count()
+            Regex("""wireCategory\(""").findAll(wiring).count()
+        )
+        assertFalse(
+            "不应再保留 onPreferenceStartScreen：空 PreferenceScreen 走不到它",
+            settings.contains("OnPreferenceStartScreenCallback")
         )
         assertTrue(
-            "第五批收官：开发者选项子屏也必须改跳 Compose Activity",
-            onStartScreen.contains("category_developer")
+            "入口点击必须真的 startActivity",
+            settings.contains("startActivity(Intent(requireActivity(), target))")
         )
     }
 
@@ -254,8 +256,8 @@ class ComposeMigrationContractTest {
             assertFalse("旧界面的内容项不得再留在 settings.xml：$key", xml.contains("@string/$key"))
         }
         assertEquals(
-            "主屏仍应是五个平级子屏（入口层级不变）",
-            5,
+            "主屏不应再有子屏定义：内容已移出编译路径，入口改为 Preference + 点击监听",
+            0,
             Regex("""<PreferenceScreen""").findAll(xml).count() - 1
         )
         assertEquals(
