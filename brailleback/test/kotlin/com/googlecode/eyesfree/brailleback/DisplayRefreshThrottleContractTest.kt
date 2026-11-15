@@ -133,7 +133,7 @@ class DisplayRefreshThrottleContractTest {
     @Test
     fun duplicateContentIsDroppedBeforeTranslation() {
         val body = handleSetContentBody()
-        val compareAt = body.indexOf("if (fingerprint == lastDisplayedFingerprint)")
+        val compareAt = body.indexOf("if (refreshGate.isDuplicateOfLast(fingerprint))")
         val translateAt = body.indexOf("translateCurrentContent()")
         assertTrue("handleSetContent 里找不到指纹比较", compareAt >= 0)
         assertTrue("handleSetContent 里找不到翻译调用", translateAt >= 0)
@@ -148,7 +148,7 @@ class DisplayRefreshThrottleContractTest {
     @Test
     fun droppedContentIsRecycledInsteadOfLeaked() {
         val body = handleSetContentBody()
-        val compareAt = body.indexOf("if (fingerprint == lastDisplayedFingerprint)")
+        val compareAt = body.indexOf("if (refreshGate.isDuplicateOfLast(fingerprint))")
         val recycleAt = body.indexOf("callbackHandler.recycleContent(content)", compareAt)
         val returnAt = body.indexOf("return", compareAt)
         assertTrue("丢弃重复帧时必须归还节点引用", recycleAt > compareAt)
@@ -159,13 +159,19 @@ class DisplayRefreshThrottleContractTest {
     fun fingerprintOnlyAdvancesAfterASuccessfulRefresh() {
         val body = doRefreshBody()
         val dotsAt = body.indexOf("displayDots(")
-        val commitAt = body.indexOf("lastDisplayedFingerprint = pendingFingerprint")
+        val commitAt = body.indexOf("refreshGate.onDelivered(")
         assertTrue("找不到 displayDots 调用", dotsAt >= 0)
         assertTrue("找不到指纹转正语句", commitAt >= 0)
         assertTrue(
             "指纹只能在真正下发之后转正：连接未建立/冻结时提前记录，" +
                 "恢复后第一帧会被自己丢掉，显示停在旧内容",
             dotsAt < commitAt)
+        // 转正动作本身在 RefreshGate 里，「送达前不转正」由 RefreshGateTest 钉住。
+        assertTrue(
+            "闸门必须把待发指纹转成已送达",
+            projectFile("brailleback/src/com/googlecode/eyesfree/brailleback/RefreshGate.kt")
+                .readText().contains("lastDeliveredFingerprint = pendingFingerprint"),
+        )
     }
 
     // ---- 3. 密集刷新限速，但单次变化不能有延迟 ----
@@ -185,7 +191,7 @@ class DisplayRefreshThrottleContractTest {
             body.contains("CONTENT_MIN_INTERVAL_MILLIS - elapsed"))
         assertTrue("延迟不能为负", body.contains("coerceAtLeast(0)"))
         assertTrue("必须记录上次刷屏时间",
-            body.contains("SystemClock.uptimeMillis() - lastRefreshUptime"))
+            body.contains("SystemClock.uptimeMillis() - refreshGate.lastDeliveredAt()"))
     }
 
     @Test

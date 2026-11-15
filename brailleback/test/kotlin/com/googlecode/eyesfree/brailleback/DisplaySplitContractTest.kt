@@ -136,6 +136,21 @@ class DisplaySplitContractTest {
         )) {
             assertFalse("$field 应改为 DisplayRuntimeState 的只读访问器", manager.contains(field))
         }
+        // 限速三件套是一组，收进 RefreshGate 后不许再散着写。
+        for (field in listOf(
+            "lastDisplayedFingerprint",
+            "pendingFingerprint",
+            "lastRefreshUptime",
+        )) {
+            assertFalse("$field 应改走 RefreshGate", manager.contains(field))
+        }
+        assertTrue("限速三件套必须收进 RefreshGate", manager.contains("RefreshGate()"))
+        assertTrue(
+            "指纹去重必须走闸门（送达前不许转正）",
+            manager.contains("refreshGate.isDuplicateOfLast("),
+        )
+        assertTrue("刷新成功必须走闸门记时",
+            manager.contains("refreshGate.onDelivered("))
         assertTrue("状态必须来自 MutableStateFlow", manager.contains("MutableStateFlow(DisplayRuntimeState())"))
         // 裁决必须一次取快照：连读三个字段就是原来那个撕裂读。
         assertTrue(

@@ -180,16 +180,10 @@ class DisplayManager(
     private val TELEMETRY_INTERVAL_MS = 5000L
     private val stats = DisplayRefreshStats()
     /**
-     * 上一次真正送到点显器的内容指纹。无障碍框架在窗口重绘时会重复下发
-     * 完全相同的内容，重译整屏会让点显器闪一下，指纹相同即丢弃。
-     * 只在 [doRefresh] 成功下发后更新：连接未建立 / 冻结期间不能记录，
-     * 否则恢复后第一帧会被自己丢掉，显示停在旧内容。
+     * 刷新闸门：指纹去重 + 最小间隔限速。三个字段本来是一组（待发指纹、
+     * 已送达指纹、已送达时刻），合成一个对象才不会读到互相矛盾的快照。
      */
-    @Volatile private var lastDisplayedFingerprint: String? = null
-    /** 当前 [currentContent] 的指纹，等 [doRefresh] 下发时转正。 */
-    @Volatile private var pendingFingerprint: String? = null
-    /** 上次真正送到点显器的时间戳（[SystemClock.uptimeMillis]），用于限速。 */
-    @Volatile private var lastRefreshUptime = 0L
+    private val refreshGate = RefreshGate()
     /**
      * 独立守护线程上报：即使 DisplayManager 的 handler 线程卡死，这里仍会输出，
      * 日志里表现为某项计数不再增长，从而区分「上层不刷新」和「线程被卡住」。
@@ -526,7 +520,7 @@ class DisplayManager(
                 return
             }
             // 距上次真正刷屏已够久就立即显示，密集时顺延到最小间隔。
-            val elapsed = SystemClock.uptimeMillis() - lastRefreshUptime
+            val elapsed = SystemClock.uptimeMillis() - refreshGate.lastDeliveredAt()
             val delay = (CONTENT_MIN_INTERVAL_MILLIS - elapsed).coerceAtLeast(0)
             sendEmptyMessageDelayed(MSG_SET_CONTENT, delay)
         }
@@ -572,14 +566,14 @@ class DisplayManager(
         private fun handleSetContent(content: Content) {
             stats.onContent()
             val fingerprint = contentFingerprint(content)
-            if (fingerprint == lastDisplayedFingerprint) {
+            if (refreshGate.isDuplicateOfLast(fingerprint)) {
                 // 文本、选区、焦点、平移策略全都没变：这只是窗口重绘触发的
                 // 重复下发，重新翻译并整屏重推会让点显器白白闪一次。
                 stats.onIdentical()
                 callbackHandler.recycleContent(content)
                 return
             }
-            pendingFingerprint = fingerprint
+            refreshGate.markPending(fingerprint)
             val oldContent = currentContent
             currentContent = content
             updateWrapStrategy()
@@ -947,9 +941,8 @@ class DisplayManager(
         }
         stats.onRefreshOk(toDisplay.size, Arrays.hashCode(toDisplay))
         display?.displayDots(toDisplay, displayedText, displayedBrailleToTextPositions)
-        lastRefreshUptime = SystemClock.uptimeMillis()
-        // 指纹在这里转正：只有真的送达点显器，重复下发才允许被丢弃。
-        lastDisplayedFingerprint = pendingFingerprint
+        // 时刻与指纹一起转正：只有真的送达点显器，重复下发才允许被丢弃。
+        refreshGate.onDelivered(SystemClock.uptimeMillis())
         if (blinkNeeded) {
             displayHandler.schedulePulse()
         } else {
