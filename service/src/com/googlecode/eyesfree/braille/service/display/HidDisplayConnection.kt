@@ -102,8 +102,10 @@ class HidDisplayConnection : DriverThread.OnInitListener {
 
   private val mUsbPermissionTimeout = object : Runnable {
     override fun run() {
-      val granted = mUsbDevice != null && mUsbManager != null &&
-          mUsbManager!!.hasPermission(mUsbDevice!!)
+      // 设备与管理器各取一次局部，避免中间被清空时读到半截状态。
+      val device = mUsbDevice
+      val usbManager = mUsbManager
+      val granted = device != null && usbManager != null && usbManager.hasPermission(device)
       onUsbPermissionResult(granted)
     }
   }
@@ -263,8 +265,9 @@ class HidDisplayConnection : DriverThread.OnInitListener {
     mUsbPermissionReceiver = object : BroadcastReceiver() {
       override fun onReceive(context: Context?, intent: Intent?) {
         val granted = intent?.getParcelableExtra<UsbDevice>(UsbManager.EXTRA_DEVICE)
-        if (granted == null || mUsbDevice == null
-            || granted.getDeviceId() != mUsbDevice!!.getDeviceId()) {
+        val localDevice = mUsbDevice
+        if (granted == null || localDevice == null
+            || granted.getDeviceId() != localDevice.getDeviceId()) {
           LogUtils.w(this, "Ignoring USB permission for a different device")
           return
         }
@@ -272,11 +275,12 @@ class HidDisplayConnection : DriverThread.OnInitListener {
             UsbManager.EXTRA_PERMISSION_GRANTED, false) ?: false)
       }
     }
+    val receiver = mUsbPermissionReceiver ?: return
     if (Build.VERSION.SDK_INT >= 33) {
-      mContext.registerReceiver(mUsbPermissionReceiver!!, filter,
+      mContext.registerReceiver(receiver, filter,
           Context.RECEIVER_NOT_EXPORTED)
     } else {
-      mContext.registerReceiver(mUsbPermissionReceiver!!, filter)
+      mContext.registerReceiver(receiver, filter)
     }
     val intent = Intent(ACTION_USB_HID_PERMISSION)
         .setPackage(mContext.getPackageName())
@@ -286,7 +290,12 @@ class HidDisplayConnection : DriverThread.OnInitListener {
       // immutable one drops those extras and always reports "denied".
       flags = flags or PendingIntent.FLAG_MUTABLE
     }
-    mUsbManager!!.requestPermission(device,
+    val usbManager = mUsbManager
+    if (usbManager == null) {
+      LogUtils.w(this, "USB host is not available; cannot request HID permission")
+      return
+    }
+    usbManager.requestPermission(device,
         PendingIntent.getBroadcast(mContext, 0, intent, flags))
     // Some OEMs swallow the broadcast; the poll is the fallback.
     mMainHandler.postDelayed(mUsbPermissionTimeout, USB_PERMISSION_TIMEOUT_MS)
@@ -302,13 +311,14 @@ class HidDisplayConnection : DriverThread.OnInitListener {
     unregisterUsbReceiver()
     // hasPermission() is authoritative; "granted" may be false merely because
     // an OEM dropped the system's PendingIntent extras.
-    if (mUsbDevice == null || mUsbManager == null
-        || !mUsbManager!!.hasPermission(mUsbDevice!!)) {
+    val device = mUsbDevice
+    val usbManager = mUsbManager
+    if (device == null || usbManager == null || !usbManager.hasPermission(device)) {
       LogUtils.w(this, "USB permission for HID display was not granted")
       notifyConnectFailed(-8)
       return
     }
-    finishUsbConnect(mPendingUsbController, mUsbDevice!!)
+    finishUsbConnect(mPendingUsbController, device)
   }
 
   private fun finishUsbConnect(controller: BrailleDisplayController?,
@@ -339,11 +349,9 @@ class HidDisplayConnection : DriverThread.OnInitListener {
   }
 
   private fun unregisterUsbReceiver() {
-    if (mUsbPermissionReceiver == null) {
-      return
-    }
+    val receiver = mUsbPermissionReceiver ?: return
     try {
-      mContext.unregisterReceiver(mUsbPermissionReceiver!!)
+      mContext.unregisterReceiver(receiver)
     } catch (e: IllegalArgumentException) {
       LogUtils.d(this, "USB permission receiver was already unregistered")
     }
@@ -553,10 +561,10 @@ class HidDisplayConnection : DriverThread.OnInitListener {
   }
 
   private fun stopDriver() {
-    if (mDriverThread != null) {
-      mDriverThread!!.stop()
-      mDriverThread = null
-    }
+    // 先摘下引用再停止：其它线程可能已经把它清掉了。
+    val driverThread = mDriverThread
+    mDriverThread = null
+    driverThread?.stop()
   }
 
   private class NoOpOutputStream : OutputStream() {

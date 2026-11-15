@@ -193,13 +193,14 @@ class NodeBrailler(
     ) {
         val nodeRect = Rect()
         node.getBoundsInScreen(nodeRect)
-        val current = AccessibilityNodeInfoRef.unOwned(node)!!
-        var currentIncludesChildren = includesChildren(current.get()!!!!)
+        // 节点已被回收时 unOwned 返回 null：放弃这次边界计算，不抛异常。
+        val current = AccessibilityNodeInfoRef.unOwned(node) ?: return
+        var currentIncludesChildren = includesChildren(current.get() ?: return)
         // Walk up the node tree as long as all siblings overlap the original
         // node vertically on screen.
         do {
             if (currentIncludesChildren) {
-                if (!findOverlappingRange(current.get()!!!!, nodeRect, outLeft, outRight)) {
+                if (!findOverlappingRange(current.get() ?: break, nodeRect, outLeft, outRight)) {
                     break
                 }
             } else {
@@ -215,7 +216,7 @@ class NodeBrailler(
             }
             // TODO: why not format bottom-up and avoid having to lookup the
             // rule twice?  Consider that at some point.
-            currentIncludesChildren = includesChildren(current.get()!!)
+            currentIncludesChildren = includesChildren(current.get() ?: break)
             // Don't let any parent prevent us from getting onto the display,
             // *we* contain the focused node.
         } while (currentIncludesChildren)
@@ -231,10 +232,36 @@ class NodeBrailler(
         val right = AccessibilityNodeInfoRef()
         findDisplayExtentFromNode(node, left, right)
         do {
-            outResult.add(left.makeOwned().release()!!)
-        } while (!left.get()!!.equals(right.get()!!) && left.nextSibling())
+            val owned = left.makeOwned().release() ?: break
+            outResult.add(owned)
+            // 两端都为空时视为同一位置：用可空安全的 != 比较，不再依赖非空断言。
+        } while (left.get() != right.get() && left.nextSibling())
     }
 
+    /**
+     * 沿兄弟链朝一个方向扫，直到越界、节点被回收、或遇到不在同一行的节点。
+     *
+     * 返回 true 表示扫到了链的尽头（覆盖了全部兄弟）。用单一出口而不是在循环里
+     * 堆 break：原来这里同时有 `get() 为空就 break` 和 `不同行就 break` 两个跳出口，
+     * 一旦两个方向都这么写，函数就没法一眼看懂在哪里停。
+     */
+    private fun scanSiblings(
+        ref: AccessibilityNodeInfoRef,
+        rect: Rect,
+        tmpRect: Rect,
+        step: (AccessibilityNodeInfoRef) -> Boolean,
+        onAccept: (AccessibilityNodeInfoRef) -> Unit
+    ): Boolean {
+        while (step(ref)) {
+            val node = ref.get() ?: return false
+            node.getBoundsInScreen(tmpRect)
+            if (!includesChildren(node) || !shouldPutOnSameLine(tmpRect, rect)) {
+                return false
+            }
+            onAccept(ref)
+        }
+        return true
+    }
     /**
      * Finds the range of siblings adjacent to `startFrom` that overlap `rect`
      * vertically.  Sets `outLeft` and `outRight` to the inclusive range that
@@ -249,26 +276,19 @@ class NodeBrailler(
         outRight: AccessibilityNodeInfoRef
     ): Boolean {
         val tmpRect = Rect()
-        var ret = true
-        val left = AccessibilityNodeInfoRef.unOwned(startFrom)!!
+        // 起点的 ref 建立不起来时，没有可比对的兄弟节点，直接判定「不覆盖」。
+        val left = AccessibilityNodeInfoRef.unOwned(startFrom) ?: return false
         outLeft.reset(left)
-        while (left.previousSibling()) {
-            left.get()!!.getBoundsInScreen(tmpRect)
-            if (!includesChildren(left.get()!!) || !shouldPutOnSameLine(tmpRect, rect)) {
-                ret = false
-                break
-            }
-            outLeft.reset(left)
+        var ret = scanSiblings(left, rect, tmpRect, { it.previousSibling() }) { outLeft.reset(it) }
+        val right = AccessibilityNodeInfoRef.unOwned(startFrom)
+        if (right == null) {
+            left.recycle()
+            return false
         }
-        val right = AccessibilityNodeInfoRef.unOwned(startFrom)!!
         outRight.reset(right)
-        while (right.nextSibling()) {
-            right.get()!!.getBoundsInScreen(tmpRect)
-            if (!includesChildren(right.get()!!) || !shouldPutOnSameLine(tmpRect, rect)) {
-                ret = false
-                break
-            }
-            outRight.reset(right)
+        // 两个方向都要扫：左边失败不代表右边不用扫，这里不能用 && 短路。
+        if (!scanSiblings(right, rect, tmpRect, { it.nextSibling() }) { outRight.reset(it) }) {
+            ret = false
         }
         outLeft.makeOwned()
         outRight.makeOwned()

@@ -72,15 +72,18 @@ class ReadThread(
         if (mDisconnecting) {
             return false
         }
-        if (mSocket != null && mConnectedDeviceInfo != null) {
-            val info = mConnectedDeviceInfo!!
-            val bthDev = info.getBluetoothDevice()!!
+        // socket 与设备信息各取一次，避免中间被清空时读到半截状态。
+        val socket = mSocket
+        val info = mConnectedDeviceInfo
+        if (socket != null && info != null) {
+            // 设备信息里没有 BluetoothDevice（已解绑或被回收）就按连接失败处理。
+            val bthDev = info.getBluetoothDevice() ?: return false
             mDisplayService.setConnectionProgress(
                 mResources.getString(R.string.connprog_initializing, deviceName(bthDev))
             )
             try {
                 mDriverThread = DriverThread(
-                    mSocket!!.outputStream,
+                    socket.outputStream,
                     info,
                     mResources,
                     mTablesDir,
@@ -98,15 +101,28 @@ class ReadThread(
     }
 
     private fun readLoop() {
+        // 一个读循环对应一个 socket：进来时取一次，断连后不再重取，
+        // 原来每轮都用非空断言去读属性，断连瞬间会把读线程炸掉。
+        val socket = mSocket ?: return
         try {
             val buf = ByteArray(128)
-            var readSize: Int
-            do {
-                readSize = mSocket!!.inputStream.read(buf, 0, buf.size)
+            var readSize = 0
+            var running = true
+            while (running) {
+                readSize = socket.inputStream.read(buf, 0, buf.size)
                 if (readSize > 0) {
-                    mDriverThread!!.addReadOperation(buf, readSize)
+                    // 驱动线程被别的线程置空就收工：不再向已停止的线程投递数据。
+                    val driver = mDriverThread
+                    if (driver == null) {
+                        running = false
+                    } else {
+                        driver.addReadOperation(buf, readSize)
+                    }
                 }
-            } while (readSize >= 0)
+                if (readSize < 0) {
+                    running = false
+                }
+            }
             Log.i(LOG_TAG, "End of input from device.")
         } catch (ex: IOException) {
             Log.i(LOG_TAG, "Socket closed while reading: $ex")
@@ -120,7 +136,8 @@ class ReadThread(
                 if (mDisconnecting) {
                     return
                 }
-                val bthDev = dev.getBluetoothDevice()!!
+                // 设备信息不完整（已解绑/被回收）就跳过这台，继续找下一台。
+                val bthDev = dev.getBluetoothDevice() ?: continue
                 val address = try {
                     bthDev.address
                 } catch (ex: SecurityException) {
@@ -139,10 +156,12 @@ class ReadThread(
                 Log.d(LOG_TAG, "Trying to connect to braille device: $name")
                 var socket: BluetoothSocket? = null
                 try {
+                    // SDP UUID 缺失就没有可连接的服务记录，跳过这台。
+                    val sdpUuid = dev.getSdpUuid() ?: continue
                     val newSocket = if (dev.getConnectSecurely()) {
-                        bthDev.createRfcommSocketToServiceRecord(dev.getSdpUuid()!!)
+                        bthDev.createRfcommSocketToServiceRecord(sdpUuid)
                     } else {
-                        bthDev.createInsecureRfcommSocketToServiceRecord(dev.getSdpUuid()!!)
+                        bthDev.createInsecureRfcommSocketToServiceRecord(sdpUuid)
                     }
                     socket = newSocket
                     newSocket.connect()
@@ -197,11 +216,10 @@ class ReadThread(
 
     private fun cleanup() {
         closeSocket()
-        if (mDriverThread != null) {
-            val localDriverThread = mDriverThread
-            mDriverThread = null
-            localDriverThread!!.stop()
-        }
+        // 先摘下引用再停止：别的线程可能已经把 mDriverThread 清掉了。
+        val driverThread = mDriverThread
+        mDriverThread = null
+        driverThread?.stop()
         mDisplayService.onDisplayDisconnected()
         Log.i(LOG_TAG, "Display disconnected")
     }
@@ -219,7 +237,11 @@ class ReadThread(
                 disconnect()
                 return
             }
-            val bthDev = info.getBluetoothDevice()!!
+            val bthDev = info.getBluetoothDevice()
+            if (bthDev == null) {
+                disconnect()
+                return
+            }
             mDisplayService.setConnectionProgress(
                 mResources.getString(
                     R.string.connprog_failed_to_initialize,

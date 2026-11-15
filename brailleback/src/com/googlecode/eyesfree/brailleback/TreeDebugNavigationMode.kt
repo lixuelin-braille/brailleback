@@ -118,8 +118,8 @@ class TreeDebugNavigationMode(
 
     override fun onObserveAccessibilityEvent(event: AccessibilityEvent) {
         val source = event.source ?: return
-        val isNewWindow = currentNode == null ||
-            currentNode!!.windowId != source.windowId
+        val current = currentNode
+        val isNewWindow = current == null || current.windowId != source.windowId
 
         val t = event.eventType
         var isInterestingEventType = false
@@ -136,12 +136,9 @@ class TreeDebugNavigationMode(
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent): Boolean {
-        if (pendingNode == null) {
-            return false
-        }
-        if (currentNode == null ||
-            currentNode!!.windowId != pendingNode!!.windowId
-        ) {
+        val pending = pendingNode ?: return false
+        val current = currentNode
+        if (current == null || current.windowId != pending.windowId) {
             makePendingNodeCurrent()
             displayCurrentNode()
             return true
@@ -154,16 +151,13 @@ class TreeDebugNavigationMode(
     }
 
     private fun setPendingNode(newNode: AccessibilityNodeInfo?) {
-        if (pendingNode != null && pendingNode !== newNode) {
-            pendingNode!!.recycle()
-        }
+        // 换节点前回收旧的；用安全调用，旧节点已被回收时不再崩。
+        pendingNode?.takeIf { it !== newNode }?.recycle()
         pendingNode = newNode
     }
 
     private fun setCurrentNode(newNode: AccessibilityNodeInfo?) {
-        if (currentNode != null && currentNode !== newNode) {
-            currentNode!!.recycle()
-        }
+        currentNode?.takeIf { it !== newNode }?.recycle()
         currentNode = newNode
     }
 
@@ -173,12 +167,13 @@ class TreeDebugNavigationMode(
     }
 
     private fun displayCurrentNode() {
-        if (currentNode == null) {
+        val node = currentNode
+        if (node == null) {
             displayManager.setContent(Content("No Node"))
         } else {
             displayManager.setContent(
-                Content(
-                    TreeDebug.nodeDebugDescription(AccessibilityNodeInfoCompat(currentNode!!))))
+                Content(TreeDebug.nodeDebugDescription(AccessibilityNodeInfoCompat(node)))
+            )
         }
     }
 
@@ -204,20 +199,14 @@ class TreeDebugNavigationMode(
                     prev = null
                     return ret
                 }
-                if (prev != null) {
-                    prev!!.recycle()
-                }
+                prev?.recycle()
                 prev = cur
                 cur = null
             }
         } finally {
             parent.recycle()
-            if (prev != null) {
-                prev!!.recycle()
-            }
-            if (cur != null) {
-                cur!!.recycle()
-            }
+            prev?.recycle()
+            cur?.recycle()
         }
         return ret
     }
@@ -240,16 +229,12 @@ class TreeDebugNavigationMode(
                 if (cur.equals(from)) {
                     return parent.getChild(i + 1)
                 }
-                if (cur != null) {
-                    cur!!.recycle()
-                    cur = null
-                }
+                cur?.recycle()
+                cur = null
             }
         } finally {
             parent.recycle()
-            if (cur != null) {
-                cur!!.recycle()
-            }
+            cur?.recycle()
         }
         return null
     }

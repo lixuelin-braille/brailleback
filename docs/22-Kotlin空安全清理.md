@@ -78,25 +78,88 @@ $s = Rep2 $s $old $new        # $s 变成数组：'  MISS' + 原文本
 真机第一轮采样曾看到 `Crashed services:{{...BrailleBackService}}`，
 复采三次全空、日志无 FATAL——那是「服务刚被停用、正在解绑」的瞬时记录，不是本次改动引起的崩溃。
 
-## 剩余 267 处的分布与下一批
+## 第二批：7 个文件 82 处（267 → 185）
+
+这一批换了一个更彻底的手法：**属性局部化**。
+
+`mDevice!!`、`mSocket!!`、`currentNode!!` 这类写法，问题的根不在「少一个 `?.`」，
+而在「同一个可空属性在一段逻辑里被读了好几次」——中间任何一次被别的线程清空，
+断言就炸。所以不是逐行换安全调用，而是在函数开头取一次局部变量，后面全用局部：
+
+```kotlin
+// 改前：三次读属性，三次断言
+if (!mUsbManager!!.hasPermission(mDevice!!)) {
+    if (sPromptedDeviceName == mDevice!!.getDeviceName()) { ... }
+}
+
+// 改后：各取一次，权限与设备名都来自同一份快照
+val usbManager = mUsbManager
+val deviceName = chosenDevice.getDeviceName()
+if (usbManager == null || !usbManager.hasPermission(chosenDevice)) { ... }
+```
+
+| 文件 | 处数 | 改法要点 |
+|:--|--:|:--|
+| `NodeBrailler` | 15 | 节点 ref 为空就放弃这次边界计算；`AccessibilityNodeInfo` 释放改 `?.recycle()` |
+| `ReadThread` | 10 | socket/驱动线程各取局部；SDP UUID 缺失跳过该设备继续找下一台 |
+| `UsbDisplayConnection` | 21 | 设备与管理器快照化；权限轮询/广播/请求三处统一 |
+| `HidDisplayConnection` | 11 | 同上，另加 `unregisterReceiver` 用局部引用 |
+| `TreeDebugNavigationMode` | 11 | `currentNode`/`pendingNode` 快照；比较改 `!=` 而非 `.equals` |
+| `OverlayTutorialActivity` | 14 | 演示视图全部 `?.` 调用：视图没建好时安静跳过，不再崩在定时线程 |
+
+`ReadThread` 里有一处**行为修正**要记住：原来读循环每轮都用 `mSocket!!` 重新取属性，
+现在进入循环时取一次。一个读循环对应一个 socket 本来就是正确的生命周期，
+而且断连时不会再把读线程连带炸掉。
+
+## 第二批踩坑：detekt 拦住了我新加的 break
+
+给循环加「为空就 `break`」之后，`detektCheck` 直接失败：
+
+```
+NodeBrailler.kt:259 [LoopWithTooManyJumpStatements]
+NodeBrailler.kt:274 [LoopWithTooManyJumpStatements]
+ReadThread.kt:107  [LoopWithTooManyJumpStatements]
+```
+
+这条规则是「一个循环里最多一个跳出口」。当时的写法确实有两个：
+`get() 为空就 break` 和 `不同行就 break`。**没有抑制规则**，而是重构：
+
+- `NodeBrailler`：把「沿兄弟链朝一个方向扫」抽成 `scanSiblings(step, onAccept)` 单出口函数，
+  左扫右扫各调用一次，两个循环和四处重复逻辑一起消失。
+- `ReadThread`：改成 `while (running)` + 标志位，循环里零 `break`。
+
+两个方向都要扫，所以不能用 `ret && scanSiblings(...)` 短路——原逻辑左边失败右边照扫。
+
+## 验证
+
+| 项 | 结果 |
+|:--|:--|
+| 编译 | 全部模块通过 |
+| 单测 | 520 + 164 全绿 |
+| detekt | 通过（重构后不再报 `LoopWithTooManyJumpStatements`） |
+| lint | 通过，error=0 |
+| 真机 | 连续四轮采样 `Crashed services:{}`，主进程与 `:service` 都在，无 `FATAL EXCEPTION` |
+
+## 剩余 185 处的分布与下一批
 
 | 文件 | 处数 | 行数 | 备注 |
 |:--|--:|--:|:--|
-| `BrailleBackService.kt` | 85 | 1040 | 无障碍服务主类，风险最高 |
-| `UsbDisplayConnection.kt` | 21 | 500 | USB 连接，硬件路径 |
-| `NodeBrailler.kt` | 15 | 311 | 节点转盲文，有单测 |
-| `OverlayTutorialActivity.kt` | 14 | 130 | 教程浮层，UI |
-| `HidDisplayConnection.kt` | 11 | 577 | HID 连接，硬件路径 |
-| `TreeDebugNavigationMode.kt` | 11 | 390 | 调试导航 |
+| `BrailleBackService.kt` | 85 | 1040 | 无障碍服务主类，风险最高，占剩余的一半 |
 | `LabelProviderClient.kt` | 10 | 597 | 标签服务客户端 |
 | `DefaultNavigationMode.kt` | 10 | 1290 | 导航主逻辑 |
-| `ReadThread.kt` | 10 | 232 | 蓝牙读线程 |
-| `IMESetupWizardActivity.kt` | 9 | 213 | 输入法向导 |
+| `IMESetupWizardActivity.kt` | 9 | 213 | 输入法向导（UI，可整批清） |
 | `SelfBrailleService.kt` | 8 | 294 | 自述盲文服务 |
-| 其余 34 个文件 | 63 | — | 多为测试与 UI |
+| `KeyBindingsActivity.kt` | 6 | — | 按键列表（UI） |
+| `SoundBehaviorContractTest.kt` | 6 | — | 测试 |
+| `BdoCArchiveParserTest.kt` | 6 | — | 测试 |
+| `DisplayService.kt` | 5 | 1769 | 显示服务主类 |
+| `JiebaDict.kt` | 4 | — | 分词词典 |
+| 其余 18 个文件 | 36 | — | 多为测试与 UI |
 
-建议下一批顺序（按「崩了影响多大」排）：
+建议下一批顺序：
 
-1. `NodeBrailler.kt`（15 处，纯逻辑，单测能兜底，先把模式跑顺）
-2. `ReadThread.kt` + `UsbDisplayConnection.kt`（连接层，崩了用户只知道「连不上」）
-3. `BrailleBackService.kt`（85 处，分 3～4 次改，每次改完必须装机冒烟）
+1. UI 与测试这 8 个文件（约 40 处，改法全程 `?.` 与 `?: fail()`，风险最低，一次清完）
+2. `BrailleBackService.kt`：85 处分 4 次，每次 20 处左右，每次改完跑单测 + 装机冒烟
+3. `DisplayService.kt` 与 `DefaultNavigationMode.kt` 最后做（体量大、逻辑密）
+
+目标：全仓 `!!` 先降到 0，再谈「密封类替代 null 返回」「不可变集合」「`when` 穷尽」这些更深的 Kotlin 化。

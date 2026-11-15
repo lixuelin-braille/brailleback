@@ -42,18 +42,20 @@ class OverlayTutorialActivity : Activity() {
     private val mPanDemoRunnable = object : Runnable {
         override fun run() {
             mPanDemoState = !mPanDemoState
-            mPanDemoLeftButton!!.setPressed(mPanDemoState)
-            mPanDemoRightButton!!.setPressed(mPanDemoState)
-            mPanDemo!!.postDelayed(this, PAN_DEMO_INTERVAL)
+            // 视图还没创建好时安静跳过这一拍，原来会直接崩在定时线程里。
+            mPanDemoLeftButton?.setPressed(mPanDemoState)
+            mPanDemoRightButton?.setPressed(mPanDemoState)
+            mPanDemo?.postDelayed(this, PAN_DEMO_INTERVAL)
         }
     }
 
     private var mRoutingKeyDemo: BrailleView? = null
     private val mRoutingKeyDemoRunnable = object : Runnable {
         override fun run() {
-            mRoutingKeyDemo!!.cancelPendingTouches()
-            mRoutingKeyDemo!!.highlightCell(mRandom.nextInt(ROUTING_KEY_DEMO_CELLS))
-            mRoutingKeyDemo!!.postDelayed(this, ROUTING_KEY_DEMO_INTERVAL)
+            val routingKeyDemo = mRoutingKeyDemo ?: return
+            routingKeyDemo.cancelPendingTouches()
+            routingKeyDemo.highlightCell(mRandom.nextInt(ROUTING_KEY_DEMO_CELLS))
+            routingKeyDemo.postDelayed(this, ROUTING_KEY_DEMO_INTERVAL)
         }
     }
 
@@ -61,27 +63,29 @@ class OverlayTutorialActivity : Activity() {
         super.onCreate(savedInstanceState)
 
         setContentView(R.layout.overlay_tutorial_activity)
-        mPanDemo = findViewById(R.id.pan_demo)
-        mPanDemoLeftButton = mPanDemo!!.findViewById(R.id.pan_left_button)
-        mPanDemoRightButton = mPanDemo!!.findViewById(R.id.pan_right_button)
+        val panDemo = findViewById<View>(R.id.pan_demo)
+        mPanDemo = panDemo
+        mPanDemoLeftButton = panDemo?.findViewById(R.id.pan_left_button)
+        mPanDemoRightButton = panDemo?.findViewById(R.id.pan_right_button)
         val routingKeyDemoView = findViewById<View>(R.id.routing_key_demo)
-        mRoutingKeyDemo = routingKeyDemoView.findViewById<BrailleView>(R.id.braille_view)
-        mRoutingKeyDemo!!.setDisplayProperties(ROUTING_KEY_DEMO_DISPLAY_PROPERTIES)
-        mRoutingKeyDemo!!.displayDots(byteArrayOf(), "", intArrayOf())
+        val routingKeyDemo = routingKeyDemoView.findViewById<BrailleView>(R.id.braille_view)
+        mRoutingKeyDemo = routingKeyDemo
+        routingKeyDemo?.setDisplayProperties(ROUTING_KEY_DEMO_DISPLAY_PROPERTIES)
+        routingKeyDemo?.displayDots(byteArrayOf(), "", intArrayOf())
     }
 
     override fun onResume() {
         super.onResume()
 
-        mPanDemo!!.post(mPanDemoRunnable)
-        mRoutingKeyDemo!!.post(mRoutingKeyDemoRunnable)
+        mPanDemo?.post(mPanDemoRunnable)
+        mRoutingKeyDemo?.post(mRoutingKeyDemoRunnable)
     }
 
     override fun onPause() {
         super.onPause()
 
-        mPanDemo!!.removeCallbacks(mPanDemoRunnable)
-        mRoutingKeyDemo!!.removeCallbacks(mRoutingKeyDemoRunnable)
+        mPanDemo?.removeCallbacks(mPanDemoRunnable)
+        mRoutingKeyDemo?.removeCallbacks(mRoutingKeyDemoRunnable)
     }
 
     fun onClickFinishButton(v: View) {

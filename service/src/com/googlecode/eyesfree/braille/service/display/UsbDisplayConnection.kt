@@ -126,10 +126,13 @@ class UsbDisplayConnection : DriverThread.OnInitListener {
 
     private val mPermissionPollRunnable = object : Runnable {
         override fun run() {
-            if (mDisconnecting || mPermissionSettled || mFailed || mDevice == null) {
+            // 设备与管理器各取一次局部：属性中途可能被清空，非空断言会直接崩。
+            val device = mDevice
+            if (mDisconnecting || mPermissionSettled || mFailed || device == null) {
                 return
             }
-            if (mUsbManager!!.hasPermission(mDevice!!)) {
+            val usbManager = mUsbManager ?: return
+            if (usbManager.hasPermission(device)) {
                 LogUtils.i(this, "USB permission detected by fallback poll")
                 onPermissionGranted()
                 return
@@ -137,7 +140,7 @@ class UsbDisplayConnection : DriverThread.OnInitListener {
             if (mSilentPermissionWait) {
                 // The prompt was already shown for this device. Ask again
                 // only once the user has signalled that they are present.
-                if (sPromptedDeviceName != mDevice!!.getDeviceName()) {
+                if (sPromptedDeviceName != device.getDeviceName()) {
                     LogUtils.i(this,
                             "App is in the foreground; asking for USB permission again")
                     mSilentPermissionWait = false
@@ -168,13 +171,15 @@ class UsbDisplayConnection : DriverThread.OnInitListener {
             LogUtils.i(this, "USB permission broadcast: granted=" + granted)
             // hasPermission() is authoritative: some OEMs deliver the
             // broadcast without the system's extras.
-            if (!granted && mDevice != null
-                    && !mUsbManager!!.hasPermission(mDevice!!)) {
+            val localDevice = mDevice
+            val usbManager = mUsbManager
+            if (!granted && localDevice != null && usbManager != null
+                    && !usbManager.hasPermission(localDevice)) {
                 fail("USB permission denied by the user")
                 return
             }
-            if (device != null && mDevice != null
-                    && device.getDeviceId() != mDevice!!.getDeviceId()) {
+            if (device != null && localDevice != null
+                    && device.getDeviceId() != localDevice.getDeviceId()) {
                 LogUtils.w(this, "Ignoring permission for a different USB device")
                 return
             }
@@ -202,7 +207,7 @@ class UsbDisplayConnection : DriverThread.OnInitListener {
             return
         }
 
-        val plugged = mUsbManager!!.getDeviceList()
+        val plugged = mUsbManager?.getDeviceList() ?: return
         LogUtils.i(this, "USB devices currently attached: " + plugged.size)
         for (device in plugged.values) {
             LogUtils.i(this, "  device id=" + device.getDeviceId()
@@ -237,20 +242,25 @@ class UsbDisplayConnection : DriverThread.OnInitListener {
             return
         }
 
-        mDevice = selected
-        mDriverCandidates = candidates
+        // 选中项落局部，后面不再反复读属性（属性随时可能被 disconnect 清空）。
+        val chosenDevice = selected
+        val chosenCandidates = candidates
+        mDevice = chosenDevice
+        mDriverCandidates = chosenCandidates
         mDriverIndex = 0
-        mDriverCode = candidates!!.get(0)
-        if (candidates!!.size > 1) {
+        mDriverCode = chosenCandidates[0]
+        if (chosenCandidates.size > 1) {
             LogUtils.w(this, "Multiple drivers match; trying " + mDriverCode
-                    + " first. Fallback order: " + candidates)
+                    + " first. Fallback order: " + chosenCandidates)
         }
 
-        if (!mUsbManager!!.hasPermission(mDevice!!)) {
-            if (sPromptedDeviceName == mDevice!!.getDeviceName()) {
+        val usbManager = mUsbManager
+        val deviceName = chosenDevice.getDeviceName()
+        if (usbManager == null || !usbManager.hasPermission(chosenDevice)) {
+            if (sPromptedDeviceName == deviceName) {
                 startSilentPermissionWait()
             } else {
-                sPromptedDeviceName = mDevice!!.getDeviceName()
+                sPromptedDeviceName = deviceName
                 requestPermission()
             }
             return
@@ -262,18 +272,20 @@ class UsbDisplayConnection : DriverThread.OnInitListener {
     // 那里没有「必须指定 flag」的要求，属 lint 误报。
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
     private fun requestPermission() {
+        val device = mDevice ?: return
         LogUtils.i(this, "Requesting USB permission for device id="
-                + mDevice!!.getDeviceId())
+                + device.getDeviceId())
         // A receiver from an earlier request may still be registered when
         // the prompt is asked again; keep exactly one at a time.
         unregisterPermissionReceiver()
         val filter = IntentFilter(ACTION_USB_PERMISSION)
         mPermissionReceiver = mPermissionBroadcastReceiver
+        val receiver = mPermissionReceiver ?: return
         if (Build.VERSION.SDK_INT >= 33) {
-            mContext.registerReceiver(mPermissionReceiver!!, filter,
+            mContext.registerReceiver(receiver, filter,
                     Context.RECEIVER_NOT_EXPORTED)
         } else {
-            mContext.registerReceiver(mPermissionReceiver!!, filter)
+            mContext.registerReceiver(receiver, filter)
         }
 
         val intent = Intent(ACTION_USB_PERMISSION)
@@ -288,7 +300,12 @@ class UsbDisplayConnection : DriverThread.OnInitListener {
         }
         val permissionIntent = PendingIntent.getBroadcast(
                 mContext, 0, intent, flags)
-        mUsbManager!!.requestPermission(mDevice!!, permissionIntent)
+        val usbManager = mUsbManager
+        if (usbManager == null) {
+            fail("USB host is not available on this device")
+            return
+        }
+        usbManager.requestPermission(device, permissionIntent)
         // The broadcast is the primary signal; the poll protects against
         // OEMs that swallow it (and against a screen reader missing the dialog).
         mHandler.postDelayed(mPermissionPollRunnable, PERMISSION_POLL_MILLIS)
@@ -325,12 +342,13 @@ class UsbDisplayConnection : DriverThread.OnInitListener {
     }
 
     private fun startDriver() {
-        if (mDisconnecting || mFailed || mDevice == null) {
+        val device = mDevice ?: return
+        if (mDisconnecting || mFailed) {
             return
         }
-        val serial = safeSerialNumber(mDevice!!)
+        val serial = safeSerialNumber(device)
         val parameter = UsbBrailleDevice.buildParameter(
-                serial, mDevice!!.getVendorId(), mDevice!!.getProductId())
+                serial, device.getVendorId(), device.getProductId())
         LogUtils.i(this, "Starting brltty USB driver=" + mDriverCode
                 + " parameter=" + parameter)
         try {
