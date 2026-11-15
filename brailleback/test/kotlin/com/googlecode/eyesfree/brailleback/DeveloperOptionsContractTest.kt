@@ -35,6 +35,9 @@ class DeveloperOptionsContractTest {
     private fun text(path: String) = projectFile(path).readText()
 
     private val base = "brailleback/"
+
+    /** 旧五子屏冻结原文（归档，不参与编译）。 */
+    private val ARCHIVE_PATH = "docs/归档-旧设置界面/settings-legacy.xml"
     private val composeDir = base + "src/com/googlecode/eyesfree/brailleback/compose/"
     private fun compose(name: String) = text(composeDir + name)
 
@@ -45,7 +48,7 @@ class DeveloperOptionsContractTest {
             .associate { it.groupValues[1] to it.groupValues[2] }
 
     /** settings.xml 中开发者选项子屏的片段（回退用的旧实现）。 */
-    private fun legacyScreen(): String = text(base + "res/xml/settings.xml")
+    private fun legacyScreen(): String = text(ARCHIVE_PATH)
         .substringAfter("""app:key="@string/pref_category_developer_key"""")
         .substringBefore("""app:key="@string/pref_category_features_key"""")
 
@@ -214,6 +217,7 @@ class DeveloperOptionsContractTest {
             assertTrue("日志动作真源缺失：$fragment", helper.contains(fragment))
         }
 
+        // 旧界面已归档：日志动作只剩 Compose 页一个入口，旧 Fragment 不得再留调用点。
         val oldFragment = settingsSource()
         listOf(
             "DebugLogActions.shareCurrentLog(requireActivity())",
@@ -222,7 +226,7 @@ class DeveloperOptionsContractTest {
             "DebugLogActions.shareLog(requireActivity(), text)",
             "DebugLogActions.clear(requireActivity())",
         ).forEach { fragment ->
-            assertTrue("旧 Fragment 必须委托给同一真源：$fragment", oldFragment.contains(fragment))
+            assertFalse("旧设置页归档后不得再调用日志动作：$fragment", oldFragment.contains(fragment))
         }
         listOf(
             "ClipData.newPlainText", "Intent.ACTION_SEND", "ClipboardManager"
@@ -263,7 +267,8 @@ class DeveloperOptionsContractTest {
         val logic = compose("DeveloperOptionsLogic.kt")
         assertTrue(logic.contains("fun shouldCheckFirstTimeTutorial(newValue: Boolean): Boolean = newValue"))
         assertTrue(logic.contains("const val OVERLAY_DEFAULT = false"))
-        assertTrue(
+        assertFalse(
+            "叠加层首次教程已由 Compose 页独占，旧设置页归档后不得保留第二处",
             settingsSource().contains("OverlayTutorialActivity.startIfFirstTime(requireActivity())")
         )
         // 「首次」不是我们编的：教程 Activity 自己有 PREF_HAS_RUN 守卫。

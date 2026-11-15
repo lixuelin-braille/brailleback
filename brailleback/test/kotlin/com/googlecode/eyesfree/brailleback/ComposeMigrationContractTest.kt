@@ -35,6 +35,9 @@ class ComposeMigrationContractTest {
     private fun text(path: String) = projectFile(path).readText()
 
     private val base = "brailleback/"
+
+    /** 旧五子屏冻结原文（归档，不参与编译）。 */
+    private val ARCHIVE_PATH = "docs/归档-旧设置界面/settings-legacy.xml"
     private val composeDir = base + "src/com/googlecode/eyesfree/brailleback/compose/"
 
     private fun compose(name: String) = text(composeDir + name)
@@ -206,10 +209,10 @@ class ComposeMigrationContractTest {
     }
 
     @Test
-    fun allFiveLegacySubScreensRemainInXmlForRollback() {
+    fun legacySubScreensAreArchivedAndMainScreenKeepsOnlyEntryRows() {
         val xml = text(base + "res/xml/settings.xml")
-        // 五屏的 XML 定义一律保留：五个子屏现已全部不再走 PreferenceFragment，
-        // 但旧实现必须随时可回退。
+        val archived = text(ARCHIVE_PATH)
+        // 主屏只剩五个入口行：五屏内容移出编译路径，主屏层级不变。
         listOf(
             "pref_category_device_key",
             "pref_category_keys_key",
@@ -217,19 +220,17 @@ class ComposeMigrationContractTest {
             "pref_category_sound_behavior_key",
             "pref_category_developer_key"
         ).forEach { key ->
-            assertTrue("子屏 XML 必须完整保留以便回退：$key", xml.contains("@string/$key"))
+            assertTrue("主屏入口行不得丢失：$key", xml.contains("@string/$key"))
+            assertTrue("旧子屏原文必须进归档：$key", archived.contains("@string/$key"))
         }
-        // 已迁移子屏的入口与全部 key 仍保留：两代 UI 共用同一份偏好数据，可随时回退。
+        // 内容项与全部偏好键只保留在归档里：两代 UI 共用同一份偏好数据。
         listOf(
-            "pref_category_device_key",
             "pref_connection_status_key",
             "pref_connection_protocol_key",
             "pref_auto_connect_key",
-            "pref_category_keys_key",
             "pref_key_bindings_key",
             "pref_custom_key_map_key",
             "pref_volume_gestures_enabled_key",
-            "pref_category_braille_key",
             "pref_braille_table_key",
             "pref_braille_word_wrap_key",
             "pref_cursor_dots_key",
@@ -249,12 +250,18 @@ class ComposeMigrationContractTest {
             "pref_braille_overlay_key",
             "pref_braille_overlay_tutorial_key"
         ).forEach { key ->
-            assertTrue("已迁移子屏的偏好 key 不得丢失：$key", xml.contains("@string/$key"))
+            assertTrue("旧界面的偏好 key 必须留在归档里（可回退）：$key", archived.contains("@string/$key"))
+            assertFalse("旧界面的内容项不得再留在 settings.xml：$key", xml.contains("@string/$key"))
         }
         assertEquals(
             "主屏仍应是五个平级子屏（入口层级不变）",
             5,
             Regex("""<PreferenceScreen""").findAll(xml).count() - 1
+        )
+        assertEquals(
+            "归档必须仍是完整的五个子屏原文",
+            5,
+            Regex("""<PreferenceScreen""").findAll(archived).count() - 1
         )
     }
 

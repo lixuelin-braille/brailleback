@@ -35,6 +35,9 @@ class SettingsStructureContractTest {
 
     private val base = "brailleback/"
 
+    /** 旧五子屏冻结原文的位置（相对仓库根，机读路径见 docs/归档-旧设置界面/README.md）。 */
+    private val ARCHIVE_PATH get() = "docs/归档-旧设置界面/settings-legacy.xml"
+
     private fun Element.children(): List<Element> {
         val out = mutableListOf<Element>()
         var node: Node? = firstChild
@@ -54,6 +57,10 @@ class SettingsStructureContractTest {
 
     private val settingsXml: Element
         get() = parse(base + "res/xml/settings.xml")
+
+    /** 旧五子屏的冻结原文：界面已归档，偏好键与出厂默认值仍以它为准核对。 */
+    private val archivedXml: Element
+        get() = parse(ARCHIVE_PATH)
 
     private val leafTags = setOf(
         "Preference", "ListPreference", "SwitchPreferenceCompat", "CheckBoxPreference"
@@ -169,9 +176,10 @@ class SettingsStructureContractTest {
     }
 
     @Test
-    fun allLegacyPreferenceKeysArePreserved() {
-        // 重排前 settings.xml 中全部会写入/读取 SharedPreferences 的 key。
-        // 只有两个纯导航容器（旧「声音」屏、旧「其他」屏）被有意合并移除。
+    fun allLegacyPreferenceKeysStillResolveAndStayInTheArchive() {
+        // 旧子屏内容已归档（界面不再渲染），但偏好键就是 SharedPreferences 的键：
+        // 服务端与 Compose 两侧仍在读写，键名一旦丢失，老用户设置会被静默丢弃。
+        // 因此这里对「归档原文」做完整性校验，同时确认每个 @string 键仍能解析。
         val legacyKeys = listOf(
             "setup_service", "bookshelf", "pref_braille_keyboard_key",
             "connection_status", "key_bindings", "custom_key_map",
@@ -186,12 +194,52 @@ class SettingsStructureContractTest {
             "log_level", "view_log", "share_log", "copy_log", "clear_log",
             "overlay_enabled", "show_overlay_tutorial"
         )
-        val present = allElements(settingsXml)
+        // 归档里出现的键（@string 引用已解析成实际值）
+        val archived = allElements(archivedXml)
+            .filter { it.hasAttribute("app:key") }
+            .map { resolveKey(it.getAttribute("app:key")) }
+            .toSet()
+        // 主屏仍保留的叶子项（启用服务、书架、键盘、许可）也一起算
+        val present = archived + allElements(settingsXml)
             .filter { it.hasAttribute("app:key") }
             .map { resolveKey(it.getAttribute("app:key")) }
             .toSet()
         val missing = legacyKeys.filter { it !in present }
-        assertTrue("重排丢失了这些偏好 key，老用户设置会被丢弃：$missing", missing.isEmpty())
+        assertTrue("归档后丢失了这些偏好 key，老用户设置会被丢弃：$missing", missing.isEmpty())
+
+        // 归档必须是可回退的完整原文：五个子屏、且每个子屏都还有内容项。
+        val archivedScreens = allElements(archivedXml).filter { it.tagName == "PreferenceScreen" }
+        assertEquals("归档应保留五个子屏原文", 5, archivedScreens.size)
+        archivedScreens.forEach { screen ->
+            assertTrue(
+                "归档子屏 ${screen.getAttribute("app:key")} 是空的，回退后设置项会不见",
+                allElements(screen).any { it.tagName in leafTags }
+            )
+        }
+    }
+
+    @Test
+    fun subScreenEntriesOnlyPointAtComposeScreens() {
+        // 主屏只留入口行：五个子屏自身不再带任何内容项，否则又会出现两套界面。
+        val screens = allElements(settingsXml).filter { it.tagName == "PreferenceScreen" }
+        assertEquals(5, screens.size)
+        screens.forEach { screen ->
+            assertTrue(
+                "子屏 ${screen.getAttribute("app:key")} 仍带内容项，旧界面没有真正退出",
+                screen.children().none { it.tagName in leafTags } &&
+                    screen.children().none { it.tagName == "PreferenceCategory" }
+            )
+        }
+        val wiring = text(base + "src/com/googlecode/eyesfree/brailleback/SettingsActivity.kt")
+        listOf(
+            "DeviceConnectionComposeActivity",
+            "KeysGesturesComposeActivity",
+            "BrailleDisplayComposeActivity",
+            "SoundBehaviorComposeActivity",
+            "DeveloperOptionsComposeActivity",
+        ).forEach { activity ->
+            assertTrue("入口行必须仍指向 $activity", wiring.contains(activity))
+        }
     }
 
     @Test

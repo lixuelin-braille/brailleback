@@ -34,6 +34,9 @@ class SoundBehaviorContractTest {
     private fun text(path: String) = projectFile(path).readText()
 
     private val base = "brailleback/"
+
+    /** 旧五子屏冻结原文（归档，不参与编译）。 */
+    private val ARCHIVE_PATH = "docs/归档-旧设置界面/settings-legacy.xml"
     private val composeDir = base + "src/com/googlecode/eyesfree/brailleback/compose/"
     private fun compose(name: String) = text(composeDir + name)
 
@@ -44,7 +47,7 @@ class SoundBehaviorContractTest {
             .associate { it.groupValues[1] to it.groupValues[2] }
 
     /** settings.xml 中声音与行为子屏的片段（回退用的旧实现）。 */
-    private fun legacyScreen(): String = text(base + "res/xml/settings.xml")
+    private fun legacyScreen(): String = text(ARCHIVE_PATH)
         .substringAfter("""app:key="@string/pref_category_sound_behavior_key"""")
         .substringBefore("""app:key="@string/pref_category_developer_key"""")
 
@@ -195,9 +198,11 @@ class SoundBehaviorContractTest {
         assertTrue(activity.contains("editor.putBoolean(key, flag)"))
         assertTrue(activity.contains("editor.apply()"))
 
-        // 旧实现与服务侧的依赖点：两处都必须仍然存在，证明这个标记不是我们凭空加的。
+        // 旧界面已归档（docs/归档-旧设置界面/）：motion_mode_explicit 的写入只剩 Compose 页一处，
+        // 双写会让「用户手动拨过开关」的判定出现两个真源。
         val oldFragment = text(base + "src/com/googlecode/eyesfree/brailleback/SettingsActivity.kt")
-        assertTrue(
+        assertFalse(
+            "旧设置页归档后不得再保留第二份运动模式写入",
             oldFragment.contains("getString(R.string.pref_motion_mode_explicit_key), true")
         )
         val service = text(base + "src/com/googlecode/eyesfree/brailleback/BrailleBackService.kt")

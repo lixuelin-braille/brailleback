@@ -42,6 +42,9 @@ class KeyMapResourceContractTest {
 
     private val base = "brailleback/"
 
+    /** 旧五子屏冻结原文（归档，不参与编译）。 */
+    private val ARCHIVE_PATH = "docs/归档-旧设置界面/settings-legacy.xml"
+
     // ------------------------------------------------------------ 白名单一致性
 
     @Test
@@ -128,8 +131,15 @@ class KeyMapResourceContractTest {
 
     @Test
     fun settingsEntryAndActivityAreWired() {
+        // 旧界面已归档：入口行还在主屏，内容项与键只在归档原文里。
         val settings = text(base + "res/xml/settings.xml")
-        assertTrue(settings.contains("@string/pref_custom_key_map_key"))
+        assertTrue(settings.contains("@string/pref_category_keys_key"))
+        assertFalse(
+            "自定义键位内容项应随旧子屏归档，不再出现在 settings.xml",
+            settings.contains("@string/pref_custom_key_map_key")
+        )
+        val archived = text(ARCHIVE_PATH)
+        assertTrue(archived.contains("@string/pref_custom_key_map_key"))
 
         val donottranslate = text(base + "res/values/donottranslate.xml")
         assertTrue(
@@ -141,12 +151,21 @@ class KeyMapResourceContractTest {
         val manifest = text(base + "AndroidManifest.xml")
         assertTrue(manifest.contains("android:name=\".CustomKeyMapActivity\""))
 
+        // 入口跳到 Compose 页后，自定义键位入口由后者承接（旧 SettingsActivity 已不再绑定）。
+        val keysGestures = text(
+            base + "src/com/googlecode/eyesfree/brailleback/compose/KeysGesturesComposeActivity.kt"
+        )
+        assertTrue(
+            keysGestures.contains("CustomKeyMapActivity::class.java")
+        )
         val settingsActivity = text(
             base + "src/com/googlecode/eyesfree/brailleback/SettingsActivity.kt"
         )
-        assertTrue(
+        assertFalse(
+            "旧设置页归档后不得再持有自定义键位入口",
             settingsActivity.contains("Intent(requireActivity(), CustomKeyMapActivity::class.java)")
         )
+        assertTrue(settingsActivity.contains("KeysGesturesComposeActivity::class.java"))
     }
 
     @Test

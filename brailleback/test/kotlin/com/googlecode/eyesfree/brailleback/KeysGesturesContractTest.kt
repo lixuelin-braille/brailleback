@@ -32,6 +32,9 @@ class KeysGesturesContractTest {
     private fun text(path: String) = projectFile(path).readText()
 
     private val base = "brailleback/"
+
+    /** 旧五子屏冻结原文（归档，不参与编译）。 */
+    private val ARCHIVE_PATH = "docs/归档-旧设置界面/settings-legacy.xml"
     private val composeDir = base + "src/com/googlecode/eyesfree/brailleback/compose/"
     private fun compose(name: String) = text(composeDir + name)
 
@@ -41,7 +44,7 @@ class KeysGesturesContractTest {
             .associate { it.groupValues[1] to it.groupValues[2] }
 
     /** settings.xml 中按键与手势子屏的片段（回退用的旧实现）。 */
-    private fun legacyScreen(): String = text(base + "res/xml/settings.xml")
+    private fun legacyScreen(): String = text(ARCHIVE_PATH)
         .substringAfter("""app:key="@string/pref_category_keys_key"""")
         .substringBefore("""app:key="@string/pref_category_braille_key"""")
 
