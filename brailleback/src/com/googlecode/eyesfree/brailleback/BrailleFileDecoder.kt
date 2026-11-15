@@ -152,21 +152,48 @@ object BrailleFileDecoder {
     }
 
     /**
+     * 解码结果。成功与失败是不同类型，调用方必须 `when` 处理，
+     * 不会再有「忘了判 null」的路径。
+     */
+    sealed interface DecodedDocument {
+        /** 解码成功，[text] 可直接进入排版管线。 */
+        data class Decoded(val text: String) : DecodedDocument
+
+        /** 读取失败的具体原因。 */
+        sealed interface Failure : DecodedDocument {
+            /** 文件是空的（0 字节）。 */
+            data object EmptyFile : Failure
+
+            /** 后缀是 bdo/bdoc，但找不到 Bword 记录标记。 */
+            data object NotBwordArchive : Failure
+
+            /** 是 Bword 文档，但盲文方数 [cellCount] 低于可靠阈值。 */
+            data class TooFewBrailleCells(val cellCount: Int) : Failure
+        }
+    }
+
+    /**
      * 按文件名后缀分派解码。
      *
      * - `.bdo` / `.bdoc`：Bword 二进制盲文文档，走 [BdoCArchiveParser] 结构化解码，
      *   输出已是 Unicode 盲文（U+2800 系列），**不可**再做 ASCII 盲文转换。
      *   这是国内盲文图书馆/出版社的主力格式。
      * - 其余（`.brf` / `.txt` 等）：按文本解码，后续由 [toUnicodeBraille] 处理。
-     *
-     * @return 解码后的正文；bdo 解码失败时返回 null（交由调用方提示）。
      */
-    fun decodeDocument(bytes: ByteArray, fileName: String?): String? {
+    fun decodeDocument(bytes: ByteArray, fileName: String?): DecodedDocument {
         val ext = fileName?.substringAfterLast('.', "")?.lowercase()
-        return if (ext == "bdo" || ext == "bdoc") {
-            BdoCArchiveParser.parse(bytes)
-        } else {
-            decode(bytes)
+        if (ext != "bdo" && ext != "bdoc") {
+            return DecodedDocument.Decoded(decode(bytes))
+        }
+        return when (val result = BdoCArchiveParser.parse(bytes)) {
+            is BdoCArchiveParser.ParseResult.Decoded ->
+                DecodedDocument.Decoded(result.text)
+            BdoCArchiveParser.ParseResult.EmptyInput ->
+                DecodedDocument.Failure.EmptyFile
+            BdoCArchiveParser.ParseResult.NoRecords ->
+                DecodedDocument.Failure.NotBwordArchive
+            is BdoCArchiveParser.ParseResult.TooFewCells ->
+                DecodedDocument.Failure.TooFewBrailleCells(result.cellCount)
         }
     }
 

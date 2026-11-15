@@ -60,8 +60,7 @@ class BrailleReaderLogicTest {
         val content = "这是一本盲文书\n第二行测试"
         val decoded = BrailleFileDecoder.decodeDocument(
             content.toByteArray(StandardCharsets.UTF_8), "book.txt")
-        assertNotNull(decoded)
-        assertEquals(content, decoded)
+        assertEquals(BrailleFileDecoder.DecodedDocument.Decoded(content), decoded)
     }
 
     @Test
@@ -71,8 +70,7 @@ class BrailleReaderLogicTest {
         val cs = Charset.forName("GBK")
         val gbkBytes = content.toByteArray(cs)
         val decoded = BrailleFileDecoder.decodeDocument(gbkBytes, "book.brf")
-        assertNotNull(decoded)
-        assertEquals(content, decoded)
+        assertEquals(BrailleFileDecoder.DecodedDocument.Decoded(content), decoded)
     }
 
     @Test

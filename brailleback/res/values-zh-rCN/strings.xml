@@ -71,7 +71,9 @@
     <string name="braille_reader_nav_hint">"长按「上一页/下一页」可逐行移动"</string>
     <string name="braille_reader_send">"发送点显"</string>
     <string name="braille_reader_load_fail">"文件读取失败：%1$s"</string>
-    <string name="braille_reader_bdo_fail">"不是有效的 Bword（.bdo/.bdoc）盲文文档"</string>
+    <string name="braille_reader_err_empty">"这个文件是空的"</string>
+    <string name="braille_reader_err_not_bword">"这个 .bdo/.bdoc 文件里找不到 Bword 记录"</string>
+    <string name="braille_reader_err_too_few">"这个 .bdo/.bdoc 文档只有 %1$d 方盲文，内容太少，读不了"</string>
     <string name="braille_reader_translating">"正在翻译为盲文…"</string>
     <string name="braille_reader_translator_waiting">"正在启动盲文翻译服务…"</string>
     <string name="braille_reader_translate_fail">"翻译失败，已显示原文；连接点显器可输出盲文"</string>

@@ -314,8 +314,12 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
                 val name = displayNameOf(uri)
                 checkSupportedFormat(name)
                 val bytes = readAllBytes(uri)
-                val text = BrailleFileDecoder.decodeDocument(bytes, name)
-                    ?: throw IllegalStateException(getString(R.string.braille_reader_bdo_fail))
+                val text = when (val document =
+                        BrailleFileDecoder.decodeDocument(bytes, name)) {
+                    is BrailleFileDecoder.DecodedDocument.Decoded -> document.text
+                    is BrailleFileDecoder.DecodedDocument.Failure ->
+                        throw IllegalStateException(loadFailureMessage(document))
+                }
                 text to name
             } catch (e: Exception) {
                 if (!isFinishing) {
@@ -341,6 +345,23 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
                 }
             }
         }.start()
+    }
+
+    /**
+     * 解码失败的具体原因，翻成一句用户能听懂的话。
+     *
+     * 盲人用户看不到界面，只能听到这一句：必须说清是「文件空」「不是 bdo」
+     * 还是「内容太少」，而不是统一的「不是有效的盲文文档」。
+     */
+    private fun loadFailureMessage(
+        failure: BrailleFileDecoder.DecodedDocument.Failure
+    ): String = when (failure) {
+        BrailleFileDecoder.DecodedDocument.Failure.EmptyFile ->
+            getString(R.string.braille_reader_err_empty)
+        BrailleFileDecoder.DecodedDocument.Failure.NotBwordArchive ->
+            getString(R.string.braille_reader_err_not_bword)
+        is BrailleFileDecoder.DecodedDocument.Failure.TooFewBrailleCells ->
+            getString(R.string.braille_reader_err_too_few, failure.cellCount)
     }
 
     /**

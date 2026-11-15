@@ -26,14 +26,30 @@ object BdoCArchiveParser {
     private const val MIN_VALID_BRAILLE = 100 // 判定为有效结构化解码的最少盲文字符数
 
     /**
-     * 从二进制 BDO/BDOC 字节流中结构化解码盲文正文。
-     *
-     * @return 以 `\n` 分隔的 Unicode 盲文文本（空记录=空行）；无法可靠解码时返回 null。
+     * 解析结果。失败原因不再用 null 承载：null 分不清「文件空」「不是 CArchive」
+     * 「盲文方太少」三种情况，调用方只能给同一句提示。
      */
-    fun parse(bytes: ByteArray): String? {
-        if (bytes.isEmpty()) return null
+    sealed interface ParseResult {
+        /** 解析成功：[text] 是以 `\n` 分隔的 Unicode 盲文（空记录=空行），[cellCount] 是盲文方数。 */
+        data class Decoded(val text: String, val cellCount: Int) : ParseResult
+
+        /** 输入是 0 字节。 */
+        data object EmptyInput : ParseResult
+
+        /** 找不到任何 `\xff\xfe\xff` 记录标记，不是 Bword CArchive 文档。 */
+        data object NoRecords : ParseResult
+
+        /** 找到了记录，但盲文方数 [cellCount] 低于 [MIN_VALID_BRAILLE]。 */
+        data class TooFewCells(val cellCount: Int) : ParseResult
+    }
+
+    /**
+     * 从二进制 BDO/BDOC 字节流中结构化解码盲文正文。
+     */
+    fun parse(bytes: ByteArray): ParseResult {
+        if (bytes.isEmpty()) return ParseResult.EmptyInput
         val markers = findMarkers(bytes)
-        if (markers.isEmpty()) return null
+        if (markers.isEmpty()) return ParseResult.NoRecords
         val records = ArrayList<String>()
         var totalCells = 0
         for (i in markers.indices) {
@@ -45,8 +61,8 @@ object BdoCArchiveParser {
             records.add(if (values.isEmpty()) "" else valuesToBraille(values))
         }
         // 盲文方过少说明不是有效的结构化盲文文档（可能是恰好含标记的二进制）
-        if (totalCells < MIN_VALID_BRAILLE) return null
-        return records.joinToString("\n")
+        if (totalCells < MIN_VALID_BRAILLE) return ParseResult.TooFewCells(totalCells)
+        return ParseResult.Decoded(records.joinToString("\n"), totalCells)
     }
 
     /** 查找所有 `\xff\xfe\xff` 记录标记偏移（不重叠，与 CArchive find 行为一致）。 */

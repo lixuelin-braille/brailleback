@@ -51,7 +51,8 @@ class ContentKindTest {
     fun `unicode braille is BRAILLE`() {
         // 真实 bdo 样本：解析后全是 U+2800 系列
         val f = locate("test/resources/real_bdo_sample.bdo") ?: return
-        val text = BdoCArchiveParser.parse(f.readBytes())
+        val text = (BdoCArchiveParser.parse(f.readBytes())
+                as? BdoCArchiveParser.ParseResult.Decoded)?.text
         assertTrue("样本解码不应为空", !text.isNullOrEmpty())
         assertEquals(BrailleFileDecoder.ContentKind.BRAILLE,
             BrailleFileDecoder.detectKind(requireNotNull(text) { "样本解码不应为空" }))

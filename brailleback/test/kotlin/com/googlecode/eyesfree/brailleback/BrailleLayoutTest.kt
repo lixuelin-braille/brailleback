@@ -102,7 +102,8 @@ class BrailleLayoutTest {
     fun `real bdo first page is no longer mostly blank`() {
         val bytes = javaClass.getResourceAsStream("/real_bdo_sample.bdo")?.readBytes()
             ?: throw AssertionError("缺少测试资源 real_bdo_sample.bdo")
-        val text = requireNotNull(BdoCArchiveParser.parse(bytes)) { "样本解码失败" }
+        val text = (BdoCArchiveParser.parse(bytes) as? BdoCArchiveParser.ParseResult.Decoded)
+            ?.text ?: throw AssertionError("样本解码失败")
         val cells = 40
         val lpp = 20
         val pages = BrailleFileDecoder.buildPages(text, cells, lpp)

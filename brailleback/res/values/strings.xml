@@ -109,7 +109,9 @@
     <string name="braille_reader_nav_hint">Long-press Prev / Next to move one line</string>
     <string name="braille_reader_send">Send to display</string>
     <string name="braille_reader_load_fail">Failed to load file: %1$s</string>
-    <string name="braille_reader_bdo_fail">Not a valid Bword (.bdo/.bdoc) braille document</string>
+    <string name="braille_reader_err_empty">The file is empty</string>
+    <string name="braille_reader_err_not_bword">No Bword records found in this .bdo/.bdoc file</string>
+    <string name="braille_reader_err_too_few">Only %1$d braille cells in this .bdo/.bdoc document, too few to read</string>
     <string name="braille_reader_translating">Translating to braille…</string>
     <string name="braille_reader_translator_waiting">Starting braille translation service…</string>
     <string name="braille_reader_translate_fail">Translation failed. Showing original text; connect a display for braille output.</string>
