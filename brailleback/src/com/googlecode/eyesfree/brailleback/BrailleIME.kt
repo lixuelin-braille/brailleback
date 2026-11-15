@@ -333,7 +333,7 @@ class BrailleIME : BrailleIme {
 
     /* Exposed for use by the host. */
 
-    fun route(position: Int, content: DisplayManager.Content): Boolean {
+    fun route(position: Int, content: Content): Boolean {
         val ic = getCurrentInputConnection()
         val text: Spanned? = content.getSpanned()
         if (ic != null && text != null) {
@@ -535,8 +535,8 @@ class BrailleIME : BrailleIme {
             }
         }
         displayManager.setContent(
-                DisplayManager.Content(text)
-                        .setPanStrategy(DisplayManager.Content.PAN_CURSOR)
+                Content(text)
+                        .setPanStrategy(Content.PAN_CURSOR)
                         .setEditable(true)
                         .setSplitParagraphs(isMultiLineField()))
     }

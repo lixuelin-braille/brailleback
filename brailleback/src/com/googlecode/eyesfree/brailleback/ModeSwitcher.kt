@@ -66,7 +66,7 @@ class ModeSwitcher(vararg modes: NavigationMode) : NavigationMode {
         mActive = false
     }
 
-    override fun onPanLeftOverflow(content: DisplayManager.Content): Boolean {
+    override fun onPanLeftOverflow(content: Content): Boolean {
         var ret = getCurrentMode().onPanLeftOverflow(content)
         if (!ret && mOverrideMode != null) {
             ret = mModes[mModeIndex].onPanLeftOverflow(content)
@@ -74,7 +74,7 @@ class ModeSwitcher(vararg modes: NavigationMode) : NavigationMode {
         return ret
     }
 
-    override fun onPanRightOverflow(content: DisplayManager.Content): Boolean {
+    override fun onPanRightOverflow(content: Content): Boolean {
         var ret = getCurrentMode().onPanRightOverflow(content)
         if (!ret && mOverrideMode != null) {
             ret = mModes[mModeIndex].onPanRightOverflow(content)
@@ -83,7 +83,7 @@ class ModeSwitcher(vararg modes: NavigationMode) : NavigationMode {
     }
 
     override fun onMappedInputEvent(
-        event: BrailleInputEvent, content: DisplayManager.Content): Boolean {
+        event: BrailleInputEvent, content: Content): Boolean {
         var ret = getCurrentMode().onMappedInputEvent(event, content)
         if (!ret && mOverrideMode != null) {
             ret = mModes[mModeIndex].onMappedInputEvent(event, content)

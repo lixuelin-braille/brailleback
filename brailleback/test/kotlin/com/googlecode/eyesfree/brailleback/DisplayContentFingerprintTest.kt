@@ -19,7 +19,7 @@ import java.lang.reflect.Array as ReflectArray
  */
 class DisplayContentFingerprintTest {
 
-    private fun content(text: String?) = DisplayManager.Content(text)
+    private fun content(text: String?) = Content(text)
 
     @Test
     fun `完全相同的两帧指纹相等`() {
@@ -40,8 +40,8 @@ class DisplayContentFingerprintTest {
     fun `平移策略变化指纹不同`() {
         // 同一个文本，只是 PAN_KEEP 变成 PAN_RESET，也必须重画。
         assertNotEquals(
-            contentFingerprint(content("同一文本").setPanStrategy(DisplayManager.Content.PAN_KEEP)),
-            contentFingerprint(content("同一文本").setPanStrategy(DisplayManager.Content.PAN_RESET)),
+            contentFingerprint(content("同一文本").setPanStrategy(Content.PAN_KEEP)),
+            contentFingerprint(content("同一文本").setPanStrategy(Content.PAN_RESET)),
         )
     }
 
@@ -50,7 +50,7 @@ class DisplayContentFingerprintTest {
         assertNotEquals(
             contentFingerprint(content("省略号abc")),
             contentFingerprint(
-                content("省略号abc").setContractionMode(DisplayManager.Content.CONTRACT_ALWAYS_ALLOW)
+                content("省略号abc").setContractionMode(Content.CONTRACT_ALWAYS_ALLOW)
             ),
         )
     }
@@ -87,10 +87,10 @@ class DisplayContentFingerprintTest {
         // 焦点在同一行内移动一格，文本没变，但光标位置必须跟着挪。
         // android.text.SpannableString 在 JVM 单测里是桩，所以这里用最小实现，
         // 只提供指纹真正会调用到的那几个方法。
-        val focusAtThree = DisplayManager.Content(
+        val focusAtThree = Content(
             MarkerText("光标在这里移动", listOf(DisplaySpans.FocusSpan() to (2 to 3)))
         )
-        val focusAtFive = DisplayManager.Content(
+        val focusAtFive = Content(
             MarkerText("光标在这里移动", listOf(DisplaySpans.FocusSpan() to (4 to 5)))
         )
         assertNotEquals(
@@ -103,10 +103,10 @@ class DisplayContentFingerprintTest {
     @Test
     fun `同一区间不同标记类型指纹不同`() {
         // 选区与焦点都在 2..3，但语义不同，不能算同一帧。
-        val selection = DisplayManager.Content(
+        val selection = Content(
             MarkerText("光标在这里移动", listOf(DisplaySpans.SelectionSpan() to (2 to 3)))
         )
-        val focus = DisplayManager.Content(
+        val focus = Content(
             MarkerText("光标在这里移动", listOf(DisplaySpans.FocusSpan() to (2 to 3)))
         )
         assertNotEquals(contentFingerprint(selection), contentFingerprint(focus))
@@ -116,8 +116,8 @@ class DisplayContentFingerprintTest {
     fun `没有标记时文本相同指纹相同`() {
         val plain = MarkerText("无标记文本", emptyList())
         assertEquals(
-            contentFingerprint(DisplayManager.Content(plain)),
-            contentFingerprint(DisplayManager.Content(MarkerText("无标记文本", emptyList()))),
+            contentFingerprint(Content(plain)),
+            contentFingerprint(Content(MarkerText("无标记文本", emptyList()))),
         )
     }
 

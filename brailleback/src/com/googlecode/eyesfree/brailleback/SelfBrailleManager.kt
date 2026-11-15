@@ -17,15 +17,15 @@ class SelfBrailleManager {
 
     private var mImeOpen = false
 
-    fun contentForNode(node: AccessibilityNodeInfoCompat): DisplayManager.Content? {
+    fun contentForNode(node: AccessibilityNodeInfoCompat): Content? {
         val service = getSelfBrailleService()
         val content = service?.contentForNode(node)
         if (content != null) {
             content.setContractionMode(
                 if (mImeOpen) {
-                    DisplayManager.Content.CONTRACT_DEFAULT
+                    Content.CONTRACT_DEFAULT
                 } else {
-                    DisplayManager.Content.CONTRACT_ALWAYS_ALLOW
+                    Content.CONTRACT_ALWAYS_ALLOW
                 })
         }
         return content

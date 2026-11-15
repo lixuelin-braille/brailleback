@@ -119,14 +119,14 @@ class BrailleMenuNavigationMode(
         // Nothing to do here.
     }
 
-    override fun onPanLeftOverflow(content: DisplayManager.Content): Boolean {
+    override fun onPanLeftOverflow(content: Content): Boolean {
         // When we overflow, want to move to the previous item, if it exists.
         return feedbackManager.emitOnFailure(
             scrollMenu(SCROLL_MENU_BACKWARD),
             FeedbackManager.TYPE_NAVIGATE_OUT_OF_BOUNDS)
     }
 
-    override fun onPanRightOverflow(content: DisplayManager.Content): Boolean {
+    override fun onPanRightOverflow(content: Content): Boolean {
         // When we overflow, want to move to the next item, if it exists.
         return feedbackManager.emitOnFailure(
             scrollMenu(SCROLL_MENU_FORWARD),
@@ -135,7 +135,7 @@ class BrailleMenuNavigationMode(
 
     override fun onMappedInputEvent(
         event: BrailleInputEvent,
-        content: DisplayManager.Content
+        content: Content
     ): Boolean {
         when (event.command) {
             BrailleInputEvent.CMD_NAV_ITEM_NEXT,
@@ -268,8 +268,8 @@ class BrailleMenuNavigationMode(
      */
     private fun brailleDisplayWithCurrentItem() {
         val current = menuItems!![currentIndex]
-        val content = DisplayManager.Content(current.name)
-        content.setPanStrategy(DisplayManager.Content.PAN_RESET)
+        val content = Content(current.name)
+        content.setPanStrategy(Content.PAN_RESET)
         displayManager.setContent(content)
     }
 

@@ -49,17 +49,17 @@ class TreeDebugNavigationMode(
      */
     private var pendingNode: AccessibilityNodeInfo? = null
 
-    override fun onPanLeftOverflow(content: DisplayManager.Content): Boolean {
+    override fun onPanLeftOverflow(content: Content): Boolean {
         return movePrevious()
     }
 
-    override fun onPanRightOverflow(content: DisplayManager.Content): Boolean {
+    override fun onPanRightOverflow(content: Content): Boolean {
         return moveNext()
     }
 
     override fun onMappedInputEvent(
         event: BrailleInputEvent,
-        content: DisplayManager.Content
+        content: Content
     ): Boolean {
         when (event.command) {
             BrailleInputEvent.CMD_NAV_LINE_PREVIOUS -> return movePreviousSibling()
@@ -174,10 +174,10 @@ class TreeDebugNavigationMode(
 
     private fun displayCurrentNode() {
         if (currentNode == null) {
-            displayManager.setContent(DisplayManager.Content("No Node"))
+            displayManager.setContent(Content("No Node"))
         } else {
             displayManager.setContent(
-                DisplayManager.Content(
+                Content(
                     TreeDebug.nodeDebugDescription(AccessibilityNodeInfoCompat(currentNode!!))))
         }
     }
@@ -372,7 +372,7 @@ class TreeDebugNavigationMode(
         val node = currentNode ?: return
         val rect = Rect()
         node.getBoundsInScreen(rect)
-        displayManager.setContent(DisplayManager.Content("b: " + rect))
+        displayManager.setContent(Content("b: " + rect))
     }
 
     /**

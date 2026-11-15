@@ -43,7 +43,7 @@ class NodeBrailler(
     fun brailleNode(
         node: AccessibilityNodeInfoCompat,
         focusNode: AccessibilityNodeInfoCompat? = null
-    ): DisplayManager.Content? {
+    ): Content? {
         var content = mSelfBrailleManager.contentForNode(node)
         if (content == null) {
             val toFormat = ArrayList<AccessibilityNodeInfoCompat>()
@@ -53,7 +53,7 @@ class NodeBrailler(
             for (n in toFormat) {
                 formatSubtree(n, sb, focusNode)
             }
-            content = DisplayManager.Content(sb)
+            content = Content(sb)
             val heading = toFormat.size == 1 && HeadingRules.isHeading(node, sb)
             // 阅读类长文本（微信读书等把整页正文放在一个 content-desc 里，
             // 段间用空行分隔）按段落排版：段首空两方，下一段从行首开始。
@@ -82,7 +82,7 @@ class NodeBrailler(
 
     /** Makes sure logical focus is visible even for self-brailled content. */
     private fun ensureFocusSpan(
-        content: DisplayManager.Content,
+        content: Content,
         focusNode: AccessibilityNodeInfoCompat
     ) {
         val spannable = content.getText() as? Spannable ?: return

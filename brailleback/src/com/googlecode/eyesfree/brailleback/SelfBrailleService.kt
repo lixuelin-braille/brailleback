@@ -119,7 +119,7 @@ class SelfBrailleService : Service() {
         }
     }
 
-    fun contentForNode(node: AccessibilityNodeInfoCompat): DisplayManager.Content? {
+    fun contentForNode(node: AccessibilityNodeInfoCompat): Content? {
         if (nodeStates.isEmpty()) {
             return null
         }
@@ -142,10 +142,10 @@ class SelfBrailleService : Service() {
             }
             DisplaySpans.addSelection(sb, selectionStart, selectionEnd)
         }
-        return DisplayManager.Content(sb)
+        return Content(sb)
             .setFirstNode(match)
             .setLastNode(match)
-            .setPanStrategy(DisplayManager.Content.PAN_CURSOR)
+            .setPanStrategy(Content.PAN_CURSOR)
     }
 
     private fun infoForClient(clientToken: IBinder): ClientInfo? {

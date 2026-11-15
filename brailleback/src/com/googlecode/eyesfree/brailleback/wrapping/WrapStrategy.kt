@@ -10,7 +10,7 @@ package com.googlecode.eyesfree.brailleback.wrapping
 import android.util.Log
 import android.util.SparseIntArray
 import com.googlecode.eyesfree.braille.translate.TranslationResult
-import com.googlecode.eyesfree.brailleback.DisplayManager.Content
+import com.googlecode.eyesfree.brailleback.Content
 
 /**
  * Handles the presentation of braille content that doesn't completely fit on

@@ -61,13 +61,13 @@ internal class DefaultNavigationMode(
 
     private var mScrollUpdatePending = false
 
-    override fun onPanLeftOverflow(content: DisplayManager.Content): Boolean {
+    override fun onPanLeftOverflow(content: Content): Boolean {
         return mFeedbackManager.emitOnFailure(
                 onPanLeftOverflowInternal(content),
                 FeedbackManager.TYPE_NAVIGATE_OUT_OF_BOUNDS)
     }
 
-    private fun onPanLeftOverflowInternal(content: DisplayManager.Content): Boolean {
+    private fun onPanLeftOverflowInternal(content: Content): Boolean {
         var currentNode: AccessibilityNodeInfoCompat? = null
         var firstNode: AccessibilityNodeInfoCompat? = null
         try {
@@ -105,14 +105,14 @@ internal class DefaultNavigationMode(
         }
     }
 
-    override fun onPanRightOverflow(content: DisplayManager.Content): Boolean {
+    override fun onPanRightOverflow(content: Content): Boolean {
         return mFeedbackManager.emitOnFailure(
                 onPanRightOverflowInternal(content),
                 FeedbackManager.TYPE_NAVIGATE_OUT_OF_BOUNDS)
     }
 
     private fun onPanRightOverflowInternal(
-            content: DisplayManager.Content): Boolean {
+            content: Content): Boolean {
         val currentNode = currentFocusedNode(true)
         try {
             if (currentNode != null
@@ -149,7 +149,7 @@ internal class DefaultNavigationMode(
      * while some (such as containers) don't.
      */
     private fun findNodeForPanRight(
-            content: DisplayManager.Content): AccessibilityNodeInfoRef {
+            content: Content): AccessibilityNodeInfoRef {
         var current = AccessibilityNodeInfoRef.refreshed(
                 content.getFirstNode()) ?: AccessibilityNodeInfoRef()
         // Simplify the algorithm by finding the node to stop our traversal
@@ -229,7 +229,7 @@ internal class DefaultNavigationMode(
         node.clear()
     }
 
-    private fun linePrevious(content: DisplayManager.Content): Boolean {
+    private fun linePrevious(content: Content): Boolean {
         return mFeedbackManager.emitOnFailure(
                 linePreviousInternal(content),
                 FeedbackManager.TYPE_NAVIGATE_OUT_OF_BOUNDS)
@@ -239,7 +239,7 @@ internal class DefaultNavigationMode(
      * Moves accessibility focus to the first focusable node of the previous
      * 'line'.
      */
-    private fun linePreviousInternal(content: DisplayManager.Content): Boolean {
+    private fun linePreviousInternal(content: Content): Boolean {
         val left = AccessibilityNodeInfoRef()
         val right = AccessibilityNodeInfoRef()
         var target: AccessibilityNodeInfoCompat? = null
@@ -305,7 +305,7 @@ internal class DefaultNavigationMode(
         }
     }
 
-    private fun lineNext(content: DisplayManager.Content): Boolean {
+    private fun lineNext(content: Content): Boolean {
         return onPanRightOverflow(content)
     }
 
@@ -377,7 +377,7 @@ internal class DefaultNavigationMode(
     }
 
     override fun onMappedInputEvent(event: BrailleInputEvent,
-                                    content: DisplayManager.Content): Boolean {
+                                    content: Content): Boolean {
         when (event.command) {
             BrailleInputEvent.CMD_NAV_ITEM_PREVIOUS ->
                 return itemPrevious()
@@ -582,7 +582,7 @@ internal class DefaultNavigationMode(
         }
         rememberScrollContainer(node)
         val content = mNodeBrailler.brailleNode(node, node) ?: return false
-        content.setPanStrategy(DisplayManager.Content.PAN_CURSOR)
+        content.setPanStrategy(Content.PAN_CURSOR)
         mLastFocusedNode.reset(AccessibilityNodeInfoCompat.obtain(node))
         mDisplayManager.setContent(content)
         return true
@@ -702,12 +702,12 @@ internal class DefaultNavigationMode(
      * @return The formatted utterance.
      */
     private fun formatEventToBraille(
-            event: AccessibilityEvent): DisplayManager.Content {
+            event: AccessibilityEvent): Content {
         val eventNode = getNodeFromEvent(event)
         if (eventNode != null) {
             val ret = mNodeBrailler.brailleNode(eventNode)
             if (ret != null) {
-                ret.setPanStrategy(DisplayManager.Content.PAN_CURSOR)
+                ret.setPanStrategy(Content.PAN_CURSOR)
                 mLastFocusedNode.reset(eventNode)
                 return ret
             }
@@ -719,7 +719,7 @@ internal class DefaultNavigationMode(
         LogUtils.log(this, Log.VERBOSE,
                 "No node on event, falling back on event text")
         mLastFocusedNode.clear()
-        return DisplayManager.Content(
+        return Content(
                 AccessibilityEventUtils.getEventText(event))
     }
 
@@ -736,8 +736,8 @@ internal class DefaultNavigationMode(
                     focused, if (quiet) focused else null) ?: return false
             if (focused == mLastFocusedNode.get()
                     && content.getPanStrategy()
-                    == DisplayManager.Content.PAN_RESET) {
-                content.setPanStrategy(DisplayManager.Content.PAN_KEEP)
+                    == Content.PAN_RESET) {
+                content.setPanStrategy(Content.PAN_KEEP)
             }
             mDisplayManager.setContent(content)
             mLastFocusedNode.reset(AccessibilityNodeInfoCompat.obtain(focused))
@@ -772,8 +772,8 @@ internal class DefaultNavigationMode(
         if (content != null) {
             if (AccessibilityNodeInfoRef.isNull(mLastFocusedNode)
                     && content.getPanStrategy()
-                    == DisplayManager.Content.PAN_RESET) {
-                content.setPanStrategy(DisplayManager.Content.PAN_KEEP)
+                    == Content.PAN_RESET) {
+                content.setPanStrategy(Content.PAN_KEEP)
             }
             mDisplayManager.setContent(content)
             if (quiet) {

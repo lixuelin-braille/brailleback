@@ -108,7 +108,7 @@ class DisplayRefreshThrottleContractTest {
     private fun fingerprintBody() =
         methodBody(
             fingerprintSource(),
-            "internal fun contentFingerprint(content: DisplayManager.Content): String")
+            "internal fun contentFingerprint(content: Content): String")
 
     // ---- 1. 内容指纹必须覆盖所有会影响显示的字段 ----
 

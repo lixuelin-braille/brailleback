@@ -1,7 +1,7 @@
 package com.googlecode.eyesfree.brailleback.wrapping
 
 import com.googlecode.eyesfree.braille.translate.TranslationResult
-import com.googlecode.eyesfree.brailleback.DisplayManager.Content
+import com.googlecode.eyesfree.brailleback.Content
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

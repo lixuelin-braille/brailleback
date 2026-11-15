@@ -15,7 +15,7 @@ import android.text.Spanned
  *
  * 从 `DisplayManager` 抽成顶层函数：它不读任何实例状态，是纯函数，
  * 因此可以在 JVM 单测里直接喂 `Content` 验证“改了哪一项就会变、没改就不变”。
- */internal fun contentFingerprint(content: DisplayManager.Content): String {
+ */internal fun contentFingerprint(content: Content): String {
     val text = content.getText() ?: return ""
     val builder = StringBuilder(text.length + 48)
     builder.append(text)

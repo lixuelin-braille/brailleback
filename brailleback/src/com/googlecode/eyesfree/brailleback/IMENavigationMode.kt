@@ -117,16 +117,16 @@ class IMENavigationMode @JvmOverloads constructor(
         mNext.onInvalidateAccessibilityNode(node)
     }
 
-    override fun onPanLeftOverflow(content: DisplayManager.Content): Boolean {
+    override fun onPanLeftOverflow(content: Content): Boolean {
         return mNext.onPanLeftOverflow(content)
     }
 
-    override fun onPanRightOverflow(content: DisplayManager.Content): Boolean {
+    override fun onPanRightOverflow(content: Content): Boolean {
         return mNext.onPanRightOverflow(content)
     }
 
     override fun onMappedInputEvent(event: BrailleInputEvent,
-            content: DisplayManager.Content): Boolean {
+            content: Content): Boolean {
         val ime = getIME()
 
         // These commands are handled by the IME whenever it is accepting

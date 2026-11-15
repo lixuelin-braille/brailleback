@@ -159,14 +159,14 @@ internal class SearchNavigationMode @JvmOverloads constructor(
         evaluateSearch()
     }
 
-    override fun onPanLeftOverflow(content: DisplayManager.Content): Boolean {
+    override fun onPanLeftOverflow(content: Content): Boolean {
         // When we overflow, want to move to the previous result, if it exists.
         return mFeedbackManager.emitOnFailure(
                 nextResult(NodeFocusFinder.SEARCH_BACKWARD),
                 FeedbackManager.TYPE_NAVIGATE_OUT_OF_BOUNDS)
     }
 
-    override fun onPanRightOverflow(content: DisplayManager.Content): Boolean {
+    override fun onPanRightOverflow(content: Content): Boolean {
         // When we overflow, want to move to the next result, if it exists.
         return mFeedbackManager.emitOnFailure(
                 nextResult(NodeFocusFinder.SEARCH_FORWARD),
@@ -174,7 +174,7 @@ internal class SearchNavigationMode @JvmOverloads constructor(
     }
 
     override fun onMappedInputEvent(event: BrailleInputEvent,
-                                    content: DisplayManager.Content): Boolean {
+                                    content: Content): Boolean {
         when (event.command) {
             BrailleInputEvent.CMD_TOGGLE_INCREMENTAL_SEARCH -> {
                 syncBackToInitial()
@@ -398,12 +398,12 @@ internal class SearchNavigationMode @JvmOverloads constructor(
      * Formats some braille content from an [AccessibilityEvent].
      */
     private fun formatEventToBraille(
-            event: AccessibilityEvent): DisplayManager.Content? {
+            event: AccessibilityEvent): Content? {
         val eventNode = getNodeFromEvent(event)
         if (eventNode != null) {
             val content = formatNodeToBraille(eventNode)
             if (content != null) {
-                return content.setPanStrategy(DisplayManager.Content.PAN_CURSOR)
+                return content.setPanStrategy(Content.PAN_CURSOR)
             }
         }
 
@@ -419,7 +419,7 @@ internal class SearchNavigationMode @JvmOverloads constructor(
      * by default, or reset pan strategy if there is no matched node stored yet.
      */
     private fun formatNodeToBraille(
-            node: AccessibilityNodeInfoCompat?): DisplayManager.Content? {
+            node: AccessibilityNodeInfoCompat?): Content? {
         if (node == null) {
             return null
         }
@@ -465,9 +465,9 @@ internal class SearchNavigationMode @JvmOverloads constructor(
         // so we want to reset the panning frame so we can see the search
         // prefix.
         val panStrategy = if (AccessibilityNodeInfoRef.isNull(mMatchedNode)) {
-            DisplayManager.Content.PAN_RESET
+            Content.PAN_RESET
         } else {
-            DisplayManager.Content.PAN_KEEP
+            Content.PAN_KEEP
         }
 
         return content.setPanStrategy(panStrategy)

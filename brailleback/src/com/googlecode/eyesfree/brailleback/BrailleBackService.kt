@@ -152,7 +152,7 @@ class BrailleBackService : AccessibilityService(),
     }
 
     override fun onMappedInputEvent(event: BrailleInputEvent,
-            content: DisplayManager.Content) {
+            content: Content) {
         if (modeSwitcher == null) {
             return
         }
@@ -242,13 +242,13 @@ class BrailleBackService : AccessibilityService(),
         return true
     }
 
-    override fun onPanLeftOverflow(content: DisplayManager.Content) {
+    override fun onPanLeftOverflow(content: Content) {
         if (modeSwitcher != null && !modeSwitcher!!.onPanLeftOverflow(content)) {
             feedbackManager!!.emitFeedback(FeedbackManager.TYPE_NAVIGATE_OUT_OF_BOUNDS)
         }
     }
 
-    override fun onPanRightOverflow(content: DisplayManager.Content) {
+    override fun onPanRightOverflow(content: Content) {
         if (modeSwitcher != null && !modeSwitcher!!.onPanRightOverflow(content)) {
             feedbackManager!!.emitFeedback(FeedbackManager.TYPE_NAVIGATE_OUT_OF_BOUNDS)
         }
@@ -665,7 +665,7 @@ class BrailleBackService : AccessibilityService(),
         PassthroughProbe.uninstall(this)
         super.onDestroy()
         if (displayManager != null) {
-            displayManager!!.setContent(DisplayManager.Content(getString(R.string.shutting_down)))
+            displayManager!!.setContent(Content(getString(R.string.shutting_down)))
 
             // We are not in an initialized state anymore.
             isInfrastructureInitialized = false
@@ -804,7 +804,7 @@ class BrailleBackService : AccessibilityService(),
                 this /*panOverflowListener*/,
                 this /*connectionStateChangeListener*/,
                 this /*inputEventListener*/)
-        displayManager!!.setContent(DisplayManager.Content(getString(R.string.display_connected)))
+        displayManager!!.setContent(Content(getString(R.string.display_connected)))
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         applyMotionModeDefault(prefs)
         displayManager!!.setPauseClear(

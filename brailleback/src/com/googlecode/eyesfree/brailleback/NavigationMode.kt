@@ -29,7 +29,7 @@ interface NavigationMode {
     fun onObserveAccessibilityEvent(event: AccessibilityEvent)
     fun onAccessibilityEvent(event: AccessibilityEvent): Boolean
     fun onInvalidateAccessibilityNode(node: AccessibilityNodeInfoCompat)
-    fun onPanLeftOverflow(content: DisplayManager.Content): Boolean
-    fun onPanRightOverflow(content: DisplayManager.Content): Boolean
-    fun onMappedInputEvent(event: BrailleInputEvent, content: DisplayManager.Content): Boolean
+    fun onPanLeftOverflow(content: Content): Boolean
+    fun onPanRightOverflow(content: Content): Boolean
+    fun onMappedInputEvent(event: BrailleInputEvent, content: Content): Boolean
 }
