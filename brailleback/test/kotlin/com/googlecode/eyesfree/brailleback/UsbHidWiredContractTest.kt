@@ -17,13 +17,14 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Locks down the two-choice connection contract and the wired USB HID path
+ * Locks down the three-choice connection contract and the wired USB HID path
  * ported from Google TalkBack 16.2.
  *
- * The settings expose exactly "bluetooth" and "usb". The Bluetooth choice
+ * The settings expose "bluetooth", "usb" and "auto". The Bluetooth choice
  * covers Wujie BLE, Braille HID and classic RFCOMM, while the USB choice
  * covers the brltty serial backend with the system BrailleDisplayController
- * USB HID overload as its fallback. The tests catch a regression that
+ * USB HID overload as its fallback. Auto decides per attempt: a plugged display
+ * wins, otherwise it behaves like Bluetooth. The tests catch a regression that
  * reintroduces separate USB HID / RFCOMM / Wujie options, drops the protocol
  * from the settings, or leaves wired retry dependent on Bluetooth.
  */
@@ -122,16 +123,17 @@ class UsbHidWiredContractTest {
             .toList()
 
     @Test
-    fun settingsExposeOnlyBluetoothAndUsb() {
-        assertEquals(listOf("bluetooth", "usb"), items(protocolValues()))
+    fun settingsExposeBluetoothUsbAndAuto() {
+        assertEquals(listOf("bluetooth", "usb", "auto"), items(protocolValues()))
         assertFalse(protocolValues().contains("usbhid"))
         assertFalse(protocolValues().contains("rfcomm"))
         assertFalse(protocolValues().contains("wujie"))
 
         val entries = items(protocolEntries())
-        assertEquals(2, entries.size)
+        assertEquals(3, entries.size)
         assertTrue(entries[0].contains("pref_connection_protocol_bluetooth_label"))
         assertTrue(entries[1].contains("pref_connection_protocol_usb_label"))
+        assertTrue(entries[2].contains("pref_connection_protocol_auto_label"))
         assertFalse(protocolEntries().contains("usbhid"))
     }
 
@@ -152,6 +154,23 @@ class UsbHidWiredContractTest {
         assertTrue(fallback.contains("isUsbProtocol() && !mUsbHidTried && canUseUsbHid()"))
         assertTrue(fallback.contains("connectUsbHid()"))
         assertTrue(source.contains("fun connectUsbHid()"))
+    }
+
+    @Test
+    fun autoPicksWiredOnlyWhenADisplayIsActuallyPluggedIn() {
+        val source = displayServiceSource()
+        val connectBraille = methodBody(source, "fun connectBraille()")
+        // 自动不能无条件走 USB：没插点显器时必须落到蓝牙，否则会对着空 USB 反复失败。
+        assertTrue(connectBraille.contains("isAutoProtocol() && isUsbBrailleDeviceAttached()"))
+        assertTrue(connectBraille.contains("connectBluetooth()"))
+        // 探针必须查同一张 brltty VID/PID 表，不能另写一份设备表。
+        val probe = methodBody(source, "fun isUsbBrailleDeviceAttached()")
+        assertTrue(probe.contains("BrlttyWrapper.getUsbDriverTable()"))
+        assertTrue(probe.contains("UsbBrailleDevice.candidateDrivers("))
+        // 自动也要能被 USB 插拔广播唤醒，否则插上线不会自动切过去。
+        assertTrue(source.contains("if (isWiredOrAutoProtocol() && !isConnectionActive())"))
+        val wiredOrAuto = methodBody(source, "fun isWiredOrAutoProtocol()")
+        assertTrue(wiredOrAuto.contains("isUsbProtocol() || isAutoProtocol()"))
     }
 
     @Test
@@ -207,7 +226,8 @@ class UsbHidWiredContractTest {
         val source = displayServiceSource()
         assertTrue(source.contains("fun isWiredProtocol()"))
         assertTrue(source.contains("return isUsbProtocol()"))
-        assertTrue(source.contains("if (isWiredProtocol() && !isConnectionActive())"))
+        // 自动模式下插线也要能唤醒连接，所以挂接判断放宽到「有线或自动」。
+        assertTrue(source.contains("if (isWiredOrAutoProtocol() && !isConnectionActive())"))
         assertTrue(source.contains("if (isWiredProtocol()) {"))
 
         val detached = block(source, "UsbManager.ACTION_USB_DEVICE_DETACHED.equals(action)")

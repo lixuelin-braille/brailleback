@@ -22,7 +22,9 @@ import org.junit.Test
 class ConnectionProtocolPolicyTest {
     @Test
     fun bluetoothCoversEveryLegacyWirelessValue() {
-        for (value in listOf(null, "", "auto", "hid", "rfcomm", "wujie")) {
+        // "auto" 曾经是四种无线协议里的一个（HID 优先、再 RFCOMM），
+        // 现在是独立的第三项，所以不在这张表里；其余旧值一律归到蓝牙。
+        for (value in listOf(null, "", "hid", "rfcomm", "wujie", "bluetooth")) {
             assertEquals(
                 ConnectionProtocolPolicy.BLUETOOTH,
                 ConnectionProtocolPolicy.normalize(value),
@@ -39,6 +41,32 @@ class ConnectionProtocolPolicyTest {
         assertEquals(
             ConnectionProtocolPolicy.USB,
             ConnectionProtocolPolicy.normalize("usbhid"),
+        )
+    }
+
+    @Test
+    fun autoSurvivesNormalizationOrItWouldBecomeBluetooth() {
+        // 归一化一旦把 auto 折成 bluetooth，"自动"这项就永远是蓝牙，选它等于没选。
+        assertEquals(
+            ConnectionProtocolPolicy.AUTO,
+            ConnectionProtocolPolicy.normalize("auto"),
+        )
+    }
+
+    @Test
+    fun normalizeToleratesCaseAndPadding() {
+        // 值来自 SharedPreferences 的历史写入，大小写/空白不应改变语义。
+        assertEquals(
+            ConnectionProtocolPolicy.AUTO,
+            ConnectionProtocolPolicy.normalize("  Auto "),
+        )
+        assertEquals(
+            ConnectionProtocolPolicy.USB,
+            ConnectionProtocolPolicy.normalize("USB"),
+        )
+        assertEquals(
+            ConnectionProtocolPolicy.BLUETOOTH,
+            ConnectionProtocolPolicy.normalize(" Bluetooth\n"),
         )
     }
 }

@@ -70,4 +70,14 @@ class DeviceConnectionLogicTest {
         assertEquals("蓝牙连接", DeviceConnectionLogic.labelForValue(values, entries, "junk"))
         assertEquals("", DeviceConnectionLogic.labelForValue(emptyList(), emptyList(), "usb"))
     }
+
+    @Test
+    fun labelForAutoReadsTheThirdEntry() {
+        val values = listOf("bluetooth", "usb", "auto")
+        val entries = listOf("蓝牙连接", "USB 连接", "自动")
+        // 自动必须是第三项、且真的能读到：读屏只会顺序念这个列表，
+        // 少一项就等于这一项不存在。
+        assertEquals("自动", DeviceConnectionLogic.labelForValue(values, entries, "auto"))
+        assertFalse(DeviceConnectionLogic.isUsb("auto"))
+    }
 }

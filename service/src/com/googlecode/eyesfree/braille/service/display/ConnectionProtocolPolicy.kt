@@ -17,19 +17,36 @@
 package com.googlecode.eyesfree.braille.service.display
 
 /**
- * The two connection choices shown to the user.
+ * The connection choices shown to the user.
  *
  * Bluetooth covers every wireless transport (HID, RFCOMM and the vendor BLE
  * path for Wujie). USB covers both the brltty serial driver and USB HID.
- * Legacy preference values are folded into one of these two values.
+ * Auto means "pick at connect time": a plugged braille display wins over
+ * Bluetooth, because a wired link does not share the radio and survives
+ * Bluetooth being switched off. Legacy preference values are folded into
+ * one of these three values.
  */
 object ConnectionProtocolPolicy {
     const val BLUETOOTH = "bluetooth"
     const val USB = "usb"
 
+    /**
+     * Decide per connection attempt instead of pinning one transport.
+     *
+     * Kept as a stored value (not a derived one) so the user's choice survives
+     * restarts and can be shown as selected in the settings list.
+     */
+    const val AUTO = "auto"
+
     const val PREFERENCE_KEY = "connection_protocol"
 
     @JvmStatic
-    fun normalize(value: String?): String =
-        if (value == USB || value == "usbhid") USB else BLUETOOTH
+    fun normalize(value: String?): String {
+        val trimmed = value?.trim()?.lowercase() ?: return BLUETOOTH
+        return when (trimmed) {
+            USB, "usbhid" -> USB
+            AUTO -> AUTO
+            else -> BLUETOOTH
+        }
+    }
 }

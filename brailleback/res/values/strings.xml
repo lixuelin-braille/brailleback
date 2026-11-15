@@ -138,7 +138,7 @@
     <string name="pref_chinese_segmentation_title">Chinese word segmentation</string>
     <string name="pref_chinese_segmentation_summary">Split Chinese text into words before translating to braille (recommended)</string>
     <string name="pref_connection_protocol_default" translatable="false">bluetooth</string>
-    <string name="pref_connection_protocol_auto_label">Auto (HID first, then Bluetooth serial)</string>
+    <string name="pref_connection_protocol_auto_label">Auto (USB when a display is plugged in, otherwise Bluetooth)</string>
     <string name="pref_connection_protocol_hid_label">HID (new protocol)</string>
     <string name="pref_connection_protocol_rfcomm_label">Bluetooth serial (old protocol)</string>
     <!-- Label for the status preference. [CHAR_LIMIT=45] -->

@@ -217,8 +217,9 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
                     }
                 } else if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(action)) {
                     // Wired displays only: a USB stick or keyboard must not
-                    // disturb a working Bluetooth connection.
-                    if (isWiredProtocol() && !isConnectionActive()) {
+                    // disturb a working Bluetooth connection. Auto counts here
+                    // because plugging the display in should switch it over.
+                    if (isWiredOrAutoProtocol() && !isConnectionActive()) {
                         // 重新插入属于新的枚举，可以再问一次 USB 授权。
                         UsbDisplayConnection.allowPermissionPromptAgain()
                         Timber.i("USB device attached; trying wired connection");
@@ -787,6 +788,12 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         Timber.i("Starting connection with protocol %s", protocol)
         if (isUsbProtocol()) {
             connectUsbUnified()
+        } else if (isAutoProtocol() && isUsbBrailleDeviceAttached()) {
+            // Auto: a plugged display wins. The probe below only reads the USB
+            // device list against the same brltty VID/PID table the wired path
+            // uses, so it can not report a match that connectUsb() would reject.
+            Timber.i("Auto protocol: attached braille display found, using USB")
+            connectUsbUnified()
         } else {
             connectBluetooth()
         }
@@ -934,17 +941,48 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
     }
 
     fun isBluetoothProtocol(): Boolean {
-        return ConnectionProtocolPolicy.BLUETOOTH.equals(
-                getConnectionProtocol())
+        // Auto may still end up on Bluetooth (when nothing is plugged in), so
+        // every "can we use the wireless transports" gate must answer true for
+        // it; only USB is excluded.
+        return !isUsbProtocol()
     }
 
     fun isUsbProtocol(): Boolean {
         return ConnectionProtocolPolicy.USB.equals(getConnectionProtocol())
     }
 
+    fun isAutoProtocol(): Boolean {
+        return ConnectionProtocolPolicy.AUTO.equals(getConnectionProtocol())
+    }
+
     /** Wired USB must keep retrying even when Bluetooth is off. */
     private fun isWiredProtocol(): Boolean {
         return isUsbProtocol()
+    }
+
+    /** USB attach/detach handling also applies to auto, which may pick USB. */
+    private fun isWiredOrAutoProtocol(): Boolean {
+        return isUsbProtocol() || isAutoProtocol()
+    }
+
+    /**
+     * True when a plugged USB device matches the brltty VID/PID table.
+     *
+     * Auto uses this to choose between wired and wireless before dialling. It
+     * reads the same table the wired path uses, so a "true" here means
+     * connectUsb() will find a driver instead of failing on "no match".
+     * Any JNI/link failure degrades to "nothing attached" (Bluetooth path).
+     */
+    private fun isUsbBrailleDeviceAttached(): Boolean {
+        val usb = getSystemService(Context.USB_SERVICE) as? UsbManager ?: return false
+        val table = BrlttyWrapper.getUsbDriverTable()
+        if (table.isEmpty()) {
+            return false
+        }
+        return usb.deviceList.values.any { device ->
+            UsbBrailleDevice.candidateDrivers(
+                    table, device.vendorId, device.productId).isNotEmpty()
+        }
     }
 
     fun isHidRequested(): Boolean {
@@ -1112,6 +1150,11 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
             return false
         }
         if (isWiredProtocol()) {
+            return true
+        }
+        // Auto with a display plugged in must keep retrying even when Bluetooth
+        // is off; otherwise unplugging/replugging would never reconnect.
+        if (isAutoProtocol() && isUsbBrailleDeviceAttached()) {
             return true
         }
         val adapter = BluetoothAdapter.getDefaultAdapter()
