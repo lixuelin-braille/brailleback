@@ -112,6 +112,10 @@
     <string name="braille_reader_err_empty">The file is empty</string>
     <string name="braille_reader_err_not_bword">No Bword records found in this .bdo/.bdoc file</string>
     <string name="braille_reader_err_too_few">Only %1$d braille cells in this .bdo/.bdoc document, too few to read</string>
+    <!-- EPUB/HTML/Markdown extraction failures: empty, invalid EPUB, no text. -->
+    <string name="braille_reader_err_epub_invalid">Not a valid EPUB book (container.xml or OPF package is missing)</string>
+    <string name="braille_reader_err_epub_no_text">This ebook has no readable text (images only)</string>
+    <string name="braille_reader_err_epub_too_large">The ebook is too large to unpack (limit 128 MB)</string>
     <string name="braille_reader_translating">Translating to braille…</string>
     <string name="braille_reader_translator_waiting">Starting braille translation service…</string>
     <string name="braille_reader_translate_fail">Translation failed. Showing original text; connect a display for braille output.</string>
@@ -468,6 +472,9 @@
     <string name="bookshelf_type_bdo">BDO braille file</string>
 
     <string name="bookshelf_type_txt">plain text file</string>
+    <string name="bookshelf_type_epub">EPUB ebook</string>
+    <string name="bookshelf_type_html">web page document</string>
+    <string name="bookshelf_type_md">Markdown document</string>
 
     <string name="bookshelf_type_unknown">file</string>
 

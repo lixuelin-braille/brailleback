@@ -34,6 +34,7 @@
 | **[27-DefaultNavigationMode拆分](./27-DefaultNavigationMode拆分.md)** | 1302 → 937 行：滚动与可见性 15 个函数搬成同包扩展函数、6 字段 3 方法放宽到 internal、detekt 拦一次循环跳转 | 改导航或滚动逻辑前读 |
 | **[28-targetSdk37](./28-targetSdk37.md)** | 11 模块 compileSdk/targetSdk 35 → 37、Android 17 变更逐条核对、真机五轮与 install 假信号 | 再提 targetSdk 或改打包配置前读 |
 | **[29-点显器连接前台保活](./29-点显器连接前台保活.md)** | 无障碍服务未开启时连接跟着界面走、`onUnbind` 客户端归零即断；connectedDevice 前台保活 + `onUnbind` 保护、真机验证与边界 | 排查「退出界面点显器就不动」或改连接生命周期前必读 |
+| **[30-电子书格式支持](./30-电子书格式支持.md)** | 阅读器新增 EPUB/HTML/Markdown：zip→container→OPF spine 取文字、HTML 清洗与实体解码、失败原因分级、6 例单测与真机冒烟 | 改阅读器格式分派或加新电子书格式前必读 |
 
 ---
 

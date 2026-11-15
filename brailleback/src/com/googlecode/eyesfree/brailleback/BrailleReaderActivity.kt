@@ -314,11 +314,21 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
                 val name = displayNameOf(uri)
                 checkSupportedFormat(name)
                 val bytes = readAllBytes(uri)
-                val text = when (val document =
-                        BrailleFileDecoder.decodeDocument(bytes, name)) {
-                    is BrailleFileDecoder.DecodedDocument.Decoded -> document.text
-                    is BrailleFileDecoder.DecodedDocument.Failure ->
-                        throw IllegalStateException(loadFailureMessage(document))
+                // EPUB/HTML/Markdown 是容器或标记文本，先提取成明眼文字，
+                // 再交给下面的内容类型检测走翻译链路。
+                val text = if (EbookTextExtractor.supports(name)) {
+                    when (val extracted = EbookTextExtractor.extract(bytes, name)) {
+                        is EbookTextExtractor.Result.Success -> extracted.text
+                        is EbookTextExtractor.Result.Failure ->
+                            throw IllegalStateException(ebookFailureMessage(extracted))
+                    }
+                } else {
+                    when (val document =
+                            BrailleFileDecoder.decodeDocument(bytes, name)) {
+                        is BrailleFileDecoder.DecodedDocument.Decoded -> document.text
+                        is BrailleFileDecoder.DecodedDocument.Failure ->
+                            throw IllegalStateException(loadFailureMessage(document))
+                    }
                 }
                 text to name
             } catch (e: Exception) {
@@ -362,6 +372,23 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
             getString(R.string.braille_reader_err_not_bword)
         is BrailleFileDecoder.DecodedDocument.Failure.TooFewBrailleCells ->
             getString(R.string.braille_reader_err_too_few, failure.cellCount)
+    }
+
+    /**
+     * 电子书容器提取失败的原因。和 bdo 的失败提示分开，用户听到的是
+     * 「不是 EPUB」「只有图片」这种能据此行动的话。
+     */
+    private fun ebookFailureMessage(
+        failure: EbookTextExtractor.Result.Failure
+    ): String = when (failure) {
+        EbookTextExtractor.Result.Failure.EmptyFile ->
+            getString(R.string.braille_reader_err_empty)
+        EbookTextExtractor.Result.Failure.NotEpub ->
+            getString(R.string.braille_reader_err_epub_invalid)
+        EbookTextExtractor.Result.Failure.NoText ->
+            getString(R.string.braille_reader_err_epub_no_text)
+        EbookTextExtractor.Result.Failure.TooLarge ->
+            getString(R.string.braille_reader_err_epub_too_large)
     }
 
     /**
@@ -930,13 +957,14 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
         )
 
         /**
-         * 明确不支持的二进制/排版格式。盲文阅读器只处理盲文与纯文本：
-         * .bdo/.bdoc（Bword 二进制盲文）、.brf/.brl/.txt（文本类）。
+         * 明确不支持的二进制/排版格式。盲文阅读器本身只处理盲文与文字：
+         * .bdo/.bdoc（Bword 二进制盲文）、.brf/.brl/.txt（文本类）、
+         * .epub/.html/.md（由 [EbookTextExtractor] 取出文字后翻译）。
          * Word/PDF 等需先转成盲文，直接打开只会得到乱码。
          */
         private val UNSUPPORTED_EXT = setOf(
             "doc", "docx", "wps", "rtf", "odt",
-            "pdf", "epub", "mobi", "azw3",
+            "pdf", "mobi", "azw3",
             "rar", "zip", "7z",
             "jpg", "jpeg", "png", "gif", "bmp", "webp"
         )
