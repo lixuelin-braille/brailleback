@@ -43,12 +43,10 @@ import java.util.Collections
 import java.util.LinkedList
 import java.util.ListIterator
 import java.util.Locale
-import java.util.concurrent.Executors
 import java.util.regex.Pattern
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -119,11 +117,7 @@ class CustomLabelManager(context: Context) : AccessibilityEventListener {
     // 标签库读写固定走这一条单线程：等价于 AsyncTask 在 API 23+ 的
     // SERIAL_EXECUTOR，保证同一 view 的增删改不并发、prefetch 与 refresh
     // 的先后顺序与旧的执行器一致。回调仍在主线程投递（Dispatchers.Main）。
-    private val mLabelExecutor = Executors.newSingleThreadExecutor { runnable ->
-        Thread(runnable, "custom-label").apply { isDaemon = true }
-    }
-    private val mLabelDispatcher = mLabelExecutor.asCoroutineDispatcher()
-    private val mLabelScope = CoroutineScope(SupervisorJob() + mLabelDispatcher)
+    private val mLabelScope = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
 
     init {
         mLastLocale = Locale.getDefault()

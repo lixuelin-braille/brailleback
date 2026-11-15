@@ -27,6 +27,10 @@ import com.googlecode.eyesfree.utils.LogUtils
 import java.io.File
 import java.io.IOException
 import java.io.OutputStream
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * Wired USB connection path (P1).
@@ -98,6 +102,7 @@ class UsbDisplayConnection : DriverThread.OnInitListener {
     private val mInputEventListener: DriverThread.OnInputEventListener
     private val mUsbManager: UsbManager?
     private val mHandler = Handler(Looper.getMainLooper())
+    private val mScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     @Volatile private var mDriverThread: DriverThread? = null
     @Volatile private var mDisconnecting = false
@@ -440,12 +445,10 @@ class UsbDisplayConnection : DriverThread.OnInitListener {
             return
         }
         // DriverThread.stop() joins up to 1s; never block the main thread.
-        Thread(object : Runnable {
-            override fun run() {
-                dt.stop()
-                notifyDisconnected()
-            }
-        }, "UsbDriverStop").start()
+        mScope.launch {
+            dt.stop()
+            notifyDisconnected()
+        }
     }
 
     private fun notifyDisconnected() {
