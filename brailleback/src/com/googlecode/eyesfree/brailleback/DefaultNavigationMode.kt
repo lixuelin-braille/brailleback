@@ -1028,8 +1028,8 @@ internal class DefaultNavigationMode(
             return false
         }
         val visibleHeight =
-                minOf(nodeBounds.bottom, containerBounds.bottom)
-                        - maxOf(nodeBounds.top, containerBounds.top)
+            minOf(nodeBounds.bottom, containerBounds.bottom) -
+                maxOf(nodeBounds.top, containerBounds.top)
         // A node that only peeks in at the very bottom is not a good
         // navigation target; scroll first so the user gets a usable line.
         return visibleHeight > 0 && visibleHeight * 3 >= nodeBounds.height()

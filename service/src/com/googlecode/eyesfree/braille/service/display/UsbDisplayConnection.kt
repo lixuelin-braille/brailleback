@@ -10,6 +10,7 @@
 
 package com.googlecode.eyesfree.braille.service.display
 
+import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -257,6 +258,9 @@ class UsbDisplayConnection : DriverThread.OnInitListener {
         startDriver()
     }
 
+    // 33+ 已带 RECEIVER_NOT_EXPORTED，旧重载分支只在 SDK < 33 生效，
+    // 那里没有「必须指定 flag」的要求，属 lint 误报。
+    @SuppressLint("UnspecifiedRegisterReceiverFlag")
     private fun requestPermission() {
         LogUtils.i(this, "Requesting USB permission for device id="
                 + mDevice!!.getDeviceId())

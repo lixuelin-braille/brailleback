@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!--
+      service 模块同样有 52 个语言目录，新增字符串只保证简体；缺译是已知状态。
+      降级为 warning：仍出现在报告里，但不阻断（与 brailleback/lint.xml 同一口径）。
+    -->
+    <issue id="MissingTranslation" severity="warning" />
+</lint>

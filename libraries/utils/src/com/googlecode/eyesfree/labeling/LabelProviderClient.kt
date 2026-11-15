@@ -72,7 +72,7 @@ class LabelProviderClient(context: Context, authority: String) {
      * Inserts the specified label into the labels database via a client for the
      * labels [android.content.ContentProvider].
      *
-     * Don't run this method on the UI thread. Use [android.os.AsyncTask].
+     * Don't run this method on the UI thread: 包在 `withContext(Dispatchers.IO)` 里调用。
      *
      * @param label The model object for the label to store in the database.
      * @return A new label object with the assigned label ID from the database,
@@ -117,7 +117,7 @@ class LabelProviderClient(context: Context, authority: String) {
     /**
      * Gets a list of all labels in the label database.
      *
-     * Don't run this method on the UI thread. Use [android.os.AsyncTask].
+     * Don't run this method on the UI thread: 包在 `withContext(Dispatchers.IO)` 里调用。
      *
      * @return An unmodifiable list of all labels in the database,
      *         or an empty list if the query returns no results,
@@ -149,7 +149,7 @@ class LabelProviderClient(context: Context, authority: String) {
     /**
      * Gets a summary of label info for each package from the label database.
      *
-     * Don't run this method on the UI thread. Use [android.os.AsyncTask].
+     * Don't run this method on the UI thread: 包在 `withContext(Dispatchers.IO)` 里调用。
      *
      * @return An unmodifiable list of [PackageLabelInfo] objects, or an
      *         empty map if the query returns no results, or `null` if the
@@ -183,7 +183,7 @@ class LabelProviderClient(context: Context, authority: String) {
     /**
      * Queries for labels matching a particular package and locale.
      *
-     * Don't run this method on the UI thread. Use [android.os.AsyncTask].
+     * Don't run this method on the UI thread: 包在 `withContext(Dispatchers.IO)` 里调用。
      *
      * @param packageName The package name to match.
      * @param locale The locale to match.
@@ -232,7 +232,7 @@ class LabelProviderClient(context: Context, authority: String) {
      * Queries for labels matching a particular package and locale for all
      * versions of that package.
      *
-     * Don't run this method on the UI thread. Use [android.os.AsyncTask].
+     * Don't run this method on the UI thread: 包在 `withContext(Dispatchers.IO)` 里调用。
      *
      * @param packageName The package name to match.
      * @param locale The locale to match.
@@ -247,7 +247,7 @@ class LabelProviderClient(context: Context, authority: String) {
     /**
      * Queries for a single label matching a particular view and locale.
      *
-     * Don't run this method on the UI thread. Use [android.os.AsyncTask].
+     * Don't run this method on the UI thread: 包在 `withContext(Dispatchers.IO)` 里调用。
      *
      * @param packageName The package name for the view's application.
      * @param viewName The identifier of the view for which to find a label.
@@ -294,7 +294,7 @@ class LabelProviderClient(context: Context, authority: String) {
     /**
      * Queries for a single label by its label ID.
      *
-     * Don't run this method on the UI thread. Use [android.os.AsyncTask].
+     * Don't run this method on the UI thread: 包在 `withContext(Dispatchers.IO)` 里调用。
      *
      * @param id The ID of the label to find.
      * @return The label with the given ID,
@@ -327,7 +327,7 @@ class LabelProviderClient(context: Context, authority: String) {
     /**
      * Updates a single label.
      *
-     * Don't run this method on the UI thread. Use [android.os.AsyncTask].
+     * Don't run this method on the UI thread: 包在 `withContext(Dispatchers.IO)` 里调用。
      *
      * @param label The label with updated values to store.
      * @return `true` if the update succeeded, or `false` otherwise.
@@ -367,7 +367,7 @@ class LabelProviderClient(context: Context, authority: String) {
     /**
      * Deletes a single label.
      *
-     * Don't run this method on the UI thread. Use [android.os.AsyncTask].
+     * Don't run this method on the UI thread: 包在 `withContext(Dispatchers.IO)` 里调用。
      *
      * @param label The label to delete.
      * @return `true` if the delete succeeded, or `false` otherwise.

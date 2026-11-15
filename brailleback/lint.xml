@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!--
+      中文优先策略：新增字符串只保证 values/（简体）与 values-zh*，而仓库里有 52 个
+      语言目录，缺译（MissingTranslation）是已知、可增量补齐的状态，不该把构建整片
+      变红（此前它一次性刷出 276 条 error，正是 lint 被设成 abortOnError=false 的原因）。
+
+      降级为 warning 而不是 ignore：缺译是真实缺口，仍要出现在报告里，只是不阻断。
+    -->
+    <issue id="MissingTranslation" severity="warning" />
+</lint>

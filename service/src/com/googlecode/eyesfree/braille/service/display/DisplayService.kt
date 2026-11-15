@@ -1592,6 +1592,10 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         autoConnectBraille()
     }
 
+    // 注册本身已按 API 33 分版本：33+ 用带 flag 的重载，低版本走旧重载。旧重载那条分支
+    // 只在 SDK < 33 的设备上执行，而「必须指定 RECEIVER_EXPORTED/NOT_EXPORTED」是
+    // targetSdk 34+ 才引入的约束，低版本根本不存在，因此这是 lint 的误报，不是漏配。
+    @SuppressLint("UnspecifiedRegisterReceiverFlag")
     private fun registerBroadcastReceiver() {
         val actions = arrayOf(
             Intent.ACTION_SCREEN_ON,

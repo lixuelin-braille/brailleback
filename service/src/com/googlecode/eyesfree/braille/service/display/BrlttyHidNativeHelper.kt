@@ -17,6 +17,7 @@
 package com.googlecode.eyesfree.braille.service.display
 
 import android.accessibilityservice.BrailleDisplayController
+import android.os.Build
 import timber.log.Timber
 import java.io.IOException
 
@@ -114,6 +115,12 @@ object BrlttyHidNativeHelper {
     /** Outputs text to the braille display. */
     @JvmStatic
     fun writeBrailleDisplay(buffer: ByteArray) {
+        // BrailleDisplayController 及其 write()/disconnect() 都是 API 35 才存在的 API。
+        // 低版本上 mController 恒为 null（setup 只会在调用方的版本守卫内被调用），
+        // 但这里显式挡一层：既满足 lint 的 NewApi 门禁，也不给将来的赋值路径留隐患。
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            return
+        }
         val controller = synchronized(mLock) { mController }
         if (controller == null) {
             Timber.tag(TAG)

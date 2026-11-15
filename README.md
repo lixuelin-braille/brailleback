@@ -41,10 +41,33 @@ gradle :brailleback:assembleDebug --rerun-tasks
 ./gradlew assembleDebug
 ```
 
-产物：`brailleback/build/outputs/apk/debug/brailleback-debug.apk`（约 9.65 MB，arm64-v8a + armeabi-v7a 双架构）
+产物：`brailleback/build/outputs/apk/debug/brailleback-debug.apk`（debug 实测约 33.4 MB，arm64-v8a + armeabi-v7a 双架构）
 
 > ⚠️ 已知小问题：`local.properties` 的 `ndk.dir` 指向 NDK 29，与 AGP 默认的 28.2 不一致，
 > 会报 `CXX1104` 且 `.so` 未 strip（不影响运行，仅 APK 偏大）。详见 `docs/00`。
+
+## 持续集成
+
+`.github/workflows/ci.yml` 两个 job：
+
+- **单元测试**：push / PR 自动跑 `:brailleback:testDebugUnitTest`（41 套件 / 448 用例），
+  输出用例总数并上传 XML 报告。
+- **lint 门禁**：`:brailleback:lintDebug :service:lintDebug`，`abortOnError=true`——
+  error 级问题（`NewApi`、`RegisterReceiverFlag`、`WrongConstant` 等）直接让 CI 变红。
+  该 job 会装 NDK `28.2.13676358`（app 依赖 addon 的 ndk-build）。
+
+本地等价命令：
+
+```bash
+./gradlew :brailleback:testDebugUnitTest --rerun-tasks --no-build-cache
+./gradlew :brailleback:lintDebug :service:lintDebug
+```
+
+CI 里额外传 `-x verifyNativeLibs`：那个任务比对「jni 源码 mtime vs `jniLibs/*.so` mtime」，
+只有本地编辑顺序下才有意义，CI 全新 checkout 会误报。
+
+`MissingTranslation` 在两个模块的 `lint.xml` 里降级为 warning：仓库有 52 个语言目录，
+新增字符串只保证简体，缺译是已知状态，但不该让构建整片变红。
 
 ## 文档
 

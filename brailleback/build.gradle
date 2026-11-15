@@ -61,7 +61,10 @@ android {
         release.setRoot('build-types/release')
     }
     lint {
-        abortOnError false
+        // 门禁：error 级问题直接让构建失败（CI 跑 :brailleback:lintDebug）。
+        // 为什么以前是 false：MissingTranslation 曾以 error 级刷出 276 条，
+        // 把它降级为 warning（见 brailleback/lint.xml），其余检查保持原样。
+        abortOnError true
         checkReleaseBuilds false
     }
 }

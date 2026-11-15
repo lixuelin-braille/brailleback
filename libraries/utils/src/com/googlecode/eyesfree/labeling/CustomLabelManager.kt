@@ -25,7 +25,6 @@ import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import android.content.pm.PackageManager.NameNotFoundException
 import android.content.pm.Signature
-import android.os.AsyncTask
 import android.os.Build
 import android.text.TextUtils
 import android.util.Log
@@ -46,7 +45,14 @@ import java.util.HashSet
 import java.util.LinkedList
 import java.util.ListIterator
 import java.util.Locale
+import java.util.concurrent.Executors
 import java.util.regex.Pattern
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Manages logic for prefetching, retrieval, addition, updating, and removal of
@@ -112,6 +118,15 @@ class CustomLabelManager(context: Context) : AccessibilityEventListener {
     private var mShouldShutdownClient = false
     private var mRunningTasks = 0
 
+    // 标签库读写固定走这一条单线程：等价于 AsyncTask 在 API 23+ 的
+    // SERIAL_EXECUTOR，保证同一 view 的增删改不并发、prefetch 与 refresh
+    // 的先后顺序与旧的执行器一致。回调仍在主线程投递（Dispatchers.Main）。
+    private val mLabelExecutor = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "custom-label").apply { isDaemon = true }
+    }
+    private val mLabelDispatcher = mLabelExecutor.asCoroutineDispatcher()
+    private val mLabelScope = CoroutineScope(SupervisorJob() + mLabelDispatcher)
+
     init {
         mLastLocale = Locale.getDefault()
         if (Build.VERSION.SDK_INT >= 33) {
@@ -145,7 +160,21 @@ class CustomLabelManager(context: Context) : AccessibilityEventListener {
             return
         }
 
-        DataConsistencyCheckTask().execute()
+        runLabelTask(
+            logName = "DataConsistencyCheck",
+            work = { computeLabelsToRemove() },
+            onDone = { labelsToRemove ->
+                if (!labelsToRemove.isNullOrEmpty()) {
+                    LogUtils.log(
+                        this, Log.VERBOSE,
+                        "Found %d labels to remove during consistency check", labelsToRemove.size
+                    )
+                    for (l in labelsToRemove) {
+                        removeLabel(l)
+                    }
+                }
+            },
+        )
     }
 
     /**
@@ -178,7 +207,14 @@ class CustomLabelManager(context: Context) : AccessibilityEventListener {
         }
 
         val request = DirectLabelFetchRequest(labelId, callback)
-        DirectLabelFetchTask().execute(request)
+        runLabelTask(
+            logName = "DirectLabelFetch(id=$labelId)",
+            work = { mClient.getLabelById(labelId) },
+            onDone = { result ->
+                LogUtils.log(this, Log.VERBOSE, "DirectLabelFetch(%d) complete.  Obtained label %s", labelId, result)
+                request.invokeCallback(result)
+            },
+        )
     }
 
     /**
@@ -192,7 +228,23 @@ class CustomLabelManager(context: Context) : AccessibilityEventListener {
         }
 
         val request = PackageLabelsFetchRequest(packageName, callback)
-        PackageLabelsFetchTask().execute(request)
+        runLabelTask(
+            logName = "PackageLabelsFetch($packageName)",
+            work = {
+                var versionCode = Integer.MAX_VALUE
+                try {
+                    versionCode = mPackageManager.getPackageInfo(packageName, 0).versionCode
+                } catch (e: NameNotFoundException) {
+                    LogUtils.log(this, Log.WARN, "Unable to resolve package info during prefetch for %s", packageName)
+                }
+
+                mClient.getLabelsForPackage(packageName, Locale.getDefault().toString(), versionCode)
+            },
+            onDone = { result ->
+                LogUtils.log(this, Log.VERBOSE, "LabelPrefetch for %s complete", packageName)
+                request.invokeCallback(result)
+            },
+        )
     }
 
     fun getAllLabelsFromDatabase(callback: OnAllLabelsFetchedListener?) {
@@ -201,7 +253,14 @@ class CustomLabelManager(context: Context) : AccessibilityEventListener {
         }
 
         val request = AllLabelsFetchRequest(callback)
-        AllLabelsFetchTask().execute(request)
+        runLabelTask(
+            logName = "AllLabelsFetch",
+            work = { mClient.getAllLabels() },
+            onDone = { result ->
+                LogUtils.log(this, Log.VERBOSE, "AllLabelsFetch complete")
+                request.invokeCallback(result)
+            },
+        )
     }
 
     /**
@@ -271,8 +330,14 @@ class CustomLabelManager(context: Context) : AccessibilityEventListener {
             parsedId.first, signatureHash, parsedId.second, finalLabel,
             locale, version, screenshotPath, timestamp
         )
-        val request = LabelAddRequest(label, null)
-        LabelAddTask().execute(request)
+        runLabelTask(
+            logName = "LabelAdd(${label.viewName})",
+            work = { mClient.insertLabel(label) },
+            onDone = { stored ->
+                LogUtils.log(this, Log.VERBOSE, "LabelAdd complete, stored as %s", stored)
+                stored?.packageName?.let { sendCacheRefreshIntent(it) }
+            },
+        )
     }
 
     /**
@@ -297,8 +362,16 @@ class CustomLabelManager(context: Context) : AccessibilityEventListener {
                 throw IllegalArgumentException("Attempted to update a label with an empty text value")
             }
 
-            val request = LabelUpdateRequest(l, null)
-            LabelUpdateTask().execute(request)
+            runLabelTask(
+                logName = "LabelUpdate(${l.viewName})",
+                work = { if (l.id != Label.NO_ID) mClient.updateLabel(l) else false },
+                onDone = { updated ->
+                    LogUtils.log(this, Log.VERBOSE, "LabelUpdate(%s) complete. Result: %s", l.viewName, updated)
+                    if (updated == true) {
+                        l.packageName?.let { sendCacheRefreshIntent(it) }
+                    }
+                },
+            )
         }
     }
 
@@ -316,8 +389,16 @@ class CustomLabelManager(context: Context) : AccessibilityEventListener {
         }
 
         for (l in labels) {
-            val request = LabelRemoveRequest(l, null)
-            LabelRemoveTask().execute(request)
+            runLabelTask(
+                logName = "LabelRemove(${l.viewName})",
+                work = { if (l.id != Label.NO_ID) mClient.deleteLabel(l) else false },
+                onDone = { removed ->
+                    LogUtils.log(this, Log.VERBOSE, "LabelRemove(%s) complete. Removed: %s", l.viewName, removed)
+                    if (removed == true) {
+                        l.packageName?.let { sendCacheRefreshIntent(it) }
+                    }
+                },
+            )
         }
     }
 
@@ -398,16 +479,16 @@ class CustomLabelManager(context: Context) : AccessibilityEventListener {
         }
     }
 
-    private fun taskStarting(task: TrackedAsyncTask<*, *, *>?) {
+    private fun taskStarting(logName: String) {
         synchronized(mLock) {
-            LogUtils.log(this, Log.VERBOSE, "Task %s starting.", task)
+            LogUtils.log(this, Log.VERBOSE, "Task %s starting.", logName)
             mRunningTasks++
         }
     }
 
-    private fun taskEnding(task: TrackedAsyncTask<*, *, *>?) {
+    private fun taskEnding(logName: String) {
         synchronized(mLock) {
-            LogUtils.log(this, Log.VERBOSE, "Task %s ending.", task)
+            LogUtils.log(this, Log.VERBOSE, "Task %s ending.", logName)
             mRunningTasks--
         }
 
@@ -511,263 +592,94 @@ class CustomLabelManager(context: Context) : AccessibilityEventListener {
     }
 
     /**
-     * An AsyncTask intermediate that tracks task completion for purposes of
-     * releasing resources within this manager.
+     * 原来 7 个 AsyncTask 子类共用的调度点。
+     *
+     * 三点语义与 AsyncTask 时代保持一致：串行执行（单线程调度器，等价于
+     * API 23+ 的 SERIAL_EXECUTOR）、结果回到主线程交付、整段执行前后维护任务
+     * 计数，好让 [maybeShutdownClient] 知道何时可以释放数据库连接。
      */
-    private abstract inner class TrackedAsyncTask<Params, Progress, Result> :
-        AsyncTask<Params, Progress, Result>() {
-
-        override fun onPreExecute() {
-            taskStarting(this)
-            super.onPreExecute()
-        }
-
-        override fun onPostExecute(result: Result?) {
-            taskEnding(this)
-            super.onPostExecute(result)
-        }
-
-        abstract override fun doInBackground(vararg params: Params?): Result?
-    }
-
-    private inner class DirectLabelFetchTask :
-        TrackedAsyncTask<DirectLabelFetchRequest, Void, Label>() {
-
-        private var mRequest: DirectLabelFetchRequest? = null
-
-        override fun doInBackground(vararg requests: DirectLabelFetchRequest?): Label? {
-            if (requests.isEmpty()) {
-                throw IllegalArgumentException("Direct label fetch task supports only single requests.")
+    private fun <T> runLabelTask(logName: String, work: () -> T?, onDone: (T?) -> Unit) {
+        taskStarting(logName)
+        mLabelScope.launch {
+            var failure: Throwable? = null
+            val result: T? = try {
+                work()
+            } catch (t: Throwable) {
+                failure = t
+                null
             }
 
-            mRequest = requests[0]
-            LogUtils.log(this, Log.VERBOSE, "Spawning new DirectLabelFetchTask(%d)", hashCode())
-
-            val labelId = mRequest!!.labelId
-            return mClient.getLabelById(labelId)
-        }
-
-        override fun onPostExecute(result: Label?) {
-            LogUtils.log(this, Log.VERBOSE, "DirectLabelFetchTask(%d) complete.  Obtained label %s", hashCode(), result)
-
-            mRequest?.invokeCallback(result)
-            super.onPostExecute(result)
-        }
-    }
-
-    private inner class AllLabelsFetchTask :
-        TrackedAsyncTask<AllLabelsFetchRequest, Void, List<Label>>() {
-
-        private var mRequest: AllLabelsFetchRequest? = null
-
-        override fun doInBackground(vararg requests: AllLabelsFetchRequest?): List<Label>? {
-            if (requests.isEmpty()) {
-                throw IllegalArgumentException("Fetch all labels task supports only single requests.")
-            }
-
-            mRequest = requests[0]
-
-            LogUtils.log(this, Log.VERBOSE, "Spawning new AllLabelsFetchTask(%d) for %s", hashCode(), mRequest)
-
-            return mClient.getAllLabels()
-        }
-
-        override fun onPostExecute(result: List<Label>?) {
-            LogUtils.log(this, Log.VERBOSE, "AllLabelsFetchTask(%d) complete", hashCode())
-            mRequest?.invokeCallback(result)
-            super.onPostExecute(result)
-        }
-    }
-
-    private inner class PackageLabelsFetchTask :
-        TrackedAsyncTask<PackageLabelsFetchRequest, Void, Map<String, Label>>() {
-
-        private var mRequest: PackageLabelsFetchRequest? = null
-
-        override fun doInBackground(vararg requests: PackageLabelsFetchRequest?): Map<String, Label>? {
-            if (requests.isEmpty()) {
-                throw IllegalArgumentException("Fetch labels for package task supports only single package lookups.")
-            }
-
-            mRequest = requests[0]
-
-            LogUtils.log(this, Log.VERBOSE, "Spawning new PackageLabelsFetchTask(%d) for %s", hashCode(), mRequest)
-
-            var versionCode = Integer.MAX_VALUE
             try {
-                val packageInfo = mPackageManager.getPackageInfo(mRequest!!.packageName, 0)
-                versionCode = packageInfo.versionCode
+                if (failure != null) {
+                    // 与 AsyncTask 时代一致：后台异常不静默吞掉。
+                    LogUtils.log(
+                        this@CustomLabelManager, Log.ERROR, "Task %s failed: %s", logName, failure
+                    )
+                    throw failure
+                }
+
+                withContext(Dispatchers.Main) {
+                    onDone(result)
+                }
+            } finally {
+                taskEnding(logName)
+            }
+        }
+    }
+
+    /**
+     * 一致性检查的业务部分（原 `DataConsistencyCheckTask.doInBackground`）：
+     * 挑出「包已卸载」或「签名对不上」的标签，交给调用方删除。
+     */
+    private fun computeLabelsToRemove(): List<Label>? {
+        val allLabels = mClient.getAllLabels()
+
+        if (allLabels == null || allLabels.isEmpty()) {
+            return null
+        }
+
+        val pm = mContext.packageManager
+
+        val candidates = ArrayList(allLabels)
+        val i = candidates.listIterator()
+
+        // Iterate through the labels database, and prune labels that belong
+        // to valid packages.
+        while (i.hasNext()) {
+            val l = i.next()
+
+            // Ensure the label has a matching installed package.
+            val packageName = l.packageName ?: continue
+
+            var packageInfo: PackageInfo? = null
+            try {
+                packageInfo = pm.getPackageInfo(packageName, PackageManager.GET_SIGNATURES)
             } catch (e: NameNotFoundException) {
-                LogUtils.log(this, Log.WARN, "Unable to resolve package info during prefetch for %s", mRequest!!.packageName)
+                // If there's no installed package, leave the label in the
+                // list for removal.
+                LogUtils.log(CustomLabelManager::class.java, Log.VERBOSE, "Consistency check removing label for unknown package %s.", packageName)
+                continue
             }
 
-            return mClient.getLabelsForPackage(
-                mRequest!!.packageName, Locale.getDefault().toString(), versionCode
-            )
+            // Ensure the signature hash of the application matches
+            // the hash of the package when the label was stored.
+            val expectedHash = l.packageSignature
+            val actualHash = packageInfo?.let { computePackageSignatureHash(it) }
+            if (TextUtils.isEmpty(expectedHash) || TextUtils.isEmpty(actualHash)
+                || expectedHash != actualHash
+            ) {
+                // If the expected or actual signature hashes aren't
+                // valid, or they don't match, leave the label in the list
+                // for removal.
+                LogUtils.log(CustomLabelManager::class.java, Log.WARN, "Consistency check removing label due to signature mismatch for package %s.", packageName)
+                continue
+            }
+
+            // If the label has passed all consistency checks, prune the
+            // label from the list of potentials for removal.
+            i.remove()
         }
 
-        override fun onPostExecute(result: Map<String, Label>?) {
-            LogUtils.log(this, Log.VERBOSE, "LabelPrefetchTask(%d) complete", hashCode())
-            mRequest?.invokeCallback(result)
-            super.onPostExecute(result)
-        }
-    }
-
-    private inner class LabelAddTask : TrackedAsyncTask<LabelAddRequest, Void, Label>() {
-
-        private var mRequest: LabelAddRequest? = null
-
-        override fun doInBackground(vararg requests: LabelAddRequest?): Label? {
-            if (requests.isEmpty()) {
-                throw IllegalArgumentException("Add task supports only single Label additions.")
-            }
-
-            mRequest = requests[0]
-            LogUtils.log(this, Log.VERBOSE, "Spawning new LabelAddTask(%d) for %s", hashCode(), mRequest?.label)
-
-            return mClient.insertLabel(mRequest!!.label)
-        }
-
-        override fun onPostExecute(result: Label?) {
-            LogUtils.log(this, Log.VERBOSE, "LabelAddTask(%d) complete, stored as %s", hashCode(), result)
-
-            mRequest?.invokeCallback(result)
-
-            result?.packageName?.let { sendCacheRefreshIntent(it) }
-
-            super.onPostExecute(result)
-        }
-    }
-
-    private inner class LabelUpdateTask : TrackedAsyncTask<LabelUpdateRequest, Void, Boolean>() {
-
-        private var mRequest: LabelUpdateRequest? = null
-
-        override fun doInBackground(vararg requests: LabelUpdateRequest?): Boolean? {
-            if (requests.isEmpty()) {
-                throw IllegalArgumentException("Update task supports only single Label updates.")
-            }
-
-            mRequest = requests[0]
-
-            LogUtils.log(this, Log.VERBOSE, "Spawning new LabelUpdateTask(%d) for label: %s", hashCode(), mRequest?.label)
-
-            val label = mRequest!!.label
-            return if (label != null && label.id != Label.NO_ID) {
-                mClient.updateLabel(label)
-            } else {
-                false
-            }
-        }
-
-        override fun onPostExecute(result: Boolean?) {
-            LogUtils.log(this, Log.VERBOSE, "LabelUpdateTask(%d) complete. Result: %s", hashCode(), result)
-
-            if (result == true) {
-                mRequest?.label?.packageName?.let { sendCacheRefreshIntent(it) }
-            }
-
-            super.onPostExecute(result)
-        }
-    }
-
-    private inner class LabelRemoveTask : TrackedAsyncTask<LabelRemoveRequest, Void, Boolean>() {
-
-        private var mRequest: LabelRemoveRequest? = null
-
-        override fun doInBackground(vararg requests: LabelRemoveRequest?): Boolean? {
-            if (requests.isEmpty()) {
-                throw IllegalArgumentException("Remove task supports only single Label removals.")
-            }
-
-            mRequest = requests[0]
-
-            LogUtils.log(this, Log.VERBOSE, "Spawning new LabelRemoveTask(%d) for label: %s", hashCode(), mRequest?.label)
-
-            val label = mRequest!!.label
-            return if (label != null && label.id != Label.NO_ID) {
-                mClient.deleteLabel(label)
-            } else {
-                false
-            }
-        }
-
-        override fun onPostExecute(result: Boolean?) {
-            LogUtils.log(this, Log.VERBOSE, "LabelRemoveTask(%d) complete.  Removed: %s.", hashCode(), result)
-
-            if (result == true) {
-                mRequest?.label?.packageName?.let { sendCacheRefreshIntent(it) }
-            }
-
-            super.onPostExecute(result)
-        }
-    }
-
-    private inner class DataConsistencyCheckTask : TrackedAsyncTask<Void, Void, List<Label>>() {
-
-        override fun doInBackground(vararg params: Void?): List<Label>? {
-            val allLabels = mClient.getAllLabels()
-
-            if (allLabels == null || allLabels.isEmpty()) {
-                return null
-            }
-
-            val pm = mContext.packageManager
-
-            val candidates = ArrayList(allLabels)
-            val i = candidates.listIterator()
-
-            // Iterate through the labels database, and prune labels that belong
-            // to valid packages.
-            while (i.hasNext()) {
-                val l = i.next()
-
-                // Ensure the label has a matching installed package.
-                val packageName = l.packageName ?: continue
-
-                var packageInfo: PackageInfo? = null
-                try {
-                    packageInfo = pm.getPackageInfo(packageName, PackageManager.GET_SIGNATURES)
-                } catch (e: NameNotFoundException) {
-                    // If there's no installed package, leave the label in the
-                    // list for removal.
-                    LogUtils.log(CustomLabelManager::class.java, Log.VERBOSE, "Consistency check removing label for unknown package %s.", packageName)
-                    continue
-                }
-
-                // Ensure the signature hash of the application matches
-                // the hash of the package when the label was stored.
-                val expectedHash = l.packageSignature
-                val actualHash = packageInfo?.let { computePackageSignatureHash(it) }
-                if (TextUtils.isEmpty(expectedHash) || TextUtils.isEmpty(actualHash)
-                    || expectedHash != actualHash
-                ) {
-                    // If the expected or actual signature hashes aren't
-                    // valid, or they don't match, leave the label in the list
-                    // for removal.
-                    LogUtils.log(CustomLabelManager::class.java, Log.WARN, "Consistency check removing label due to signature mismatch for package %s.", packageName)
-                    continue
-                }
-
-                // If the label has passed all consistency checks, prune the
-                // label from the list of potentials for removal.
-                i.remove()
-            }
-
-            return candidates // now containing only labels for removal
-        }
-
-        override fun onPostExecute(labelsToRemove: List<Label>?) {
-            if (labelsToRemove == null || labelsToRemove.isEmpty()) {
-                return
-            }
-
-            LogUtils.log(this, Log.VERBOSE, "Found %d labels to remove during consistency check", labelsToRemove.size)
-            for (l in labelsToRemove) {
-                removeLabel(l)
-            }
-
-            super.onPostExecute(labelsToRemove)
-        }
+        return candidates // now containing only labels for removal
     }
 }

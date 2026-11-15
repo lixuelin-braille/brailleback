@@ -1,0 +1,106 @@
+name: CI
+
+# 两条门禁：JVM 单元测试 + lint（error 级）。
+# 本机实测：单元测试 41 个套件 / 448 个用例，约 20 秒；lint 首次约 2 分钟。
+#
+# 三个与仓库形态有关的必要处理，别删：
+#   1. 仓库在 Windows 上维护，gradlew 在索引里是 100644（无执行位），
+#      Linux runner 上必须先 chmod +x，否则 ./gradlew 直接 Permission denied。
+#   2. 跳过 verifyNativeLibs：它比较「jni 源码 mtime vs jniLibs/*.so mtime」，
+#      依赖本地编辑顺序；CI 每次全新 checkout，mtime 没有意义，只会误报
+#      「native 库落后于源码」。
+#   3. lint 任务会拉起 addon/brailletranslate 的 ndk-build（app 依赖它），
+#      所以 lint job 必须装 NDK，版本跟 addon/brailletranslate/build.gradle 的
+#      ndkVersion 一致（28.2.13676358），否则会停在 NDK 未配置。
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: 单元测试
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 授权 gradlew
+        run: chmod +x gradlew
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: 跑单元测试
+        run: ./gradlew :brailleback:testDebugUnitTest --console=plain -x verifyNativeLibs
+
+      - name: 汇总用例数
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import glob, xml.etree.ElementTree as ET
+          total = fail = 0
+          suites = 0
+          for path in glob.glob('brailleback/build/test-results/testDebugUnitTest/TEST-*.xml'):
+              root = ET.parse(path).getroot()
+              suites += 1
+              total += int(root.get('tests', 0))
+              fail += int(root.get('failures', 0)) + int(root.get('errors', 0))
+          print(f'套件 {suites} / 用例 {total} / 失败 {fail}')
+          PY
+
+      - name: 上传测试报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: brailleback/build/test-results/testDebugUnitTest
+          retention-days: 14
+
+  lint:
+    name: lint 门禁
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 授权 gradlew
+        run: chmod +x gradlew
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # lint 与 app 的依赖图里含 ndk-build，NDK 缺失会直接失败；
+      # 版本必须与 addon/brailletranslate/build.gradle 的 ndkVersion 一致。
+      - name: 安装 NDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;28.2.13676358" > /dev/null
+
+      - name: 跑 lint（error 级阻断）
+        run: ./gradlew :brailleback:lintDebug :service:lintDebug --console=plain -x verifyNativeLibs
+
+      - name: 上传 lint 报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-reports
+          path: |
+            brailleback/build/reports/lint-results-debug.html
+            brailleback/build/reports/lint-results-debug.xml
+            service/build/reports/lint-results-debug.html
+            service/build/reports/lint-results-debug.xml
+          retention-days: 14

@@ -197,6 +197,12 @@ object PassthroughProbe {
         region: Region,
         ratioPercent: Int,
     ) {
+        // 守卫放在调用点本身：arm() 里的检查覆盖不到 postDelayed 的 lambda，
+        // 而且这里才是真正碰 API 30 的位置，将来多一个调用方也不会漏。
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            Log.e(TAG, "skip region: API 30+ required, sdk=" + Build.VERSION.SDK_INT)
+            return
+        }
         try {
             service.setTouchExplorationPassthroughRegion(
                 Display.DEFAULT_DISPLAY,

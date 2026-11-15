@@ -25,6 +25,7 @@ import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothGattService
 import android.bluetooth.BluetoothProfile
+import android.bluetooth.BluetoothStatusCodes
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -482,8 +483,10 @@ class WujieGattConnection {
                         BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
                         else BluetoothGattDescriptor.ENABLE_INDICATION_VALUE
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // API 33 的 writeDescriptor(descriptor, value) 返回 @BluetoothStatusCodes，
+            // 不是 @GattStatus；两者 SUCCESS 都是 0，行为不变，但语义要对。
             if (gatt.writeDescriptor(descriptor, cccdValue)
-                    != BluetoothGatt.GATT_SUCCESS) {
+                    != BluetoothStatusCodes.SUCCESS) {
                 finishOp()
             }
         } else {

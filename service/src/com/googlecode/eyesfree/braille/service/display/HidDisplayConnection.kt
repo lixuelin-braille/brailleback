@@ -252,6 +252,9 @@ class HidDisplayConnection : DriverThread.OnInitListener {
     finishUsbConnect(controller, selected)
   }
 
+  // 33+ 已带 RECEIVER_NOT_EXPORTED，旧重载分支只在 SDK < 33 生效，
+  // 那里没有「必须指定 flag」的要求，属 lint 误报。
+  @SuppressLint("UnspecifiedRegisterReceiverFlag")
   private fun requestUsbPermission(device: UsbDevice) {
     LogUtils.i(this, "Requesting USB permission for HID device id="
         + device.getDeviceId())
