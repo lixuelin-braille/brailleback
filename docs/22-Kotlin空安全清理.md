@@ -232,17 +232,65 @@ client?.release()
 验证：编译通过、520 + 164 全绿、detekt 通过、lint error=0；
 真机连续五轮采样 `Crashed services:{}`，主进程与 `:service` 都在，无 `FATAL EXCEPTION`。
 
-## 剩余 85 处：只剩 BrailleBackService
+## 第五批：BrailleBackService 85 到 0
 
-| 文件 | 处数 | 行数 | 说明 |
-|:--|--:|--:|:--|
-| `BrailleBackService.kt` | 85 | 1040 | 无障碍服务主类，全仓最后一处 |
+`BrailleBackService.kt` 是全仓最后一个文件，1040 行、81 行含 `!!`（合计 85 处）。
+动它之前先确认了一件事：**不能整体改成 `lateinit`**。
 
-分 4 批做，每批 20 处左右，每批跑单测 + 装机冒烟：
+`onDestroy` 里会把 `displayManager`、`translatorManager`、`focusTracker`、
+`labelManager`、`packageReceiver`、`brailleImeHostBridge` 显式置 null；
+`modeSwitcher` 在 `onMappedInputEvent` 开头又有 `== null` 提前返回。
+这两点都说明「属性持有的是真实可空状态」，不是初始化一次就永不改变。
+`lateinit` 只能表达「迟早会被赋值」，表达不了「会被回收」，硬改只是把断言换成另一种崩溃。
 
-1. 成员属性断言（`mDisplayManager!!`、`mSelfBrailleService!!` 一类）
-2. 生命周期回调（`onServiceConnected` / `onAccessibilityEvent` / `onDestroy`）
-3. 偏好设置与内容刷新路径（`SharedPreferences`、`DisplayManager.setContent`）
-4. 剩下的 UI、菜单、广播接收
+所以保持属性可空，逐处取局部。分四轮块替换：
 
-目标：全仓 `!!` 归零，再谈「密封类替代 null 返回」「不可变集合」「`when` 穷尽」这些更深的 Kotlin 化。
+| 轮次 | 范围 | 处数 | 手法 |
+|:--|:--|--:|:--|
+| 1 | 偏好监听器、`onConnectionStateChanged`、`onMappedInputEvent`、`handleGlobalCommands`、左右溢出 | 26 | `val dm = displayManager ?: return`；单语句用 `?.`；条件用 `x?.foo() == true` |
+| 2 | `adjustSystemVolume`、`performVolumeAction`、`promoteToForeground` | 9 | `val audio = mAudioManager`；`getSystemService(...)?.createNotificationChannel(...)` |
+| 3 | `onDestroy`、`onAccessibilityEvent`、`onConfigurationChanged`、`onSearchFinished`、`onMenuClosed`、`startSearchMode`、`startSearchWithTutorial`、`initializeDependencies` | 14 | `val imeBridge = brailleImeHostBridge`；`modeSwitcher?.let { ... }`；先落局部再赋给属性 |
+| 4 | `initializeLabelManager`、`initializeDisplayManager`、`initializeNavigationMode`、`shutdownDependencies`、`invalidateNode`、`isBrailleDisplayConnected` | 36 | 初始化契约用 `requireNotNull(...) { "原因" }`；`val x = mX; mX = null; x?.shutdown()` |
+
+合计 85 处，全部改完。
+
+### 这一批的三个判断
+
+1. **初始化路径用 `requireNotNull`，回调路径用 `?: return`**。
+   `initializeNavigationMode` 里六次 `!!` 不是「可能为空」，而是「上一行刚建好，此刻必然非空」——
+   这是**不变量**，用 `requireNotNull` 带原因抛出，一旦初始化顺序被改坏，立刻在这里报出来。
+   回调（连接状态、无障碍事件、配置变化）相反：为空是**正常发生的事**，直接 `?.` 或提前返回。
+   两种空，处理方式不能一样。
+
+2. **`onDestroy` 里先撤引用再释放**。`shutdownDependencies` 全部改成
+   `val dm = displayManager; displayManager = null; dm?.shutdown()`。
+   原写法 `if (x != null) { x!!.shutdown(); x = null }` 在释放过程中被重入时，
+   第二次会拿到半关闭的对象再关一遍。
+
+3. **静态方法里不要用 `!!` 撑短路链**。
+   `isBrailleDisplayConnected()` 原来写
+   `service != null && service.displayManager != null && service.displayManager!!.isDisplayConnected()`，
+   `instance` 与它的 `displayManager` 都可能在读取途中被销毁，改成
+   `val dm = instance?.displayManager ?: return false`。
+
+### 验证
+
+- 编译通过；主模块 520 例 + service 164 例全绿；detekt 通过；lint error=0。
+- 真机连续五轮采样 `Crashed services:{}`，主进程与 `:service` 都在，无 `FATAL EXCEPTION`。
+- 每次冒烟都会临时把 brailleback 追加进 `enabled_accessibility_services`，取完日志立即恢复原清单。
+
+## 全仓 `!!` 归零
+
+| 批次 | 提交 | 处数 | 累计剩余 |
+|:--|:--|--:|--:|
+| 起点 | — | 281 | 281 |
+| 第一批 | `3da6101` | 14 | 267 |
+| 第二批 | `0256974` | 82 | 185 |
+| 第三批 | `18172db` | 51 | 134 |
+| 第四批 | `fba7e8e` | 49 | 85 |
+| 第五批 | 本次 | 85 | **0** |
+
+清零不等于「空安全做完了」。它拿掉的是**显式的**崩溃点；
+真正的 Kotlin 化还在后面：密封类 / 结果类型替代 null 返回、数据类、不可变集合、
+`when` 穷尽、扩展函数收纳。那些改的是**形状**，不是**符号**。
+
