@@ -39,8 +39,8 @@ object SharedPreferencesUtils {
     fun getIntFromStringPref(
         prefs: SharedPreferences, res: Resources, keyResId: Int, defaultResId: Int
     ): Int {
-        val strPref = prefs.getString(
-            res.getString(keyResId), res.getString(defaultResId))!!
+        val defaultValue = res.getString(defaultResId)
+        val strPref = prefs.getString(res.getString(keyResId), defaultValue) ?: defaultValue
         return Integer.parseInt(strPref)
     }
 
@@ -60,8 +60,8 @@ object SharedPreferencesUtils {
     fun getFloatFromStringPref(
         prefs: SharedPreferences, res: Resources, keyResId: Int, defaultResId: Int
     ): Float {
-        val strPref = prefs.getString(
-            res.getString(keyResId), res.getString(defaultResId))!!
+        val defaultValue = res.getString(defaultResId)
+        val strPref = prefs.getString(res.getString(keyResId), defaultValue) ?: defaultValue
         return java.lang.Float.parseFloat(strPref)
     }
 

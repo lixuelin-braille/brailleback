@@ -735,7 +735,9 @@ class DisplayManager(
         } else {
             brailleToTextPositions[displayStart]
         }
-        val contentText = currentContent.getText()!!
+        // 内容可能已被清空：没有文本就不做这次位置换算，直接放弃这一帧，
+        // 以前这里用非空断言，会让刷新线程整个抛出去。
+        val contentText = currentContent.getText() ?: return
         var textRight =
             if (displayEnd >= brailleToTextPositions.size) {
                 contentText.length

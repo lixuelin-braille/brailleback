@@ -143,8 +143,9 @@ class ClassLoadingManager private constructor() {
         // If we failed loading this class once, don't bother trying again.
         var notFoundClassesSet: HashSet<String>? = null
         synchronized(mNotFoundClassesMap) {
-            notFoundClassesSet = mNotFoundClassesMap[packageNameStr]
-            if (notFoundClassesSet != null && notFoundClassesSet!!.contains(classNameStr)) {
+            val knownMissing = mNotFoundClassesMap[packageNameStr]
+            notFoundClassesSet = knownMissing
+            if (knownMissing != null && knownMissing.contains(classNameStr)) {
                 return null
             }
         }

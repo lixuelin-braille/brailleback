@@ -37,14 +37,14 @@ open class SimpleOverlay @JvmOverloads constructor(
     init {
         mContentView = object : FrameLayout(context) {
             override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-                if (mKeyListener != null && mKeyListener!!.onKey(mContentView, event.keyCode, event)) {
+                if (mKeyListener?.onKey(mContentView, event.keyCode, event) == true) {
                     return true
                 }
                 return super.dispatchKeyEvent(event)
             }
 
             override fun dispatchTouchEvent(event: MotionEvent): Boolean {
-                if (mTouchListener != null && mTouchListener!!.onTouch(mContentView, event)) {
+                if (mTouchListener?.onTouch(mContentView, event) == true) {
                     return true
                 }
                 return super.dispatchTouchEvent(event)

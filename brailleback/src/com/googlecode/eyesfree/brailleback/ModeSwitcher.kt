@@ -98,7 +98,9 @@ class ModeSwitcher(vararg modes: NavigationMode) : NavigationMode {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent): Boolean {
-        return if (mOverrideMode == null || !mOverrideMode!!.onAccessibilityEvent(event)) {
+        // 先取到局部变量，Kotlin 才能在下面做非空判断（属性每次读都可能变）。
+        val overrideMode = mOverrideMode
+        return if (overrideMode == null || !overrideMode.onAccessibilityEvent(event)) {
             mModes[mModeIndex].onAccessibilityEvent(event)
         } else {
             true

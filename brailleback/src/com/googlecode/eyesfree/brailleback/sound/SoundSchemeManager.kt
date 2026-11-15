@@ -70,7 +70,7 @@ class SoundSchemeManager private constructor(context: Context) {
                     }
                 }
             }
-            return instance!!
+            return checkNotNull(instance) { "SoundSchemeManager 单例初始化后不应为空" }
         }
     }
 

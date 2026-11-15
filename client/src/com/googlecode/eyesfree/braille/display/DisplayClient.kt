@@ -295,10 +295,10 @@ class DisplayClient(context: Context) : Display {
         }
 
         private fun handleReportInputEvent(event: BrailleInputEvent?) {
-            val localListener = mInputEventListener
-            if (localListener != null) {
-                localListener.onInputEvent(event!!)
-            }
+            // 事件为空就丢弃：协议允许空上报，以前这里会直接 NPE 掉整个回调线程。
+            val localListener = mInputEventListener ?: return
+            val input = event ?: return
+            localListener.onInputEvent(input)
         }
 
         private fun handleRebindService() {

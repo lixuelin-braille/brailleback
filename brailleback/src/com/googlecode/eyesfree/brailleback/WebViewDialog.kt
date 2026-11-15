@@ -44,6 +44,12 @@ class WebViewDialog : FragmentActivity() {
         setContentView(R.layout.activity_licenses)
 
         val webView = findViewById<WebView>(R.id.content)
-        webView.loadUrl(intent.getStringExtra(Intent.EXTRA_STREAM)!!)
+        val url = intent.getStringExtra(Intent.EXTRA_STREAM)
+        if (url.isNullOrEmpty()) {
+            // 以前这里用非空断言，缺 URL 时直接崩在 onCreate；缺 URL 时关掉自己，比停在空白页强。
+            finish()
+            return
+        }
+        webView.loadUrl(url)
     }
 }

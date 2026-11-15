@@ -307,8 +307,9 @@ class BrailleIME : BrailleIme {
     override fun onUpdateSelection(oldSelStart: Int, oldSelEnd: Int,
                                    newSelStart: Int, newSelEnd: Int,
                                    candidatesStart: Int, candidatesEnd: Int) {
-        if (mExtractedText != null) {
-            val off = mExtractedText!!.startOffset
+        val extracted = mExtractedText
+        if (extracted != null) {
+            val off = extracted.startOffset
             val len = mCurrentText.length
             var selStart = newSelStart - off
             var selEnd = newSelEnd - off

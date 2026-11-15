@@ -296,10 +296,10 @@ class TranslatorClient(context: Context, onInitListener: OnInitListener?) {
         }
 
         private fun handleOnInit(status: Int) {
-            if (mOnInitListener != null) {
-                mOnInitListener!!.onInit(status)
-                mOnInitListener = null
-            }
+            val listener = mOnInitListener ?: return
+            // 先清空再回调：回调里若重入，同一个监听器不会被通知两次。
+            mOnInitListener = null
+            listener.onInit(status)
         }
 
         private fun handleRebindService() {

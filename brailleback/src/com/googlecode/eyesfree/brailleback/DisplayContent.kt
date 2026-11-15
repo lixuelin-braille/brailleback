@@ -217,9 +217,9 @@ class Content @JvmOverloads constructor(text: CharSequence? = null) {
         if (translator == null) {
             return createEmptyTranslation(text)
         }
-        // Matches the original Java behavior, which assumes non-null text
-        // whenever a translator is available.
-        val text = this.text!!
+        // 原实现假定「有翻译器就一定有文本」，空文本会直接 NPE。
+        // 空内容按空翻译返回，与 createEmptyTranslation 的可空语义一致。
+        val text = this.text ?: return createEmptyTranslation(this.text)
 
         // Assume that we have at most one BrailleSpan since we currently
         // never add more than one BrailleSpan.
@@ -337,8 +337,9 @@ class Content @JvmOverloads constructor(text: CharSequence? = null) {
         cursorPosition: Int,
         computerBrailleAtCursor: Boolean
     ): TranslationResult {
+        val content = text ?: return createEmptyTranslation(null)
         val translation =
-            translator.translate(text!!.toString(), cursorPosition, computerBrailleAtCursor)
+            translator.translate(content.toString(), cursorPosition, computerBrailleAtCursor)
         if (translation != null) {
             return translation
         }
