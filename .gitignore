@@ -69,3 +69,7 @@ service/jni/brlttywrapper/third_party/brltty_backup_*/
 service/jni/jniLibs/
 tools/_so_check/
 tools/*.dll
+# --- 正式签名密钥（本机私有，绝不入库） ---
+keystore.properties
+*.jks
+*.keystore

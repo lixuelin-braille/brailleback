@@ -6,8 +6,27 @@ apply plugin: 'org.jetbrains.kotlin.plugin.compose'
 def appVersionCode = providers.gradleProperty('appVersionCode').get().toInteger()
 def appVersionName = providers.gradleProperty('appVersionName').get()
 
+// 正式签名的 keystore 放在仓库根的 keystore.properties（不进版本库，见 .gitignore）。
+// 文件不存在时，release 仍按原来的方式用 debug 签名，构建不会因为缺密钥而失败。
+def keystorePropertiesFile = rootProject.file('keystore.properties')
+def hasReleaseKey = keystorePropertiesFile.exists()
+def keystoreProperties = new Properties()
+if (hasReleaseKey) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+
 android {
     compileSdk 35
+    if (hasReleaseKey) {
+        signingConfigs {
+            release {
+                storeFile rootProject.file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
     buildFeatures {
         buildConfig = true
         compose = true
@@ -38,7 +57,8 @@ android {
         release {
             minifyEnabled true
             shrinkResources true
-            signingConfig signingConfigs.debug
+            // 有 keystore 就用它，没有就沿用 debug 签名（保持「不配密钥也能打包」）。
+            signingConfig hasReleaseKey ? signingConfigs.release : signingConfigs.debug
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
