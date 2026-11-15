@@ -101,10 +101,25 @@ class DisplaySplitContractTest {
     }
 
     @Test
-    fun `管理器体积守住`() {
+    fun `占线器体积守住`() {
         val lines = src("DisplayManager.kt").readLines().count { it.isNotBlank() }
         // 拆分前 1527 行（含 329 行 Content 与 78 行 CallbackHandler）。这里卡住上限，
         // 一旦有人再往里堆逻辑，先在这里断，而不是等文件长回 1500 行。
         assertTrue("DisplayManager 非空行数 $lines 已超出拆分后的预算", lines < 1100)
+    }
+
+    @Test
+    fun `刷新链路定时器已全部协程化`() {
+        val manager = srcText("DisplayManager.kt")
+        // 三个定时器（空闲清屏 / 运动去抖 / 闪烁）已换成 Job + delay：
+        // 自续 Runnable 和 Handler 延迟消息不许回潮。
+        assertFalse("不许再出现自续 Runnable 定时器", manager.contains("mIdleClearRunnable"))
+        assertFalse("不许再出现运动去抖 Runnable", manager.contains("mMotionModeRefreshRunnable"))
+        assertFalse("闪烁不该再走消息队列", manager.contains("MSG_PULSE"))
+        assertFalse("不该再用 postDelayed 排定时", manager.contains(".postDelayed("))
+        assertTrue("调度器必须绑定 display HandlerThread 的 looper",
+            manager.contains("Handler(displayLooper).asCoroutineDispatcher()"))
+        // 独立的 telemetry 线程不能并进来：它要在 display 线程卡死时仍然出日志。
+        assertTrue("统计上报线程必须保留", manager.contains("DisplayStats"))
     }
 }

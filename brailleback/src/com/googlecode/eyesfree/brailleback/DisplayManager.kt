@@ -29,6 +29,10 @@ import android.preference.PreferenceManager
 import android.text.Spanned
 import android.util.Log
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.android.asCoroutineDispatcher
+import kotlinx.coroutines.cancel
 import com.googlecode.eyesfree.braille.display.BrailleInputEvent
 import com.googlecode.eyesfree.braille.display.Display
 import com.googlecode.eyesfree.braille.display.DisplayClient
@@ -228,22 +232,17 @@ class DisplayManager(
     @Volatile
     private var mPauseClear = true
 
-    private val mIdleClearRunnable: Runnable = object : Runnable {
-        override fun run() {
-            doSendEmptyCommand()
-            // Keep the display cleared during continued idle.
-            if (mIdleClearTimeoutMs > 0) {
-                displayHandler.postDelayed(this, mIdleClearTimeoutMs)
-            }
-        }
-    }
-
-    private val mMotionModeRefreshRunnable: Runnable = Runnable {
-        if (!connected || mFrozen) {
-            return@Runnable
-        }
-        doRefresh()
-    }
+    /**
+     * 三个定时器都跑在 display HandlerThread 的 looper 上（拿 `handlerThread.looper`
+     * 当协程调度器），取消即 `cancel()`，不再依赖消息队列里的自续 `Runnable`。
+     */
+    private val displayScope: CoroutineScope
+    /** 空闲清屏：安静满 mIdleClearTimeoutMs 后清屏，之后按同一间隔继续清。 */
+    private val idleClearTimer: RepeatingTimer
+    /** 运动模式去抖：滚动停下 MOTION_MODE_DEBOUNCE_MS 后补一次刷新。 */
+    private val motionDebouncer: Debouncer
+    /** 光标闪烁：延迟一次后执行，动作内部（doRefresh）再排下一次。 */
+    private val pulseTimer: OneShotTimer
 
     /**
      * 用户自定义的「原始命令码 → 目标命令码」映射，默认空表（全部保持出厂行为）。
@@ -267,7 +266,16 @@ class DisplayManager(
                 }
             }
         handlerThread.start()
-        displayHandler = DisplayHandler(handlerThread.looper)
+        val displayLooper = handlerThread.looper
+        // 协程调度器直接绑在 display HandlerThread 上：delay、取消、消息处理
+        // 共享同一个 looper，先后顺序与原来的 postDelayed 完全一致。
+        displayScope = CoroutineScope(
+            SupervisorJob() + Handler(displayLooper).asCoroutineDispatcher()
+        )
+        idleClearTimer = RepeatingTimer(displayScope)
+        motionDebouncer = Debouncer(displayScope)
+        pulseTimer = OneShotTimer(displayScope)
+        displayHandler = DisplayHandler(displayLooper)
         callbackHandler = DisplayCallbackHandler(this)
 
         sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
@@ -280,6 +288,8 @@ class DisplayManager(
         sharedPreferences.unregisterOnSharedPreferenceChangeListener(this)
         telemetryRunning.set(false)
         telemetryThread.interrupt()
+        // 先停定时器，避免 looper 退出后再有 delay 唤醒。
+        displayScope.cancel()
         displayHandler.stop()
         // Discard callbacks that were queued before shutdown.
         callbackHandler.removeCallbacksAndMessages(null)
@@ -412,7 +422,7 @@ class DisplayManager(
         } else {
             sendEmptyCommand()
             connected = false
-            displayHandler.removeCallbacks(mIdleClearRunnable)
+            idleClearTimer.cancel()
         }
         simulatedDisplay = display?.isSimulated ?: false
         callbackHandler.onConnectionStateChanged(state)
@@ -529,15 +539,15 @@ class DisplayManager(
         }
 
         fun schedulePulse() {
-            if (hasMessages(MSG_PULSE)) {
-                return
+            // 一次只排一次：闪一下 → 重画 → doRefresh 再决定要不要排下一次。
+            pulseTimer.schedule(if (overlaysOn) BLINK_ON_MILLIS else BLINK_OFF_MILLIS) {
+                overlaysOn = !overlaysOn
+                refresh()
             }
-            sendEmptyMessageDelayed(MSG_PULSE,
-                if (overlaysOn) BLINK_ON_MILLIS else BLINK_OFF_MILLIS)
         }
 
         fun cancelPulse() {
-            removeMessages(MSG_PULSE)
+            pulseTimer.cancel()
             overlaysOn = true
         }
 
@@ -555,7 +565,6 @@ class DisplayManager(
                     }
                 }
                 MSG_RETRANSLATE -> handleRetranslate()
-                MSG_PULSE -> handlePulse()
                 MSG_STOP -> handleStop()
                 else -> {
                     // Fall out.
@@ -648,11 +657,6 @@ class DisplayManager(
             }
             cancelPulse()
             updateDisplayedContent()
-        }
-
-        private fun handlePulse() {
-            overlaysOn = !overlaysOn
-            refresh()
         }
 
         private fun handleStop() {
@@ -781,21 +785,16 @@ class DisplayManager(
 
     /** Resets the idle-clearing timer; call on any display activity. */
     private fun resetIdleTimer() {
-        displayHandler.removeCallbacks(mIdleClearRunnable)
-        if (mIdleClearTimeoutMs > 0) {
-            displayHandler.postDelayed(mIdleClearRunnable, mIdleClearTimeoutMs)
-        }
+        // 每次显示活动都重置：安静满 mIdleClearTimeoutMs 才清屏，之后按同一间隔继续清。
+        idleClearTimer.restart(mIdleClearTimeoutMs) { doSendEmptyCommand() }
     }
 
     /** Sets the idle clear timeout; 0 disables idle clearing. */
     fun setIdleClearTimeoutMs(timeoutMs: Long) {
         displayHandler.post {
             mIdleClearTimeoutMs = timeoutMs
-            if (timeoutMs <= 0) {
-                displayHandler.removeCallbacks(mIdleClearRunnable)
-            } else {
-                resetIdleTimer()
-            }
+            // restart 内部对 <= 0 直接跳过，等于关闭空闲清屏。
+            resetIdleTimer()
         }
     }
 
@@ -890,7 +889,7 @@ class DisplayManager(
             mMotionMode = motionMode
             if (!mMotionMode) {
                 // Apply any deferred content immediately.
-                displayHandler.removeCallbacks(mMotionModeRefreshRunnable)
+                motionDebouncer.cancel()
                 refresh()
             }
         }
@@ -919,10 +918,12 @@ class DisplayManager(
                 stats.onBlocked(decision.reason)
                 if (decision.reason == RefreshBlock.MOTION) {
                     // Coalesce rapid updates: refresh once after scrolling settles.
-                    displayHandler.removeCallbacks(mMotionModeRefreshRunnable)
-                    displayHandler.postDelayed(
-                        mMotionModeRefreshRunnable, MOTION_MODE_DEBOUNCE_MS
-                    )
+                    motionDebouncer.schedule(MOTION_MODE_DEBOUNCE_MS) {
+                        // 滚动停下后再补一次：与原来的去抖 Runnable 同条件。
+                        if (connected && !mFrozen) {
+                            doRefresh()
+                        }
+                    }
                 }
             }
         }
@@ -1179,7 +1180,6 @@ class DisplayManager(
 
         private const val MSG_SET_CONTENT = 1
         private const val MSG_RETRANSLATE = 2
-        private const val MSG_PULSE = 3
-        private const val MSG_STOP = 4
+        private const val MSG_STOP = 3
     }
 }

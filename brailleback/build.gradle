@@ -95,5 +95,7 @@ dependencies {
     implementation 'androidx.compose.material3:material3:1.3.1'
     debugImplementation 'androidx.compose.ui:ui-tooling:1.7.6'
     testImplementation 'junit:junit:4.13.2'
+    // 虚拟时间验证定时器（空闲清屏 / 运动去抖 / 闪烁），不用真等三分钟。
+    testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3'
 }
 
