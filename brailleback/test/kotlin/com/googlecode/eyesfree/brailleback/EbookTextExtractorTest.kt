@@ -141,11 +141,70 @@ class EbookTextExtractorTest {
         assertEquals(source, (result as EbookTextExtractor.Result.Success).text)
     }
 
+    private fun wordXml(body: String): String = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <w:document
+            xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:body>$body<w:sectPr/></w:body>
+        </w:document>
+    """.trimIndent()
+
     @Test
-    fun `只接电子书后缀`() {
+    fun `docx 按段落取正文并拼接 run`() {
+        val body = """
+            <w:p><w:r><w:t>第一段</w:t></w:r></w:p>
+            <w:p><w:r><w:t>第二</w:t></w:r><w:r><w:t>段</w:t></w:r>
+              <w:r><w:tab/><w:t>尾</w:t></w:r>
+              <w:r><w:br/><w:t>换行</w:t></w:r></w:p>
+            <w:p><w:r><w:t>第三段&amp;尾</w:t></w:r></w:p>
+        """.trimIndent()
+        val docx = zip("word/document.xml" to wordXml(body))
+
+        val result = EbookTextExtractor.extract(docx, "report.docx")
+
+        assertTrue("应当是 Success，实际 $result", result is EbookTextExtractor.Result.Success)
+        val text = (result as EbookTextExtractor.Result.Success).text
+        assertTrue("缺第一段: $text", text.contains("第一段"))
+        assertTrue("run 未拼接: $text", text.contains("第二段"))
+        assertTrue("tab 未变空格: $text", text.contains("段 尾"))
+        assertTrue("br 未断行: $text", text.contains("尾\n换行"))
+        assertTrue("实体未解码: $text", text.contains("第三段&尾"))
+        assertTrue("段间未断行: $text", text.contains("第一段\n第二段"))
+    }
+
+    @Test
+    fun `没有 document_xml 的 docx 判定无效 Word`() {
+        val broken = zip("word/styles.xml" to "<styles/>")
+
+        assertEquals(
+            EbookTextExtractor.Result.Failure.NotWord,
+            EbookTextExtractor.extract(broken, "broken.docx"),
+        )
+        assertEquals(
+            EbookTextExtractor.Result.Failure.NotWord,
+            EbookTextExtractor.extract("not a zip".toByteArray(), "fake.docx"),
+        )
+    }
+
+    @Test
+    fun `只有图片的 docx 报告没有文字`() {
+        val body = """<w:p><w:r><w:drawing/></w:r></w:p>"""
+        val docx = zip("word/document.xml" to wordXml(body))
+
+        assertEquals(
+            EbookTextExtractor.Result.Failure.NoText,
+            EbookTextExtractor.extract(docx, "images.docx"),
+        )
+    }
+
+    @Test
+    fun `支持的后缀`() {
         assertTrue(EbookTextExtractor.supports("book.EPUB"))
         assertTrue(EbookTextExtractor.supports("page.html"))
+        assertTrue(EbookTextExtractor.supports("report.docx"))
+        assertTrue(EbookTextExtractor.supports("report.docm"))
         assertFalse(EbookTextExtractor.supports("book.pdf"))
+        assertFalse(EbookTextExtractor.supports("legacy.doc"))
         assertFalse(EbookTextExtractor.supports("book.brf"))
         assertEquals(
             EbookTextExtractor.Result.Failure.NotEpub,

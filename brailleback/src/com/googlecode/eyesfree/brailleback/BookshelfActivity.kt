@@ -81,6 +81,7 @@ class BookshelfActivity : Activity() {
         "epub" -> getString(R.string.bookshelf_type_epub)
         "html", "htm", "xhtml" -> getString(R.string.bookshelf_type_html)
         "md", "markdown" -> getString(R.string.bookshelf_type_md)
+        "docx", "docm" -> getString(R.string.bookshelf_type_docx)
         "" -> getString(R.string.bookshelf_type_unknown)
         else -> ext.uppercase()
     }

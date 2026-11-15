@@ -1,12 +1,13 @@
 /*
  * Copyright (C) 2026 盲文服务 (Braille Service)
  *
- * 电子书容器文本提取：EPUB（zip + OPF spine）、HTML/XHTML、Markdown。
+ * 电子书/文档容器文本提取：EPUB（zip + OPF spine）、HTML/XHTML、Markdown、
+ * Word（.docx/.docm 的 word/document.xml）。
  * 纯 Kotlin，无 Android 依赖，可在 JVM 单测里跑。
  *
  * 为什么单独一层：阅读器只认识两种东西——盲文点位/ASCII 盲文，和明眼文字。
- * EPUB 是 zip 容器，直接按文本解码会得到一坨二进制；这里先把容器拆成
- * 纯文字，后面的「明眼文字 → 盲文」翻译链路完全复用 txt 那条路。
+ * EPUB、DOCX 都是 zip 容器，直接按文本解码会得到一坨二进制；这里先把容器
+ * 拆成纯文字，后面的「明眼文字 → 盲文」翻译链路完全复用 txt 那条路。
  */
 
 package com.googlecode.eyesfree.brailleback
@@ -21,6 +22,9 @@ object EbookTextExtractor {
     /** EPUB 的入口清单，路径固定。 */
     private const val CONTAINER_PATH = "META-INF/container.xml"
 
+    /** DOCX/DOCM 的正文，OOXML 规定的位置。 */
+    private const val WORD_DOCUMENT_PATH = "word/document.xml"
+
     /** 单个 zip 条目的解压上限；一章 XHTML 正常远小于这个值。 */
     private const val MAX_ENTRY_BYTES = 16L * 1024 * 1024
 
@@ -29,7 +33,8 @@ object EbookTextExtractor {
 
     /** 走本提取器而不是直接文本解码的后缀。 */
     private val SUPPORTED_EXT = setOf(
-        "epub", "html", "htm", "xhtml", "xht", "md", "markdown")
+        "epub", "html", "htm", "xhtml", "xht", "md", "markdown",
+        "docx", "docm")
 
     sealed interface Result {
         /** 提取成功，[text] 是明眼文字，交给翻译链路。 */
@@ -38,6 +43,7 @@ object EbookTextExtractor {
         sealed interface Failure : Result {
             data object EmptyFile : Failure
             data object NotEpub : Failure
+            data object NotWord : Failure
             data object NoText : Failure
             data object TooLarge : Failure
         }
@@ -60,6 +66,7 @@ object EbookTextExtractor {
         }
         return when (extensionOf(fileName)) {
             "epub" -> extractEpub(bytes)
+            "docx", "docm" -> extractWord(bytes)
             "html", "htm", "xhtml", "xht" -> {
                 val text = htmlToText(BrailleFileDecoder.decode(bytes))
                 if (text.isBlank()) Result.Failure.NoText else Result.Success(text)
@@ -140,6 +147,95 @@ object EbookTextExtractor {
         }
         return buffer.toByteArray()
     }
+
+    // ------------------------------------------------------------------
+    // Word（.docx / .docm）
+    // ------------------------------------------------------------------
+
+    /**
+     * DOCX 是 OOXML zip，正文全在 `word/document.xml`。
+     *
+     * 只取正文：页眉页脚、脚注、批注、图片里的文字都不在 document.xml，
+     * 也就不还原——阅读器要的是可读的连续文字，不是版式。
+     */
+    private fun extractWord(bytes: ByteArray): Result {
+        if (!looksLikeZip(bytes)) {
+            return Result.Failure.NotWord
+        }
+        return when (val entry = readNamedEntry(bytes, WORD_DOCUMENT_PATH)) {
+            EntryRead.Missing -> Result.Failure.NotWord
+            EntryRead.TooLarge -> Result.Failure.TooLarge
+            is EntryRead.Data -> {
+                val text = wordXmlToText(BrailleFileDecoder.decode(entry.bytes))
+                if (text.isBlank()) Result.Failure.NoText else Result.Success(text)
+            }
+        }
+    }
+
+    /** DOCX 本来就是 zip；不是 zip 的多半是旧版 .doc 改了后缀，或文件损坏。 */
+    private fun looksLikeZip(bytes: ByteArray): Boolean =
+        bytes.size >= 2 &&
+            bytes[0] == 'P'.code.toByte() &&
+            bytes[1] == 'K'.code.toByte()
+
+    private sealed interface EntryRead {
+        class Data(val bytes: ByteArray) : EntryRead
+        data object Missing : EntryRead
+        data object TooLarge : EntryRead
+    }
+
+    /** 只解压指定条目，避免把 DOCX 里的图片全读进内存。 */
+    private fun readNamedEntry(bytes: ByteArray, wantedPath: String): EntryRead {
+        ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
+            var entry = zip.nextEntry
+            while (entry != null) {
+                if (!entry.isDirectory &&
+                    entry.name.equals(wantedPath, ignoreCase = true)
+                ) {
+                    val data = readEntry(zip, MAX_ENTRY_BYTES)
+                        ?: return EntryRead.TooLarge
+                    return EntryRead.Data(data)
+                }
+                zip.closeEntry()
+                entry = zip.nextEntry
+            }
+        }
+        return EntryRead.Missing
+    }
+
+    /**
+     * 从 document.xml 取正文。
+     *
+     * 只认 `<w:t>` 里的文字（`w:delText` 是修订删除、`w:instrText` 是域代码，
+     * 都不该读给用户）；`</w:p>` 断段，`w:br` 断行，`w:tab` 变空格。
+     */
+    private fun wordXmlToText(xml: String): String {
+        val builder = StringBuilder()
+        for (match in WORD_TOKEN.findAll(xml)) {
+            val textGroup = match.groups[1]
+            if (textGroup != null) {
+                builder.append(decodeEntities(textGroup.value))
+                continue
+            }
+            when {
+                match.value.equals("</w:p>", ignoreCase = true) -> builder.append('\n')
+                match.value.contains("br", ignoreCase = true) -> builder.append('\n')
+                else -> builder.append(' ')
+            }
+        }
+        return builder.toString()
+            .replace("\r\n", "\n")
+            .replace('\r', '\n')
+            .lineSequence()
+            .joinToString("\n") { it.trimEnd() }
+            .replace(THREE_NEWLINES, "\n\n")
+            .trim()
+    }
+
+    private val WORD_TOKEN = Regex(
+        """<w:t(?:\s[^>]*)?>(.*?)</w:t>|<w:br\b[^>]*/>|<w:tab\b[^>]*/>|</w:p>""",
+        setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE)
+    )
 
     /** container.xml 里的第一个 rootfile full-path。 */
     private fun parseRootFilePath(container: ByteArray): String? {

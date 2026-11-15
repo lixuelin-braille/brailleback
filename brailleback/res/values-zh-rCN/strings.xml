@@ -74,15 +74,17 @@
     <string name="braille_reader_err_empty">"这个文件是空的"</string>
     <string name="braille_reader_err_not_bword">"这个 .bdo/.bdoc 文件里找不到 Bword 记录"</string>
     <string name="braille_reader_err_too_few">"这个 .bdo/.bdoc 文档只有 %1$d 方盲文，内容太少，读不了"</string>
-    <!-- EPUB/HTML/Markdown 提取失败的三类原因：空的、不是有效 EPUB、没有文字。 -->
+    <!-- EPUB/HTML/Markdown/Word 提取失败的三类原因：空的、不是有效容器、没有文字。 -->
     <string name="braille_reader_err_epub_invalid">"不是有效的 EPUB 电子书（缺少 container.xml 或 OPF 清单）"</string>
-    <string name="braille_reader_err_epub_no_text">"这本电子书里没有可读的文字（可能只有图片）"</string>
-    <string name="braille_reader_err_epub_too_large">"电子书体积过大，已停止解压（上限 128 MB）"</string>
+    <string name="braille_reader_err_word_invalid">"不是有效的 Word 文档（缺少 word/document.xml）"</string>
+    <string name="braille_reader_err_doc_legacy">"旧版 .doc 暂不支持，请用 Word 另存为 .docx 后再打开"</string>
+    <string name="braille_reader_err_no_text">"文件里没有可读的文字（可能只有图片）"</string>
+    <string name="braille_reader_err_too_large">"文件体积过大，已停止解压（上限 128 MB）"</string>
     <string name="braille_reader_translating">"正在翻译为盲文…"</string>
     <string name="braille_reader_translator_waiting">"正在启动盲文翻译服务…"</string>
     <string name="braille_reader_translate_fail">"翻译失败，已显示原文；连接点显器可输出盲文"</string>
     <string name="braille_reader_table_mismatch">"当前盲文表（%1$s）可能不支持本书的语言，翻译结果可能不正确；请在设置中选择中文盲文表"</string>
-    <string name="braille_reader_unsupported_format">"暂不支持 .%1$s 格式。请打开盲文文件（.bdo、.bdoc、.brf、.brl）或纯文本（.txt）"</string>
+    <string name="braille_reader_unsupported_format">"暂不支持 .%1$s 格式。可打开盲文文件（.bdo、.bdoc、.brf、.brl）、纯文本（.txt）、EPUB、HTML、Markdown 或 Word（.docx）"</string>
     <string name="braille_reader_page">"第 %1$d / %2$d 页"</string>
     <string name="braille_reader_page_cells">"第 %1$d / %2$d 页 · %3$d 方"</string>
     <string name="braille_reader_loaded">"已加载，共 %1$d 页"</string>
@@ -246,6 +248,7 @@
     <string name="bookshelf_type_epub">EPUB 电子书</string>
     <string name="bookshelf_type_html">网页文档</string>
     <string name="bookshelf_type_md">Markdown 文档</string>
+    <string name="bookshelf_type_docx">Word 文档</string>
 
     <string name="bookshelf_type_unknown">文件</string>
 

@@ -112,15 +112,17 @@
     <string name="braille_reader_err_empty">The file is empty</string>
     <string name="braille_reader_err_not_bword">No Bword records found in this .bdo/.bdoc file</string>
     <string name="braille_reader_err_too_few">Only %1$d braille cells in this .bdo/.bdoc document, too few to read</string>
-    <!-- EPUB/HTML/Markdown extraction failures: empty, invalid EPUB, no text. -->
+    <!-- EPUB/HTML/Markdown/Word extraction failures: empty, invalid container, no text. -->
     <string name="braille_reader_err_epub_invalid">Not a valid EPUB book (container.xml or OPF package is missing)</string>
-    <string name="braille_reader_err_epub_no_text">This ebook has no readable text (images only)</string>
-    <string name="braille_reader_err_epub_too_large">The ebook is too large to unpack (limit 128 MB)</string>
+    <string name="braille_reader_err_word_invalid">Not a valid Word document (word/document.xml is missing)</string>
+    <string name="braille_reader_err_doc_legacy">Legacy .doc is not supported. Save it as .docx in Word and open it again</string>
+    <string name="braille_reader_err_no_text">This file has no readable text (images only)</string>
+    <string name="braille_reader_err_too_large">The file is too large to unpack (limit 128 MB)</string>
     <string name="braille_reader_translating">Translating to braille…</string>
     <string name="braille_reader_translator_waiting">Starting braille translation service…</string>
     <string name="braille_reader_translate_fail">Translation failed. Showing original text; connect a display for braille output.</string>
     <string name="braille_reader_table_mismatch">The current braille table (%1$s) may not support this book\'s language. Pick a Chinese braille table in Settings for proper output.</string>
-    <string name="braille_reader_unsupported_format">.%1$s is not supported. Please open a braille file (.bdo, .bdoc, .brf, .brl) or plain text (.txt)</string>
+    <string name="braille_reader_unsupported_format">.%1$s is not supported. Please open a braille file (.bdo, .bdoc, .brf, .brl), plain text (.txt), EPUB, HTML, Markdown or Word (.docx)</string>
     <string name="braille_reader_page">Page %1$d / %2$d</string>
     <string name="braille_reader_page_cells">Page %1$d / %2$d · %3$d cells</string>
     <string name="braille_reader_loaded">Loaded, %1$d pages</string>
@@ -475,6 +477,7 @@
     <string name="bookshelf_type_epub">EPUB ebook</string>
     <string name="bookshelf_type_html">web page document</string>
     <string name="bookshelf_type_md">Markdown document</string>
+    <string name="bookshelf_type_docx">Word document</string>
 
     <string name="bookshelf_type_unknown">file</string>
 

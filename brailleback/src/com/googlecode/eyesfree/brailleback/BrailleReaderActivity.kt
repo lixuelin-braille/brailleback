@@ -314,7 +314,7 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
                 val name = displayNameOf(uri)
                 checkSupportedFormat(name)
                 val bytes = readAllBytes(uri)
-                // EPUB/HTML/Markdown 是容器或标记文本，先提取成明眼文字，
+                // EPUB/HTML/Markdown/Word 是容器或标记文本，先提取成明眼文字，
                 // 再交给下面的内容类型检测走翻译链路。
                 val text = if (EbookTextExtractor.supports(name)) {
                     when (val extracted = EbookTextExtractor.extract(bytes, name)) {
@@ -385,10 +385,12 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
             getString(R.string.braille_reader_err_empty)
         EbookTextExtractor.Result.Failure.NotEpub ->
             getString(R.string.braille_reader_err_epub_invalid)
+        EbookTextExtractor.Result.Failure.NotWord ->
+            getString(R.string.braille_reader_err_word_invalid)
         EbookTextExtractor.Result.Failure.NoText ->
-            getString(R.string.braille_reader_err_epub_no_text)
+            getString(R.string.braille_reader_err_no_text)
         EbookTextExtractor.Result.Failure.TooLarge ->
-            getString(R.string.braille_reader_err_epub_too_large)
+            getString(R.string.braille_reader_err_too_large)
     }
 
     /**
@@ -541,6 +543,10 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
      */
     private fun checkSupportedFormat(name: String?) {
         val ext = name?.substringAfterLast('.', "")?.lowercase() ?: return
+        if (ext == "doc") {
+            // 97-2003 是 OLE 复合文档，不是 zip，解不出正文；给出可执行的下一步。
+            throw IllegalStateException(getString(R.string.braille_reader_err_doc_legacy))
+        }
         if (ext in UNSUPPORTED_EXT) {
             throw IllegalStateException(
                 getString(R.string.braille_reader_unsupported_format, ext))
@@ -959,11 +965,11 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
         /**
          * 明确不支持的二进制/排版格式。盲文阅读器本身只处理盲文与文字：
          * .bdo/.bdoc（Bword 二进制盲文）、.brf/.brl/.txt（文本类）、
-         * .epub/.html/.md（由 [EbookTextExtractor] 取出文字后翻译）。
-         * Word/PDF 等需先转成盲文，直接打开只会得到乱码。
+         * .epub/.html/.md/.docx/.docm（由 [EbookTextExtractor] 取出文字后翻译）。
+         * PDF/MOBI 等需先转成盲文；旧版 .doc 在 checkSupportedFormat 里单独提示。
          */
         private val UNSUPPORTED_EXT = setOf(
-            "doc", "docx", "wps", "rtf", "odt",
+            "doc", "wps", "rtf", "odt",
             "pdf", "mobi", "azw3",
             "rar", "zip", "7z",
             "jpg", "jpeg", "png", "gif", "bmp", "webp"
