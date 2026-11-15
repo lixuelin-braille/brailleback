@@ -1,0 +1,290 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues></ManuallySuppressedIssues>
+  <CurrentIssues>
+    <ID>ComplexCondition:BrailleSegmenter.kt$BrailleSegmenter$word.length == 1 &amp;&amp; SUFFIX.contains(word) &amp;&amp; merged.isNotEmpty() &amp;&amp; !isPunct(merged[merged.size - 1][0]) &amp;&amp; !NON_STEM.contains(merged[merged.size - 1][0])</ID>
+    <ID>ComplexCondition:BrailleSegmenter.kt$BrailleSegmenter$word.length == 4 &amp;&amp; !CONNECT.contains(word) &amp;&amp; !SPLIT4.contains(word) &amp;&amp; !NAMESET.contains(word) &amp;&amp; !SPLIT4_INNER.contains(word)</ID>
+    <ID>ComplexCondition:DisplayService.kt$DisplayService.&lt;no name provided&gt;$mConnectionState == STATE_CONNECTED || mReadThread != null || mHidConnection != null || mWujieConnection != null || mUsbConnection != null</ID>
+    <ID>ComplexCondition:DisplayService.kt$DisplayService.&lt;no name provided&gt;.&lt;no name provided&gt;$hidRequested &amp;&amp; mConnectionState == STATE_DISCONNECTED &amp;&amp; mReadThread == null &amp;&amp; mHidConnection == null &amp;&amp; mWujieConnection == null &amp;&amp; mUsbConnection == null</ID>
+    <ID>ComplexCondition:DisplayServiceHandlerActions.kt$service.mDataFileState == DisplayService.FILES_EXTRACTED &amp;&amp; service.mConnectionState == DisplayService.STATE_DISCONNECTED &amp;&amp; !service.isConnectionActive() &amp;&amp; !service.mConnectPending &amp;&amp; !service.mWaitingForHidController</ID>
+    <ID>ComplexCondition:DisplayServiceHandlerActions.kt$service.mDataFileState == DisplayService.FILES_NOT_EXTRACTED || (service.mConnectionState == DisplayService.STATE_DISCONNECTED &amp;&amp; (service.mReadThread != null || (service.mHidConnection != null &amp;&amp; !service.mHidConnection!! .isDisconnecting()) || service.mWujieConnection != null || service.mUsbConnection != null))</ID>
+    <ID>ComplexCondition:ParagraphBlock.kt$ParagraphBlock$className != FRAME_LAYOUT_CLASS &amp;&amp; className != LINEAR_LAYOUT_CLASS &amp;&amp; className != RELATIVE_LAYOUT_CLASS &amp;&amp; className != VIEW_GROUP_CLASS &amp;&amp; className != VIEW_CLASS</ID>
+    <ID>ComplexCondition:UsbBrailleDevice.kt$UsbBrailleDevice.Companion$c.code in 0x20 until 0x7f &amp;&amp; c != '+' &amp;&amp; c != '=' &amp;&amp; c != ',' &amp;&amp; c != ':'</ID>
+    <ID>CyclomaticComplexMethod:AccessibilityEventUtils.kt$AccessibilityEventUtils$@JvmStatic fun eventEquals(first: AccessibilityEvent?, second: AccessibilityEvent?): Boolean</ID>
+    <ID>CyclomaticComplexMethod:BrailleImeHostBridge.kt$BrailleImeHostBridge$override fun performAction(action: ScreenReaderAction, vararg arg: Any?): Boolean</ID>
+    <ID>CyclomaticComplexMethod:BrailleSegmenter.kt$BrailleSegmenter$private fun addJiebaTokens(toks: MutableList&lt;Tok&gt;, text: String, from: Int, to: Int)</ID>
+    <ID>CyclomaticComplexMethod:DefaultNavigationMode.kt$DefaultNavigationMode$override fun onMappedInputEvent(event: BrailleInputEvent, content: Content): Boolean</ID>
+    <ID>CyclomaticComplexMethod:DisplayContent.kt$Content$fun translateWithVerbatimBraille( translator: BrailleTranslator?, cursorPosition: Int, computerBrailleAtCursor: Boolean ): TranslationResult</ID>
+    <ID>CyclomaticComplexMethod:DisplayServiceHandler.kt$MainHandler$override fun handleMessage(msg: Message)</ID>
+    <ID>CyclomaticComplexMethod:HidInputReportNormalizer.kt$HidInputReportNormalizer.Companion$@JvmStatic fun singleInputReport(descriptor: ByteArray?): InputReport?</ID>
+    <ID>CyclomaticComplexMethod:IMENavigationMode.kt$IMENavigationMode$override fun onMappedInputEvent(event: BrailleInputEvent, content: Content): Boolean</ID>
+    <ID>CyclomaticComplexMethod:JiebaDict.kt$JiebaDict$private fun loadWordList(stream: InputStream, overrideExisting: Boolean, label: String): Int</ID>
+    <ID>CyclomaticComplexMethod:ParagraphIndent.kt$ParagraphIndent$fun apply( text: CharSequence?, translation: TranslationResult, indentFirst: Boolean = false ): TranslationResult</ID>
+    <ID>CyclomaticComplexMethod:UserSegDict.kt$UserSegDict$@Synchronized fun match(words: List&lt;Array&lt;String&gt;&gt;, start: Int): Match?</ID>
+    <ID>CyclomaticComplexMethod:WujieGattConnection.kt$WujieGattConnection$private fun inspectServices(gatt: BluetoothGatt)</ID>
+    <ID>EmptyFunctionBlock:BrailleImeHostBridge.kt$BrailleImeHostBridge.&lt;no name provided&gt;${}</ID>
+    <ID>EmptyFunctionBlock:HidDisplayConnection.kt$HidDisplayConnection.NoOpOutputStream${ }</ID>
+    <ID>EmptyFunctionBlock:IMENavigationMode.kt$IMENavigationMode${}</ID>
+    <ID>EmptyFunctionBlock:UsbDisplayConnection.kt$UsbDisplayConnection.NoOpOutputStream${ }</ID>
+    <ID>FunctionParameterNaming:BrailleDisplayProperties.kt$BrailleDisplayProperties.Companion$`in`: Parcel</ID>
+    <ID>ImplicitDefaultLocale:BrlttyWrapper.kt$BrlttyWrapper$String.format("bluetooth:%s", device.address)</ID>
+    <ID>ImplicitDefaultLocale:DisplayClient.kt$DisplayClient.DisplayHandler$String.format( "Will rebind to braille service in %d ms.", delay)</ID>
+    <ID>ImplicitDefaultLocale:DisplayContent.kt$Content$String.format("Content {text=%s}", getText())</ID>
+    <ID>ImplicitDefaultLocale:HidDisplayConnection.kt$HidDisplayConnection.Companion$String.format("%02X", b)</ID>
+    <ID>ImplicitDefaultLocale:LabelsTable.kt$LabelsTable.Companion$String.format("DROP TABLE IF EXISTS %s", TABLE_NAME)</ID>
+    <ID>ImplicitDefaultLocale:LogUtils.kt$LogUtils$String.format("%s\n%s", message, Log.getStackTraceString(throwable))</ID>
+    <ID>ImplicitDefaultLocale:SQLiteTableBuilder.kt$SQLiteTableBuilder$String.format("%s%s", mStringBuilder.toString(), CLOSE_PAREN)</ID>
+    <ID>ImplicitDefaultLocale:SelfBrailleClient.kt$SelfBrailleClient$String.format( "*** %s connected to BrailleBack with invalid (debug?) signature ***", mContext.packageName)</ID>
+    <ID>ImplicitDefaultLocale:SelfBrailleClient.kt$SelfBrailleClient.Connection$String.format( "Service certificate mismatch for %s, dropping connection", BRAILLE_BACK_PACKAGE)</ID>
+    <ID>ImplicitDefaultLocale:TableList.kt$TableList$String.format( "Table %s: locale=%s, dots=%d, grade=%d, variant=%s,fileName=%s", id, locale.displayName, dots, grade, variant, fileName )</ID>
+    <ID>ImplicitDefaultLocale:TranslatorClient.kt$TranslatorClient.BrailleTranslatorImpl$String.format("{BrailleTranslatorImpl %s}", mTableInfo.id)</ID>
+    <ID>InstanceOfCheckForException:UnifiedBrailleInput.kt$UnifiedBrailleInput$t is LinkageError</ID>
+    <ID>LargeClass:DefaultNavigationMode.kt$DefaultNavigationMode : NavigationMode</ID>
+    <ID>LargeClass:DisplayService.kt$DisplayService : ServiceOnInputEventListener</ID>
+    <ID>LateinitUsage:BrailleDisplayComposeActivity.kt$BrailleDisplayComposeActivity$private lateinit var codeLabels: BrailleCodeCatalog.CodeLabels</ID>
+    <ID>LateinitUsage:BrailleDisplayComposeActivity.kt$BrailleDisplayComposeActivity$private lateinit var tableLabels: BrailleTableCatalog.TableLabels</ID>
+    <ID>LateinitUsage:BrailleIME.kt$BrailleIME$private lateinit var mInputMethodManager: InputMethodManager</ID>
+    <ID>LateinitUsage:CustomKeyMapActivity.kt$CustomKeyMapActivity.CustomKeyMapFragment$private lateinit var actionLabels: Array&lt;String&gt;</ID>
+    <ID>LateinitUsage:CustomKeyMapActivity.kt$CustomKeyMapActivity.CustomKeyMapFragment$private lateinit var actionValues: Array&lt;String&gt;</ID>
+    <ID>LateinitUsage:CustomKeyMapActivity.kt$CustomKeyMapActivity.CustomKeyMapFragment$private lateinit var conflictHint: Preference</ID>
+    <ID>LateinitUsage:CustomKeyMapActivity.kt$CustomKeyMapActivity.CustomKeyMapFragment$private lateinit var entries: Array&lt;CharSequence&gt;</ID>
+    <ID>LateinitUsage:CustomKeyMapActivity.kt$CustomKeyMapActivity.CustomKeyMapFragment$private lateinit var entryValues: Array&lt;CharSequence&gt;</ID>
+    <ID>LateinitUsage:CustomKeyMapActivity.kt$CustomKeyMapActivity.CustomKeyMapFragment$private lateinit var screen: PreferenceScreen</ID>
+    <ID>LateinitUsage:CustomKeyMapActivity.kt$CustomKeyMapActivity.CustomKeyMapFragment$private lateinit var sourceValues: Array&lt;String&gt;</ID>
+    <ID>LateinitUsage:DisplayManager.kt$DisplayManager$private lateinit var wrapStrategy: WrapStrategy</ID>
+    <ID>LateinitUsage:DisplayService.kt$DisplayService$private lateinit var mTablesDir: File</ID>
+    <ID>LongMethod:BrailleDisplayComposeActivity.kt$BrailleDisplayComposeActivity$override fun onCreate(savedInstanceState: Bundle?)</ID>
+    <ID>LongMethod:BrailleDisplayScreen.kt$@Composable internal fun BrailleDisplayScreen( labels: BrailleDisplayLabels, route: BrailleDisplayLogic.TableRoute, languageRows: List&lt;BrailleDisplayLogic.LanguageRow&gt;, codes: List&lt;BrailleCodeCatalog.Code&gt;, enabledCodes: Set&lt;String&gt;, currentCodeOptions: List&lt;BrailleCodeCatalog.Code&gt;, currentCodeLabel: String, showCurrentDialog: Boolean, title: String, autoLabel: String, currentTableLabel: String, currentTable: String, wordWrap: Boolean, cursorDots: Boolean, contractedMode: Boolean, chineseSegmentation: Boolean, onOpenLanguages: () -&gt; Unit, onOpenLanguage: (String) -&gt; Unit, onNavigateBack: () -&gt; Unit, onRefreshTables: () -&gt; Unit, onToggleCode: (String, Boolean) -&gt; Unit, onOpenCurrentDialog: () -&gt; Unit, onDismissCurrentDialog: () -&gt; Unit, onSelectCurrent: (String) -&gt; Unit, onAutoSelected: () -&gt; Unit, onBooleanChanged: (String, Boolean) -&gt; Unit, onBack: () -&gt; Unit, )</ID>
+    <ID>LongMethod:DeveloperOptionsScreen.kt$@Composable internal fun DeveloperOptionsScreen( labels: DeveloperOptionsLabels, logLevelValue: String, overlayEnabled: Boolean, onLogLevelSelected: (String) -&gt; Unit, onViewLog: () -&gt; String, onShareLog: () -&gt; Unit, onCopyLog: () -&gt; Unit, onClearLog: () -&gt; Unit, onOverlayChange: (Boolean) -&gt; Unit, onOpenTutorial: () -&gt; Unit, onBack: () -&gt; Unit, )</ID>
+    <ID>LongMethod:SoundBehaviorComposeActivity.kt$SoundBehaviorComposeActivity$override fun onCreate(savedInstanceState: Bundle?)</ID>
+    <ID>LongMethod:SoundBehaviorScreen.kt$@Composable internal fun SoundBehaviorScreen( labels: SoundBehaviorLabels, soundEnabled: Boolean, volume: Int, pauseValue: String, idleValue: String, motionMode: Boolean, quietNavigation: Boolean, onSoundEnabledChange: (Boolean) -&gt; Unit, onVolumeConfirmed: (Int) -&gt; Unit, onPauseSelected: (String) -&gt; Unit, onIdleSelected: (String) -&gt; Unit, onMotionModeChange: (Boolean) -&gt; Unit, onQuietNavigationChange: (Boolean) -&gt; Unit, onBack: () -&gt; Unit, )</ID>
+    <ID>LongParameterList:BluetoothDiscoveryPolicy.kt$BluetoothDiscoveryPolicy.Companion$( autoConnectEnabled: Boolean, autoReconnectSuppressed: Boolean, haveClients: Boolean, dataFilesReady: Boolean, connectionActive: Boolean, connectPending: Boolean, waitingForHidController: Boolean, screenInteractive: Boolean, adapterEnabled: Boolean, scanPermissionGranted: Boolean )</ID>
+    <ID>LongParameterList:BrailleDisplayScreen.kt$( labels: BrailleDisplayLabels, route: BrailleDisplayLogic.TableRoute, languageRows: List&lt;BrailleDisplayLogic.LanguageRow&gt;, codes: List&lt;BrailleCodeCatalog.Code&gt;, enabledCodes: Set&lt;String&gt;, currentCodeOptions: List&lt;BrailleCodeCatalog.Code&gt;, currentCodeLabel: String, showCurrentDialog: Boolean, title: String, autoLabel: String, currentTableLabel: String, currentTable: String, wordWrap: Boolean, cursorDots: Boolean, contractedMode: Boolean, chineseSegmentation: Boolean, onOpenLanguages: () -&gt; Unit, onOpenLanguage: (String) -&gt; Unit, onNavigateBack: () -&gt; Unit, onRefreshTables: () -&gt; Unit, onToggleCode: (String, Boolean) -&gt; Unit, onOpenCurrentDialog: () -&gt; Unit, onDismissCurrentDialog: () -&gt; Unit, onSelectCurrent: (String) -&gt; Unit, onAutoSelected: () -&gt; Unit, onBooleanChanged: (String, Boolean) -&gt; Unit, onBack: () -&gt; Unit, )</ID>
+    <ID>LongParameterList:DeveloperOptionsScreen.kt$( labels: DeveloperOptionsLabels, logLevelValue: String, overlayEnabled: Boolean, onLogLevelSelected: (String) -&gt; Unit, onViewLog: () -&gt; String, onShareLog: () -&gt; Unit, onCopyLog: () -&gt; Unit, onClearLog: () -&gt; Unit, onOverlayChange: (Boolean) -&gt; Unit, onOpenTutorial: () -&gt; Unit, onBack: () -&gt; Unit, )</ID>
+    <ID>LongParameterList:KeysGesturesScreen.kt$( labels: KeysGesturesLabels, helpAvailable: Boolean, gesturesEnabled: Boolean, volumeValues: Map&lt;String, String&gt;, onOpenKeyBindings: () -&gt; Unit, onOpenCustomKeyMap: () -&gt; Unit, onGesturesEnabledChange: (Boolean) -&gt; Unit, onVolumeActionSelected: (String, String) -&gt; Unit, onBack: () -&gt; Unit, )</ID>
+    <ID>LongParameterList:SearchNavigationMode.kt$SearchNavigationMode$( private val mDisplayManager: DisplayManager, private val mAccessibilityService: AccessibilityService, private val mFeedbackManager: FeedbackManager, private val mTranslatorManager: TranslatorManager, private val mSelfBrailleManager: SelfBrailleManager, private val mNodeBrailler: NodeBrailler, private val mSearchStateListener: SearchStateListener, private val mLabelManager: CustomLabelManager? = null, // 仅供测试构造器注入；为 null 时下面会走正常构造路径。 private val overlayOverride: SearchOverlay? = null )</ID>
+    <ID>LongParameterList:SettingsComponents.kt$( title: String, currentValue: Int, min: Int, max: Int, valueText: (Int) -&gt; String, decreaseLabel: String, increaseLabel: String, confirmLabel: String, cancelLabel: String, onConfirm: (Int) -&gt; Unit, onDismiss: () -&gt; Unit, )</ID>
+    <ID>LongParameterList:SettingsComponents.kt$( title: String, entries: List&lt;String&gt;, values: List&lt;String&gt;, currentValue: String, cancelLabel: String, selectedLabel: String, unselectedLabel: String, onSelect: (String) -&gt; Unit, onDismiss: () -&gt; Unit, )</ID>
+    <ID>LongParameterList:SoundBehaviorScreen.kt$( labels: SoundBehaviorLabels, soundEnabled: Boolean, volume: Int, pauseValue: String, idleValue: String, motionMode: Boolean, quietNavigation: Boolean, onSoundEnabledChange: (Boolean) -&gt; Unit, onVolumeConfirmed: (Int) -&gt; Unit, onPauseSelected: (String) -&gt; Unit, onIdleSelected: (String) -&gt; Unit, onMotionModeChange: (Boolean) -&gt; Unit, onQuietNavigationChange: (Boolean) -&gt; Unit, onBack: () -&gt; Unit, )</ID>
+    <ID>LongParameterList:StabilityScreen.kt$( labels: StabilityLabels, snapshot: StabilitySnapshot, vendor: OemVendor, issueSummary: String, onOpenBatterySettings: () -&gt; Unit, onOpenAutostart: () -&gt; Unit, onRequestNotification: () -&gt; Unit, onRequestBluetooth: () -&gt; Unit, onBack: () -&gt; Unit, )</ID>
+    <ID>LoopWithTooManyJumpStatements:AccessibilityNodeInfoUtils.kt$AccessibilityNodeInfoUtils.Companion$for</ID>
+    <ID>LoopWithTooManyJumpStatements:BrailleFileDecoder.kt$BrailleFileDecoder$for</ID>
+    <ID>LoopWithTooManyJumpStatements:BrailleKeyMapPolicy.kt$BrailleKeyMapPolicy$for</ID>
+    <ID>LoopWithTooManyJumpStatements:BrailleSegmenter.kt$BrailleSegmenter$while</ID>
+    <ID>LoopWithTooManyJumpStatements:CustomKeyMapActivity.kt$CustomKeyMapActivity.CustomKeyMapFragment$for</ID>
+    <ID>LoopWithTooManyJumpStatements:CustomLabelManager.kt$CustomLabelManager$while</ID>
+    <ID>LoopWithTooManyJumpStatements:DefaultNavigationMode.kt$DefaultNavigationMode$for</ID>
+    <ID>LoopWithTooManyJumpStatements:DeviceFinder.kt$DeviceFinder$for</ID>
+    <ID>LoopWithTooManyJumpStatements:DisplayManager.kt$DisplayManager$for</ID>
+    <ID>LoopWithTooManyJumpStatements:DisplayService.kt$DisplayService$for</ID>
+    <ID>LoopWithTooManyJumpStatements:HidInputReportNormalizer.kt$HidInputReportNormalizer.Companion$while</ID>
+    <ID>LoopWithTooManyJumpStatements:HmmSegmenter.kt$HmmSegmenter$while</ID>
+    <ID>LoopWithTooManyJumpStatements:JiebaDict.kt$JiebaDict$for</ID>
+    <ID>LoopWithTooManyJumpStatements:JiebaDict.kt$JiebaDict$while</ID>
+    <ID>LoopWithTooManyJumpStatements:KeyBindingsActivity.kt$KeyBindingsActivity$for</ID>
+    <ID>LoopWithTooManyJumpStatements:NodeBrailler.kt$NodeBrailler$do</ID>
+    <ID>LoopWithTooManyJumpStatements:NodeBrailler.kt$NodeBrailler$for</ID>
+    <ID>LoopWithTooManyJumpStatements:ReadThread.kt$ReadThread$for</ID>
+    <ID>LoopWithTooManyJumpStatements:StringBuilderUtils.kt$StringBuilderUtils$for</ID>
+    <ID>LoopWithTooManyJumpStatements:TableList.kt$TableList$while</ID>
+    <ID>LoopWithTooManyJumpStatements:UsbBrailleDevice.kt$UsbBrailleDevice.Companion$for</ID>
+    <ID>LoopWithTooManyJumpStatements:UsbHidDevicePolicy.kt$UsbHidDevicePolicy$for</ID>
+    <ID>LoopWithTooManyJumpStatements:UserSegDict.kt$UserSegDict$while</ID>
+    <ID>LoopWithTooManyJumpStatements:WrapStrategy.kt$WrapStrategy$while</ID>
+    <ID>LoopWithTooManyJumpStatements:ZipResourceExtractor.kt$ZipResourceExtractor$while</ID>
+    <ID>MaxLineLength:CustomLabelManager.kt$CustomLabelManager$LogUtils.log(CustomLabelManager::class.java, Log.WARN, "Consistency check removing label due to signature mismatch for package %s.", packageName)</ID>
+    <ID>MaxLineLength:DeviceFinder.kt$Pattern.compile("(Braille Wave( BRW)?|Braillino( BL2)?|Braille Star 40( BS4)?|Easy Braille( EBR)?|Active Braille( AB4)?|Basic Braille BB[3,4,6]?)\\/[a-zA-Z][0-9]-[0-9]{5}")</ID>
+    <ID>MayBeConst:Label.kt$Label.Companion$private val DEBUG_FORMAT_STRING = "%s[id=%d, packageName=%s, " + "packageSignature=%s, viewName=%s, text=%s, locale=%s, " + "packageVersion=%d, screenshotPath=%s, timestamp=%d]"</ID>
+    <ID>MayBeConst:StringBuilderUtils.kt$StringBuilderUtils$/** * Breaking separator inserted between text, intended to make TTS pause an * appropriate amount. Using a period breaks pronunciation of street * abbreviations, and using a new line doesn't work in eSpeak. */ @JvmField val DEFAULT_BREAKING_SEPARATOR = ", "</ID>
+    <ID>MayBeConst:StringBuilderUtils.kt$StringBuilderUtils$/** * Non-breaking separator inserted between text. Used when text already ends * with some sort of breaking separator or non-alphanumeric character. */ @JvmField val DEFAULT_SEPARATOR = " "</ID>
+    <ID>MayBeConst:WriteData.kt$WriteData.Companion$private val PROP_SELECTION_END = "selectionEnd"</ID>
+    <ID>MayBeConst:WriteData.kt$WriteData.Companion$private val PROP_SELECTION_START = "selectionStart"</ID>
+    <ID>MayBeConst:WujieGattConnection.kt$WujieGattConnection.Companion$private val CONNECT_TIMEOUT_MS = 15000L</ID>
+    <ID>MayBeConst:WujieGattConnection.kt$WujieGattConnection.Companion$private val KEY_NAME_NEXT = "next"</ID>
+    <ID>MayBeConst:WujieGattConnection.kt$WujieGattConnection.Companion$private val KEY_NAME_PREVIOUS = "prev"</ID>
+    <ID>MayBeConst:WujieGattConnection.kt$WujieGattConnection.Companion$private val REQUESTED_MTU = 500</ID>
+    <ID>MayBeConst:WujieGattConnection.kt$WujieGattConnection.Companion$private val SETUP_TIMEOUT_MS = 4000L</ID>
+    <ID>NestedBlockDepth:TranslatorClient.kt$TranslatorClient$fun getTranslator(tableId: String): BrailleTranslator?</ID>
+    <ID>NewLineAtEndOfFile:DisplayManager.kt$com.googlecode.eyesfree.brailleback.DisplayManager.kt</ID>
+    <ID>NewLineAtEndOfFile:LogFileWriter.kt$com.googlecode.eyesfree.brailleback.utils.LogFileWriter.kt</ID>
+    <ID>NewLineAtEndOfFile:RollingFileLog.kt$com.googlecode.eyesfree.utils.RollingFileLog.kt</ID>
+    <ID>ProtectedMemberInFinalClass:FeedbackController.kt$FeedbackController$/** * @return The parent context. */ protected val context: Context get() = mContext</ID>
+    <ID>ReturnCount:AccessibilityEventUtils.kt$AccessibilityEventUtils$@JvmStatic fun eventEquals(first: AccessibilityEvent?, second: AccessibilityEvent?): Boolean</ID>
+    <ID>ReturnCount:AccessibilityNodeInfoUtils.kt$AccessibilityNodeInfoUtils.Companion$@JvmStatic fun shouldFocusNode(context: Context?, node: AccessibilityNodeInfoCompat?): Boolean</ID>
+    <ID>ReturnCount:AccessibilityNodeInfoUtils.kt$AccessibilityNodeInfoUtils.TopToBottomLeftToRightComparator$override fun compare( first: AccessibilityNodeInfoCompat, second: AccessibilityNodeInfoCompat ): Int</ID>
+    <ID>ReturnCount:BrailleBackService.kt$BrailleBackService$override fun onMappedInputEvent(event: BrailleInputEvent, content: Content)</ID>
+    <ID>ReturnCount:ClassLoadingManager.kt$ClassLoadingManager$fun loadOrGetCachedClass( context: Context?, className: CharSequence?, packageName: CharSequence? ): Class&lt;*&gt;?</ID>
+    <ID>ReturnCount:DefaultNavigationMode.kt$DefaultNavigationMode$override fun onMappedInputEvent(event: BrailleInputEvent, content: Content): Boolean</ID>
+    <ID>ReturnCount:DisplayService.kt$DisplayService$fun shouldAutoReconnect(): Boolean</ID>
+    <ID>ReturnCount:DisplayService.kt$DisplayService$private fun connectFromBroadcastIntent(intent: Intent?)</ID>
+    <ID>ReturnCount:IMENavigationMode.kt$IMENavigationMode$override fun onMappedInputEvent(event: BrailleInputEvent, content: Content): Boolean</ID>
+    <ID>ReturnCount:ParagraphBlock.kt$ParagraphBlock$private fun containsReadingText( node: AccessibilityNodeInfoCompat, screenWidthPx: Int, depth: Int ): Boolean</ID>
+    <ID>ReturnCount:SearchNavigationMode.kt$SearchNavigationMode$override fun onMappedInputEvent(event: BrailleInputEvent, content: Content): Boolean</ID>
+    <ID>ReturnCount:StabilityLogic.kt$internal fun oemVendor(manufacturer: String?, brand: String?): OemVendor</ID>
+    <ID>ReturnCount:TreeDebugNavigationMode.kt$TreeDebugNavigationMode$override fun onMappedInputEvent( event: BrailleInputEvent, content: Content ): Boolean</ID>
+    <ID>ReturnCount:WrapStrategy.kt$WrapStrategy$private fun avoidOpeningPunctuationAtLineEnd(lineEnd: Int): Int</ID>
+    <ID>ReturnCount:WrapStrategy.kt$WrapStrategy$private fun avoidPunctuationAtLineStart(lineStart: Int): Int</ID>
+    <ID>SpreadOperator:AccessibilityNodeInfoUtils.kt$AccessibilityNodeInfoUtils.Companion$(*ancestors.toTypedArray())</ID>
+    <ID>SpreadOperator:AccessibilityNodeInfoUtils.kt$AccessibilityNodeInfoUtils.Companion$(*seenNodes.toTypedArray())</ID>
+    <ID>SpreadOperator:BrailleSegmenter.kt$BrailleSegmenter.Companion$(*CONNECT_ARR, *POLYPHONE_CONNECT_ARR)</ID>
+    <ID>SpreadOperator:BrailleSegmenter.kt$BrailleSegmenter.Companion$(*ELEMENTS_ARR)</ID>
+    <ID>SpreadOperator:BrailleSegmenter.kt$BrailleSegmenter.Companion$(*LETTER_HANZI_COMPOUND_ARR)</ID>
+    <ID>SpreadOperator:BrailleSegmenter.kt$BrailleSegmenter.Companion$(*NAMES_ARR)</ID>
+    <ID>SpreadOperator:BrailleSegmenter.kt$BrailleSegmenter.Companion$(*SPLIT4_ARR)</ID>
+    <ID>SpreadOperator:BrailleSegmenter.kt$BrailleSegmenter.Companion$(*SPLIT4_INNER_ARR)</ID>
+    <ID>SpreadOperator:CompatUtils.kt$CompatUtils$(*types as Array&lt;Class&lt;*&gt;&gt;)</ID>
+    <ID>SpreadOperator:CompatUtils.kt$CompatUtils$(name, *parameterTypes as Array&lt;Class&lt;*&gt;&gt;)</ID>
+    <ID>SpreadOperator:CustomLabelManager.kt$CustomLabelManager.CacheRefreshReceiver$(*(packages ?: emptyArray()))</ID>
+    <ID>SpreadOperator:FocusFinder.kt$FocusFinder$(*seenNodes.toTypedArray())</ID>
+    <ID>SpreadOperator:FocusFinder.kt$FocusFinder.Companion$(*seenNodes.toTypedArray())</ID>
+    <ID>SpreadOperator:NodeBrailler.kt$NodeBrailler$(*toFormat.toTypedArray())</ID>
+    <ID>SpreadOperator:TranslatorClient.kt$TranslatorClient$(*localService.getTableInfos())</ID>
+    <ID>SwallowedException:BookshelfActivity.kt$BookshelfActivity$e: Exception</ID>
+    <ID>SwallowedException:BrailleBackService.kt$BrailleBackService$e: SecurityException</ID>
+    <ID>SwallowedException:BrailleDisplayComposeActivity.kt$BrailleDisplayComposeActivity$e: IllegalArgumentException</ID>
+    <ID>SwallowedException:BrailleFileDecoder.kt$BrailleFileDecoder$e: CharacterCodingException</ID>
+    <ID>SwallowedException:BrailleFileDecoder.kt$BrailleFileDecoder$e: Exception</ID>
+    <ID>SwallowedException:BrailleMenuNavigationMode.kt$BrailleMenuNavigationMode$e: ActivityNotFoundException</ID>
+    <ID>SwallowedException:BrailleMenuNavigationMode.kt$BrailleMenuNavigationMode$e: PackageManager.NameNotFoundException</ID>
+    <ID>SwallowedException:BrailleReaderActivity.kt$BrailleReaderActivity$e: Exception</ID>
+    <ID>SwallowedException:BrailleSegmenter.kt$BrailleSegmenter$e: Exception</ID>
+    <ID>SwallowedException:ClassLoadingManager.kt$ClassLoadingManager$e: ClassNotFoundException</ID>
+    <ID>SwallowedException:ClassLoadingManager.kt$ClassLoadingManager$e: Exception</ID>
+    <ID>SwallowedException:CustomLabelManager.kt$CustomLabelManager$e: NameNotFoundException</ID>
+    <ID>SwallowedException:CustomLabelManager.kt$CustomLabelManager$e: NoSuchAlgorithmException</ID>
+    <ID>SwallowedException:DebugLogActions.kt$DebugLogActions$e: Exception</ID>
+    <ID>SwallowedException:DisplayClient.kt$DisplayClient$e: RemoteException</ID>
+    <ID>SwallowedException:DisplayService.kt$DisplayService$e: IllegalArgumentException</ID>
+    <ID>SwallowedException:DisplayService.kt$DisplayService$ex: RemoteException</ID>
+    <ID>SwallowedException:HidDisplayConnection.kt$HidDisplayConnection$e: IllegalArgumentException</ID>
+    <ID>SwallowedException:HidDisplayConnection.kt$HidDisplayConnection$e: RuntimeException</ID>
+    <ID>SwallowedException:HmmSegmenter.kt$HmmSegmenter$e: Exception</ID>
+    <ID>SwallowedException:IMEHelper.kt$IMEHelper.Companion$ex: SecurityException</ID>
+    <ID>SwallowedException:LegacyEditBuffer.kt$LegacyEditBuffer$t: Throwable</ID>
+    <ID>SwallowedException:RollingFileLog.kt$RollingFileLog$e: Exception</ID>
+    <ID>SwallowedException:RollingFileLog.kt$RollingFileLog.Companion$e: Exception</ID>
+    <ID>SwallowedException:SelfBrailleClient.kt$SelfBrailleClient$ex: RemoteException</ID>
+    <ID>SwallowedException:SelfBrailleService.kt$SelfBrailleService$ex: RemoteException</ID>
+    <ID>SwallowedException:SelfBrailleService.kt$SelfBrailleService.ClientInfo$e: RuntimeException</ID>
+    <ID>SwallowedException:ServiceUtil.kt$ServiceUtil$e: RuntimeException</ID>
+    <ID>SwallowedException:SettingsActivity.kt$SettingsActivity.SettingsFragment$e: SecurityException</ID>
+    <ID>SwallowedException:StabilityComposeActivity.kt$StabilityComposeActivity$e: ActivityNotFoundException</ID>
+    <ID>SwallowedException:StabilityComposeActivity.kt$StabilityComposeActivity$e: SecurityException</ID>
+    <ID>SwallowedException:UsbDisplayConnection.kt$UsbDisplayConnection$e: IllegalArgumentException</ID>
+    <ID>SwallowedException:UserSegDict.kt$UserSegDict$e: Exception</ID>
+    <ID>ThrowsCount:TableList.kt$TableList$private fun parseResource(res: Resources)</ID>
+    <ID>ThrowsCount:TableList.kt$TableList$private fun parseTable(p: XmlResourceParser)</ID>
+    <ID>ThrowsCount:WriteData.kt$WriteData$fun validate()</ID>
+    <ID>TooGenericExceptionCaught:BluetoothConnection.kt$BluetoothConnection$e: RuntimeException</ID>
+    <ID>TooGenericExceptionCaught:BookshelfActivity.kt$BookshelfActivity$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:BrailleBackService.kt$BrailleBackService$e: RuntimeException</ID>
+    <ID>TooGenericExceptionCaught:BrailleFileDecoder.kt$BrailleFileDecoder$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:BrailleImeHostBridge.kt$BrailleImeHostBridge$e: RuntimeException</ID>
+    <ID>TooGenericExceptionCaught:BrailleImeHostBridge.kt$BrailleImeHostBridge$t: Throwable</ID>
+    <ID>TooGenericExceptionCaught:BrailleReaderActivity.kt$BrailleReaderActivity$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:BrailleSegmenter.kt$BrailleSegmenter$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:BrlttyHidNativeHelper.kt$BrlttyHidNativeHelper$e: RuntimeException</ID>
+    <ID>TooGenericExceptionCaught:BrlttyWrapper.kt$BrlttyWrapper$ex: RuntimeException</ID>
+    <ID>TooGenericExceptionCaught:BrlttyWrapper.kt$BrlttyWrapper.Companion$t: Throwable</ID>
+    <ID>TooGenericExceptionCaught:ClassLoadingManager.kt$ClassLoadingManager$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:CompatUtils.kt$CompatUtils$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:CustomKeyMapActivity.kt$CustomKeyMapActivity.CustomKeyMapFragment$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:CustomLabelManager.kt$CustomLabelManager$t: Throwable</ID>
+    <ID>TooGenericExceptionCaught:DebugLogActions.kt$DebugLogActions$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:DeviceFinder.kt$t: Throwable</ID>
+    <ID>TooGenericExceptionCaught:DriverThread.kt$DriverThread.&lt;no name provided&gt;$ex: Throwable</ID>
+    <ID>TooGenericExceptionCaught:HidBridge.kt$HidBridge$e: RuntimeException</ID>
+    <ID>TooGenericExceptionCaught:HidDisplayConnection.kt$HidDisplayConnection$e: RuntimeException</ID>
+    <ID>TooGenericExceptionCaught:HmmSegmenter.kt$HmmSegmenter$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:JiebaDict.kt$JiebaDict$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:LabelOperationUtils.kt$LabelOperationUtils$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:LegacyEditBuffer.kt$LegacyEditBuffer$t: Throwable</ID>
+    <ID>TooGenericExceptionCaught:PassthroughProbe.kt$PassthroughProbe$e: RuntimeException</ID>
+    <ID>TooGenericExceptionCaught:RollingFileLog.kt$RollingFileLog$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:RollingFileLog.kt$RollingFileLog.Companion$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:SelfBrailleService.kt$SelfBrailleService.ClientInfo$e: RuntimeException</ID>
+    <ID>TooGenericExceptionCaught:ServiceUtil.kt$ServiceUtil$e: RuntimeException</ID>
+    <ID>TooGenericExceptionCaught:UnifiedBrailleInput.kt$UnifiedBrailleInput$t: Throwable</ID>
+    <ID>TooGenericExceptionCaught:UsbDisplayConnection.kt$UsbDisplayConnection$t: Throwable</ID>
+    <ID>TooGenericExceptionCaught:UserSegDict.kt$UserSegDict$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:ZipResourceExtractor.kt$ZipResourceExtractor$e: Exception</ID>
+    <ID>TooGenericExceptionThrown:TableList.kt$TableList$throw RuntimeException( p.positionDescription + ": grade must not be specified for 8 dot braille" )</ID>
+    <ID>TooGenericExceptionThrown:TableList.kt$TableList$throw RuntimeException(ex)</ID>
+    <ID>TooGenericExceptionThrown:TableList.kt$TableList$throw RuntimeException(p.positionDescription + ": Locale must be specified")</ID>
+    <ID>TooGenericExceptionThrown:TableList.kt$TableList$throw RuntimeException(p.positionDescription + ": Unexpected start tag")</ID>
+    <ID>TooGenericExceptionThrown:TableList.kt$TableList$throw RuntimeException(p.positionDescription + ": dots must be either 6 or 8")</ID>
+    <ID>TooGenericExceptionThrown:TableList.kt$TableList$throw RuntimeException(p.positionDescription + ": missing fileName attribute")</ID>
+    <ID>TooGenericExceptionThrown:TableList.kt$TableList$throw RuntimeException(p.positionDescription + ": missing id attribute")</ID>
+    <ID>TooGenericExceptionThrown:TableList.kt$TableList$throw RuntimeException(p.positionDescription + ": neither dots nor grade was specified")</ID>
+    <ID>TooManyFunctions:AccessibilityNodeInfoUtils.kt$AccessibilityNodeInfoUtils$Companion</ID>
+    <ID>TooManyFunctions:BrailleBackService.kt$BrailleBackService : AccessibilityServiceOnConnectionStateChangeListenerOnMappedInputEventListenerOnPanOverflowListenerSearchStateListenerBrailleMenuListener</ID>
+    <ID>TooManyFunctions:BrailleIME.kt$BrailleIME : BrailleIme</ID>
+    <ID>TooManyFunctions:BrailleImeHostBridge.kt$BrailleImeHostBridge : TalkBackForBrailleImeTalkBackForBrailleCommon</ID>
+    <ID>TooManyFunctions:BrailleReaderActivity.kt$BrailleReaderActivity : ActivityOnConnectionStateChangeListener</ID>
+    <ID>TooManyFunctions:DefaultNavigationMode.kt$DefaultNavigationMode : NavigationMode</ID>
+    <ID>TooManyFunctions:DisplayManager.kt$DisplayManager : OnConnectionStateChangeListenerOnInputEventListenerOnTablesChangedListenerOnSharedPreferenceChangeListener</ID>
+    <ID>TooManyFunctions:DisplayService.kt$DisplayService : ServiceOnInputEventListener</ID>
+    <ID>TooManyFunctions:DisplayServiceHandler.kt$MainHandler : Handler</ID>
+    <ID>TooManyFunctions:IMENavigationMode.kt$IMENavigationMode : NavigationModeHost</ID>
+    <ID>UnusedParameter:BrailleCodeCatalog.kt$BrailleCodeCatalog$labels: BrailleTableCatalog.TableLabels</ID>
+    <ID>UnusedParameter:HidDisplayConnection.kt$HidDisplayConnection$granted: Boolean</ID>
+    <ID>UnusedParameter:OverlayTutorialActivity.kt$OverlayTutorialActivity$v: View</ID>
+    <ID>UnusedParameter:SearchTutorialActivity.kt$SearchTutorialActivity$v: View</ID>
+    <ID>UnusedParameter:StabilityScreen.kt$vendor: OemVendor</ID>
+    <ID>UnusedParameter:WujieGattConnection.kt$WujieGattConnection$gatt: BluetoothGatt</ID>
+    <ID>UnusedPrivateMember:DisplayService.kt$DisplayService$private fun getHidFailureMessage(): String</ID>
+    <ID>UnusedPrivateProperty:BrailleDisplayProperties.kt$BrailleDisplayProperties.Companion$i</ID>
+    <ID>UnusedPrivateProperty:BrailleSegmenter.kt$BrailleSegmenter.Companion$private const val LOG_TAG = "BrailleSegmenter"</ID>
+    <ID>UnusedPrivateProperty:DefaultBrailleRule.kt$DefaultBrailleRule$private var mLabelManager: CustomLabelManager? = null</ID>
+    <ID>UnusedPrivateProperty:HidDisplayConnection.kt$HidDisplayConnection.Companion$private val LOG_TAG: String = HidDisplayConnection::class.java.simpleName</ID>
+    <ID>UnusedPrivateProperty:UsbDisplayConnection.kt$UsbDisplayConnection.Companion$private const val LOG_TAG = "UsbDisplayConnection"</ID>
+    <ID>UseCheckOrError:BasePackageMonitor.kt$BasePackageMonitor$throw IllegalStateException("Already registered")</ID>
+    <ID>UseCheckOrError:BasePackageMonitor.kt$BasePackageMonitor$throw IllegalStateException("Not registered")</ID>
+    <ID>UseCheckOrError:BrailleReaderActivity.kt$BrailleReaderActivity$throw IllegalStateException("cannot open $uri")</ID>
+    <ID>UseCheckOrError:BrlttyWrapper.kt$BrlttyWrapper$throw IllegalStateException("Display ${mDeviceInfo.getDriverCode()} has no bluetooth device")</ID>
+    <ID>UseCheckOrError:SQLiteTableBuilder.kt$SQLiteTableBuilder$throw IllegalStateException("createTable was already called on this instance.")</ID>
+    <ID>UseCheckOrError:WriteData.kt$WriteData$throw IllegalStateException("Accessibility node info can't be null")</ID>
+    <ID>UseCheckOrError:WriteData.kt$WriteData$throw IllegalStateException("Selection can't be set without text")</ID>
+    <ID>UseCheckOrError:WriteData.kt$WriteData$throw IllegalStateException("Selection end without start")</ID>
+    <ID>UseCheckOrError:WriteData.kt$WriteData$throw IllegalStateException("Selection out of bounds")</ID>
+    <ID>UseRequire:CustomLabelManager.kt$CustomLabelManager$throw IllegalArgumentException("Attempted to add a label for a null node.")</ID>
+    <ID>UseRequire:CustomLabelManager.kt$CustomLabelManager$throw IllegalArgumentException("Attempted to add a label with a null userLabel value")</ID>
+    <ID>UseRequire:CustomLabelManager.kt$CustomLabelManager$throw IllegalArgumentException("Attempted to add a label with an empty userLabel value")</ID>
+    <ID>UseRequire:CustomLabelManager.kt$CustomLabelManager$throw IllegalArgumentException("Attempted to update a label with an empty text value")</ID>
+    <ID>UseRequire:CustomLabelManager.kt$CustomLabelManager$throw IllegalArgumentException("Attempted to update a null label.")</ID>
+    <ID>UseRequire:SQLiteTableBuilder.kt$SQLiteTableBuilder$throw IllegalArgumentException("Column name cannot be empty.")</ID>
+    <ID>UseRequire:SQLiteTableBuilder.kt$SQLiteTableBuilder$throw IllegalArgumentException("Database cannot be null.")</ID>
+    <ID>UseRequire:SQLiteTableBuilder.kt$SQLiteTableBuilder$throw IllegalArgumentException("Invalid column name.")</ID>
+    <ID>UseRequire:SQLiteTableBuilder.kt$SQLiteTableBuilder$throw IllegalArgumentException("Invalid table name.")</ID>
+    <ID>UseRequire:SQLiteTableBuilder.kt$SQLiteTableBuilder$throw IllegalArgumentException("Table name cannot be empty.")</ID>
+    <ID>UseRequire:WujieBrailleFrameCodec.kt$WujieBrailleFrameCodec.Companion$throw IllegalArgumentException("Unsupported cell count: $cellCount")</ID>
+    <ID>UtilityClassWithPublicConstructor:LabelsTable.kt$LabelsTable</ID>
+    <ID>VariableNaming:BookshelfActivity.kt$BookshelfActivity$val when_ = DateUtils.getRelativeTimeSpanString( book.openedAt, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS)</ID>
+    <ID>VariableNaming:BrailleKeyBinding.kt$BrailleKeyBinding$private val FLAG_LONG_PRESS = 0x00000001</ID>
+    <ID>VariableNaming:BrailleSegmenter.kt$BrailleSegmenter$val L = text.length</ID>
+    <ID>VariableNaming:BrailleSegmenter.kt$BrailleSegmenter$val M = sb.length</ID>
+    <ID>VariableNaming:DisplayManager.kt$DisplayManager$/** * 刷新链路心跳：每 5 秒一行，冻结时用来判断上层是否还在产生新的点阵。 * 同时记录被 connected/frozen/motion 三个条件拦下的刷新次数。 * * 计数与格式见 [DisplayRefreshStats]；上报线程仍在这里，且必须独立于刷新调度器。 */ private val TELEMETRY_INTERVAL_MS = 5000L</ID>
+    <ID>VariableNaming:DisplayManager.kt$DisplayManager$/** Dot pattern used to overlay characters in a focused element. */ // TODO: Make customizable. private val FOCUS_DOTS = 0xC0</ID>
+    <ID>VariableNaming:DisplayManager.kt$DisplayManager$/** Dot pattern used to overlay characters under a selection. */ // TODO: Make customizable. private val SELECTION_DOTS = 0xC0</ID>
+    <ID>VariableNaming:DriverThread.kt$DriverThread$/** * Upper bound on commands drained by one wake-up. A driver that keeps * reporting commands must not monopolise the handler thread. */ private val MAX_COMMANDS_PER_WAKE = 64</ID>
+    <ID>VariableNaming:DriverThread.kt$DriverThread$/** Gracefully stop driver thread. */ private val MSG_STOP = 3</ID>
+    <ID>VariableNaming:DriverThread.kt$DriverThread$/** Low-frequency refresh telemetry: one compact line every 5 seconds. */ private val TELEMETRY_INTERVAL_MILLIS = 5000L</ID>
+    <ID>VariableNaming:DriverThread.kt$DriverThread$/** Minimum spacing between slow-operation reports. */ private val SLOW_OPERATION_LOG_INTERVAL_MILLIS = 2000L</ID>
+    <ID>VariableNaming:DriverThread.kt$DriverThread$/** Only report a slow read/write operation above this duration. */ private val SLOW_OPERATION_MILLIS = 200L</ID>
+    <ID>VariableNaming:DriverThread.kt$DriverThread$/** Wake up the handler thread to poll for input from the device. */ private val MSG_READ = 1</ID>
+    <ID>VariableNaming:DriverThread.kt$DriverThread$/** Wake up the thread to call writeWindow of the driver. */ private val MSG_WRITE = 2</ID>
+    <ID>VariableNaming:DriverThread.kt$DriverThread$private val COMMAND_ARGUMENT_MASK = 0x7fff0000</ID>
+    <ID>VariableNaming:DriverThread.kt$DriverThread$private val COMMAND_ARGUMENT_SHIFT = 16</ID>
+    <ID>VariableNaming:DriverThread.kt$DriverThread$private val COMMAND_CODE_MASK = 0xffff</ID>
+    <ID>VariableNaming:DriverThread.kt$DriverThread$private val LOG_TAG = DriverThread::class.java.simpleName</ID>
+    <ID>VariableNaming:DriverThread.kt$DriverThread$private val STALL_WARN_MILLIS = 2000L</ID>
+    <ID>VariableNaming:DriverThread.kt$DriverThread$private val STOP_WAIT_MILLIS: Long = 1000</ID>
+    <ID>VariableNaming:FeedbackController.kt$FeedbackController$/** Default delay time between repeated sounds. */ private val DEFAULT_REPETITION_DELAY = 150</ID>
+    <ID>VariableNaming:FeedbackController.kt$FeedbackController$/** Default rate for sound playback. Use 1.0f for normal speed playback. */ private val DEFAULT_RATE = 1.0f</ID>
+    <ID>VariableNaming:FeedbackController.kt$FeedbackController$/** Default stream for audio feedback. */ private val DEFAULT_STREAM = AudioManager.STREAM_MUSIC</ID>
+    <ID>VariableNaming:FeedbackController.kt$FeedbackController$/** Default volume for sound playback relative to current stream volume. */ private val DEFAULT_VOLUME = 1.0f</ID>
+    <ID>VariableNaming:FeedbackController.kt$FeedbackController$/** Number of channels to use in SoundPool for auditory icon feedback. */ private val NUMBER_OF_CHANNELS = 10</ID>
+    <ID>VariableNaming:IMESetupWizardActivity.kt$IMESetupWizardActivity$private val FRAGMENTS_LAYOUT_ID = View.generateViewId()</ID>
+    <ID>VariableNaming:ReadThread.kt$ReadThread$private val LOG_TAG = ReadThread::class.java.simpleName</ID>
+  </CurrentIssues>
+</SmellBaseline>

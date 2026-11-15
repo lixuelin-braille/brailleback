@@ -17,3 +17,51 @@ allprojects {
 task clean(type: Delete) {
     delete rootProject.buildDir
 }
+
+// ── detekt：只拦新增债务 ────────────────────────────────────────────────
+// 不引 detekt 的 Gradle 插件（1.23 的插件面向 Gradle 8 API，Gradle 9 上有兼容风险），
+// 直接用 detekt-cli 跑 JavaExec。依赖已在离线缓存里（tools/dependency-probe 拉的）。
+configurations {
+    detektCli
+}
+
+dependencies {
+    detektCli 'io.gitlab.arturbosch.detekt:detekt-cli:1.23.7'
+}
+
+def detektInputs = [
+    "$rootDir/brailleback/src",
+    "$rootDir/service/src",
+    "$rootDir/client/src",
+    "$rootDir/libraries/utils/src",
+    "$rootDir/libraries/compatutils/src",
+]
+
+tasks.register('detektCheck', JavaExec) {
+    group = 'verification'
+    description = '扫主模块与服务，只报 baseline 之外的新问题；有新问题则失败'
+    classpath = configurations.detektCli
+    mainClass = 'io.gitlab.arturbosch.detekt.cli.Main'
+    args = [
+        '--config', "$rootDir/config/detekt/detekt.yml",
+        '--baseline', "$rootDir/config/detekt/baseline.xml",
+        '--build-upon-default-config',
+        '--input', detektInputs.join(','),
+        '--excludes', '**/build/**,**/jni/**,**/*Test.kt',
+    ]
+}
+
+tasks.register('detektBaseline', JavaExec) {
+    group = 'verification'
+    description = '重新生成 baseline（把当前所有问题冻结成基线）'
+    classpath = configurations.detektCli
+    mainClass = 'io.gitlab.arturbosch.detekt.cli.Main'
+    args = [
+        '--config', "$rootDir/config/detekt/detekt.yml",
+        '--baseline', "$rootDir/config/detekt/baseline.xml",
+        '--build-upon-default-config',
+        '--create-baseline',
+        '--input', detektInputs.join(','),
+        '--excludes', '**/build/**,**/jni/**,**/*Test.kt',
+    ]
+}

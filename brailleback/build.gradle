@@ -120,7 +120,7 @@ dependencies {
     debugImplementation 'androidx.compose.ui:ui-tooling:1.7.6'
     testImplementation 'junit:junit:4.13.2'
     // 虚拟时间验证定时器（空闲清屏 / 运动去抖 / 闪烁），不用真等三分钟。
-    testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3'
+    testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0'
     // 仪器测试：只做「真机/模拟器上真的能起来」的冒烟。版本锁在本机离线缓存已有的组合，
     // 不引 espresso / compose-ui-test（缓存里只有 1.10.2，与 Compose 1.7.6 不同版）。
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'

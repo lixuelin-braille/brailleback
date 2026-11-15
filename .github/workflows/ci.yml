@@ -67,6 +67,28 @@ jobs:
           path: brailleback/build/test-results/testDebugUnitTest
           retention-days: 14
 
+  detekt:
+    name: detekt 只拦新增债务
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 授权 gradlew
+        run: chmod +x gradlew
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # baseline 冻结了 284 条存量问题；这一关只关心「新代码有没有更烂」。
+      # 阈值在 config/detekt/detekt.yml，改老代码后需要跑 detektBaseline 重新生成。
+      - name: 跑 detekt
+        run: ./gradlew detektCheck --console=plain -x verifyNativeLibs
+
   lint:
     name: lint 门禁
     runs-on: ubuntu-latest
