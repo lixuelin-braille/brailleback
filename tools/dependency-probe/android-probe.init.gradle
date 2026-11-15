@@ -1,0 +1,54 @@
+// 给主工程临时注入一个探测配置，用来把 AAR 拉进本机 Gradle 缓存。
+// java-library 解析不了 AAR（缺 AGP/BuildType 等变体属性），所以复制 debugRuntimeClasspath
+// 的属性到一个 canBeResolved 的配置上，再让它去解析。
+//
+// 用法：
+//   .\gradlew.bat :brailleback:resolveProbeAar --init-script .tmp-deps\android-probe.init.gradle
+//
+// 这个脚本只在显式 --init-script 时生效，不进仓库、不影响日常构建。
+
+gradle.projectsEvaluated {
+    def target = rootProject.findProject(':brailleback')
+    if (target == null) {
+        println '找不到 :brailleback'
+        return
+    }
+
+    def base = target.configurations.findByName('debugRuntimeClasspath')
+    def probe = target.configurations.findByName('probeAar') ?: target.configurations.create('probeAar')
+    probe.canBeResolved = true
+    probe.canBeConsumed = false
+    base.attributes.keySet().each { key ->
+        probe.attributes.attribute(key, base.attributes.getAttribute(key))
+    }
+
+    [
+        // Compose UI 测试：必须与项目 Compose 1.7.6 同版
+        'androidx.compose.ui:ui-test-junit4:1.7.6',
+        'androidx.compose.ui:ui-test-manifest:1.7.6',
+        // androidx.test 1.6.x 一整套（项目现在锁 1.5.x）
+        'androidx.test:runner:1.6.2',
+        'androidx.test:rules:1.6.1',
+        'androidx.test:core:1.6.1',
+        'androidx.test.ext:junit:1.2.1',
+        'androidx.test.espresso:espresso-core:3.6.1',
+        // 真实触摸点击：Preference 标题 TextView 不可点击，Espresso 点不动，
+        // UiAutomator 的 click 落到行容器上，跟用户手指一致。
+        'androidx.test.uiautomator:uiautomator:2.3.0',
+        // 稳定性工具
+        'com.squareup.leakcanary:leakcanary-android:2.14',
+        // 运行时
+        'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0',
+        'androidx.core:core-ktx:1.9.0',
+        'androidx.work:work-runtime-ktx:2.10.0',
+        'androidx.profileinstaller:profileinstaller:1.4.1',
+    ].each { notation -> target.dependencies.add('probeAar', notation) }
+
+    target.tasks.register('resolveProbeAar') {
+        doLast {
+            def files = probe.files
+            println "AAR 解析到 ${files.size()} 个文件"
+            files.sort { it.absolutePath }.each { println "  ${it.name}" }
+        }
+    }
+}

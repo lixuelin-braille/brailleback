@@ -126,5 +126,9 @@ dependencies {
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test:runner:1.5.2'
     androidTestImplementation 'androidx.test:core:1.5.0'
+    // 真实触摸点击：设置分类是 Preference 行，标题 TextView 本身不可点击，
+    // Espresso 的 click 会在「View is not clickable」上失败；UiAutomator 的 click
+    // 打到行容器，和手指一致。版本来自阿里镜像拉取（见 tools/dependency-probe）。
+    androidTestImplementation 'androidx.test.uiautomator:uiautomator:2.3.0'
 }
 

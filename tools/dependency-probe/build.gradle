@@ -1,0 +1,57 @@
+// JVM 侧依赖探测：把需要的坐标解析进本机 Gradle 缓存（GRADLE_USER_HOME 下的 modules-2）。
+// AAR（androidx / compose / espresso / leakcanary 等）不能用 java-library 解析，
+// 它们在同目录的 android-probe.init.gradle 里用主工程的 Android 属性拉。
+//
+// 用法（在仓库根执行，路径是相对本目录的）：
+//   .\gradlew.bat -p tools\dependency-probe resolveProbe --refresh-dependencies
+//
+// 拉完之后主工程仍然可以 --offline 构建。
+
+apply plugin: 'java-library'
+
+dependencies {
+    // JVM 上跑 Android 单测：能覆盖资源解析、Service 骨架，不必每次上设备
+    implementation 'org.robolectric:robolectric:4.14.1'
+    // 协程泄漏 / 阻塞检测
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-debug:1.9.0'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0'
+    // 静态检查 CLI（独立跑，不引 Gradle 插件）
+    implementation 'com.pinterest.ktlint:ktlint-cli:1.3.1'
+    implementation 'io.gitlab.arturbosch.detekt:detekt-cli:1.23.7'
+}
+
+tasks.register('resolveProbe') {
+    doLast {
+        def files = configurations.runtimeClasspath.files
+        println "解析到 ${files.size()} 个文件"
+        files.sort { it.absolutePath }.each { println "  ${it.name}" }
+    }
+}
+
+// 试跑 ktlint：只报告，不改文件。Windows 上 ktlint 的 glob 解析不了中文路径，
+// 所以直接把文件列表算好传进去。
+tasks.register('ktlintProbe', JavaExec) {
+    classpath = configurations.runtimeClasspath
+    mainClass = 'com.pinterest.ktlint.Main'
+    doFirst {
+        def roots = [
+            new File(rootDir, '../../brailleback/src'),
+            new File(rootDir, '../../service/src'),
+        ]
+        args = ['--relative'] + roots.collectMany { root ->
+            root.directory ? fileTree(root).matching { include '**/*.kt' }.files.collect { it.absolutePath } : []
+        }
+    }
+    ignoreExitValue = true
+}
+
+// 试跑 detekt：同上，只看它能不能解析当前代码。
+tasks.register('detektProbe', JavaExec) {
+    classpath = configurations.runtimeClasspath
+    mainClass = 'io.gitlab.arturbosch.detekt.cli.Main'
+    args = [
+        '--input', "${rootDir}/../../brailleback/src,${rootDir}/../../service/src",
+        '--build-upon-default-config',
+    ]
+    ignoreExitValue = true
+}
