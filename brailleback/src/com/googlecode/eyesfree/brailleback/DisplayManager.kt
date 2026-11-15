@@ -31,6 +31,8 @@ import android.util.Log
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.android.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
 import com.googlecode.eyesfree.braille.display.BrailleInputEvent
@@ -75,14 +77,8 @@ class DisplayManager(
     // TODO: Make customizable.
     private val FOCUS_DOTS = 0xC0
 
-    /**
-     * 是否在盲文格上叠加光标点/焦点点（第 7、8 点）。
-     *
-     * 默认关闭：八点显示器上这些点会真的凸起来，焦点落在第 1 方时容易被当成
-     * 内容里多了几个点。关闭只影响叠加点，光标位置仍然参与自动平移。
-     */
-    @Volatile
-    private var cursorDotsEnabled = false
+    // 光标点/焦点点叠加（第 7、8 点）的实际值见 DisplayRuntimeState.cursorDots：
+    // 八点显示器上这些点会真的凸起来，所以默认关闭；光标位置仍参与自动平移。
 
     /**
      * Callback interface for notifying interested callers when the display is
@@ -134,14 +130,17 @@ class DisplayManager(
     private val sharedPreferences: SharedPreferences
 
     // Read and written across threads: written on the callback thread
-    // (onConnectionStateChanged) and read on the display handler thread
-    // (toggleBluetoothConnection) and the main thread (isDisplayConnected).
+    /**
+     * 跨线程共享状态的唯一来源（连接/模拟/暂停/运动模式/光标叠加）：
+     * 原来是五个分散的 `@Volatile`，裁决时连读三个必然可能撕裂，现在一次取快照。
+     */
+    private val runtimeState = MutableStateFlow(DisplayRuntimeState())
 
-    @Volatile
-    private var connected = false
-    @Volatile
-    private var simulatedDisplay = false
-
+    private val connected: Boolean get() = runtimeState.value.connected
+    private val simulatedDisplay: Boolean get() = runtimeState.value.simulated
+    private val frozen: Boolean get() = runtimeState.value.frozen
+    private val motionMode: Boolean get() = runtimeState.value.motionMode
+    private val cursorDotsEnabled: Boolean get() = runtimeState.value.cursorDots
     /**
      * Cursor position last passed to the translate method of the translator. We use this because
      * it is more reliable than the position maps inside contracted words. In the common case
@@ -158,12 +157,8 @@ class DisplayManager(
     private var overlaidBrailleContent: ByteArray = brailleContent
 
     private var overlaysOn = false
-    /** Whether display output is paused; content stays on the display. */
-    @Volatile
-    private var mFrozen = false
-    /** When set, display refreshes are coalesced while scrolling rapidly. */
-    @Volatile
-    private var mMotionMode = false
+    private val mFrozen: Boolean get() = runtimeState.value.frozen
+    private val mMotionMode: Boolean get() = runtimeState.value.motionMode
     private lateinit var wrapStrategy: WrapStrategy
     private val editingWrapStrategy: WrapStrategy = SimpleWrapStrategy()
     private var preferredWrapStrategy: WrapStrategy = SimpleWrapStrategy()
@@ -207,10 +202,12 @@ class DisplayManager(
             } catch (e: InterruptedException) {
                 break
             }
+            // 心跳行也取同一份快照，避免日志把两次状态拼在一起。
+            val snapshot = runtimeState.value
             LogUtils.i(
                 this@DisplayManager,
                 "%s",
-                stats.describe(connected, mFrozen, mMotionMode)
+                stats.describe(snapshot.connected, snapshot.frozen, snapshot.motionMode)
             )
         }
     }.apply {
@@ -415,16 +412,16 @@ class DisplayManager(
 
     override fun onConnectionStateChanged(state: Int) {
         if (state == Display.STATE_CONNECTED) {
-            connected = true
+            runtimeState.update { it.copy(connected = true) }
             sendEmptyCommand()
             displayHandler.retranslate()
             resetIdleTimer()
         } else {
             sendEmptyCommand()
-            connected = false
+            runtimeState.update { it.copy(connected = false) }
             idleClearTimer.cancel()
         }
-        simulatedDisplay = display?.isSimulated ?: false
+        runtimeState.update { it.copy(simulated = display?.isSimulated ?: false) }
         callbackHandler.onConnectionStateChanged(state)
     }
 
@@ -832,7 +829,7 @@ class DisplayManager(
      */
     fun setFrozen(frozen: Boolean) {
         displayHandler.post {
-            mFrozen = frozen
+            runtimeState.update { it.copy(frozen = frozen) }
             if (mFrozen) {
                 if (mPauseClear) {
                     // Paused: clear the display.
@@ -886,7 +883,7 @@ class DisplayManager(
             if (mMotionMode == motionMode) {
                 return@post
             }
-            mMotionMode = motionMode
+            runtimeState.update { it.copy(motionMode = motionMode) }
             if (!mMotionMode) {
                 // Apply any deferred content immediately.
                 motionDebouncer.cancel()
@@ -906,13 +903,15 @@ class DisplayManager(
             if (cursorDotsEnabled == enabled) {
                 return@post
             }
-            cursorDotsEnabled = enabled
+            runtimeState.update { it.copy(cursorDots = enabled) }
             displayHandler.retranslate()
         }
     }
 
     private fun refresh() {
-        when (val decision = decideRefresh(connected, mFrozen, mMotionMode)) {
+        // 一次取快照：三个条件必须来自同一时刻，否则「刚连上但读到旧的冻结标记」
+        // 会算出一个当次并不成立的决定。
+        when (val decision = runtimeState.value.refreshDecision()) {
             RefreshDecision.Send -> doRefresh()
             is RefreshDecision.Blocked -> {
                 stats.onBlocked(decision.reason)
@@ -920,7 +919,8 @@ class DisplayManager(
                     // Coalesce rapid updates: refresh once after scrolling settles.
                     motionDebouncer.schedule(MOTION_MODE_DEBOUNCE_MS) {
                         // 滚动停下后再补一次：与原来的去抖 Runnable 同条件。
-                        if (connected && !mFrozen) {
+                        val snapshot = runtimeState.value
+                        if (snapshot.connected && !snapshot.frozen) {
                             doRefresh()
                         }
                     }

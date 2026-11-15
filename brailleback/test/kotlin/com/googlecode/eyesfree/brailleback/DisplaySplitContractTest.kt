@@ -122,4 +122,29 @@ class DisplaySplitContractTest {
         // 独立的 telemetry 线程不能并进来：它要在 display 线程卡死时仍然出日志。
         assertTrue("统计上报线程必须保留", manager.contains("DisplayStats"))
     }
+
+    @Test
+    fun `跨线程状态只走一份快照`() {
+        val manager = srcText("DisplayManager.kt")
+        // 五个跨线程布尔已收进 DisplayRuntimeState，不许再有散落的 @Volatile 布尔。
+        for (field in listOf(
+            "private var connected",
+            "private var simulatedDisplay",
+            "private var mFrozen",
+            "private var mMotionMode",
+            "private var cursorDotsEnabled",
+        )) {
+            assertFalse("$field 应改为 DisplayRuntimeState 的只读访问器", manager.contains(field))
+        }
+        assertTrue("状态必须来自 MutableStateFlow", manager.contains("MutableStateFlow(DisplayRuntimeState())"))
+        // 裁决必须一次取快照：连读三个字段就是原来那个撕裂读。
+        assertTrue(
+            "refresh() 必须用 runtimeState.value.refreshDecision()",
+            manager.contains("runtimeState.value.refreshDecision()"),
+        )
+        assertFalse(
+            "不许再出现 decideRefresh(connected, mFrozen, mMotionMode)",
+            manager.contains("decideRefresh(connected, mFrozen, mMotionMode)"),
+        )
+    }
 }

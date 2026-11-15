@@ -264,9 +264,12 @@ class DisplayRefreshThrottleContractTest {
     fun `前置条件判定已抽出且刷新路径必须走它`() {
         val body = methodBody(displayManagerSource(), "private fun refresh()")
         assertTrue(
-            "refresh() 必须通过 decideRefresh 统一裁决，不能又退回三条分散的 early return",
-            body.contains("decideRefresh(connected, mFrozen, mMotionMode)"),
+            "refresh() 必须通过统一裁决，不能又退回三条分散的 early return",
+            body.contains("runtimeState.value.refreshDecision()"),
         )
+        assertTrue("裁决必须由 RefreshPolicy 提供（三个条件取自同一快照）",
+            projectFile("brailleback/src/com/googlecode/eyesfree/brailleback/RefreshPolicy.kt")
+                .readText().contains("fun decideRefresh("))
         assertTrue("被拦下时按原因计数", body.contains("stats.onBlocked(decision.reason)"))
         assertTrue(
             "运动模式必须继续安排去抖刷新（它是延后不是丢弃）",
