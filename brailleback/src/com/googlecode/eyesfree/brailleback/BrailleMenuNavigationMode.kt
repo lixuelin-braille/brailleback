@@ -33,7 +33,6 @@ import com.googlecode.eyesfree.labeling.Label
 import com.googlecode.eyesfree.labeling.LabelOperationUtils
 import com.googlecode.eyesfree.utils.AccessibilityNodeInfoRef
 import com.googlecode.eyesfree.utils.AccessibilityNodeInfoUtils
-import java.util.ArrayList
 
 /**
  * Navigation mode for going through menu items shown specially on the Braille

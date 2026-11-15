@@ -12,7 +12,6 @@ import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import com.googlecode.eyesfree.utils.AccessibilityNodeInfoUtils
 import com.googlecode.eyesfree.utils.LogUtils
 import com.googlecode.eyesfree.utils.NodeFocusFinder
-import java.util.HashSet
 
 /**
  * Functions to find focus.

@@ -24,9 +24,6 @@ import android.text.TextUtils
 import android.util.Log
 import android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction
 import com.googlecode.eyesfree.compat.CompatUtils
-import java.util.ArrayList
-import java.util.Comparator
-import java.util.HashSet
 import java.util.LinkedList
 
 /**

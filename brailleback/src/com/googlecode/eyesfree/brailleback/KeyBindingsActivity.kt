@@ -34,7 +34,6 @@ import com.googlecode.eyesfree.braille.display.Display
 import com.googlecode.eyesfree.braille.display.DisplayClient
 import com.googlecode.eyesfree.brailleback.utils.BrailleKeyBindingUtils
 import com.googlecode.eyesfree.labeling.CustomLabelManager
-import java.util.ArrayList
 
 /**
  * Shows key bindings for the currently connected Braille display.

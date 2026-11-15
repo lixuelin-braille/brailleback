@@ -27,9 +27,7 @@ import android.preference.PreferenceManager
 import android.util.Log
 import com.googlecode.eyesfree.braille.display.BluetoothDeviceEntry
 import com.googlecode.eyesfree.braille.service.R
-import java.util.ArrayList
 import java.util.Collections
-import java.util.HashMap
 import java.util.UUID
 import java.util.regex.Pattern
 
@@ -173,11 +171,11 @@ class DeviceFinder(context: Context) {
      */
     fun findDevices(): List<DeviceInfo> {
         if (!hasBluetoothConnectPermission()) {
-            return Collections.emptyList()
+            return emptyList()
         }
         val adapter = BluetoothAdapter.getDefaultAdapter()
         if (adapter == null) {
-            return Collections.emptyList()
+            return emptyList()
         }
 
         val ret: MutableList<DeviceInfo> = ArrayList()
@@ -201,7 +199,7 @@ class DeviceFinder(context: Context) {
             }
         } catch (e: SecurityException) {
             Log.w(LOG_TAG, "BLUETOOTH_CONNECT permission denied; no devices", e)
-            return Collections.emptyList()
+            return emptyList()
         }
         val lastAddress = mSharedPreferences.getString(
                 LAST_CONNECTED_DEVICE_KEY, null)

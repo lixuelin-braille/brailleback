@@ -37,10 +37,6 @@ import com.googlecode.eyesfree.braille.display.BrailleInputEvent
 import com.googlecode.eyesfree.braille.display.BrailleKeyBinding
 import com.googlecode.eyesfree.braille.service.R
 import java.util.ArrayDeque
-import java.util.ArrayList
-import java.util.Collections
-import java.util.Comparator
-import java.util.HashMap
 import java.util.Locale
 import java.util.UUID
 import timber.log.Timber
@@ -389,7 +385,7 @@ class WujieGattConnection {
                 }
             }
         }
-        Collections.sort(mWriteCandidates,
+        mWriteCandidates.sortWith(
                 object : Comparator<BluetoothGattCharacteristic> {
                     override fun compare(a: BluetoothGattCharacteristic,
                             b: BluetoothGattCharacteristic): Int {

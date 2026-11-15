@@ -506,7 +506,7 @@ class LabelProviderClient(context: Context, authority: String) {
 
     private fun getLabelListFromCursor(cursor: Cursor?): List<Label> {
         if (cursor == null) {
-            return Collections.emptyList()
+            return emptyList()
         }
 
         val result = ArrayList<Label>()
@@ -524,7 +524,7 @@ class LabelProviderClient(context: Context, authority: String) {
 
     private fun getPackageSummaryFromCursor(cursor: Cursor?): List<PackageLabelInfo> {
         if (cursor == null) {
-            return Collections.emptyList()
+            return emptyList()
         }
 
         val result = ArrayList<PackageLabelInfo>()
@@ -540,7 +540,7 @@ class LabelProviderClient(context: Context, authority: String) {
 
     private fun getLabelMapFromCursor(cursor: Cursor?): Map<String, Label> {
         if (cursor == null) {
-            return Collections.emptyMap()
+            return emptyMap()
         }
 
         val labelCount = cursor.count // can return -1

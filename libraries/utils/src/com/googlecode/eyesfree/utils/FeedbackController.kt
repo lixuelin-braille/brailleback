@@ -32,7 +32,6 @@ import android.util.SparseArray
 import android.util.SparseIntArray
 import java.io.File
 import java.io.IOException
-import java.util.ArrayList
 
 /**
  * Provides auditory and haptic feedback.

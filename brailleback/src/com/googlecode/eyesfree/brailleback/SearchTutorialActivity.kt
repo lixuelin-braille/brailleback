@@ -31,7 +31,6 @@ import com.googlecode.eyesfree.braille.display.BrailleKeyBinding
 import com.googlecode.eyesfree.braille.display.Display
 import com.googlecode.eyesfree.braille.display.DisplayClient
 import com.googlecode.eyesfree.brailleback.utils.BrailleKeyBindingUtils
-import java.util.ArrayList
 import java.util.Map
 
 /**

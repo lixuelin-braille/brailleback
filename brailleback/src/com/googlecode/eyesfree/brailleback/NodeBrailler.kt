@@ -21,7 +21,6 @@ import com.googlecode.eyesfree.brailleback.wrapping.ParagraphIndent
 import com.googlecode.eyesfree.utils.AccessibilityNodeInfoRef
 import com.googlecode.eyesfree.utils.AccessibilityNodeInfoUtils
 import com.googlecode.eyesfree.utils.LogUtils
-import java.util.ArrayList
 
 /**
  * Turns a subset of the node tree into braille.

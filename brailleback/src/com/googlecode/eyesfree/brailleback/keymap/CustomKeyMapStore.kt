@@ -9,7 +9,6 @@ import android.content.SharedPreferences
 import android.preference.PreferenceManager
 import com.googlecode.eyesfree.braille.display.BrailleInputEvent
 import com.googlecode.eyesfree.brailleback.R
-import java.util.HashMap
 
 /**
  * 自定义按键映射的持久化层。

@@ -4,7 +4,6 @@
 
 package com.googlecode.eyesfree.labeling
 
-import java.util.LinkedHashMap
 import java.util.Map
 
 /**

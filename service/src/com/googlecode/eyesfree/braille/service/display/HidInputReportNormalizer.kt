@@ -16,7 +16,6 @@
 
 package com.googlecode.eyesfree.braille.service.display
 
-import java.util.LinkedHashMap
 
 /**
  * Restores the HID report ID that some BLE braille displays omit on the wire.

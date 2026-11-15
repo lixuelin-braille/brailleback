@@ -27,7 +27,6 @@ import android.os.IBinder
 import android.os.Message
 import android.os.RemoteException
 import android.util.Log
-import java.util.Arrays
 
 /**
  * Client-side interface to the central braille translator service.
@@ -104,7 +103,7 @@ class TranslatorClient(context: Context, onInitListener: OnInitListener?) {
         val localService = translatorService
         if (localService != null) {
             try {
-                return Arrays.asList(*localService.getTableInfos())
+                return localService.getTableInfos().asList()
             } catch (ex: RemoteException) {
                 Log.e(LOG_TAG, "Error in getTables", ex)
             }

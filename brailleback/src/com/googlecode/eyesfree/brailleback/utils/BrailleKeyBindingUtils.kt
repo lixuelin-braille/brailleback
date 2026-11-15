@@ -9,9 +9,6 @@ import android.text.TextUtils
 import com.googlecode.eyesfree.braille.display.BrailleDisplayProperties
 import com.googlecode.eyesfree.braille.display.BrailleKeyBinding
 import com.googlecode.eyesfree.brailleback.R
-import java.util.ArrayList
-import java.util.Collections
-import java.util.Comparator
 
 /**
  * Utility methods for working with [BrailleKeyBinding] (Kotlin 版).
@@ -25,7 +22,7 @@ object BrailleKeyBindingUtils {
     fun getSortedBindingsForDisplay(props: BrailleDisplayProperties): ArrayList<BrailleKeyBinding> {
         val bindings = props.keyBindings
         val sortedBindings = ArrayList<BrailleKeyBinding>(bindings.toList())
-        Collections.sort(sortedBindings, COMPARE_BINDINGS)
+        sortedBindings.sortWith(COMPARE_BINDINGS)
         return sortedBindings
     }
 
@@ -38,7 +35,7 @@ object BrailleKeyBindingUtils {
         command: Int, sortedBindings: ArrayList<BrailleKeyBinding>): BrailleKeyBinding? {
         val dummyBinding = BrailleKeyBinding()
         dummyBinding.command = command
-        var index = Collections.binarySearch(sortedBindings, dummyBinding, COMPARE_BINDINGS_BY_COMMAND)
+        var index = sortedBindings.binarySearch(dummyBinding, COMPARE_BINDINGS_BY_COMMAND)
         if (index < 0) {
             return null
         }

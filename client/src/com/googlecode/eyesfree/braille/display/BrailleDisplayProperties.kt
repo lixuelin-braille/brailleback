@@ -19,7 +19,6 @@ package com.googlecode.eyesfree.braille.display
 import android.os.Parcel
 import android.os.Parcelable
 import java.util.Collections
-import java.util.HashMap
 
 /**
  * Properties of a braille display such as dimensions and keyboard

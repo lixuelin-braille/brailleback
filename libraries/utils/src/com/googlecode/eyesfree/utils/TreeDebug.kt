@@ -19,7 +19,6 @@ package com.googlecode.eyesfree.utils
 import android.text.TextUtils
 import android.util.Log
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
-import java.util.HashSet
 
 /**
  * Util class to help debug Node trees.

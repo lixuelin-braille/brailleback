@@ -3,7 +3,6 @@ package com.googlecode.eyesfree.braille.display
 import android.os.Parcel
 import android.os.Parcelable
 import android.util.SparseArray
-import java.util.HashMap
 
 /**
  * An input event, originating from a braille display.

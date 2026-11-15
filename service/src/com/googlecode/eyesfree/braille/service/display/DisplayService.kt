@@ -51,7 +51,6 @@ import com.googlecode.eyesfree.utils.LogUtils
 import com.googlecode.eyesfree.utils.LogFileWriter
 import java.io.File
 import java.lang.ref.WeakReference
-import java.util.Arrays
 import java.util.concurrent.atomic.AtomicLong
 import timber.log.Timber
 
@@ -631,7 +630,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
     private fun recordDots(patterns: ByteArray, route: Int) {
         mDotsCalls.incrementAndGet()
         mDotsLastCells = patterns.size
-        mDotsLastDigest = Arrays.hashCode(patterns)
+        mDotsLastDigest = patterns.contentHashCode()
         mDotsLastRoute = route
     }
 

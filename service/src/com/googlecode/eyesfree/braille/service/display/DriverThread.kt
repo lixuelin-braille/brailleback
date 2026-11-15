@@ -14,7 +14,6 @@ import com.googlecode.eyesfree.utils.LogUtils
 import java.io.File
 import java.io.IOException
 import java.io.OutputStream
-import java.util.Arrays
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -258,7 +257,7 @@ class DriverThread(
         }
         statLastElapsedMs = elapsed
         statLastCells = buffer.size
-        statLastDigest = Arrays.hashCode(buffer)
+        statLastDigest = buffer.contentHashCode()
         lastExecutedAt = startedAt
         return true
     }

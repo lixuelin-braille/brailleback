@@ -38,7 +38,6 @@ import com.googlecode.eyesfree.utils.LogUtils
 import java.io.File
 import java.io.IOException
 import java.io.OutputStream
-import java.util.ArrayList
 import java.util.concurrent.Executor
 import timber.log.Timber
 

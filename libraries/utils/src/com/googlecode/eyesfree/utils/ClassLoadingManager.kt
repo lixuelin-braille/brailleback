@@ -20,7 +20,6 @@ import android.content.Context
 import android.content.pm.PackageInfo
 import android.text.TextUtils
 import android.util.Log
-import java.util.HashSet
 
 /**
  * This class manages efficient loading of classes.

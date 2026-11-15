@@ -36,7 +36,6 @@ import com.googlecode.eyesfree.utils.AccessibilityNodeInfoUtils
 import com.googlecode.eyesfree.utils.LogUtils
 import com.googlecode.eyesfree.utils.NodeFilter
 import java.lang.ref.WeakReference
-import java.util.HashSet
 
 /**
  * Allows clients to control what should be output on the braille display for

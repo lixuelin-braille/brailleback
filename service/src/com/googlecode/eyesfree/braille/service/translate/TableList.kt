@@ -8,9 +8,7 @@ import com.googlecode.eyesfree.braille.service.BuildConfig
 import com.googlecode.eyesfree.braille.service.R
 import com.googlecode.eyesfree.braille.translate.TableInfo
 import java.io.IOException
-import java.util.ArrayList
 import java.util.Collections
-import java.util.HashMap
 import java.util.Locale
 import java.util.regex.Pattern
 import org.xmlpull.v1.XmlPullParser

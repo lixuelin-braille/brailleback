@@ -51,7 +51,6 @@ import com.googlecode.eyesfree.utils.LogUtils
 import com.googlecode.eyesfree.utils.SharedPreferencesUtils
 import java.lang.ref.WeakReference
 import java.util.Arrays
-import java.util.Comparator
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
@@ -941,7 +940,7 @@ class DisplayManager(
             stats.onEmpty()
             return
         }
-        stats.onRefreshOk(toDisplay.size, Arrays.hashCode(toDisplay))
+        stats.onRefreshOk(toDisplay.size, toDisplay.contentHashCode())
         display?.displayDots(toDisplay, displayedText, displayedBrailleToTextPositions)
         // 时刻与指纹一起转正：只有真的送达点显器，重复下发才允许被丢弃。
         refreshGate.onDelivered(SystemClock.uptimeMillis())

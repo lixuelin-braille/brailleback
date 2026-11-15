@@ -39,9 +39,7 @@ import com.googlecode.eyesfree.labeling.DirectLabelFetchRequest.OnLabelFetchedLi
 import com.googlecode.eyesfree.labeling.PackageLabelsFetchRequest.OnLabelsFetchedListener
 import java.security.MessageDigest
 import java.security.NoSuchAlgorithmException
-import java.util.ArrayList
 import java.util.Collections
-import java.util.HashSet
 import java.util.LinkedList
 import java.util.ListIterator
 import java.util.Locale
