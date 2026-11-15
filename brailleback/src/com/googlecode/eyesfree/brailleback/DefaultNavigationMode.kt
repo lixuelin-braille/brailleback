@@ -42,24 +42,24 @@ import com.googlecode.eyesfree.utils.WebInterfaceUtils
 // TODO: Consolidate parts of this class with similar code in TalkBack.
 internal class DefaultNavigationMode(
     private val mDisplayManager: DisplayManager,
-    private val mAccessibilityService: AccessibilityService,
+    internal val mAccessibilityService: AccessibilityService,
     private val mFeedbackManager: FeedbackManager,
     private val mSelfBrailleManager: SelfBrailleManager,
     private val mNodeBrailler: NodeBrailler,
     private val mRuleRepository: BrailleRuleRepository
 ) : NavigationMode {
 
-    private val mFocusFinder = FocusFinder(mAccessibilityService)
+    internal val mFocusFinder = FocusFinder(mAccessibilityService)
 
     private val mLastFocusedNode = AccessibilityNodeInfoRef()
 
-    private val mLastScrollableNode = AccessibilityNodeInfoRef()
+    internal val mLastScrollableNode = AccessibilityNodeInfoRef()
 
-    private val mMainHandler = Handler(Looper.getMainLooper())
+    internal val mMainHandler = Handler(Looper.getMainLooper())
 
-    private var mScrollSequence = 0
+    internal var mScrollSequence = 0
 
-    private var mScrollUpdatePending = false
+    internal var mScrollUpdatePending = false
 
     override fun onPanLeftOverflow(content: Content): Boolean {
         return mFeedbackManager.emitOnFailure(
@@ -585,7 +585,7 @@ internal class DefaultNavigationMode(
      * Moves the system accessibility focus, or in braille-only mode updates
      * only the braille display and the mode's logical focus.
      */
-    private fun focusOrBraille(node: AccessibilityNodeInfoCompat): Boolean {
+    internal fun focusOrBraille(node: AccessibilityNodeInfoCompat): Boolean {
         if (!isQuietNavigationEnabled()) {
             return node.performAction(
                     AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
@@ -598,7 +598,7 @@ internal class DefaultNavigationMode(
         return true
     }
 
-    private fun isQuietNavigationEnabled(): Boolean {
+    internal fun isQuietNavigationEnabled(): Boolean {
         return PreferenceManager.getDefaultSharedPreferences(mAccessibilityService)
                 .getBoolean(
                         mAccessibilityService.getString(R.string.pref_quiet_navigation_key),
@@ -814,7 +814,7 @@ internal class DefaultNavigationMode(
     /**
      * Attempts to scroll using the specified action.
      */
-    private fun attemptScrollAction(action: Int): Boolean {
+    internal fun attemptScrollAction(action: Int): Boolean {
         var focusedNode: AccessibilityNodeInfoCompat? = null
         var scrollableNode: AccessibilityNodeInfoCompat? = null
 
@@ -912,366 +912,6 @@ internal class DefaultNavigationMode(
      * Note we might have an issue here when more than one node is on the line
      * or not the whole list item is visible.
      */
-    private fun autoScrollItem(node: AccessibilityNodeInfoCompat?,
-                               scrollDirection: Int): Boolean {
-        if (scrollAtEdge(node, scrollDirection)) {
-            return true
-        }
-        val edgeDirection =
-                if (scrollDirection == AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
-                    1
-                else
-                    -1
-        return AccessibilityNodeInfoUtils.isAutoScrollEdgeListItem(
-                mAccessibilityService, node, edgeDirection)
-                && attemptScrollAction(scrollDirection)
-    }
-
-    /**
-     * Scrolls the nearest scrollable ancestor when there is no reachable
-     * focusable node left in the requested direction inside it.
-     *
-     * [AccessibilityNodeInfoUtils.isAutoScrollEdgeListItem] only recognizes
-     * the legacy list and scroll view classes.  Modern containers
-     * (RecyclerView, Compose scrollables, WebView and vendor list widgets)
-     * therefore fell through to [findNodeForPanRight] and moved the braille
-     * focus to a control outside the list, such as an edit text or a button
-     * below the content.  This check is class agnostic and keeps the focus
-     * inside the scrollable area whenever it can still scroll.
-     */
-    private fun scrollAtEdge(
-            currentNode: AccessibilityNodeInfoCompat?,
-            scrollDirection: Int): Boolean {
-        if (currentNode == null) {
-            return false
-        }
-        val forward =
-                scrollDirection == AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
-        val container = AccessibilityNodeInfoUtils.getSelfOrMatchingAncestor(
-                mAccessibilityService, currentNode,
-                AccessibilityNodeInfoUtils.FILTER_SCROLLABLE) ?: return false
-        var before: List<NodeSnapshot> = emptyList()
-        try {
-            if (currentNode != container
-                    && hasVisibleFocusableAhead(currentNode, container,
-                            forward)) {
-                return false
-            }
-            before = collectVisibleNodes(container)
-            val beforeBounds = before.map { Rect(it.bounds) }
-            val refreshed = AccessibilityNodeInfoUtils.refreshNode(container)
-            val scrollable = refreshed ?: container
-            try {
-                if (!scrollable.performAction(scrollDirection)) {
-                    return false
-                }
-                mLastScrollableNode.reset(
-                        AccessibilityNodeInfoCompat.obtain(scrollable))
-                scheduleBrailleAfterScroll(
-                        scrollable, currentNode, forward, beforeBounds)
-                LogUtils.log(this, Log.VERBOSE,
-                        "Auto-scroll started: forward=%s className=%s",
-                        forward, scrollable.className)
-                return true
-            } finally {
-                if (refreshed != null && refreshed !== container) {
-                    refreshed.recycle()
-                }
-            }
-        } finally {
-            recycleSnapshots(before)
-            container.recycle()
-        }
-    }
-
-    private fun hasVisibleFocusableAhead(
-            currentNode: AccessibilityNodeInfoCompat,
-            container: AccessibilityNodeInfoCompat,
-            forward: Boolean): Boolean {
-        if (currentNode == container) {
-            // All descendants are part of the container's displayed content.
-            return false
-        }
-        val searchDirection = if (forward) {
-            FocusFinder.SEARCH_FORWARD
-        } else {
-            FocusFinder.SEARCH_BACKWARD
-        }
-        val next = mFocusFinder.linear(currentNode, searchDirection)
-                ?: return false
-        try {
-            return isDescendantOf(next, container)
-                    && isVisibleInContainer(next, container)
-        } finally {
-            next.recycle()
-        }
-    }
-
-    private fun isDescendantOf(
-            node: AccessibilityNodeInfoCompat,
-            ancestor: AccessibilityNodeInfoCompat): Boolean {
-        if (node == ancestor) {
-            return true
-        }
-        var parent = node.parent
-        while (parent != null) {
-            if (parent == ancestor) {
-                parent.recycle()
-                return true
-            }
-            val next = parent.parent
-            parent.recycle()
-            parent = next
-        }
-        return false
-    }
-
-    private fun isVisibleInContainer(
-            node: AccessibilityNodeInfoCompat,
-            container: AccessibilityNodeInfoCompat): Boolean {
-        if (!node.isVisibleToUser) {
-            return false
-        }
-        val nodeBounds = Rect()
-        node.getBoundsInScreen(nodeBounds)
-        val containerBounds = Rect()
-        container.getBoundsInScreen(containerBounds)
-        if (nodeBounds.width() <= 0 || nodeBounds.height() <= 0) {
-            return false
-        }
-        val visibleHeight =
-            minOf(nodeBounds.bottom, containerBounds.bottom) -
-                maxOf(nodeBounds.top, containerBounds.top)
-        // A node that only peeks in at the very bottom is not a good
-        // navigation target; scroll first so the user gets a usable line.
-        return visibleHeight > 0 && visibleHeight * 3 >= nodeBounds.height()
-    }
-
-    /**
-     * Collects the visible nodes inside [container] in tree order.  The
-     * snapshots are used both to detect whether a scroll action actually
-     * moved the content and to choose the next node to braille.
-     */
-    private fun collectVisibleNodes(
-            container: AccessibilityNodeInfoCompat): List<NodeSnapshot> {
-        val result = ArrayList<NodeSnapshot>()
-        val containerBounds = Rect()
-        container.getBoundsInScreen(containerBounds)
-        collectVisibleNodesInternal(
-                container, containerBounds, 0, result)
-        return result
-    }
-
-    private fun collectVisibleNodesInternal(
-            node: AccessibilityNodeInfoCompat,
-            containerBounds: Rect,
-            depth: Int,
-            result: MutableList<NodeSnapshot>) {
-        if (depth >= MAX_VISIBLE_NODE_DEPTH
-                || result.size >= MAX_VISIBLE_NODE_COUNT) {
-            return
-        }
-        val childCount = node.childCount
-        for (i in 0 until childCount) {
-            if (result.size >= MAX_VISIBLE_NODE_COUNT) {
-                return
-            }
-            val child = node.getChild(i) ?: continue
-            try {
-                if (!child.isVisibleToUser) {
-                    continue
-                }
-                val bounds = Rect()
-                child.getBoundsInScreen(bounds)
-                if (bounds.width() <= 0 || bounds.height() <= 0
-                        || !Rect.intersects(bounds, containerBounds)) {
-                    continue
-                }
-                result.add(NodeSnapshot(
-                        AccessibilityNodeInfoCompat.obtain(child),
-                        Rect(bounds),
-                        AccessibilityNodeInfoUtils.shouldFocusNode(
-                                mAccessibilityService, child)))
-                collectVisibleNodesInternal(
-                        child, containerBounds, depth + 1, result)
-            } finally {
-                child.recycle()
-            }
-        }
-    }
-
-    private fun recycleSnapshots(nodes: List<NodeSnapshot>) {
-        for (snapshot in nodes) {
-            snapshot.node.recycle()
-        }
-    }
-
-    private fun boundsOf(nodes: List<NodeSnapshot>): List<Rect> {
-        return nodes.map { Rect(it.bounds) }
-    }
-
-    private fun scheduleBrailleAfterScroll(
-            container: AccessibilityNodeInfoCompat,
-            previous: AccessibilityNodeInfoCompat,
-            forward: Boolean,
-            beforeBounds: List<Rect>) {
-        val sequence = ++mScrollSequence
-        mScrollUpdatePending = true
-        val containerCopy = AccessibilityNodeInfoCompat.obtain(container)
-        val previousCopy = AccessibilityNodeInfoCompat.obtain(previous)
-        updateAfterScroll(sequence, containerCopy, previousCopy, forward,
-                beforeBounds, 0)
-    }
-
-    private fun updateAfterScroll(
-            sequence: Int,
-            containerCopy: AccessibilityNodeInfoCompat,
-            previousCopy: AccessibilityNodeInfoCompat,
-            forward: Boolean,
-            beforeBounds: List<Rect>,
-            attempt: Int) {
-        val delay = SCROLL_UPDATE_DELAYS_MS[attempt]
-        mMainHandler.postDelayed({
-            if (sequence != mScrollSequence) {
-                containerCopy.recycle()
-                previousCopy.recycle()
-                return@postDelayed
-            }
-            val refreshed = AccessibilityNodeInfoUtils.refreshNode(
-                    containerCopy)
-            val scrollable = refreshed ?: containerCopy
-            val visible = collectVisibleNodes(scrollable)
-            val moved = boundsOf(visible) != beforeBounds
-            if (!moved && attempt < SCROLL_UPDATE_DELAYS_MS.size - 1) {
-                recycleSnapshots(visible)
-                if (refreshed != null && refreshed !== containerCopy) {
-                    refreshed.recycle()
-                }
-                updateAfterScroll(sequence, containerCopy, previousCopy,
-                        forward, beforeBounds, attempt + 1)
-                return@postDelayed
-            }
-
-            mScrollUpdatePending = false
-            LogUtils.log(this, Log.VERBOSE,
-                    "Auto-scroll settled: moved=%s attempt=%d",
-                    moved, attempt)
-            try {
-                if (moved) {
-                    if (isQuietNavigationEnabled()) {
-                        val target = chooseVisibleTarget(
-                                visible, previousCopy, forward)
-                        if (target != null) {
-                            try {
-                                focusOrBraille(target)
-                            } finally {
-                                target.recycle()
-                            }
-                        } else if (visible.isNotEmpty()) {
-                            // Nothing focusable is visible; show the newly
-                            // revealed content instead of jumping away.
-                            focusOrBraille(scrollable)
-                        }
-                    }
-                } else {
-                    // The scroll action claimed success but nothing moved:
-                    // we are at the real end of the scrollable area.
-                    focusNextAfterNoScroll(previousCopy, forward)
-                }
-            } finally {
-                recycleSnapshots(visible)
-                if (refreshed != null && refreshed !== containerCopy) {
-                    refreshed.recycle()
-                }
-                containerCopy.recycle()
-                previousCopy.recycle()
-            }
-        }, delay)
-    }
-
-    private fun chooseVisibleTarget(
-            nodes: List<NodeSnapshot>,
-            previous: AccessibilityNodeInfoCompat?,
-            forward: Boolean): AccessibilityNodeInfoCompat? {
-        val focusable = nodes.filter { it.focusable }
-        if (focusable.isEmpty()) {
-            return null
-        }
-        val sorted = if (forward) {
-            focusable.sortedBy { it.bounds.top }
-        } else {
-            focusable.sortedByDescending { it.bounds.bottom }
-        }
-        val refreshedPrevious = if (previous != null) {
-            AccessibilityNodeInfoUtils.refreshNode(previous)
-        } else {
-            null
-        }
-        try {
-            // Prefer new content over the node that was already on screen.
-            val preferred = sorted.firstOrNull {
-                refreshedPrevious == null || it.node != refreshedPrevious
-            } ?: sorted.first()
-            LogUtils.log(this, Log.VERBOSE,
-                    "Auto-scroll target: className=%s bounds=%s",
-                    preferred.node.className, preferred.bounds)
-            return AccessibilityNodeInfoCompat.obtain(preferred.node)
-        } finally {
-            AccessibilityNodeInfoUtils.recycleNodes(refreshedPrevious)
-        }
-    }
-
-    private fun focusNextAfterNoScroll(
-            previous: AccessibilityNodeInfoCompat,
-            forward: Boolean) {
-        val refreshed = AccessibilityNodeInfoUtils.refreshNode(previous)
-                ?: return
-        try {
-            val next = mFocusFinder.linear(refreshed,
-                    if (forward) FocusFinder.SEARCH_FORWARD
-                    else FocusFinder.SEARCH_BACKWARD) ?: return
-            try {
-                focusOrBraille(next)
-            } finally {
-                next.recycle()
-            }
-        } finally {
-            refreshed.recycle()
-        }
-    }
-
-    private fun rememberScrollContainer(node: AccessibilityNodeInfoCompat) {
-        val container = AccessibilityNodeInfoUtils.getSelfOrMatchingAncestor(
-                mAccessibilityService, node,
-                AccessibilityNodeInfoUtils.FILTER_SCROLLABLE) ?: return
-        mLastScrollableNode.reset(container)
-    }
-
-    private fun findFocusableInLastScrollContainer():
-            AccessibilityNodeInfoCompat? {
-        val stored = mLastScrollableNode.get() ?: return null
-        val container = AccessibilityNodeInfoUtils.refreshNode(stored)
-                ?: return null
-        try {
-            if (!container.isVisibleToUser) {
-                return null
-            }
-            val visible = collectVisibleNodes(container)
-            try {
-                return chooseVisibleTarget(visible, null, true)
-            } finally {
-                recycleSnapshots(visible)
-            }
-        } finally {
-            container.recycle()
-        }
-    }
-
-    private class NodeSnapshot(
-        val node: AccessibilityNodeInfoCompat,
-        val bounds: Rect,
-        val focusable: Boolean
-    )
 
     private companion object {
         private const val DIRECTION_BACKWARD =
@@ -1293,10 +933,5 @@ internal class DefaultNavigationMode(
         // TODO: use event arguments instead of this hack.
         private const val ACTION_BRAILLE_CLICK_MAX = -275000000
         private const val ACTION_BRAILLE_CLICK_MIN = -275999999
-
-        private const val MAX_VISIBLE_NODE_DEPTH = 40
-        private const val MAX_VISIBLE_NODE_COUNT = 400
-
-        private val SCROLL_UPDATE_DELAYS_MS = longArrayOf(80L, 120L, 180L)
     }
 }

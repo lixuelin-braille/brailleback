@@ -31,6 +31,7 @@
 | **[24-DisplayService拆分](./24-DisplayService拆分.md)** | 1763 → 1317 行：27 个连接编排函数搬成同包扩展函数、三份源码契约的连带改动、detekt ReturnCount 拦一次 | 改点显器连接流程前读 |
 | **[25-Kotlin集合与标准库替换](./25-Kotlin集合与标准库替换.md)** | `java.util` import 89 → 52、`Arrays`/`Collections` 换标准库、ArrayDeque 两次踩坑 | 动集合或排序代码前读 |
 | **[26-裸线程与执行器收编](./26-裸线程与执行器收编.md)** | 单线程执行器 → `limitedParallelism(1)`、USB 停机线程 → 协程；日志/`synchronized` 两项否决原因 | 再动线程或日志前读 |
+| **[27-DefaultNavigationMode拆分](./27-DefaultNavigationMode拆分.md)** | 1302 → 937 行：滚动与可见性 15 个函数搬成同包扩展函数、6 字段 3 方法放宽到 internal、detekt 拦一次循环跳转 | 改导航或滚动逻辑前读 |
 
 ---
 
