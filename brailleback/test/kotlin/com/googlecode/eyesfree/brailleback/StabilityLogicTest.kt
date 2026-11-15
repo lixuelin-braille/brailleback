@@ -141,6 +141,6 @@ class StabilityLogicTest {
         // 返回 null 是约定：调用方必须退回应用详情页，而不是假定入口存在。
         assertNull(autostartComponent(OemVendor.SAMSUNG))
         assertNull(autostartComponent(OemVendor.GENERIC))
-        assertTrue(autostartComponent(OemVendor.XIAOMI)!!.contains('/'))
+        assertTrue(requireNotNull(autostartComponent(OemVendor.XIAOMI)).contains('/'))
     }
 }

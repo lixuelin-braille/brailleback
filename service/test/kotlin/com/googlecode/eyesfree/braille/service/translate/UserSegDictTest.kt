@@ -132,7 +132,7 @@ class UserSegDictTest {
             arrayOf("家", "1", "2"))
         val hit = dict.match(adjacent, 0)
         assertNotNull(hit)
-        assertEquals(listOf("国家"), hit!!.pieces)
+        assertEquals(listOf("国家"), requireNotNull(hit).pieces)
         assertEquals(2, hit.endIndex)
 
         val withGap = listOf(

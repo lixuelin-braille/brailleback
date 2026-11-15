@@ -54,7 +54,7 @@ class ContentKindTest {
         val text = BdoCArchiveParser.parse(f.readBytes())
         assertTrue("样本解码不应为空", !text.isNullOrEmpty())
         assertEquals(BrailleFileDecoder.ContentKind.BRAILLE,
-            BrailleFileDecoder.detectKind(text!!))
+            BrailleFileDecoder.detectKind(requireNotNull(text) { "样本解码不应为空" }))
     }
 
     @Test

@@ -62,13 +62,15 @@ class HmmSegmenterTest {
 
     private fun hmmOrSkip(): HmmSegmenter {
         org.junit.Assume.assumeTrue("hmm_emit.txt 不可用，跳过", hmm != null)
-        return hmm!!
+        return requireNotNull(hmm) { "hmm_emit.txt 未加载" }
     }
 
     private fun dictOrSkip(): JiebaDict {
         org.junit.Assume.assumeTrue("真实词典不可用，跳过", dict != null)
-        org.junit.Assume.assumeTrue("HMM 未加载，跳过", dict!!.isHmmReady())
-        return dict!!
+        // assumeTrue 不带 contract，编译器不会因此收窄类型，这里显式收窄。
+        val dictionary = requireNotNull(dict) { "真实词典不可用" }
+        org.junit.Assume.assumeTrue("HMM 未加载，跳过", dictionary.isHmmReady())
+        return dictionary
     }
 
     private fun tokens(sentence: String): List<String> {

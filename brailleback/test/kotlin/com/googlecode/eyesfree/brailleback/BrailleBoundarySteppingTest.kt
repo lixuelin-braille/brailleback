@@ -25,7 +25,7 @@ class BrailleBoundarySteppingTest {
     private fun realStream(): String {
         val bytes = javaClass.getResourceAsStream("/real_bdo_sample.bdo")?.readBytes()
             ?: throw AssertionError("缺少测试资源 real_bdo_sample.bdo")
-        val text = BdoCArchiveParser.parse(bytes)!!
+        val text = requireNotNull(BdoCArchiveParser.parse(bytes)) { "样本解码失败" }
         return BrailleFileDecoder.toReadingStream(text)
     }
 

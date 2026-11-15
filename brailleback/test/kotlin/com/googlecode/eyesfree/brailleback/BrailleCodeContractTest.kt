@@ -227,7 +227,7 @@ class BrailleCodeContractTest {
         val en = stringValues(base + "res/values/strings.xml")
         assertEquals("%1\$s八点计算机盲文", zh["compose_code_eight_dot"])
         assertEquals("%1\$s 8-dot Computer Braille", en["compose_code_eight_dot"])
-        assertFalse(zh["compose_code_eight_dot"]!!.contains("（八点）"))
+        assertFalse(requireNotNull(zh["compose_code_eight_dot"]).contains("（八点）"))
         assertEquals("八点计算机盲文", zh["compose_code_summary_eight"])
         assertEquals("8-dot computer braille", en["compose_code_summary_eight"])
         // 旧 XML 回退屏仍用旧模板，不能删。

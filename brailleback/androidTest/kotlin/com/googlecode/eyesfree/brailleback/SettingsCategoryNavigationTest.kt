@@ -56,8 +56,7 @@ class SettingsCategoryNavigationTest {
             val device = UiDevice.getInstance(instrumentation)
             val title = context.getString(titleRes)
             val row = findRow(device, title)
-            assertTrue("设置页上找不到分类「$title」（已向上滚动三次）", row != null)
-            row!!.click()
+            requireNotNull(row) { "设置页上找不到分类「$title」（已向上滚动三次）" }.click()
 
             // 点击后是异步启动：等前台 Activity 变成目标子屏，最多 8 秒。
             val deadline = System.currentTimeMillis() + 8000

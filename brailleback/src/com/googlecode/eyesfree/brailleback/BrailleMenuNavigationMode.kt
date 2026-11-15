@@ -167,39 +167,43 @@ class BrailleMenuNavigationMode(
     fun activateCurrentMenuItem(): Boolean {
         // Grab the state we need before closing the menu, since that clears
         // out all state.
-        val itemId = menuItems!![currentIndex].id
+        // 菜单状态可能在按下瞬间已被清空：没有条目就当作激活失败。
+        val items = menuItems ?: return false
+        val itemId = items[currentIndex].id
         val node = initialNode.release()
+        // 单选出口：把三个分支各自返回收敛成一个 when 表达式，避免 return 越堆越多。
         return try {
             closeMenu()
 
-            if (node == null) {
-                return false
+            when {
+                node == null -> false
+                // This must be checked before we try to grab a label.
+                itemId == R.string.menu_item_update_talkback -> launchIntentToPlayStoreTalkBack()
+                else -> {
+                    val unwrapped = node.info as AccessibilityNodeInfo
+                    val existingLabel: Label? =
+                        labelManager.getLabelForViewIdFromCache(unwrapped.viewIdResourceName)
+                    activateLabelItem(itemId, unwrapped, existingLabel)
+                }
             }
-
-            // This must be checked before we try to grab a label.
-            if (itemId == R.string.menu_item_update_talkback) {
-                return launchIntentToPlayStoreTalkBack()
-            }
-
-            val unwrapped = node.info as AccessibilityNodeInfo
-            val existingLabel: Label? =
-                labelManager.getLabelForViewIdFromCache(unwrapped.viewIdResourceName)
-
-            when (itemId) {
-                R.string.menu_item_label_add ->
-                    return LabelOperationUtils.startActivityAddLabelForNode(
-                        accessibilityService, unwrapped)
-                R.string.menu_item_label_edit ->
-                    return LabelOperationUtils.startActivityEditLabel(
-                        accessibilityService, existingLabel)
-                R.string.menu_item_label_remove ->
-                    return LabelOperationUtils.startActivityRemoveLabel(
-                        accessibilityService, existingLabel)
-            }
-            false
         } finally {
             AccessibilityNodeInfoUtils.recycleNodes(node)
         }
+    }
+
+    /** 只处理三类「标签」菜单项；其余条目返回 false。 */
+    private fun activateLabelItem(
+        itemId: Int,
+        node: AccessibilityNodeInfo,
+        existingLabel: Label?
+    ): Boolean = when (itemId) {
+        R.string.menu_item_label_add ->
+            LabelOperationUtils.startActivityAddLabelForNode(accessibilityService, node)
+        R.string.menu_item_label_edit ->
+            LabelOperationUtils.startActivityEditLabel(accessibilityService, existingLabel)
+        R.string.menu_item_label_remove ->
+            LabelOperationUtils.startActivityRemoveLabel(accessibilityService, existingLabel)
+        else -> false
     }
 
     /** Fires an intent to open TalkBack in the Play store. */
@@ -225,8 +229,9 @@ class BrailleMenuNavigationMode(
         if (node == null) {
             return false
         }
-        menuItems = getItemsForNode(node)
-        return !menuItems!!.isEmpty()
+        val items = getItemsForNode(node)
+        menuItems = items
+        return items.isNotEmpty()
     }
 
     /**
@@ -267,7 +272,7 @@ class BrailleMenuNavigationMode(
      * menu item.
      */
     private fun brailleDisplayWithCurrentItem() {
-        val current = menuItems!![currentIndex]
+        val current = menuItems?.getOrNull(currentIndex) ?: return
         val content = Content(current.name)
         content.setPanStrategy(Content.PAN_RESET)
         displayManager.setContent(content)

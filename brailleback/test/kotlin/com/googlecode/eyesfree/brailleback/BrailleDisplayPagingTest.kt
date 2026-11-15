@@ -19,7 +19,7 @@ class BrailleDisplayPagingTest {
     private fun realStream(): String {
         val bytes = javaClass.getResourceAsStream("/real_bdo_sample.bdo")?.readBytes()
             ?: throw AssertionError("缺少测试资源 real_bdo_sample.bdo")
-        val text = BdoCArchiveParser.parse(bytes)!!
+        val text = requireNotNull(BdoCArchiveParser.parse(bytes)) { "样本 real_bdo_sample.bdo 解码失败" }
         return BrailleFileDecoder.toReadingStream(text)
     }
 
@@ -165,8 +165,10 @@ class BrailleDisplayPagingTest {
     fun `old pageToCells limitation is what motivated offset paging`() {
         // 说明旧模型的问题：按屏幕页组织时，一页可达数百方，
         // 而 pageToCells 只取前 N 方，20 方点显器只能读到极小一部分。
-        val text = BdoCArchiveParser.parse(
-            javaClass.getResourceAsStream("/real_bdo_sample.bdo")!!.readBytes())!!
+        val sample = requireNotNull(javaClass.getResourceAsStream("/real_bdo_sample.bdo")) {
+            "缺少测试资源 real_bdo_sample.bdo"
+        }
+        val text = requireNotNull(BdoCArchiveParser.parse(sample.readBytes())) { "样本解码失败" }
         val pages = BrailleFileDecoder.buildPages(text, 40, 20)
         val firstPageCells = pages[0].replace("\n", "").length
         val reachable = BrailleFileDecoder.pageToCells(pages, 0, 20).length

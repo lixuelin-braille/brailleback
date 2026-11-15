@@ -61,8 +61,8 @@ class CbsFullTableSupersetTest {
         val commonFile = locate("zhcn-cbs.ctb")
         val fullFile = locate("zhcn-cbs-full.ctb")
         assumeTrue("未找到 cbs 表文件", commonFile != null && fullFile != null)
-        val (commonSigns, commonAlways) = parse(commonFile!!)
-        val (fullSigns, fullAlways) = parse(fullFile!!)
+        val (commonSigns, commonAlways) = parse(requireNotNull(commonFile) { "未找到 zhcn-cbs.ctb" })
+        val (fullSigns, fullAlways) = parse(requireNotNull(fullFile) { "未找到 zhcn-cbs-full.ctb" })
 
         assertTrue("常用字表为空", commonSigns.isNotEmpty())
         assertTrue("全字符表应覆盖更多字符", fullSigns.size > commonSigns.size)

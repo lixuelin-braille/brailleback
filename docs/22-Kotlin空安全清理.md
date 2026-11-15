@@ -140,26 +140,74 @@ ReadThread.kt:107  [LoopWithTooManyJumpStatements]
 | lint | 通过，error=0 |
 | 真机 | 连续四轮采样 `Crashed services:{}`，主进程与 `:service` 都在，无 `FATAL EXCEPTION` |
 
-## 剩余 185 处的分布与下一批
+## 第三批：19 个文件 51 处（185 → 134）
+
+先把「≤3 处的小文件」一次清完，剩下的大文件集中攻。这一批里 UI 类占多数，
+改法也统一成了三种：
+
+| 情况 | 改法 |
+|:--|:--|
+| 视图 / Activity / ActionBar 可能为空 | `?.` 直接调用，空的机型上本来就是空操作 |
+| 刚赋值给可空属性，马上要用 | 先落局部，赋给属性，再用局部 |
+| `Parcel` 反序列化 | **读写顺序不能动**，用 `?: 默认值` 或局部，绝不可跳过不读 |
+
+`Parcel` 里有一条纪律值得单独记：`BrailleDisplayProperties` 读友好键名时，
+原来写作 `names[in.readString()!!] = in.readString()!!` —— 两个 `!!` 之间是两次
+`readString()`。改成局部变量时如果只读一次，后面所有字段都会错位。所以改成：
+
+```kotlin
+for (i in 0 until size) {
+    // 反序列化必须读写成对：即使键为空也要把后面的值读完，否则字段会错位。
+    val key = `in`.readString()
+    val value = `in`.readString()
+    if (key != null) {
+        names[key] = value ?: ""
+    }
+}
+```
+
+`WriteData.writeToParcel` 则用 `checkNotNull` 保留失败语义，因为缺节点时继续写会把
+整条 Parcel 流写坏，读端会读到错位数据——这种情况必须明确失败：
+
+```kotlin
+val node = checkNotNull(accessibilityNodeInfo) {
+    "WriteData 缺少 accessibilityNodeInfo，无法写入 Parcel"
+}
+```
+
+测试文件 17 处统一改成 `requireNotNull(x) { "说明" }`。注意
+`org.junit.Assume.assumeTrue` **不带 contract**，它后面编译器不会收窄类型，
+所以「断言不为空 + 后面直接用」的写法仍要显式 `requireNotNull`。
+
+## 第三批 detekt 又拦了两条
+
+| 规则 | 位置 | 处理 |
+|:--|:--|:--|
+| `ComplexCondition`（7 > 5） | `DisplayServiceHandlerActions.kt:48` | 抽出 `hidBusy` 与 `connectionInProgress` 两个局部布尔 |
+| `ReturnCount`（7 > 6） | `BrailleMenuNavigationMode.activateCurrentMenuItem` | 三个分支各自 `return` 收敛成一个 `when` 表达式，标签分支抽成 `activateLabelItem` |
+
+`ReturnCount` 这条说明一件事：**每加一个 `?: return`，都在往「返回点太多」这条线上走**。
+把分支收敛成表达式比逐处加 early return 更耐用。
+
+## 剩余 134 处的分布与下一批
 
 | 文件 | 处数 | 行数 | 备注 |
 |:--|--:|--:|:--|
-| `BrailleBackService.kt` | 85 | 1040 | 无障碍服务主类，风险最高，占剩余的一半 |
-| `LabelProviderClient.kt` | 10 | 597 | 标签服务客户端 |
+| `BrailleBackService.kt` | 85 | 1040 | 无障碍服务主类，占剩余的 63%，风险最高 |
 | `DefaultNavigationMode.kt` | 10 | 1290 | 导航主逻辑 |
-| `IMESetupWizardActivity.kt` | 9 | 213 | 输入法向导（UI，可整批清） |
+| `LabelProviderClient.kt` | 10 | 597 | 标签服务客户端 |
 | `SelfBrailleService.kt` | 8 | 294 | 自述盲文服务 |
-| `KeyBindingsActivity.kt` | 6 | — | 按键列表（UI） |
-| `SoundBehaviorContractTest.kt` | 6 | — | 测试 |
 | `BdoCArchiveParserTest.kt` | 6 | — | 测试 |
+| `SoundBehaviorContractTest.kt` | 6 | — | 测试 |
 | `DisplayService.kt` | 5 | 1769 | 显示服务主类 |
 | `JiebaDict.kt` | 4 | — | 分词词典 |
-| 其余 18 个文件 | 36 | — | 多为测试与 UI |
 
-建议下一批顺序：
+八个小文件（49 处）先清掉，就只剩 `BrailleBackService` 一个：
 
-1. UI 与测试这 8 个文件（约 40 处，改法全程 `?.` 与 `?: fail()`，风险最低，一次清完）
-2. `BrailleBackService.kt`：85 处分 4 次，每次 20 处左右，每次改完跑单测 + 装机冒烟
-3. `DisplayService.kt` 与 `DefaultNavigationMode.kt` 最后做（体量大、逻辑密）
+1. 两个测试 12 处 + `JiebaDict` 4 处（低风险，一次清完）
+2. `DisplayService` 5 + `SelfBrailleService` 8 + `LabelProviderClient` 10 + `DefaultNavigationMode` 10（35 处）
+3. `BrailleBackService` 85 处分 4 批，每批 20 处左右，每批跑单测 + 装机冒烟
+
+目标：全仓 `!!` 先降到 0，再谈「密封类替代 null 返回」「不可变集合」「`when` 穷尽」这些更深的 Kotlin 化。
 
 目标：全仓 `!!` 先降到 0，再谈「密封类替代 null 返回」「不可变集合」「`when` 穷尽」这些更深的 Kotlin 化。

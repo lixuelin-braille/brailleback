@@ -127,8 +127,10 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
       }
       return
     }
+    // 属性不参与智能转换：这里再取一次，取不到就放弃这句朗读。
+    val tts = textToSpeech ?: return
     val params = Bundle()
-    textToSpeech!!.speak(
+    tts.speak(
         text,
         if (flush) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD,
         params,
@@ -160,7 +162,7 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
       if (delayMs > 0) {
         mainHandler.postDelayed(announce, delayMs.toLong())
       } else {
-        view!!.post(announce)
+        view?.post(announce)
       }
     } else if (delayMs > 0) {
       mainHandler.postDelayed(Runnable { speakNow(charSequence, flush) }, delayMs.toLong())
@@ -169,7 +171,7 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
     }
     if (speakOptions != null && speakOptions.mCompletedAction != null) {
       // 简化：不追踪读屏朗读完成事件，直接回调成功状态。
-      speakOptions.mCompletedAction!!.run(/* status= */ 0)
+      speakOptions.mCompletedAction?.run(/* status= */ 0)
     }
   }
 

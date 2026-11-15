@@ -54,7 +54,8 @@ class BrailleDisplayProperties(
     private constructor(`in`: Parcel) : this(
         numTextCells = `in`.readInt(),
         numStatusCells = `in`.readInt(),
-        keyBindings = `in`.createTypedArray(BrailleKeyBinding.CREATOR)!!,
+        // 老版本写入时可能没有按键绑定，读回为空时用空数组而不是崩在构造里。
+        keyBindings = `in`.createTypedArray(BrailleKeyBinding.CREATOR) ?: emptyArray(),
         friendlyKeyNames = readFriendlyKeyNames(`in`)
     )
 
@@ -63,7 +64,12 @@ class BrailleDisplayProperties(
             val size = `in`.readInt()
             val names = HashMap<String, String>(size)
             for (i in 0 until size) {
-                names[`in`.readString()!!] = `in`.readString()!!
+                // 反序列化必须读写成对：即使键为空也要把后面的值读完，否则字段会错位。
+                val key = `in`.readString()
+                val value = `in`.readString()
+                if (key != null) {
+                    names[key] = value ?: ""
+                }
             }
             return Collections.unmodifiableMap(names)
         }

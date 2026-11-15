@@ -11,15 +11,18 @@ import com.googlecode.eyesfree.compat.CompatUtils
 import java.lang.reflect.Method
 
 object AccessibilityServiceCompatUtils {
-    private val METHOD_performGlobalAction: Method = CompatUtils.getMethod(
-        AccessibilityService::class.java, "performGlobalAction", Int::class.javaPrimitiveType
-    )!!
-    private val METHOD_getServiceInfo: Method = CompatUtils.getMethod(
-        AccessibilityService::class.java, "getServiceInfo"
-    )!!
-    private val METHOD_getRootInActiveWindow: Method = CompatUtils.getMethod(
-        AccessibilityService::class.java, "getRootInActiveWindow"
-    )!!
+    // 反射找不到方法时，类初始化就失败并给出可读原因（原来是一个裸的 NPE）。
+    private val METHOD_performGlobalAction: Method = checkNotNull(
+        CompatUtils.getMethod(
+            AccessibilityService::class.java, "performGlobalAction", Int::class.javaPrimitiveType
+        )
+    ) { "AccessibilityService.performGlobalAction(int) 在系统里不存在" }
+    private val METHOD_getServiceInfo: Method = checkNotNull(
+        CompatUtils.getMethod(AccessibilityService::class.java, "getServiceInfo")
+    ) { "AccessibilityService.getServiceInfo() 在系统里不存在" }
+    private val METHOD_getRootInActiveWindow: Method = checkNotNull(
+        CompatUtils.getMethod(AccessibilityService::class.java, "getRootInActiveWindow")
+    ) { "AccessibilityService.getRootInActiveWindow() 在系统里不存在" }
 
     @JvmStatic
     fun performGlobalAction(service: AccessibilityService, action: Int): Boolean {

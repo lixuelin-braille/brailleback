@@ -43,14 +43,15 @@ fun handleRegisterCallback(
     if (service.mConnectionProgress != null) {
         service.sendConnectionProgress(callback)
     }
+    // HID 连接取一次局部：可空属性不能智能转换，原来这里只能靠非空断言。
+    val hidConnection = service.mHidConnection
+    val hidBusy = hidConnection != null && !hidConnection.isDisconnecting()
+    val connectionInProgress = service.mReadThread != null
+            || hidBusy
+            || service.mWujieConnection != null
+            || service.mUsbConnection != null
     if (service.mDataFileState == DisplayService.FILES_NOT_EXTRACTED
-            || (service.mConnectionState == DisplayService.STATE_DISCONNECTED
-                    && (service.mReadThread != null
-                            || (service.mHidConnection != null
-                                    && !service.mHidConnection!!
-                                            .isDisconnecting())
-                            || service.mWujieConnection != null
-                            || service.mUsbConnection != null))) {
+            || (service.mConnectionState == DisplayService.STATE_DISCONNECTED && connectionInProgress)) {
         // Extraction or connection in progress, there will be a
         // broadcast of the state when it either succeeds or fails.
         return

@@ -68,8 +68,13 @@ class IMESetupWizardActivity : Activity() {
         val layout = LinearLayout(this)
         layout.id = FRAGMENTS_LAYOUT_ID
         enableBrailleImeFrag = EnableBrailleImeFragment()
-        defaultBrailleImeFrag = DefaultBrailleImeFragment()
-        defaultBrailleImeFrag!!.setInputMethodManager(inputMethodManager!!)
+        // 取一次局部再设置：可空属性不参与智能转换，也避免两次读之间被清空。
+        val defaultFrag = DefaultBrailleImeFragment()
+        defaultBrailleImeFrag = defaultFrag
+        val imm = inputMethodManager
+        if (imm != null) {
+            defaultFrag.setInputMethodManager(imm)
+        }
         setContentView(layout)
 
         checkStatus()
@@ -85,11 +90,12 @@ class IMESetupWizardActivity : Activity() {
                 inflater: LayoutInflater?, container: ViewGroup?, savedInstanceState: Bundle?): View? {
 
             // Create "enable braille IME" screen.
-            val context = activity
+            // Fragment 还没挂到 Activity 时 activity 为空，此时没有可用的 Context，直接不动。
+            val context = activity ?: return null
             val enableBrailleImeLayout = LinearLayout(context)
             enableBrailleImeLayout.orientation = LinearLayout.VERTICAL
             enableBrailleImeLayout.addView(
-                    IMESetupWizardActivity.createMessageText(context!!, R.string.ime_setup_need_enable_message))
+                    IMESetupWizardActivity.createMessageText(context, R.string.ime_setup_need_enable_message))
 
             // Create "enable braille IME" button.
             val button = Button(context)
@@ -97,11 +103,11 @@ class IMESetupWizardActivity : Activity() {
             button.setOnClickListener {
                 // Start IME-enable activity, and have the wizard activity handle the result.
                 val intent = Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)
-                context!!.startActivityForResult(intent, IMESetupWizardActivity.REQUEST_ENABLE_IME)
+                context.startActivityForResult(intent, IMESetupWizardActivity.REQUEST_ENABLE_IME)
             }
             enableBrailleImeLayout.addView(button)
 
-            enableBrailleImeLayout.addView(IMESetupWizardActivity.createCancelButton(context!!))
+            enableBrailleImeLayout.addView(IMESetupWizardActivity.createCancelButton(context))
             return enableBrailleImeLayout
         }
     }
@@ -119,22 +125,22 @@ class IMESetupWizardActivity : Activity() {
                 inflater: LayoutInflater?, container: ViewGroup?, savedInstanceState: Bundle?): View? {
 
             // Create "set default IME" screen.
-            val context = activity
+            val context = activity ?: return null
             val defaultBrailleImeLayout = LinearLayout(context)
             defaultBrailleImeLayout.orientation = LinearLayout.VERTICAL
             defaultBrailleImeLayout.addView(
-                    IMESetupWizardActivity.createMessageText(context!!, R.string.ime_setup_need_default_message))
+                    IMESetupWizardActivity.createMessageText(context, R.string.ime_setup_need_default_message))
 
             // Create "set default IME" button -- in case immediate call to showInputMethodPicker() fails,
             // or in case user exits IME-picker without selecting braille IME.
             val button = Button(context)
             button.setText(R.string.ime_setup_need_default_positive)
             button.setOnClickListener {
-                inputMethodManager!!.showInputMethodPicker()
+                inputMethodManager?.showInputMethodPicker()
             }
             defaultBrailleImeLayout.addView(button)
 
-            defaultBrailleImeLayout.addView(IMESetupWizardActivity.createCancelButton(context!!))
+            defaultBrailleImeLayout.addView(IMESetupWizardActivity.createCancelButton(context))
             return defaultBrailleImeLayout
         }
 
@@ -143,7 +149,9 @@ class IMESetupWizardActivity : Activity() {
             // Try to call showInputMethodPicker() without button click.
             // Need delay to ensure showInputMethodPicker() receives correct UID, else it fails.
             val handler = Handler()
-            handler.postDelayed({ inputMethodManager!!.showInputMethodPicker() }, 300L)
+            // 取一次局部，避免延迟执行时属性已被清空。
+            val imm = inputMethodManager
+            handler.postDelayed({ imm?.showInputMethodPicker() }, 300L)
         }
     }
 

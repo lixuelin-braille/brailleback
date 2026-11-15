@@ -47,21 +47,21 @@ class KeyBindingsActivity : Activity(), Display.OnConnectionStateChangeListener 
 
         setTitle(R.string.key_bindings_title)
         setContentView(R.layout.key_bindings)
-        actionBar!!.setHomeButtonEnabled(true)
-        actionBar!!.setDisplayHomeAsUpEnabled(true)
+        // 没有 actionBar 的机型（或主题）上这两个设置本来就是空操作。
+        actionBar?.setHomeButtonEnabled(true)
+        actionBar?.setDisplayHomeAsUpEnabled(true)
     }
 
     override fun onStart() {
         super.onStart()
-        mDisplay = DisplayClient(this)
-        mDisplay!!.setOnConnectionStateChangeListener(this)
+        val display = DisplayClient(this)
+        mDisplay = display
+        display.setOnConnectionStateChangeListener(this)
     }
 
     override fun onStop() {
-        if (mDisplay != null) {
-            mDisplay!!.shutdown()
-            mDisplay = null
-        }
+        mDisplay?.shutdown()
+        mDisplay = null
         super.onStop()
     }
 
@@ -84,7 +84,7 @@ class KeyBindingsActivity : Activity(), Display.OnConnectionStateChangeListener 
     }
 
     private fun populateListView() {
-        val props = mDisplay!!.displayProperties ?: return
+        val props = mDisplay?.displayProperties ?: return
         val sortedBindings = BrailleKeyBindingUtils.getSortedBindingsForDisplay(props)
 
         val result = ArrayList<KeyBinding>()
@@ -135,7 +135,7 @@ class KeyBindingsActivity : Activity(), Display.OnConnectionStateChangeListener 
         override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
             val view = super.getView(position, convertView, parent)
             val item = getItem(position)
-            (view.findViewById(android.R.id.text2) as TextView).text = item!!.binding
+            (view.findViewById(android.R.id.text2) as TextView).text = item?.binding
             return view
         }
     }

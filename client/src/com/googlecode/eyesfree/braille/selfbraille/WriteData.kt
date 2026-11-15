@@ -37,7 +37,8 @@ class WriteData private constructor(
     private constructor(`in`: Parcel) : this(
         AccessibilityNodeInfo.CREATOR.createFromParcel(`in`),
         `in`.readString(),
-        `in`.readBundle()!!
+        // 老版本可能没写 properties，读回为空时用空 Bundle，后面写属性会自动替换。
+        `in`.readBundle() ?: Bundle.EMPTY
     )
 
     val selectionStart: Int
@@ -74,7 +75,9 @@ class WriteData private constructor(
         }
         val selStart = selectionStart
         val selEnd = selectionEnd
-        if (text == null) {
+        // 文本落局部：可空属性不参与智能转换，原来只能在 else 分支里靠断言。
+        val currentText = text
+        if (currentText == null) {
             if (selStart > 0 || selEnd > 0) {
                 throw IllegalStateException("Selection can't be set without text")
             }
@@ -82,7 +85,7 @@ class WriteData private constructor(
             if (selStart < 0 && selEnd >= 0) {
                 throw IllegalStateException("Selection end without start")
             }
-            val textLength = text!!.length
+            val textLength = currentText.length
             if (selStart > textLength || selEnd > textLength) {
                 throw IllegalStateException("Selection out of bounds")
             }
@@ -92,7 +95,12 @@ class WriteData private constructor(
     override fun describeContents(): Int = 0
 
     override fun writeToParcel(out: Parcel, flags: Int) {
-        accessibilityNodeInfo!!.writeToParcel(out, flags)
+        // Parcel 是按固定顺序解包的：缺节点时继续写会把整条流写坏，
+        // 所以这里明确失败并给出原因，而不是让读端读到错位数据。
+        val node = checkNotNull(accessibilityNodeInfo) {
+            "WriteData 缺少 accessibilityNodeInfo，无法写入 Parcel"
+        }
+        node.writeToParcel(out, flags)
         // The above call recycles the node, so make sure we don't use it
         // anymore.
         accessibilityNodeInfo = null

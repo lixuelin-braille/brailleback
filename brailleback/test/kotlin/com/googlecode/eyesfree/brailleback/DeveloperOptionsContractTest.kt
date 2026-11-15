@@ -407,7 +407,7 @@ class DeveloperOptionsContractTest {
         )
         assertTrue(
             "预览提示必须说明完整日志的导出方式",
-            values["compose_settings_log_preview_hint"]!!.contains("复制或分享")
+            requireNotNull(values["compose_settings_log_preview_hint"]).contains("复制或分享")
         )
     }
 
@@ -469,9 +469,8 @@ class DeveloperOptionsContractTest {
         val zh = stringValues(base + "res/values-zh-rCN/strings.xml")
         val name = "pref_braille_overlay_tutorial_title"
         assertEquals("英文标题应保持不变", "Launch tutorial", en[name])
-        val title = zh[name]
-        assertTrue("中文资源缺少 $name", title != null)
-        assertTrue("中文标题必须含「教程」：$title", title!!.contains("教程"))
+        val title = requireNotNull(zh[name]) { "中文资源缺少 $name" }
+        assertTrue("中文标题必须含「教程」：$title", title.contains("教程"))
         assertFalse("中文教程标题不得误译成「发布教程」：$title", title.contains("发布"))
     }
 

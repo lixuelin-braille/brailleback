@@ -56,15 +56,14 @@ class SearchTutorialActivity : Activity(),
 
     override fun onStart() {
         super.onStart()
-        mDisplay = DisplayClient(this)
-        mDisplay!!.setOnConnectionStateChangeListener(this)
+        val display = DisplayClient(this)
+        mDisplay = display
+        display.setOnConnectionStateChangeListener(this)
     }
 
     override fun onStop() {
-        if (mDisplay != null) {
-            mDisplay!!.shutdown()
-            mDisplay = null
-        }
+        mDisplay?.shutdown()
+        mDisplay = null
         if (mShouldActivateSearch) {
             BrailleBackService.getActiveInstance()?.startSearchMode()
             mShouldActivateSearch = false
@@ -88,7 +87,7 @@ class SearchTutorialActivity : Activity(),
      */
     private fun populateTutorialText() {
         // Find friendly names for key commands.
-        val props = mDisplay!!.displayProperties ?: return
+        val props = mDisplay?.displayProperties ?: return
 
         val sortedBindings =
                 BrailleKeyBindingUtils.getSortedBindingsForDisplay(props)
