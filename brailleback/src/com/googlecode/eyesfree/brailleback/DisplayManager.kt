@@ -523,19 +523,11 @@ class DisplayManager(
     /**
      * 刷新链路心跳：每 5 秒一行，冻结时用来判断上层是否还在产生新的点阵。
      * 同时记录被 connected/frozen/motion 三个条件拦下的刷新次数。
+     *
+     * 计数与格式见 [DisplayRefreshStats]；上报线程仍在这里，且必须独立于刷新调度器。
      */
     private val TELEMETRY_INTERVAL_MS = 5000L
-    @Volatile private var statRefreshOk = 0
-    @Volatile private var statContent = 0
-    @Volatile private var statRetranslate = 0
-    @Volatile private var statBlockedNotConnected = 0
-    @Volatile private var statBlockedFrozen = 0
-    @Volatile private var statBlockedMotion = 0
-    @Volatile private var statBlockedIdentical = 0
-    @Volatile private var statCoalesced = 0
-    @Volatile private var statBlockedEmpty = 0
-    @Volatile private var statLastCells = 0
-    @Volatile private var statLastDigest = 0
+    private val stats = DisplayRefreshStats()
     /**
      * 上一次真正送到点显器的内容指纹。无障碍框架在窗口重绘时会重复下发
      * 完全相同的内容，重译整屏会让点显器闪一下，指纹相同即丢弃。
@@ -559,16 +551,11 @@ class DisplayManager(
             } catch (e: InterruptedException) {
                 break
             }
-            LogUtils.i(this@DisplayManager,
-                "refresh stats: conn=%s content=%d retranslate=%d ok=%d " +
-                    "cells=%d digest=%08X " +
-                    "blocked(nc=%d frozen=%d motion=%d identical=%d empty=%d) " +
-                    "coalesced=%d frozen=%s motion=%s",
-                connected, statContent, statRetranslate, statRefreshOk,
-                statLastCells, statLastDigest,
-                statBlockedNotConnected, statBlockedFrozen, statBlockedMotion,
-                statBlockedIdentical, statBlockedEmpty,
-                statCoalesced, mFrozen, mMotionMode)
+            LogUtils.i(
+                this@DisplayManager,
+                "%s",
+                stats.describe(connected, mFrozen, mMotionMode)
+            )
         }
     }.apply {
         isDaemon = true
@@ -871,7 +858,7 @@ class DisplayManager(
             if (superseded != null) {
                 // 定时器已在跑，只换内容、不重置定时器：事件洪流下首帧
                 // 延迟上限恒为 CONTENT_MIN_INTERVAL_MILLIS，不会永远轮不到。
-                statCoalesced += 1
+                stats.onCoalesced()
                 // 被替换掉的那帧不会再显示，它的节点引用必须归还。
                 callbackHandler.recycleContent(superseded)
                 return
@@ -925,12 +912,12 @@ class DisplayManager(
         }
 
         private fun handleSetContent(content: Content) {
-            statContent += 1
+            stats.onContent()
             val fingerprint = contentFingerprint(content)
             if (fingerprint == lastDisplayedFingerprint) {
                 // 文本、选区、焦点、平移策略全都没变：这只是窗口重绘触发的
                 // 重复下发，重新翻译并整屏重推会让点显器白白闪一次。
-                statBlockedIdentical += 1
+                stats.onIdentical()
                 callbackHandler.recycleContent(content)
                 return
             }
@@ -992,7 +979,7 @@ class DisplayManager(
         }
 
         private fun handleRetranslate() {
-            statRetranslate += 1
+            stats.onRetranslate()
             val oldTextPosition =
                 displayToTextPosition(
                     currentTranslationResult, cursorPositionToTranslate,
@@ -1027,42 +1014,7 @@ class DisplayManager(
         }
     }
 
-    /**
-     * 内容指纹：文本 + 三类标记的区间 + 平移/收缩/分段/可编辑标志。
-     *
-     * 用来识别「无障碍框架重复下发了完全一样的内容」。只比文本不够：
-     * 光标在同一文本上移动、选区变化、平移策略从 PAN_KEEP 变 PAN_RESET
-     * 都必须重新显示，否则点显器会停在错误位置。
-     */
-    private fun contentFingerprint(content: Content): String {
-        val text = content.getText() ?: return ""
-        val builder = StringBuilder(text.length + 48)
-        builder.append(text)
-        builder.append('\u0000').append(content.getPanStrategy())
-        builder.append('\u0000').append(content.getContractionMode())
-        builder.append('\u0000').append(content.isEditable())
-        builder.append('\u0000').append(content.isSplitParagraphs())
-        builder.append('\u0000').append(content.isParagraphIndent())
-        builder.append('\u0000').append(content.isFirstParagraphIndent())
-        builder.append('\u0000').append(content.isHeading())
-        val spanned = content.getSpanned()
-        if (spanned != null) {
-            appendSpanRanges(builder, spanned, DisplaySpans.SelectionSpan::class.java)
-            appendSpanRanges(builder, spanned, DisplaySpans.FocusSpan::class.java)
-            appendSpanRanges(builder, spanned, DisplaySpans.BrailleSpan::class.java)
-        }
-        return builder.toString()
-    }
-
-    private fun <T> appendSpanRanges(builder: StringBuilder, spanned: Spanned,
-                                     type: Class<T>) {
-        for (span in spanned.getSpans(0, spanned.length, type)) {
-            builder.append('\u0000')
-                .append(spanned.getSpanStart(span))
-                .append(':')
-                .append(spanned.getSpanEnd(span))
-        }
-    }
+    // 内容指纹与区间拼接已迁到 DisplayContentFingerprint.kt（纯函数，可 JVM 单测）。
 
     private class OnMappedInputEventArgs(
         val event: BrailleInputEvent,
@@ -1389,24 +1341,19 @@ class DisplayManager(
     }
 
     private fun refresh() {
-        if (!connected) {
-            statBlockedNotConnected += 1
-            return
+        when (val decision = decideRefresh(connected, mFrozen, mMotionMode)) {
+            RefreshDecision.Send -> doRefresh()
+            is RefreshDecision.Blocked -> {
+                stats.onBlocked(decision.reason)
+                if (decision.reason == RefreshBlock.MOTION) {
+                    // Coalesce rapid updates: refresh once after scrolling settles.
+                    displayHandler.removeCallbacks(mMotionModeRefreshRunnable)
+                    displayHandler.postDelayed(
+                        mMotionModeRefreshRunnable, MOTION_MODE_DEBOUNCE_MS
+                    )
+                }
+            }
         }
-        if (mFrozen) {
-            // Output paused: keep the last content on the display.
-            statBlockedFrozen += 1
-            return
-        }
-        if (mMotionMode) {
-            // Coalesce rapid updates: refresh once after scrolling settles.
-            statBlockedMotion += 1
-            displayHandler.removeCallbacks(mMotionModeRefreshRunnable)
-            displayHandler.postDelayed(
-                    mMotionModeRefreshRunnable, MOTION_MODE_DEBOUNCE_MS)
-            return
-        }
-        doRefresh()
     }
 
     private fun doRefresh() {
@@ -1419,15 +1366,13 @@ class DisplayManager(
             } else {
                 displayedBraille
             }
-        if (toDisplay.isEmpty() && statLastCells > 0) {
+        if (toDisplay.isEmpty() && stats.lastCells() > 0) {
             // 空数组会被编码成一整屏空白，点显器先清屏再画，看起来就是闪一下。
             // 焦点在两个节点之间切换时会短暂下发空内容，此时保持原屏更稳。
-            statBlockedEmpty += 1
+            stats.onEmpty()
             return
         }
-        statRefreshOk += 1
-        statLastCells = toDisplay.size
-        statLastDigest = Arrays.hashCode(toDisplay)
+        stats.onRefreshOk(toDisplay.size, Arrays.hashCode(toDisplay))
         display?.displayDots(toDisplay, displayedText, displayedBrailleToTextPositions)
         lastRefreshUptime = SystemClock.uptimeMillis()
         // 指纹在这里转正：只有真的送达点显器，重复下发才允许被丢弃。

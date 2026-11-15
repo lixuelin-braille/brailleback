@@ -50,6 +50,17 @@ class DisplayRefreshThrottleContractTest {
         projectFile("brailleback/src/com/googlecode/eyesfree/brailleback/DisplayManager.kt")
             .readText()
 
+    /** 指纹已抽成顶层纯函数（DisplayContentFingerprint.kt），断言要跟着走。 */
+    private fun fingerprintSource() =
+        projectFile(
+            "brailleback/src/com/googlecode/eyesfree/brailleback/DisplayContentFingerprint.kt"
+        ).readText()
+
+    /** 计数与心跳行已抽成独立类（DisplayRefreshStats.kt）。 */
+    private fun statsSource() =
+        projectFile("brailleback/src/com/googlecode/eyesfree/brailleback/DisplayRefreshStats.kt")
+            .readText()
+
     /** 抽出单个 Kotlin 方法体，避免同名字符串造成假通过。 */
     private fun methodBody(source: String, signature: String): String {
         val start = source.indexOf(signature)
@@ -96,8 +107,8 @@ class DisplayRefreshThrottleContractTest {
 
     private fun fingerprintBody() =
         methodBody(
-            displayManagerSource(),
-            "private fun contentFingerprint(content: Content)")
+            fingerprintSource(),
+            "internal fun contentFingerprint(content: DisplayManager.Content): String")
 
     // ---- 1. 内容指纹必须覆盖所有会影响显示的字段 ----
 
@@ -215,7 +226,7 @@ class DisplayRefreshThrottleContractTest {
     fun emptyFrameDoesNotBlankTheDisplay() {
         val body = doRefreshBody()
         assertTrue("空帧抑制条件缺失",
-            body.contains("toDisplay.isEmpty() && statLastCells > 0"))
+            body.contains("toDisplay.isEmpty() && stats.lastCells() > 0"))
         val guardAt = body.indexOf("if (toDisplay.isEmpty()")
         val dotsAt = body.indexOf("displayDots(")
         assertTrue("空帧抑制必须在 displayDots 之前返回", guardAt in 0 until dotsAt)
@@ -224,22 +235,42 @@ class DisplayRefreshThrottleContractTest {
         assertTrue("空帧抑制块必须位于下发之前",
             guardAt + guardBlock.length <= dotsAt)
         assertTrue("被抑制的空帧要单独计数，便于日志核对",
-            guardBlock.contains("statBlockedEmpty += 1"))
+            guardBlock.contains("stats.onEmpty()"))
         assertTrue("被抑制的空帧必须提前返回", guardBlock.contains("return"))
-        // 抑制时不能把 statLastCells 归零，否则第二次空帧就会漏出去清屏。
-        assertFalse("抑制空帧时不能清掉已显示格数", guardBlock.contains("statLastCells = 0"))
         assertFalse("被抑制的空帧不能计入已刷新次数",
-            guardBlock.contains("statRefreshOk += 1"))
+            guardBlock.contains("stats.onRefreshOk"))
+        // 抑制时不能把已显示格数归零，否则第二次空帧就会漏出去清屏：
+        // DisplayRefreshStats 只暴露 lastCells() 读，没有重置入口。
+        assertFalse("格数不该有可被误用的重置接口",
+            statsSource().contains("resetLastCells"))
+        assertFalse("格数不该有可被误用的重置接口",
+            statsSource().contains("fun setLastCells"))
     }
 
     @Test
     fun refreshStatsExposeTheNewCounters() {
-        val source = displayManagerSource()
+        val source = statsSource()
         // 没有这几个计数，现场日志无法区分「没内容可推」和「被限速拦住」。
         assertTrue(source.contains("identical=%d"))
         assertTrue(source.contains("empty=%d"))
         assertTrue(source.contains("coalesced=%d"))
-        assertTrue(source.contains("statBlockedIdentical"))
-        assertTrue(source.contains("statCoalesced"))
+        assertTrue("重复帧计数入口缺失", source.contains("fun onIdentical()"))
+        assertTrue("合并计数入口缺失", source.contains("fun onCoalesced()"))
+        assertTrue("心跳行必须由计数模块统一格式化，避免两处格式漂移",
+            source.contains("fun describe("))
+    }
+
+    @Test
+    fun `前置条件判定已抽出且刷新路径必须走它`() {
+        val body = methodBody(displayManagerSource(), "private fun refresh()")
+        assertTrue(
+            "refresh() 必须通过 decideRefresh 统一裁决，不能又退回三条分散的 early return",
+            body.contains("decideRefresh(connected, mFrozen, mMotionMode)"),
+        )
+        assertTrue("被拦下时按原因计数", body.contains("stats.onBlocked(decision.reason)"))
+        assertTrue(
+            "运动模式必须继续安排去抖刷新（它是延后不是丢弃）",
+            body.contains("RefreshBlock.MOTION"),
+        )
     }
 }
