@@ -57,7 +57,7 @@ class SoundBehaviorContractTest {
      */
     private fun wiring(): String =
         text(base + "src/com/googlecode/eyesfree/brailleback/SettingsActivity.kt")
-            .substringAfter("// 五个分类入口跳各自的 Compose 页。")
+            .substringAfter("// 六个分类入口跳各自的 Compose 页。")
             .substringBefore("// 屏幕盲文键盘")
 
     // -------------------------------------------------------------- 项与键
@@ -409,8 +409,8 @@ class SoundBehaviorContractTest {
             ).containsMatchIn(wiring)
         )
         assertEquals(
-            "五个分类入口各一条 wireCategory 接线",
-            5,
+            "六个分类入口各一条 wireCategory 接线",
+            6,
             Regex("""wireCategory\(""").findAll(wiring).count()
         )
         listOf(
@@ -419,6 +419,7 @@ class SoundBehaviorContractTest {
             "BrailleDisplayComposeActivity",
             "SoundBehaviorComposeActivity",
             "DeveloperOptionsComposeActivity",
+            "StabilityComposeActivity",
         ).forEach { activity ->
             assertTrue("接线缺少 $activity", wiring.contains(activity))
         }
@@ -442,8 +443,8 @@ class SoundBehaviorContractTest {
         )
         assertTrue(manifest.contains("""android:theme="@style/BraillebackSettingsTheme""""))
         assertEquals(
-            "Manifest 中应有五个 Compose 设置子屏",
-            5,
+            "Manifest 中应有六个 Compose 设置子屏",
+            6,
             Regex("""android:name="\.compose\.\w+ComposeActivity"""").findAll(manifest).count()
         )
     }

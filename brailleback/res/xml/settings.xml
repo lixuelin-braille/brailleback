@@ -62,6 +62,14 @@
             app:title="@string/pref_category_developer_title"
             app:summary="@string/pref_category_developer_summary" />
 
+        <!-- 稳定性与省电：把「服务会不会被系统或厂商杀掉」摊开显示并提供入口。
+             Android 17 起后台调音量受限制，服务被杀时音量键会静默失效，
+             所以这一屏和按键设置一样属于必看项。 -->
+        <Preference
+            app:key="@string/pref_category_stability_key"
+            app:title="@string/pref_category_stability_title"
+            app:summary="@string/pref_category_stability_summary" />
+
     </PreferenceCategory>
 
     <!-- ==================== 功能与内容（打开功能，不是设置开关） ==================== -->

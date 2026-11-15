@@ -379,4 +379,50 @@
     <string name="compose_settings_log_preview_hint">这里只显示最近一部分日志；完整日志请用复制或分享</string>
     <string name="compose_settings_overlay_tutorial_disabled">需要先开启屏幕叠加层</string>
 
-</resources>
+
+    <!-- 第六批：稳定性与省电适配（保活自检） -->
+    <string name="stability_title">稳定性与省电</string>
+    <string name="stability_section_status">状态</string>
+    <string name="stability_section_oem">厂商设置</string>
+    <string name="stability_service_title">前台服务</string>
+    <string name="stability_service_running">正在运行</string>
+        <string name="stability_issue_service_not_enabled">盲文服务还没启用：去系统「无障碍」里打开</string>
+<string name="stability_service_not_enabled">服务还没启用：先在系统「无障碍」里启用盲文服务</string>
+    <string name="stability_service_not_running">没有运行。服务一旦消失，点显器会静默断开。</string>
+    <string name="stability_battery_title">电池优化</string>
+    <string name="stability_battery_unrestricted">不受限制：系统不会推迟本应用</string>
+    <string name="stability_battery_optimized">受优化：息屏后系统可能停掉本应用</string>
+    <string name="stability_open_battery">设为不受限制</string>
+    <string name="stability_background_title">厂商后台限制</string>
+    <string name="stability_background_restricted">已被厂商省电策略限制。打开下面的设置页，把本应用设为「无限制」。</string>
+    <string name="stability_background_ok">未受限</string>
+    <string name="stability_open_autostart">打开厂商设置</string>
+    <string name="stability_notification_title">通知权限</string>
+    <string name="stability_bluetooth_title">蓝牙权限</string>
+    <string name="stability_granted">已授权</string>
+    <string name="stability_denied">未授权</string>
+    <string name="stability_request_permission">去授权</string>
+    <string name="stability_summary_all_ok">各项检查都正常</string>
+    <string name="stability_summary_title">总览</string>
+    <string name="stability_vendor_unknown">这台设备</string>
+    <string name="stability_vendor_title">这台设备</string>
+    <string name="stability_android17_note">Android 17 起后台调音量受限制：服务没在跑时，音量键会静默失效。</string>
+    <string name="stability_no_settings_page">这台机器没有提供应用设置页。请手动打开系统设置，找到本应用并设为无限制。</string>
+    <string name="stability_permission_denied_notification">通知已关闭</string>
+    <string name="stability_permission_denied_bluetooth">蓝牙权限缺失</string>
+    <string name="pref_category_stability_title">稳定性与省电</string>
+    <string name="pref_category_stability_summary">电池优化、厂商后台限制与权限</string>
+    <string-array name="stability_vendor_steps">
+        <item>设置 → 应用 → 应用管理，找到盲文服务</item>
+        <item>点「省电策略」，选「无限制」</item>
+        <item>同一页打开「自启动」开关</item>
+        <item>最近任务里给应用加锁，防止一键清理把它清掉</item>
+        <item>设置 → 应用 → 应用启动管理，关闭自动管理后允许自启动</item>
+        <item>电池 → 更多电池设置，允许后台活动</item>
+        <item>设置 → 电池 → 应用耗电管理，允许后台运行</item>
+        <item>设置 → 应用管理 → 自启动，打开开关</item>
+        <item>设置 → 电池 → 后台高耗电，允许</item>
+        <item>i管家 → 应用管理 → 自启动，打开开关</item>
+        <item>设置 → 电池 → 后台使用限制，把本应用加入「从不休眠的应用」</item>
+        <item>设备保护里允许本应用后台活动</item>
+    </string-array></resources>

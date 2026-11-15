@@ -38,6 +38,7 @@ import com.googlecode.eyesfree.brailleback.compose.DeviceConnectionComposeActivi
 import com.googlecode.eyesfree.brailleback.compose.DeveloperOptionsComposeActivity
 import com.googlecode.eyesfree.brailleback.compose.KeysGesturesComposeActivity
 import com.googlecode.eyesfree.brailleback.compose.SoundBehaviorComposeActivity
+import com.googlecode.eyesfree.brailleback.compose.StabilityComposeActivity
 import com.googlecode.eyesfree.brailleback.utils.LogFileWriter
 
 class SettingsActivity : AppCompatActivity(),
@@ -183,7 +184,7 @@ class SettingsActivity : AppCompatActivity(),
                 findPreference<Preference>(getString(R.string.pref_setup_service_key))
             mSetupServicePreference?.setOnPreferenceClickListener(this)
 
-            // 五个分类入口跳各自的 Compose 页。
+            // 六个分类入口跳各自的 Compose 页。
             // 这里用 Preference + 点击监听器，而不是空 PreferenceScreen：androidx 的
             // PreferenceScreen.onClick() 在「无 intent、无 fragment、无子项」时直接 return，
             // 点击会静默失败；而且它覆写了 onClick，setOnPreferenceClickListener 对它无效。
@@ -206,6 +207,12 @@ class SettingsActivity : AppCompatActivity(),
             wireCategory(
                 R.string.pref_category_developer_key,
                 DeveloperOptionsComposeActivity::class.java
+            )
+            // 稳定性与省电：无障碍服务被系统/厂商省电策略杀掉时点显器是静默断开的，
+            // 这一屏给出四项实测状态和直达各设置页的入口。
+            wireCategory(
+                R.string.pref_category_stability_key,
+                StabilityComposeActivity::class.java
             )
 
             findPreference<Preference>(getString(R.string.pref_bookshelf_key))

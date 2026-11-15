@@ -125,7 +125,7 @@ class SettingsStructureContractTest {
 
     @Test
     fun categoryEntriesAreFlatAndNeverScreens() {
-        // 五个子屏的内容已经移出本文件，这里只剩五个入口行。入口行必须是 Preference：
+        // 子屏内容已经移出本文件，这里只剩入口行。入口行必须是 Preference：
         // androidx 1.2.1 的 PreferenceScreen.onClick() 在「无 intent、无 fragment、无子项」
         // 时会直接 return（宁可静默失败也不抛异常）；而且它覆写了 onClick，
         // setOnPreferenceClickListener 对 PreferenceScreen 无效。归档时就踩过这个坑：
@@ -141,7 +141,7 @@ class SettingsStructureContractTest {
                     resolveKey(it.getAttribute("app:key")) == "category_settings"
             }
             .flatMap { it.children() }
-        assertEquals("设置分类下应为五个平级入口", 5, entries.size)
+        assertEquals("设置分类下应为六个平级入口", 6, entries.size)
         entries.forEach { entry ->
             assertEquals(
                 "入口 ${entry.getAttribute("app:key")} 必须是 Preference，否则点击不会有反应",
@@ -150,10 +150,10 @@ class SettingsStructureContractTest {
             )
         }
         assertEquals(
-            "五个入口的 key 必须稳定（代码按 key 接线）",
+            "六个入口的 key 必须稳定（代码按 key 接线）",
             setOf(
                 "category_device", "category_keys", "category_braille",
-                "category_sound_behavior", "category_developer"
+                "category_sound_behavior", "category_developer", "category_stability"
             ),
             entries.map { resolveKey(it.getAttribute("app:key")) }.toSet()
         )
@@ -161,10 +161,10 @@ class SettingsStructureContractTest {
 
     @Test
     fun everyScreenHasBoundedNodeCount() {
-        // 归档后只剩一个主屏：3 个分组标题 + 启用服务 + 5 个分类入口 + 3 个功能入口 = 12。
+        // 归档后只剩一个主屏：3 个分组标题 + 启用服务 + 6 个分类入口 + 3 个功能入口 = 13。
         assertTrue(
-            "主屏朗读节点不得超过 12 个，超过会让线性浏览重新变拥挤",
-            audibleNodes(settingsXml) <= 12
+            "主屏朗读节点不得超过 13 个，超过会让线性浏览重新变拥挤",
+            audibleNodes(settingsXml) <= 13
         )
     }
 

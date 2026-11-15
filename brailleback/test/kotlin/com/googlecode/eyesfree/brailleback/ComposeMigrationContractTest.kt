@@ -158,7 +158,7 @@ class ComposeMigrationContractTest {
         // 五个入口是 Preference + 点击监听（wireCategory）。不能用空 PreferenceScreen：
         // androidx 1.2.1 的 PreferenceScreen.onClick() 在无 intent/fragment/子项时直接 return，
         // 点击静默失败；这次真机上五个入口全部点了没反应就是这个原因。
-        val wiring = settings.substringAfter("// 五个分类入口跳各自的 Compose 页。")
+        val wiring = settings.substringAfter("// 六个分类入口跳各自的 Compose 页。")
             .substringBefore("// 屏幕盲文键盘")
         listOf(
             "pref_category_device_key" to "DeviceConnectionComposeActivity",
@@ -166,6 +166,7 @@ class ComposeMigrationContractTest {
             "pref_category_braille_key" to "BrailleDisplayComposeActivity",
             "pref_category_sound_behavior_key" to "SoundBehaviorComposeActivity",
             "pref_category_developer_key" to "DeveloperOptionsComposeActivity",
+            "pref_category_stability_key" to "StabilityComposeActivity",
         ).forEach { (keyRes, activity) ->
             assertTrue(
                 "$keyRes 未接线到 $activity",
@@ -175,8 +176,8 @@ class ComposeMigrationContractTest {
             )
         }
         assertEquals(
-            "五个已迁移的子屏应各有一条 wireCategory 接线",
-            5,
+            "六个已迁移的子屏应各有一条 wireCategory 接线",
+            6,
             Regex("""wireCategory\(""").findAll(wiring).count()
         )
         assertFalse(
@@ -214,7 +215,8 @@ class ComposeMigrationContractTest {
     fun legacySubScreensAreArchivedAndMainScreenKeepsOnlyEntryRows() {
         val xml = text(base + "res/xml/settings.xml")
         val archived = text(ARCHIVE_PATH)
-        // 主屏只剩五个入口行：五屏内容移出编译路径，主屏层级不变。
+        // 主屏只剩入口行：迁移的 5 个子屏内容移出编译路径，主屏层级不变；
+        // 稳定性与省电是新增屏（没有旧 XML 可归档），单独断言它必须在主屏上。
         listOf(
             "pref_category_device_key",
             "pref_category_keys_key",
@@ -225,6 +227,11 @@ class ComposeMigrationContractTest {
             assertTrue("主屏入口行不得丢失：$key", xml.contains("@string/$key"))
             assertTrue("旧子屏原文必须进归档：$key", archived.contains("@string/$key"))
         }
+        // 稳定性与省电是新增入口，没有旧 XML 可归档，所以只要求主屏有它。
+        assertTrue(
+            "新增的稳定性与省电入口必须出现在主屏",
+            xml.contains("@string/pref_category_stability_key"),
+        )
         // 内容项与全部偏好键只保留在归档里：两代 UI 共用同一份偏好数据。
         listOf(
             "pref_connection_status_key",

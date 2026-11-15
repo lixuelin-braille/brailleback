@@ -241,7 +241,7 @@ class KeysGesturesContractTest {
     @Test
     fun wiringRoutesFiveScreensToCompose() {
         val settings = text(base + "src/com/googlecode/eyesfree/brailleback/SettingsActivity.kt")
-        val wiring = settings.substringAfter("// 五个分类入口跳各自的 Compose 页。")
+        val wiring = settings.substringAfter("// 六个分类入口跳各自的 Compose 页。")
             .substringBefore("// 屏幕盲文键盘")
         assertTrue(
             "按键与手势入口必须接线到自己的 Compose 页",
@@ -254,8 +254,8 @@ class KeysGesturesContractTest {
             wiring.contains("DeveloperOptionsComposeActivity::class.java")
         )
         assertEquals(
-            "五个分类入口各一条 wireCategory 接线",
-            5,
+            "六个分类入口各一条 wireCategory 接线",
+            6,
             Regex("""wireCategory\(""").findAll(wiring).count()
         )
         assertTrue(

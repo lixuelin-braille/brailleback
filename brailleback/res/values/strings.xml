@@ -570,4 +570,50 @@
     <string name="compose_settings_log_level_locked">This diagnostic build has a fixed log level and cannot be changed here</string>
     <string name="compose_settings_log_preview_hint">Showing only the most recent part of the log. Use copy or share for the full log.</string>
     <string name="compose_settings_overlay_tutorial_disabled">Turn on the on-screen braille overlay first</string>
-</resources>
+
+    <!-- 第六批：稳定性与省电适配（保活自检） -->
+    <string name="stability_title">Stability and battery</string>
+    <string name="stability_section_status">Status</string>
+    <string name="stability_section_oem">Vendor settings</string>
+    <string name="stability_service_title">Foreground service</string>
+    <string name="stability_service_running">Running</string>
+        <string name="stability_issue_service_not_enabled">Braille service is not enabled: turn it on in Accessibility</string>
+<string name="stability_service_not_enabled">Service is not enabled yet: enable Braille service in Accessibility first</string>
+    <string name="stability_service_not_running">Not running. The braille display disconnects silently when the service is gone.</string>
+    <string name="stability_battery_title">Battery optimization</string>
+    <string name="stability_battery_unrestricted">Unrestricted: the system will not defer this app</string>
+    <string name="stability_battery_optimized">Optimized: the system may stop this app while the screen is off</string>
+    <string name="stability_open_battery">Allow background</string>
+    <string name="stability_background_title">Vendor background restriction</string>
+    <string name="stability_background_restricted">Restricted by the vendor power manager. Open the settings below and set this app to unrestricted.</string>
+    <string name="stability_background_ok">Not restricted</string>
+    <string name="stability_open_autostart">Open vendor settings</string>
+    <string name="stability_notification_title">Notifications</string>
+    <string name="stability_bluetooth_title">Bluetooth permission</string>
+    <string name="stability_granted">Granted</string>
+    <string name="stability_denied">Not granted</string>
+    <string name="stability_request_permission">Grant</string>
+    <string name="stability_summary_all_ok">All checks passed</string>
+    <string name="stability_summary_title">Overall</string>
+    <string name="stability_vendor_unknown">This device</string>
+    <string name="stability_vendor_title">This device</string>
+    <string name="stability_android17_note">Android 17 restricts background volume APIs: volume-key handling silently stops working when the service is not running.</string>
+    <string name="stability_no_settings_page">This device exposes no settings page for the app. Open Settings, find the app and set it to unrestricted manually.</string>
+    <string name="stability_permission_denied_notification">Notifications off</string>
+    <string name="stability_permission_denied_bluetooth">Bluetooth permission missing</string>
+    <string name="pref_category_stability_title">Stability and battery</string>
+    <string name="pref_category_stability_summary">Battery optimization, vendor background limits and permissions</string>
+    <string-array name="stability_vendor_steps">
+        <item>Settings - Apps - App management: find this braille app</item>
+        <item>Battery saver: set it to No restrictions</item>
+        <item>Autostart: turn the switch on</item>
+        <item>Recents: lock the card so clean-up does not kill it</item>
+        <item>Settings - Apps - App launch: turn off automatic management, allow autostart</item>
+        <item>Battery - More battery settings: allow background activity</item>
+        <item>Settings - Battery - App power management: allow background running</item>
+        <item>Settings - App management - Autostart: turn it on</item>
+        <item>Settings - Battery - High background power use: allow</item>
+        <item>iManager - App management - Autostart: turn it on</item>
+        <item>Settings - Battery - Background usage limits: add this app to Never sleeping apps</item>
+        <item>Device care: allow background activity for this app</item>
+    </string-array></resources>
