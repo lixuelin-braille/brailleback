@@ -16,7 +16,7 @@ if (hasReleaseKey) {
 }
 
 android {
-    compileSdk 35
+    compileSdk 37
     if (hasReleaseKey) {
         signingConfigs {
             release {
@@ -36,7 +36,7 @@ android {
     defaultConfig {
         applicationId "com.googlecode.eyesfree.brailleback"
         minSdk 23
-        targetSdk 35
+        targetSdk 37
         versionCode appVersionCode
         versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"

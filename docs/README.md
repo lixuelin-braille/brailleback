@@ -32,6 +32,7 @@
 | **[25-Kotlin集合与标准库替换](./25-Kotlin集合与标准库替换.md)** | `java.util` import 89 → 52、`Arrays`/`Collections` 换标准库、ArrayDeque 两次踩坑 | 动集合或排序代码前读 |
 | **[26-裸线程与执行器收编](./26-裸线程与执行器收编.md)** | 单线程执行器 → `limitedParallelism(1)`、USB 停机线程 → 协程；日志/`synchronized` 两项否决原因 | 再动线程或日志前读 |
 | **[27-DefaultNavigationMode拆分](./27-DefaultNavigationMode拆分.md)** | 1302 → 937 行：滚动与可见性 15 个函数搬成同包扩展函数、6 字段 3 方法放宽到 internal、detekt 拦一次循环跳转 | 改导航或滚动逻辑前读 |
+| **[28-targetSdk37](./28-targetSdk37.md)** | 11 模块 compileSdk/targetSdk 35 → 37、Android 17 变更逐条核对、真机五轮与 install 假信号 | 再提 targetSdk 或改打包配置前读 |
 
 ---
 

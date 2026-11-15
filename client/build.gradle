@@ -1,12 +1,12 @@
 apply plugin: 'com.android.library'
 
 android {
-    compileSdk 35
+    compileSdk 37
     namespace 'com.googlecode.eyesfree.braille.client'
 
     defaultConfig {
         minSdk 23
-        targetSdk 35
+        targetSdk 37
         
     }
 

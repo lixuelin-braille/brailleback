@@ -1,12 +1,12 @@
 apply plugin: 'com.android.library'
 
 android {
-    compileSdk 35
+    compileSdk 37
     namespace 'com.google.android.accessibility.brailleime.analytics'
 
     defaultConfig {
         minSdk 23
-        targetSdk 35
+        targetSdk 37
     }
 
     compileOptions {

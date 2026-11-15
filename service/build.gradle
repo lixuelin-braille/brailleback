@@ -11,7 +11,7 @@ import org.gradle.api.tasks.TaskAction
 apply plugin: 'com.android.library'
 
 android {
-    compileSdk 35
+    compileSdk 37
     buildFeatures {
         buildConfig = true
     }
@@ -19,7 +19,7 @@ android {
 
     defaultConfig {
         minSdk 23
-        targetSdk 35
+        targetSdk 37
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         // 诊断包专用：把日志级别硬编码进 APK，不再读设置项。
         // 正常构建为 -1（不生效）；出诊断包用 -PdiagLogLevel=3（DEBUG）。
