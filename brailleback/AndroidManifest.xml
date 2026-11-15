@@ -135,6 +135,7 @@
         <service
             android:name="com.googlecode.eyesfree.braille.service.display.DisplayService"
             android:permission="com.googlecode.eyesfree.braille.display.PERMISSION_CONNECT"
+            android:foregroundServiceType="connectedDevice"
             android:exported="false">
             <intent-filter>
                 <action android:name="com.googlecode.eyesfree.braille.service.ACTION_DISPLAY_SERVICE" />

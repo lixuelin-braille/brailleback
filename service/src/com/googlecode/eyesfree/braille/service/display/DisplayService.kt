@@ -258,6 +258,14 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
     var mConnectionProgress: String? = null
     var mConnectPending = false
 
+    /**
+     * 前台保活是否生效。无障碍服务未开启时，连接成功后由服务自身提升为
+     * connectedDevice 前台服务；生效期间客户端数归零不主动断开——界面退出
+     * 只是用户离开设置页/阅读器，不代表要停止点显器。
+     */
+    @Volatile
+    internal var mDisplayKeepAliveActive = false
+
     var mDisplayProperties: BrailleDisplayProperties? = null
     private lateinit var mTablesDir: File
     var mDataFileState = FILES_NOT_EXTRACTED
@@ -540,14 +548,27 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         val clientCount = mClients.beginBroadcast()
         mClients.finishBroadcast()
         if (clientCount <= 0) {
-            cancelPendingReconnect()
-            disconnectBraille()
+            // 前台保活期间不解绑即断开：服务已是 started，客户端暂时归零
+            // 只说明界面退出，连接应当保留到显式断开或点显器掉线为止。
+            if (!mDisplayKeepAliveActive) {
+                cancelPendingReconnect()
+                disconnectBraille()
+            }
         }
         return true
     }
 
     override fun onRebind(intent: Intent?) {
         autoConnectBraille()
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // 连接建立时通过 startForegroundService 拉起本服务，必须在 5 秒内
+        // 补上 startForeground；其它启动来源不需要前台状态。
+        if (intent?.action == ACTION_DISPLAY_KEEP_ALIVE) {
+            postDisplayKeepAliveNotification()
+        }
+        return START_NOT_STICKY
     }
 
     // NOTE: The methods in this class are invoked on threads created by the
@@ -624,6 +645,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
     /*package*/ fun onDisplayConnected(
         properties: BrailleDisplayProperties?) {
         mHandler.onDisplayConnected(properties)
+        promoteDisplayForeground()
     }
 
     /** Records one displayDots delivery for the refresh telemetry. */
@@ -699,6 +721,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         // An explicit disconnect starts a new connection cycle, so a
         // controller release conflict may be retried once in that cycle.
         mHidRetryCount = 0
+        dropDisplayForeground()
     }
 
     /** Cancels a reconnect requested by an earlier transition. */

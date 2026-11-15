@@ -50,6 +50,10 @@
     <string name="connprog_usb_hid_not_found">No wired USB HID braille display detected. Connect the display and try again.</string>
     <string name="connprog_usb_hid_permission_denied">USB permission was denied. Allow access when prompted, then reconnect.</string>
     <string name="connprog_usb_hid_failed">Wired USB HID connection failed (error %1$d).</string>
+    <!-- 前台保活通知：无障碍服务未开启时，点显器连接靠它保持。 -->
+    <string name="display_keepalive_channel">Braille display connection</string>
+    <string name="display_keepalive_title">Braille display connected</string>
+    <string name="display_keepalive_text">The display stays connected after leaving this screen. Force-stopping the app disconnects it.</string>
 </resources>
 
 
