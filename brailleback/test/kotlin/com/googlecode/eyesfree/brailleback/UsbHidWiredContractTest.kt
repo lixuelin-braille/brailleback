@@ -124,16 +124,19 @@ class UsbHidWiredContractTest {
 
     @Test
     fun settingsExposeBluetoothUsbAndAuto() {
-        assertEquals(listOf("bluetooth", "usb", "auto"), items(protocolValues()))
+        // 自动排第一：它是推荐项，读屏按列表顺序念，排第一才能先听到。
+        assertEquals(listOf("auto", "bluetooth", "usb"), items(protocolValues()))
         assertFalse(protocolValues().contains("usbhid"))
         assertFalse(protocolValues().contains("rfcomm"))
         assertFalse(protocolValues().contains("wujie"))
 
         val entries = items(protocolEntries())
         assertEquals(3, entries.size)
-        assertTrue(entries[0].contains("pref_connection_protocol_bluetooth_label"))
-        assertTrue(entries[1].contains("pref_connection_protocol_usb_label"))
-        assertTrue(entries[2].contains("pref_connection_protocol_auto_label"))
+        assertTrue(entries[0].contains("pref_connection_protocol_auto_label"))
+        assertTrue(entries[1].contains("pref_connection_protocol_bluetooth_label"))
+        assertTrue(entries[2].contains("pref_connection_protocol_usb_label"))
+        // values 与 entries 必须同序：错位会让「自动」被念成「USB 连接」。
+        assertEquals(items(protocolValues()).size, entries.size)
         assertFalse(protocolEntries().contains("usbhid"))
     }
 

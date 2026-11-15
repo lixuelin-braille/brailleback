@@ -72,12 +72,14 @@ class DeviceConnectionLogicTest {
     }
 
     @Test
-    fun labelForAutoReadsTheThirdEntry() {
-        val values = listOf("bluetooth", "usb", "auto")
-        val entries = listOf("蓝牙连接", "USB 连接", "自动")
-        // 自动必须是第三项、且真的能读到：读屏只会顺序念这个列表，
-        // 少一项就等于这一项不存在。
+    fun labelForAutoReadsTheFirstEntry() {
+        val values = listOf("auto", "bluetooth", "usb")
+        val entries = listOf("自动", "蓝牙连接", "USB 连接")
+        // 自动排第一：读屏按列表顺序念，排第一才会先被听到；
+        // 但 values 与 entries 必须同序，错位会把「自动」念成别的连接方式。
         assertEquals("自动", DeviceConnectionLogic.labelForValue(values, entries, "auto"))
+        assertEquals("蓝牙连接", DeviceConnectionLogic.labelForValue(values, entries, "bluetooth"))
+        assertEquals("USB 连接", DeviceConnectionLogic.labelForValue(values, entries, "usb"))
         assertFalse(DeviceConnectionLogic.isUsb("auto"))
     }
 }

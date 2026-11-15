@@ -48,14 +48,14 @@
     
     <string name="pref_bookshelf_key">bookshelf</string>
     <string-array name="pref_connection_protocol_values">
+        <item>auto</item>
         <item>bluetooth</item>
         <item>usb</item>
-        <item>auto</item>
     </string-array>
     <string-array name="pref_connection_protocol_entries">
+        <item>@string/pref_connection_protocol_auto_label</item>
         <item>@string/pref_connection_protocol_bluetooth_label</item>
         <item>@string/pref_connection_protocol_usb_label</item>
-        <item>@string/pref_connection_protocol_auto_label</item>
     </string-array>
     <string name="pref_category_braille_overlay_key">category_braille_overlay</string>
     <string name="pref_braille_overlay_key">overlay_enabled</string>

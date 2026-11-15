@@ -47,7 +47,12 @@ object DeviceConnectionLogic {
     fun isUsb(value: String?): Boolean =
         normalizeProtocol(value) == ConnectionProtocolPolicy.USB
 
-    /** 当前协议值对应的可读标签；值不在表中时退回第一项，保证读屏不会朗读空白。 */
+    /**
+     * 当前协议值对应的可读标签；值不在表中时退回第一项，保证读屏不会朗读空白。
+     *
+     * 依赖 [values] 与 [entries] 同序：错位会把一个选项的文案安到另一个选项上，
+     * 读屏用户没有任何办法察觉，只会照着错的选项点。
+     */
     fun labelForValue(values: List<String>, entries: List<String>, value: String?): String {
         val index = values.indexOf(normalizeProtocol(value))
         return entries.getOrElse(index) { entries.firstOrNull().orEmpty() }
