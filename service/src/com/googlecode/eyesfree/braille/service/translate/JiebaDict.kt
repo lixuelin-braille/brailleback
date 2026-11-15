@@ -360,9 +360,9 @@ class JiebaDict {
         for (i in n - 1 downTo 0) {
             var best = Double.NEGATIVE_INFINITY
             var bestX = i
-            for (x in dag[i]!!) {
+            for (x in dag[i].orEmpty()) {
                 val w = sentence.substring(i, x + 1)
-                var f = if (freqMap.containsKey(w)) freqMap[w]!! else 1
+                var f = freqMap[w] ?: 1
                 if (f <= 0) {
                     f = 1
                 }
@@ -399,9 +399,9 @@ class JiebaDict {
         for (i in n - 1 downTo 0) {
             var best = Double.NEGATIVE_INFINITY
             var bestX = i
-            for (x in dag[i]!!) {
+            for (x in dag[i].orEmpty()) {
                 val w = sentence.substring(i, x + 1)
-                var f = if (freqMap.containsKey(w)) freqMap[w]!! else 1
+                var f = freqMap[w] ?: 1
                 if (f <= 0) {
                     f = 1
                 }

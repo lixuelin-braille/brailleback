@@ -189,25 +189,60 @@ val node = checkNotNull(accessibilityNodeInfo) {
 `ReturnCount` 这条说明一件事：**每加一个 `?: return`，都在往「返回点太多」这条线上走**。
 把分支收敛成表达式比逐处加 early return 更耐用。
 
-## 剩余 134 处的分布与下一批
+## 第四批：八个小文件 49 处（134 → 85）
 
-| 文件 | 处数 | 行数 | 备注 |
+到这一步，全仓只剩 `BrailleBackService.kt` 一个文件还有 `!!`。
+
+| 文件 | 处数 | 改法 |
+|:--|--:|:--|
+| `DefaultNavigationMode` | 10 | `AccessibilityNodeInfoRef.get()` 取快照；`?.let { ... } ?: false` 表达失败 |
+| `LabelProviderClient` | 10 | `mClient!!` 全换成方法顶部 `val client = mClient ?: return ...` |
+| `SelfBrailleService` | 8 | 协议字段缺失用 `requireNotNull` 说明原因；旧状态缺字段则跳过 |
+| `BdoCArchiveParserTest` | 6 | `assertNotNull` + `!!` 合并成 `requireNotNull` |
+| `SoundBehaviorContractTest` | 6 | 同上，资源查表统一 `requireNotNull` |
+| `DisplayService` | 5 | `if (x != null) { x!!.disconnect() }` → `x?.disconnect()` |
+| `JiebaDict` | 4 | `dag[i]!!` → `dag[i].orEmpty()`；`containsKey + !!` → `?: 1` |
+
+两条经验：
+
+1. **`mClient!!` 这类属性，要改成「方法顶部取局部」，而不是逐处换 `?.`**。
+   `LabelProviderClient` 的 8 个方法都有 `if (!checkClient()) { return null }`，
+   紧跟一行 `val client = mClient ?: return null` 之后，下面所有 `mClient!!` 全消失。
+   `checkClient()` 只判了「当下非空」，两次调用之间仍可能被 `shutdown()` 清掉，
+   取局部才真正修掉这个窗口。
+
+2. **删掉 `sentinel!!` 会让后面的 `sentinel.get()` 编译失败**。
+   原因是那一行的 `!!` 同时承担了「智能转换」的作用——它把 `sentinel` 从可空收窄成非空，
+   后面才允许直接调 `.get()`。删断言必须换成
+   `val sentinelRef = requireNotNull(sentinel) { "…" }`，否则编译器只看到可空类型，
+   下一行立刻报 `Only safe (?.) or non-null asserted (!!.) calls are allowed`。
+   这是本批唯一一次编译失败，也是最容易踩的一类坑：**断言不只是「压住警告」，它还在给编译器发信号**。
+
+`shutdown()` 顺手改成先摘引用再释放：
+
+```kotlin
+val client = mClient
+mClient = null
+client?.release()
+```
+
+原来的写法是 `if (checkClient()) { mClient!!.release(); mClient = null }`——
+释放过程中被重入时，第二次会拿到同一个 client 再 release 一遍。
+
+验证：编译通过、520 + 164 全绿、detekt 通过、lint error=0；
+真机连续五轮采样 `Crashed services:{}`，主进程与 `:service` 都在，无 `FATAL EXCEPTION`。
+
+## 剩余 85 处：只剩 BrailleBackService
+
+| 文件 | 处数 | 行数 | 说明 |
 |:--|--:|--:|:--|
-| `BrailleBackService.kt` | 85 | 1040 | 无障碍服务主类，占剩余的 63%，风险最高 |
-| `DefaultNavigationMode.kt` | 10 | 1290 | 导航主逻辑 |
-| `LabelProviderClient.kt` | 10 | 597 | 标签服务客户端 |
-| `SelfBrailleService.kt` | 8 | 294 | 自述盲文服务 |
-| `BdoCArchiveParserTest.kt` | 6 | — | 测试 |
-| `SoundBehaviorContractTest.kt` | 6 | — | 测试 |
-| `DisplayService.kt` | 5 | 1769 | 显示服务主类 |
-| `JiebaDict.kt` | 4 | — | 分词词典 |
+| `BrailleBackService.kt` | 85 | 1040 | 无障碍服务主类，全仓最后一处 |
 
-八个小文件（49 处）先清掉，就只剩 `BrailleBackService` 一个：
+分 4 批做，每批 20 处左右，每批跑单测 + 装机冒烟：
 
-1. 两个测试 12 处 + `JiebaDict` 4 处（低风险，一次清完）
-2. `DisplayService` 5 + `SelfBrailleService` 8 + `LabelProviderClient` 10 + `DefaultNavigationMode` 10（35 处）
-3. `BrailleBackService` 85 处分 4 批，每批 20 处左右，每批跑单测 + 装机冒烟
+1. 成员属性断言（`mDisplayManager!!`、`mSelfBrailleService!!` 一类）
+2. 生命周期回调（`onServiceConnected` / `onAccessibilityEvent` / `onDestroy`）
+3. 偏好设置与内容刷新路径（`SharedPreferences`、`DisplayManager.setContent`）
+4. 剩下的 UI、菜单、广播接收
 
-目标：全仓 `!!` 先降到 0，再谈「密封类替代 null 返回」「不可变集合」「`when` 穷尽」这些更深的 Kotlin 化。
-
-目标：全仓 `!!` 先降到 0，再谈「密封类替代 null 返回」「不可变集合」「`when` 穷尽」这些更深的 Kotlin 化。
+目标：全仓 `!!` 归零，再谈「密封类替代 null 返回」「不可变集合」「`when` 穷尽」这些更深的 Kotlin 化。

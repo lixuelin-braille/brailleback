@@ -94,23 +94,28 @@ class LabelProviderClient(context: Context, authority: String) {
         if (!checkClient()) {
             return null
         }
+        // checkClient 只保证「当下」非空：取一次局部，避免调用前被 shutdown 清掉。
+        val client = mClient ?: return null
 
+        // 实际写入抽出去，让前置校验留在一处，返回点不会越堆越多。
+        return insertWithClient(client, label)
+    }
+
+    /** 真正写入；任何失败都返回 null，由上层按「插入失败」处理。 */
+    private fun insertWithClient(client: ContentProviderClient, label: Label): Label? {
         val values = buildContentValuesForLabel(label)
-
-        val resultUri: Uri?
-        try {
-            resultUri = mClient!!.insert(mLabelsContentUri, values)
+        val resultUri = try {
+            client.insert(mLabelsContentUri, values)
         } catch (e: RemoteException) {
             LogUtils.log(this, Log.ERROR, e.toString())
             return null
-        }
-
-        if (resultUri == null) {
+        } ?: run {
             LogUtils.log(this, Log.WARN, "Failed to insert label.")
             return null
         }
 
-        val newLabelId = resultUri.lastPathSegment!!.toLong()
+        // provider 返回的 Uri 理论上有路径段，缺失或不是数字都当作插入失败。
+        val newLabelId = resultUri.lastPathSegment?.toLongOrNull() ?: return null
         return Label(label, newLabelId)
     }
 
@@ -129,10 +134,12 @@ class LabelProviderClient(context: Context, authority: String) {
         if (!checkClient()) {
             return null
         }
+        // checkClient 只保证「当下」非空：取一次局部，避免调用前被 shutdown 清掉。
+        val client = mClient ?: return null
 
         var cursor: Cursor? = null
         try {
-            cursor = mClient!!.query(
+            cursor = client.query(
                 mLabelsContentUri, LabelsTable.ALL_COLUMNS /* projection */,
                 null /* where */, null /* whereArgs */, null /* sortOrder */
             )
@@ -161,12 +168,14 @@ class LabelProviderClient(context: Context, authority: String) {
         if (!checkClient()) {
             return null
         }
+        // checkClient 只保证「当下」非空：取一次局部，避免调用前被 shutdown 清掉。
+        val client = mClient ?: return null
 
         val whereArgs = arrayOf(locale)
 
         var cursor: Cursor? = null
         try {
-            cursor = mClient!!.query(
+            cursor = client.query(
                 mPackageSummaryContentUri, null /* projection */,
                 PACKAGE_SUMMARY_QUERY_WHERE, whereArgs, null /* sortOrder */
             )
@@ -206,6 +215,8 @@ class LabelProviderClient(context: Context, authority: String) {
         if (!checkClient()) {
             return null
         }
+        // checkClient 只保证「当下」非空：取一次局部，避免调用前被 shutdown 清掉。
+        val client = mClient ?: return null
 
         val whereArgs = arrayOf(
             packageName, locale, Integer.toString(maxPackageVersion)
@@ -213,7 +224,7 @@ class LabelProviderClient(context: Context, authority: String) {
 
         var cursor: Cursor? = null
         try {
-            cursor = mClient!!.query(
+            cursor = client.query(
                 mLabelsContentUri, LabelsTable.ALL_COLUMNS /* projection */,
                 GET_LABELS_FOR_APPLICATION_QUERY_WHERE, whereArgs,
                 null /* sortOrder */
@@ -271,13 +282,15 @@ class LabelProviderClient(context: Context, authority: String) {
         if (!checkClient()) {
             return null
         }
+        // checkClient 只保证「当下」非空：取一次局部，避免调用前被 shutdown 清掉。
+        val client = mClient ?: return null
 
         val whereArgs = arrayOf(
             packageName, viewName, locale, Integer.toString(maxPackageVersion)
         )
         var cursor: Cursor? = null
         try {
-            cursor = mClient!!.query(
+            cursor = client.query(
                 mLabelsContentUri, LabelsTable.ALL_COLUMNS,
                 GET_LABEL_QUERY_WHERE, whereArgs, null /* sortOrder */
             )
@@ -306,11 +319,13 @@ class LabelProviderClient(context: Context, authority: String) {
         if (!checkClient()) {
             return null
         }
+        // checkClient 只保证「当下」非空：取一次局部，避免调用前被 shutdown 清掉。
+        val client = mClient ?: return null
 
         val uri = ContentUris.withAppendedId(mLabelsContentUri, id)
         var cursor: Cursor? = null
         try {
-            cursor = mClient!!.query(
+            cursor = client.query(
                 uri, LabelsTable.ALL_COLUMNS, null /* where */,
                 null /* whereArgs */, null /* sortOrder */
             )
@@ -342,6 +357,8 @@ class LabelProviderClient(context: Context, authority: String) {
         if (!checkClient()) {
             return false
         }
+        // checkClient 只保证「当下」非空：取一次局部，避免调用前被 shutdown 清掉。
+        val client = mClient ?: return false
 
         val labelId = label.id
 
@@ -354,7 +371,7 @@ class LabelProviderClient(context: Context, authority: String) {
         val values = buildContentValuesForLabel(label)
 
         try {
-            val rowsAffected = mClient!!.update(
+            val rowsAffected = client.update(
                 uri, values, null /* selection */, null /* selectionArgs */
             )
             return rowsAffected > 0
@@ -382,6 +399,8 @@ class LabelProviderClient(context: Context, authority: String) {
         if (!checkClient()) {
             return false
         }
+        // checkClient 只保证「当下」非空：取一次局部，避免调用前被 shutdown 清掉。
+        val client = mClient ?: return false
 
         val labelId = label.id
 
@@ -393,7 +412,7 @@ class LabelProviderClient(context: Context, authority: String) {
         val uri = ContentUris.withAppendedId(mLabelsContentUri, labelId)
 
         try {
-            val rowsAffected = mClient!!.delete(
+            val rowsAffected = client.delete(
                 uri, null /* selection */, null /* selectionArgs */
             )
             return rowsAffected > 0
@@ -407,10 +426,10 @@ class LabelProviderClient(context: Context, authority: String) {
      * Shuts down the client and releases any resources.
      */
     fun shutdown() {
-        if (checkClient()) {
-            mClient!!.release()
-            mClient = null
-        }
+        // 先摘引用再释放：即使释放过程中又被调一次 shutdown，也不会重复 release。
+        val client = mClient
+        mClient = null
+        client?.release()
     }
 
     /**

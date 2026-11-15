@@ -691,23 +691,15 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         mConnectionState = STATE_DISCONNECTED
         mDisplayProperties = null
         broadcastConnectionState()
-        if (mReadThread != null) {
-            mReadThread!!.disconnect()
-        }
-        if (mHidConnection != null) {
-            // Keep the reference until HidDisplayConnection reports that the
-            // system controller has really been released. Clearing it here
-            // lets a new connection race the asynchronous teardown.
-            mHidConnection!!.disconnect()
-        }
-        if (mWujieConnection != null) {
-            mWujieConnection!!.disconnect()
-        }
-        if (mUsbConnection != null) {
-            // Like HID, this reports back asynchronously once the native
-            // driver has actually stopped.
-            mUsbConnection!!.disconnect()
-        }
+        mReadThread?.disconnect()
+        // Keep the reference until HidDisplayConnection reports that the
+        // system controller has really been released. Clearing it here
+        // lets a new connection race the asynchronous teardown.
+        mHidConnection?.disconnect()
+        mWujieConnection?.disconnect()
+        // Like HID, this reports back asynchronously once the native
+        // driver has actually stopped.
+        mUsbConnection?.disconnect()
         mHidTried = false
         // An explicit disconnect starts a new connection cycle, so a
         // controller release conflict may be retried once in that cycle.
@@ -823,10 +815,12 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
             }
         }
         // HID failed / is unavailable: classic Bluetooth serial (RFCOMM).
-        mReadThread = ReadThread(this, mTablesDir,
+        // 先落局部再赋值：属性不参与智能转换，也避免两次读之间被别的线程改掉。
+        val readThread = ReadThread(this, mTablesDir,
                 mPendingBluetoothAddress)
+        mReadThread = readThread
         mPendingBluetoothAddress = null
-        mReadThread!!.start()
+        readThread.start()
     }
 
     /**

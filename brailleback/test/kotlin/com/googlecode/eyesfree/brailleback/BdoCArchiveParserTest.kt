@@ -67,9 +67,8 @@ class BdoCArchiveParserTest {
         val stream = buildStream(
             listOf(List(100) { DOT1 }, emptyList(), List(100) { DOT1 })
         )
-        val result = BdoCArchiveParser.parse(stream)
-        assertNotNull(result)
-        val lines = result!!.lines()
+        val result = requireNotNull(BdoCArchiveParser.parse(stream)) { "样本解码失败" }
+        val lines = result.lines()
         assertEquals(3, lines.size)
         assertEquals(100, lines[0].length)
         assertEquals("", lines[1])
@@ -82,26 +81,22 @@ class BdoCArchiveParserTest {
     @Test
     fun `ff16 length records decode correctly`() {
         val stream = buildStream(listOf(List(150) { DOT1 }), ff16 = setOf(0))
-        val result = BdoCArchiveParser.parse(stream)
-        assertNotNull(result)
-        assertEquals(150, result!!.lines()[0].length)
+        val result = requireNotNull(BdoCArchiveParser.parse(stream)) { "样本解码失败" }
+        assertEquals(150, result.lines()[0].length)
     }
 
     @Test
     fun `blank cell value renders as U+2800`() {
         val values = (0 until 100).map { if (it % 2 == 0) DOT1 else BLANK }
-        val result = BdoCArchiveParser.parse(buildStream(listOf(values)))
-        assertNotNull(result)
-        val line = result!!.lines()[0]
+        val result = requireNotNull(BdoCArchiveParser.parse(buildStream(listOf(values))) ) { "样本解码失败" }
+        val line = result.lines()[0]
         assertEquals('\u2801', line[0])
         assertEquals('\u2800', line[1])
     }
 
     @Test
     fun `real bdo sample decodes to braille only`() {
-        val result = BdoCArchiveParser.parse(realSampleBytes())
-        assertNotNull(result)
-        val text = result!!
+        val text = requireNotNull(BdoCArchiveParser.parse(realSampleBytes())) { "样本解码失败" }
         // 全部非换行字符必须落在 Unicode 盲文区
         assertTrue(
             "存在非盲文字符",
@@ -120,9 +115,9 @@ class BdoCArchiveParserTest {
     fun `decodeDocument dispatches bdo by extension`() {
         val bytes = realSampleBytes()
         // .bdo / .bdoc 走结构化解码
-        val asBdo = BrailleFileDecoder.decodeDocument(bytes, "book.bdo")
-        assertNotNull(asBdo)
-        assertTrue(asBdo!!.contains('\u281B'))
+        val asBdo = requireNotNull(BrailleFileDecoder.decodeDocument(bytes, "book.bdo")) { "bdo 结构化解码失败" }
+        // 上面已用 requireNotNull 收窄，这里不再重复断言
+        assertTrue(asBdo.contains('\u281B'))
         val asBdoc = BrailleFileDecoder.decodeDocument(bytes, "book.BDOC")
         assertEquals(asBdo, asBdoc)
 
@@ -144,7 +139,7 @@ class BdoCArchiveParserTest {
 
     @Test
     fun `bdo text survives pagination unchanged`() {
-        val text = BdoCArchiveParser.parse(realSampleBytes())!!
+        val text = requireNotNull(BdoCArchiveParser.parse(realSampleBytes())) { "样本解码失败" }
         val pages = BrailleFileDecoder.buildPages(text, 40, 20)
         // 分页只是折行/切页，去换行后必须与原文逐字符一致
         val rejoined = pages.joinToString("\n").replace("\n", "")

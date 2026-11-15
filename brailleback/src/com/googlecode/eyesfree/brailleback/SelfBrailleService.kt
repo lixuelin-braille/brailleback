@@ -214,20 +214,27 @@ class SelfBrailleService : Service() {
         }
 
         private fun handleSetNodeState(service: SelfBrailleService, newState: NodeState) {
-            val newNode = newState.mWriteData!!.accessibilityNodeInfo!!
+            // 状态里缺节点信息属于契约违反（协议另一头没填），明确失败并说明原因。
+            val writeData = requireNotNull(newState.mWriteData) {
+                "NodeState 缺少 WriteData"
+            }
+            val newNode = requireNotNull(writeData.accessibilityNodeInfo) {
+                "WriteData 缺少 accessibilityNodeInfo"
+            }
             // We must remove and insert to get the node replaced.
             val oldState = service.nodeStates.remove(newNode)
             if (oldState != null) {
-                val oldNode = oldState.mWriteData!!.accessibilityNodeInfo!!
-                val oldClientInfo = service.infoForClient(oldState.mClientToken!!)
-                if (oldClientInfo != null) {
+                // 旧状态本身可能不完整（缺 WriteData 或节点）：缺什么跳过什么，不因此崩掉整条消息。
+                val oldNode = oldState.mWriteData?.accessibilityNodeInfo
+                val oldClientInfo = oldState.mClientToken?.let { service.infoForClient(it) }
+                if (oldClientInfo != null && oldNode != null) {
                     oldClientInfo.mNodes.remove(oldNode)
                 }
-                oldNode.recycle()
+                oldNode?.recycle()
             }
             var recycleNewNode = true
-            if (newState.mWriteData!!.text != null) {
-                val newClientInfo = service.infoForClient(newState.mClientToken!!)
+            if (writeData.text != null) {
+                val newClientInfo = newState.mClientToken?.let { service.infoForClient(it) }
                 if (newClientInfo != null) {
                     newClientInfo.mNodes.add(newNode)
                     service.nodeStates[newNode] = newState
@@ -275,7 +282,9 @@ class SelfBrailleService : Service() {
 
     private val filterHaveNodeState = object : NodeFilter() {
         override fun accept(context: Context?, node: AccessibilityNodeInfoCompat?): Boolean {
-            val unwrappedNode = node!!.info as AccessibilityNodeInfo
+            // 过滤器收到空节点时直接不匹配（原来会在这里崩）。
+            val nodeCompat = node ?: return false
+            val unwrappedNode = nodeCompat.info as AccessibilityNodeInfo
             return nodeStates.containsKey(unwrappedNode)
         }
     }

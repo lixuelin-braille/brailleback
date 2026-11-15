@@ -137,7 +137,8 @@ internal class DefaultNavigationMode(
             return false
         }
         try {
-            return focusOrBraille(target.get()!!)
+            // 空引用与已回收是同一回事：取不到节点就当作跳转失败。
+            return target.get()?.let { focusOrBraille(it) } ?: false
         } finally {
             target.recycle()
         }
@@ -158,23 +159,30 @@ internal class DefaultNavigationMode(
         val sentinel = AccessibilityNodeInfoRef.refreshed(
                 content.getLastNode())
         try {
-            if (AccessibilityNodeInfoRef.isNull(current)
-                    || !current.get()!!.isVisibleToUser
+            val currentInfo = current.get()
+            if (currentInfo == null
+                    || !currentInfo.isVisibleToUser
                     || AccessibilityNodeInfoRef.isNull(sentinel)) {
                 current.reset(linearSearch(FocusFinder.SEARCH_FORWARD))
                 return current
             }
-            nextUpwardsOrClear(sentinel!!)
+            // sentinel 在上面已判过非空；收窄成局部后，下一行的 sentinel.get() 才合法（智能转换只对 val 且只对本函数生效）。
+            val sentinelRef = requireNotNull(sentinel) {
+                "sentinel 在 isNull 判断后被清空"
+            }
+            nextUpwardsOrClear(sentinelRef)
             while (!AccessibilityNodeInfoRef.isNull(current)
-                    && current.get() != sentinel.get()) {
-                val rule = mRuleRepository.find(current.get()!!)
+                    && current.get() != sentinelRef.get()) {
+                // 每轮重新取：current 会被 reset，不能沿用上一轮的快照。
+                val node = current.get()
+                val rule = node?.let { mRuleRepository.find(it) }
                 // If children of this node are not included on the display,
                 // look for focusable descendants.
-                if (rule?.includeChildren(current.get()!!,
-                                mAccessibilityService) != true) {
-                    val focusableDescendant =
-                            FocusFinder.findFirstFocusableDescendant(
-                                    current.get()!!, mAccessibilityService)
+                if (node == null
+                        || rule?.includeChildren(node, mAccessibilityService) != true) {
+                    val focusableDescendant = node?.let {
+                        FocusFinder.findFirstFocusableDescendant(it, mAccessibilityService)
+                    }
                     if (focusableDescendant != null) {
                         current.reset(focusableDescendant)
                         return current
@@ -273,7 +281,9 @@ internal class DefaultNavigationMode(
             }
             // Move backwards one step from the first node that is currently
             // displayed.
-            target = mFocusFinder.linear(firstNode!!.get(),
+            // 上面已判过 isNull，这里再取一次快照；取不到就当作没有可回退的节点。
+            val firstNodeInfo = firstNode?.get() ?: return false
+            target = mFocusFinder.linear(firstNodeInfo,
                     FocusFinder.SEARCH_BACKWARD)
             firstNode.recycle()
             if (target == null) {
@@ -297,7 +307,7 @@ internal class DefaultNavigationMode(
                 left.reset(target)
                 target = null
             }
-            return focusOrBraille(left.get()!!)
+            return left.get()?.let { focusOrBraille(it) } ?: false
         } finally {
             AccessibilityNodeInfoUtils.recycleNodes(target, currentNode)
             left.recycle()
@@ -767,8 +777,10 @@ internal class DefaultNavigationMode(
             }
         }
         val quiet = isQuietNavigationEnabled()
+        // 走到这里 toBraille 必非空，但跨 if-else 的赋值不在智能转换范围内，显式收窄。
+        val brailleTarget = toBraille ?: return
         val content = mNodeBrailler.brailleNode(
-                toBraille!!, if (quiet) toBraille else null)
+                brailleTarget, if (quiet) brailleTarget else null)
         if (content != null) {
             if (AccessibilityNodeInfoRef.isNull(mLastFocusedNode)
                     && content.getPanStrategy()
@@ -777,7 +789,7 @@ internal class DefaultNavigationMode(
             }
             mDisplayManager.setContent(content)
             if (quiet) {
-                mLastFocusedNode.reset(AccessibilityNodeInfoCompat.obtain(toBraille!!))
+                mLastFocusedNode.reset(AccessibilityNodeInfoCompat.obtain(brailleTarget))
             }
         }
         if (!quiet) {

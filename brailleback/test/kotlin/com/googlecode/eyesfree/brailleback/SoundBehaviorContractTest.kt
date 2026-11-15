@@ -388,11 +388,11 @@ class SoundBehaviorContractTest {
         assertEquals("确定", values["compose_settings_confirm"])
         assertFalse(
             "开启摘要不能带「已开启」前缀（stateDescription 已播报）",
-            values["compose_settings_sound_summary_on"]!!.contains("已开启")
+            requireNotNull(values["compose_settings_sound_summary_on"]).contains("已开启")
         )
         assertFalse(
             "关闭摘要不能带「已关闭」前缀",
-            values["compose_settings_sound_summary_off"]!!.contains("已关闭")
+            requireNotNull(values["compose_settings_sound_summary_off"]).contains("已关闭")
         )
     }
 
@@ -467,20 +467,18 @@ class SoundBehaviorContractTest {
             "pref_sound_volume_title",
             "sound_editor_volume",
         ).forEach { name ->
-            val en = defaultValues[name]
-            assertTrue("默认资源缺少 $name", en != null)
-            assertFalse("默认（英文）资源 $name 不得含中文：$en", cjk.containsMatchIn(en!!))
-            val zh = zhValues[name]
-            assertTrue("中文资源缺少 $name", zh != null)
-            assertTrue("中文资源 $name 必须保持中文：$zh", cjk.containsMatchIn(zh!!))
+            val en = requireNotNull(defaultValues[name]) { "默认资源缺少 $name" }
+            assertFalse("默认（英文）资源 $name 不得含中文：$en", cjk.containsMatchIn(en))
+            val zh = requireNotNull(zhValues[name]) { "中文资源缺少 $name" }
+            assertTrue("中文资源 $name 必须保持中文：$zh", cjk.containsMatchIn(zh))
         }
         assertTrue(
             "英文音量摘要必须保留 %1\$d 占位符",
-            defaultValues["sound_editor_volume"]!!.contains("%1\$d")
+            requireNotNull(defaultValues["sound_editor_volume"]).contains("%1\$d")
         )
         assertTrue(
             "中文音量摘要必须保留 %1\$d 占位符",
-            zhValues["sound_editor_volume"]!!.contains("%1\$d")
+            requireNotNull(zhValues["sound_editor_volume"]).contains("%1\$d")
         )
     }
 }
