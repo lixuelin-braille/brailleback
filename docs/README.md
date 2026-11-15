@@ -28,6 +28,8 @@
 
 | **[22-Kotlin空安全清理](./22-Kotlin空安全清理.md)** | 非空断言改法与三条硬规矩、脚本改文件的两次踩坑、281 到 0 的五批记录 | 改空安全相关代码前必读 |
 | **[23-Kotlin结果类型替代null](./23-Kotlin结果类型替代null.md)** | 用 sealed 结果类型替掉「null 表示失败」、`Failure` 子集让 `when` 穷尽、debug APK 体积真相 | 改解析或协议返回前读 |
+| **[24-DisplayService拆分](./24-DisplayService拆分.md)** | 1763 → 1317 行：27 个连接编排函数搬成同包扩展函数、三份源码契约的连带改动、detekt ReturnCount 拦一次 | 改点显器连接流程前读 |
+
 ---
 
 ## 存档（不执行）

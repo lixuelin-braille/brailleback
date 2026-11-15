@@ -32,6 +32,7 @@ class ConnectionFailureLoggingContractTest {
      */
     private val displayServiceSources = listOf(
         "service/src/com/googlecode/eyesfree/braille/service/display/DisplayService.kt",
+        "service/src/com/googlecode/eyesfree/braille/service/display/DisplayServiceConnectionFlow.kt",
         "service/src/com/googlecode/eyesfree/braille/service/display/DisplayServiceHandler.kt",
         "service/src/com/googlecode/eyesfree/braille/service/display/DisplayServiceHandlerActions.kt",
         "service/src/com/googlecode/eyesfree/braille/service/display/DisplayServiceListeners.kt",

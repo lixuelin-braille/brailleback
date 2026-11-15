@@ -40,6 +40,14 @@ class WujieAutoConnectContractTest {
         projectFile(service + "DisplayService.kt").readText()
     }
 
+    /**
+     * 发现窗口与自动重连已搬到同包扩展函数文件（2026-11-15 拆分）。
+     * 契约断言的目标文件随之移动，判定条件本身不变。
+     */
+    private val flowSource: String by lazy {
+        projectFile(service + "DisplayServiceConnectionFlow.kt").readText()
+    }
+
     /** 取一个成员函数的函数体文本（到下一个 4 空格缩进的成员定义为止）。 */
     private fun bodyOf(src: String, signature: String): String {
         val start = src.indexOf(signature)
@@ -137,7 +145,7 @@ class WujieAutoConnectContractTest {
     @Test
     fun discoveryStillResetsAttemptFlagsBeforeConnecting() {
         // 修复依赖「发现设备 -> 重置标志 -> 重新走 connectBluetooth」这条链。
-        val body = bodyOf(source, "private fun handleDiscoveredDevice(")
+        val body = bodyOf(flowSource, "fun DisplayService.handleDiscoveredDevice(")
         assertTrue("必须先写 pending 地址", body.contains("mPendingBluetoothAddress = address"))
         assertTrue("必须重置 mWujieTried", body.contains("mWujieTried = false"))
         assertTrue("必须重置 mHidTried", body.contains("mHidTried = false"))

@@ -96,6 +96,7 @@ class UsbHidWiredContractTest {
      */
     private val displayServiceSources = listOf(
         "service/src/com/googlecode/eyesfree/braille/service/display/DisplayService.kt",
+        "service/src/com/googlecode/eyesfree/braille/service/display/DisplayServiceConnectionFlow.kt",
         "service/src/com/googlecode/eyesfree/braille/service/display/DisplayServiceHandler.kt",
         "service/src/com/googlecode/eyesfree/braille/service/display/DisplayServiceHandlerActions.kt",
         "service/src/com/googlecode/eyesfree/braille/service/display/DisplayServiceListeners.kt",
@@ -167,12 +168,12 @@ class UsbHidWiredContractTest {
         assertTrue(connectBraille.contains("isAutoProtocol() && isUsbBrailleDeviceAttached()"))
         assertTrue(connectBraille.contains("connectBluetooth()"))
         // 探针必须查同一张 brltty VID/PID 表，不能另写一份设备表。
-        val probe = methodBody(source, "fun isUsbBrailleDeviceAttached()")
+        val probe = methodBody(source, "DisplayService.isUsbBrailleDeviceAttached()")
         assertTrue(probe.contains("BrlttyWrapper.getUsbDriverTable()"))
         assertTrue(probe.contains("UsbBrailleDevice.candidateDrivers("))
         // 自动也要能被 USB 插拔广播唤醒，否则插上线不会自动切过去。
         assertTrue(source.contains("if (isWiredOrAutoProtocol() && !isConnectionActive())"))
-        val wiredOrAuto = methodBody(source, "fun isWiredOrAutoProtocol()")
+        val wiredOrAuto = methodBody(source, "DisplayService.isWiredOrAutoProtocol()")
         assertTrue(wiredOrAuto.contains("isUsbProtocol() || isAutoProtocol()"))
     }
 
@@ -227,11 +228,13 @@ class UsbHidWiredContractTest {
     @Test
     fun wiredProtocolTriggersOnUsbAttachAndSkipsBluetoothGate() {
         val source = displayServiceSource()
-        assertTrue(source.contains("fun isWiredProtocol()"))
+        assertTrue(source.contains("DisplayService.isWiredProtocol()"))
         assertTrue(source.contains("return isUsbProtocol()"))
         // 自动模式下插线也要能唤醒连接，所以挂接判断放宽到「有线或自动」。
         assertTrue(source.contains("if (isWiredOrAutoProtocol() && !isConnectionActive())"))
-        assertTrue(source.contains("if (isWiredProtocol()) {"))
+        // 拆分成扩展函数后，有线放行与「自动且插着点显器」并进了同一个前瞻；
+        // 意图不变：蓝牙关着时，有线路径仍要能被重连唤醒。
+        assertTrue(source.contains("if (isWiredProtocol()"))
 
         val detached = block(source, "UsbManager.ACTION_USB_DEVICE_DETACHED.equals(action)")
         assertTrue(detached.contains("isUsbProtocol()"))
@@ -262,14 +265,14 @@ class UsbHidWiredContractTest {
             "USB HID 失败分支不得立即重连，否则形成主线程死循环",
             code.contains("connectBraille()"),
         )
-        assertTrue(displayServiceSource().contains("fun getUsbHidFailureMessage("))
+        assertTrue(displayServiceSource().contains("DisplayService.getUsbHidFailureMessage("))
     }
 
     @Test
     fun usbHidFailureMessageDistinguishesNoDeviceAndPermission() {
         val body = methodBody(
             displayServiceSource(),
-            "fun getUsbHidFailureMessage(",
+            "DisplayService.getUsbHidFailureMessage(",
         )
         assertTrue(body.contains("error == -7"))
         assertTrue(body.contains("error == -8"))
@@ -282,7 +285,7 @@ class UsbHidWiredContractTest {
     fun usbHidRetriesWhenAnInputDeviceAppears() {
         val body = methodBody(
             displayServiceSource(),
-            "fun retryHidWhenInputDeviceAppears()",
+            "DisplayService.retryHidWhenInputDeviceAppears()",
         )
         assertTrue(body.contains("val wiredUsbHid = isUsbProtocol()"))
         assertTrue(body.contains("prepareAutomaticRetry("))
