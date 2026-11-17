@@ -16,7 +16,6 @@
 
 package com.googlecode.eyesfree.brailleback
 
-import android.app.Activity
 import android.app.AlertDialog
 import android.content.Context
 import android.content.DialogInterface
@@ -25,48 +24,41 @@ import android.os.Bundle
 import android.preference.PreferenceManager
 import android.provider.Settings
 import android.view.View
+import androidx.activity.ComponentActivity
+import androidx.lifecycle.lifecycleScope
 import com.googlecode.eyesfree.braille.display.BrailleDisplayProperties
 import com.googlecode.eyesfree.braille.display.BrailleKeyBinding
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import java.util.Random
 
 /**
  * Activity which guides new users through the use of the on-screen overlay.
+ *
+ * 两个演示动画原来用自调度 Runnable（每拍在 run() 末尾再 postDelayed 自己）；
+ * 现在改成两个生命周期作用域里的协程循环，onPause 取消——少了一类
+ * 「宿主已销毁但定时任务还在排队」的窗口。
  */
-class OverlayTutorialActivity : Activity() {
+class OverlayTutorialActivity : ComponentActivity() {
 
     private val mRandom = Random()
-    private var mPanDemo: View? = null
     private var mPanDemoLeftButton: View? = null
     private var mPanDemoRightButton: View? = null
     private var mPanDemoState: Boolean = false
-    private val mPanDemoRunnable = object : Runnable {
-        override fun run() {
-            mPanDemoState = !mPanDemoState
-            // 视图还没创建好时安静跳过这一拍，原来会直接崩在定时线程里。
-            mPanDemoLeftButton?.setPressed(mPanDemoState)
-            mPanDemoRightButton?.setPressed(mPanDemoState)
-            mPanDemo?.postDelayed(this, PAN_DEMO_INTERVAL)
-        }
-    }
+    private var mPanDemoJob: Job? = null
 
     private var mRoutingKeyDemo: BrailleView? = null
-    private val mRoutingKeyDemoRunnable = object : Runnable {
-        override fun run() {
-            val routingKeyDemo = mRoutingKeyDemo ?: return
-            routingKeyDemo.cancelPendingTouches()
-            routingKeyDemo.highlightCell(mRandom.nextInt(ROUTING_KEY_DEMO_CELLS))
-            routingKeyDemo.postDelayed(this, ROUTING_KEY_DEMO_INTERVAL)
-        }
-    }
+    private var mRoutingKeyDemoJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         setContentView(R.layout.overlay_tutorial_activity)
-        val panDemo = findViewById<View>(R.id.pan_demo)
-        mPanDemo = panDemo
-        mPanDemoLeftButton = panDemo?.findViewById(R.id.pan_left_button)
-        mPanDemoRightButton = panDemo?.findViewById(R.id.pan_right_button)
+        val panDemo: View = findViewById(R.id.pan_demo)
+        mPanDemoLeftButton = panDemo.findViewById(R.id.pan_left_button)
+        mPanDemoRightButton = panDemo.findViewById(R.id.pan_right_button)
         val routingKeyDemoView = findViewById<View>(R.id.routing_key_demo)
         val routingKeyDemo = routingKeyDemoView.findViewById<BrailleView>(R.id.braille_view)
         mRoutingKeyDemo = routingKeyDemo
@@ -77,15 +69,36 @@ class OverlayTutorialActivity : Activity() {
     override fun onResume() {
         super.onResume()
 
-        mPanDemo?.post(mPanDemoRunnable)
-        mRoutingKeyDemo?.post(mRoutingKeyDemoRunnable)
+        // 左右按钮的「按下去 / 抬起来」演示，每 500ms 翻一次。
+        mPanDemoJob = lifecycleScope.launch {
+            while (isActive) {
+                mPanDemoState = !mPanDemoState
+                // 视图还没创建好时安静跳过这一拍，原来会直接崩在定时线程里。
+                mPanDemoLeftButton?.setPressed(mPanDemoState)
+                mPanDemoRightButton?.setPressed(mPanDemoState)
+                delay(PAN_DEMO_INTERVAL)
+            }
+        }
+        // 路由键演示：每 1.5s 随机点亮一格。
+        mRoutingKeyDemoJob = lifecycleScope.launch {
+            while (isActive) {
+                val routingKeyDemo = mRoutingKeyDemo
+                if (routingKeyDemo != null) {
+                    routingKeyDemo.cancelPendingTouches()
+                    routingKeyDemo.highlightCell(mRandom.nextInt(ROUTING_KEY_DEMO_CELLS))
+                }
+                delay(ROUTING_KEY_DEMO_INTERVAL)
+            }
+        }
     }
 
     override fun onPause() {
         super.onPause()
 
-        mPanDemo?.removeCallbacks(mPanDemoRunnable)
-        mRoutingKeyDemo?.removeCallbacks(mRoutingKeyDemoRunnable)
+        mPanDemoJob?.cancel()
+        mPanDemoJob = null
+        mRoutingKeyDemoJob?.cancel()
+        mRoutingKeyDemoJob = null
     }
 
     fun onClickFinishButton(v: View) {

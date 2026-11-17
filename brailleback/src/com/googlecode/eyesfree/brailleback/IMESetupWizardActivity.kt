@@ -36,6 +36,9 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Setup wizard that helps the user to enable the braille IME and make
@@ -158,15 +161,26 @@ class IMESetupWizardActivity : ComponentActivity() {
             super.onResume()
             // Try to call showInputMethodPicker() without button click.
             // Need delay to ensure showInputMethodPicker() receives correct UID, else it fails.
-            val handler = Handler()
-            // 取一次局部，避免延迟执行时属性已被清空。
-            val imm = inputMethodManager
-            handler.postDelayed({ imm?.showInputMethodPicker() }, 300L)
+            //
+            // 原来这里 new 一个 Handler 只用来排一次 300ms；换成生命周期作用域的协程后，
+            // 页面在 300ms 内被销毁（用户按返回、切走）会自动取消，不再有
+            // 「往一个已 dead 的 Activity 弹选择器」的窗口。
+            // 这个 Fragment 是嵌套类（拿不到外部 Activity 的 this），也不是 LifecycleOwner，
+            // 所以取宿主 Activity 的作用域：Activity 销毁时这次延迟自动取消。
+            val host = activity as? ComponentActivity ?: return
+            host.lifecycleScope.launch {
+                delay(INPUT_METHOD_PICKER_DELAY_MS)
+                // 取一次局部，避免延迟执行时属性已被清空。
+                inputMethodManager?.showInputMethodPicker()
+            }
         }
     }
 
     /** Creates a text-view with a little bit of formatting. */
     companion object {
+
+        /** showInputMethodPicker() 前必须等的这一小段，等系统把 UID 认对。 */
+        private const val INPUT_METHOD_PICKER_DELAY_MS = 300L
 
         internal fun createMessageText(context: Context, textResourceId: Int): TextView {
             val message = TextView(context)
@@ -213,6 +227,10 @@ class IMESetupWizardActivity : ComponentActivity() {
         fragmentTransaction.commit()
     }
 
+    /**
+     * ContentObserver 的构造参数要求一个 Handler（回调要落到某个 Looper 上），
+     * 这是 API 硬约束，不能换协程；它的唯一用途就是给下面这个观察者。
+     */
     private val handler = Handler()
 
     private val contentObserver = object : ContentObserver(handler) {
