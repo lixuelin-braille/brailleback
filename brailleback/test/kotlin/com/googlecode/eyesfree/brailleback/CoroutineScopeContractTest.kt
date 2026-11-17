@@ -32,6 +32,10 @@ class CoroutineScopeContractTest {
             "brailleback/src/com/googlecode/eyesfree/brailleback/OverlayTutorialActivity.kt"
         const val IME_WIZARD =
             "brailleback/src/com/googlecode/eyesfree/brailleback/IMESetupWizardActivity.kt"
+        const val IME_HOST_BRIDGE =
+            "brailleback/src/com/googlecode/eyesfree/brailleback/ime/BrailleImeHostBridge.kt"
+        const val PASSTHROUGH_PROBE =
+            "brailleback/src/com/googlecode/eyesfree/brailleback/PassthroughProbe.kt"
     }
 
     private fun repoRoot(): File =
@@ -106,6 +110,42 @@ class CoroutineScopeContractTest {
         assertTrue(
             "那个 Handler 必须是 ContentObserver 的构造参数",
             text.contains("ContentObserver(handler)"),
+        )
+    }
+
+    @Test
+    fun imeHostBridgeCancelsItsScopeOnShutdown() {
+        val text = read(IME_HOST_BRIDGE)
+        assertFalse(
+            "播报/直通区的延迟必须走 mainScope，不要再自建 Handler",
+            text.contains("android.os.Handler("),
+        )
+        assertTrue(
+            "shutdown() 必须先取消作用域，否则服务销毁后还会往已关的 TTS 里说话",
+            text.contains("mainScope.cancel()"),
+        )
+        assertTrue(
+            "直通区落地那一拍要能单独取消",
+            text.contains("passthroughApplyJob?.cancel()"),
+        )
+    }
+
+    @Test
+    fun passthroughProbeScopeIsTiedToInstallLifecycle() {
+        val text = read(PASSTHROUGH_PROBE)
+        assertFalse("探针的两个延迟必须走作用域，不要再自建 Handler",
+            text.contains("Handler("))
+        assertTrue(
+            "作用域必须在 install 里建立、主线程 immediate",
+            text.contains("scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)"),
+        )
+        assertTrue(
+            "uninstall 必须撤掉作用域（原来只管自动撤销，400ms 落地那一拍会漏）",
+            text.contains("scope?.cancel()"),
+        )
+        assertTrue(
+            "400ms 落地拍与自动撤销都必须能被单独取消",
+            text.contains("settleJob?.cancel()") && text.contains("autoDisarmJob?.cancel()"),
         )
     }
 }

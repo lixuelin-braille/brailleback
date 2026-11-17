@@ -44,6 +44,13 @@ import com.google.android.accessibility.utils.output.FeedbackController
 import com.google.android.accessibility.utils.output.SpeechController
 import com.google.android.accessibility.utils.output.SpeechController.SpeakOptions
 import com.googlecode.eyesfree.brailleback.BrailleBackService
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.ArrayDeque
 import java.util.Locale
 import java.util.Queue
@@ -55,8 +62,17 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
   private val context: Context = service.getApplicationContext()
   private val focusFinder: FocusFinder = FocusFinder(service)
   private val feedbackController: FeedbackController = FeedbackController(context)
-  private val mainHandler: android.os.Handler =
-      android.os.Handler(android.os.Looper.getMainLooper())
+
+  /**
+   * 本桥接的主线程作用域。原来这里有一个自建的 main Handler，专门排三种延迟
+   * （播报延迟、直通区落地延迟）；Handler 的问题是 shutdown() 取消不掉——
+   * 服务销毁后排着的那一拍还会往已经 shutdown 的 TTS 里说话。
+   * 换成作用域后，[shutdown] 里一句 cancel() 就把在排的延迟全部撤掉。
+   */
+  private val mainScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+  /** 直通区落地那一拍；重设前先取消上一拍，避免两次延迟叠加。 */
+  private var passthroughApplyJob: Job? = null
 
   private var brailleImeForTalkBack: BrailleImeForTalkBack? = null
 
@@ -153,19 +169,26 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
         "speak text=" + charSequence + " delay=" + delayMs +
             " via=" + (if (viaAnnouncement) "announcement" else "tts"))
     if (viaAnnouncement) {
-      val announce = Runnable {
+      val announce = {
         if (sendAnnouncementEvent(charSequence)) {
-          return@Runnable
+          // 公告投递成功，就不再走自带 TTS，避免两路语音同时出声。
+        } else {
+          speakNow(charSequence, flush)
         }
-        speakNow(charSequence, flush)
       }
       if (delayMs > 0) {
-        mainHandler.postDelayed(announce, delayMs.toLong())
+        mainScope.launch {
+          delay(delayMs.toLong())
+          announce()
+        }
       } else {
         view?.post(announce)
       }
     } else if (delayMs > 0) {
-      mainHandler.postDelayed(Runnable { speakNow(charSequence, flush) }, delayMs.toLong())
+      mainScope.launch {
+        delay(delayMs.toLong())
+        speakNow(charSequence, flush)
+      }
     } else {
       speakNow(charSequence, flush)
     }
@@ -543,10 +566,12 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
     }
     passthroughActive = true
     // setServiceInfo 到系统侧生效是异步的，立即设置直通区可能被判定为"未请求探索"而丢弃。
-    mainHandler.postDelayed(
-        Runnable {
+    passthroughApplyJob?.cancel()
+    passthroughApplyJob =
+        mainScope.launch {
+          delay(PASSTHROUGH_APPLY_DELAY_MS)
           if (!passthroughActive) {
-            return@Runnable
+            return@launch
           }
           try {
             service.setTouchExplorationPassthroughRegion(Display.DEFAULT_DISPLAY, target)
@@ -554,8 +579,7 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
           } catch (t: Throwable) {
             Log.e(TAG, "passthrough failed", t)
           }
-        },
-        PASSTHROUGH_APPLY_DELAY_MS)
+        }
   }
 
   private fun clearTouchExplorationPassthrough() {
@@ -563,6 +587,8 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
       return
     }
     passthroughActive = false
+    passthroughApplyJob?.cancel()
+    passthroughApplyJob = null
     try {
       // 空 Region 表示"没有直通区"，即恢复正常的触摸探索拦截。
       service.setTouchExplorationPassthroughRegion(Display.DEFAULT_DISPLAY, Region())
@@ -731,6 +757,9 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
 
   /** 释放资源。 */
   fun shutdown() {
+    // 先撤掉所有在排的延迟（播报延迟、直通区落地），再关 TTS：
+    // 否则服务销毁后还会有一拍往已 shutdown 的 TTS 里说话。
+    mainScope.cancel()
     val tts = textToSpeech
     if (tts != null) {
       tts.stop()

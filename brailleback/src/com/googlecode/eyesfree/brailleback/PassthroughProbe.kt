@@ -24,12 +24,17 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Region
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
 import android.view.Display
 import android.view.accessibility.AccessibilityManager
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * 触摸探索透传探针（实验性，临时验证代码）。
@@ -67,9 +72,19 @@ object PassthroughProbe {
     private const val FLAG_SETTLE_MS = 400L
 
     private var receiver: BroadcastReceiver? = null
-    private var autoDisarm: Runnable? = null
     private var armed = false
-    private val mainHandler = Handler(Looper.getMainLooper())
+
+    /**
+     * 探针的作用域，随 install 建立、随 uninstall 取消。
+     *
+     * 原来这里是一个自建的 main Handler，两个延迟（400ms 落地、180s 自动撤销）
+     * 用 removeCallbacks 逐个配对取消；`uninstall` 只取消了自动撤销那一拍，
+     * 400ms 的落地拍仍会执行——服务已经解绑了还去设一次直通区。换成作用域后
+     * uninstall 一句 cancel() 就够。
+     */
+    private var scope: CoroutineScope? = null
+    private var settleJob: Job? = null
+    private var autoDisarmJob: Job? = null
 
     /** 在无障碍服务连接成功后调用，注册广播监听。重复调用安全。 */
     @JvmStatic
@@ -100,6 +115,7 @@ object PassthroughProbe {
                 ContextCompat.RECEIVER_EXPORTED,
             )
             receiver = r
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
             Log.i(TAG, "probe installed, listening on $ACTION")
         } catch (e: RuntimeException) {
             Log.e(TAG, "probe install failed", e)
@@ -119,6 +135,13 @@ object PassthroughProbe {
         if (armed) {
             disarm(service, "uninstall")
         }
+        // 兜底：armed 之外还可能排着一拍 400ms 落地，一并撤掉。
+        settleJob?.cancel()
+        settleJob = null
+        autoDisarmJob?.cancel()
+        autoDisarmJob = null
+        scope?.cancel()
+        scope = null
     }
 
     /** 打开透传：置 flag，随后按 ratio 设定区域。 */
@@ -147,19 +170,21 @@ object PassthroughProbe {
         scheduleAutoDisarm(service)
 
         // 第二步：等 flag 落地后再设区域，否则可能被系统忽略。
-        mainHandler.postDelayed(
-            {
+        settleJob?.cancel()
+        settleJob =
+            scope?.launch {
+                delay(FLAG_SETTLE_MS)
                 val region = buildRegion(service, clamped)
                 applyRegion(service, region, clamped)
-            },
-            FLAG_SETTLE_MS,
-        )
+            }
     }
 
     /** 关闭透传：先清区域，再撤 flag。顺序与 arm 相反，避免中间态被当作有效区域。 */
     private fun disarm(service: AccessibilityService, reason: String) {
-        autoDisarm?.let { mainHandler.removeCallbacks(it) }
-        autoDisarm = null
+        settleJob?.cancel()
+        settleJob = null
+        autoDisarmJob?.cancel()
+        autoDisarmJob = null
         armed = false
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
@@ -197,7 +222,7 @@ object PassthroughProbe {
         region: Region,
         ratioPercent: Int,
     ) {
-        // 守卫放在调用点本身：arm() 里的检查覆盖不到 postDelayed 的 lambda，
+        // 守卫放在调用点本身：arm() 里的检查覆盖不到落地协程里的这一段，
         // 而且这里才是真正碰 API 30 的位置，将来多一个调用方也不会漏。
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             Log.e(TAG, "skip region: API 30+ required, sdk=" + Build.VERSION.SDK_INT)
@@ -221,13 +246,15 @@ object PassthroughProbe {
     }
 
     private fun scheduleAutoDisarm(service: AccessibilityService) {
-        autoDisarm?.let { mainHandler.removeCallbacks(it) }
-        val r = Runnable {
-            Log.i(TAG, "auto disarm fired after ${AUTO_DISARM_MS}ms")
-            disarm(service, "auto-timeout")
-        }
-        autoDisarm = r
-        mainHandler.postDelayed(r, AUTO_DISARM_MS)
+        autoDisarmJob?.cancel()
+        autoDisarmJob =
+            scope?.launch {
+                delay(AUTO_DISARM_MS)
+                Log.i(TAG, "auto disarm fired after ${AUTO_DISARM_MS}ms")
+                // 先清掉自己的句柄再 disarm，否则 disarm 会取消掉正在执行的这一个。
+                autoDisarmJob = null
+                disarm(service, "auto-timeout")
+            }
     }
 
     /** 系统层面触摸探索是否处于开启状态（所有服务的请求按“或”聚合的结果）。 */

@@ -118,6 +118,8 @@ dependencies {
     implementation libs.compose.material.icons.core
     implementation libs.compose.material3
     debugImplementation libs.compose.ui.tooling
+    // 主源码直接使用协程（界面层 lifecycleScope、服务桥接层的取消作用域），按「直接用就直接声明」写。
+    implementation libs.kotlinx.coroutines.android
     testImplementation libs.junit
     // 虚拟时间验证定时器（空闲清屏 / 运动去抖 / 闪烁），不用真等三分钟。
     testImplementation libs.kotlinx.coroutines.test
