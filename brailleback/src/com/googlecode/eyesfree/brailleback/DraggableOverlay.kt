@@ -19,7 +19,6 @@ package com.googlecode.eyesfree.brailleback
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.PixelFormat
-import android.os.Build
 import android.os.Handler
 import android.os.Message
 import android.view.Gravity
@@ -80,11 +79,8 @@ open class DraggableOverlay(context: Context) : SimpleOverlay(context) {
 
     private fun createOverlayParams(): WindowManager.LayoutParams {
         val lp = WindowManager.LayoutParams()
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) {
-            lp.type = WindowManager.LayoutParams.TYPE_SYSTEM_ERROR
-        } else {
-            lp.type = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
-        }
+        // minSdk 29：TYPE_ACCESSIBILITY_OVERLAY 自 API 22 起可用，旧分支已无意义。
+        lp.type = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
         lp.format = PixelFormat.TRANSPARENT
         lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
         lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE

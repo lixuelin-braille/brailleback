@@ -25,7 +25,6 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.os.Build
 import android.view.accessibility.AccessibilityManager
 import com.googlecode.eyesfree.braille.service.R
 import timber.log.Timber
@@ -59,11 +58,7 @@ internal fun DisplayService.promoteDisplayForeground() {
     val keepAliveIntent = Intent(this, DisplayService::class.java)
             .setAction(ACTION_DISPLAY_KEEP_ALIVE)
     try {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(keepAliveIntent)
-        } else {
-            startService(keepAliveIntent)
-        }
+        startForegroundService(keepAliveIntent)
     } catch (e: IllegalStateException) {
         // 后台（例如自动重连）不允许从后台启动前台服务：连接照常工作，
         // 只是这一轮少了保活，不要因此打断连接流程。
@@ -76,11 +71,7 @@ internal fun DisplayService.promoteDisplayForeground() {
 /** onStartCommand 里补 startForeground，满足 startForegroundService 的 5 秒约束。 */
 internal fun DisplayService.postDisplayKeepAliveNotification() {
     createKeepAliveChannel()
-    val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        Notification.Builder(this, KEEP_ALIVE_CHANNEL_ID)
-    } else {
-        Notification.Builder(this)
-    }
+    val builder = Notification.Builder(this, KEEP_ALIVE_CHANNEL_ID)
     val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
     if (launchIntent != null) {
         builder.setContentIntent(PendingIntent.getActivity(
@@ -96,12 +87,8 @@ internal fun DisplayService.postDisplayKeepAliveNotification() {
             .setCategory(Notification.CATEGORY_SERVICE)
     val notification = builder.build()
     try {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(KEEP_ALIVE_NOTIFICATION_ID, notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
-        } else {
-            startForeground(KEEP_ALIVE_NOTIFICATION_ID, notification)
-        }
+        startForeground(KEEP_ALIVE_NOTIFICATION_ID, notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
         mDisplayKeepAliveActive = true
     } catch (e: SecurityException) {
         // Android 14+ 会校验 connectedDevice 的前置权限（如 BLUETOOTH_CONNECT）。
@@ -116,18 +103,11 @@ internal fun DisplayService.postDisplayKeepAliveNotification() {
 @Suppress("DEPRECATION")
 internal fun DisplayService.dropDisplayForeground() {
     mDisplayKeepAliveActive = false
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-        stopForeground(Service.STOP_FOREGROUND_REMOVE)
-    } else {
-        stopForeground(true)
-    }
+    stopForeground(Service.STOP_FOREGROUND_REMOVE)
     stopSelf()
 }
 
 private fun DisplayService.createKeepAliveChannel() {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-        return
-    }
     val channel = NotificationChannel(
             KEEP_ALIVE_CHANNEL_ID,
             getString(R.string.display_keepalive_channel),

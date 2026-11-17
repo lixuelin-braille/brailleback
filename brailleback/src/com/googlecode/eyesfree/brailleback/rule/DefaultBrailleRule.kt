@@ -5,7 +5,6 @@
 package com.googlecode.eyesfree.brailleback.rule
 
 import android.content.Context
-import android.os.Build
 import android.text.Editable
 import android.text.TextUtils
 import android.widget.AbsSeekBar
@@ -116,11 +115,9 @@ internal class DefaultBrailleRule : BrailleRule {
 
     /** Retrieves a handle to the correct [CustomLabelManager]. */
     private fun getLabelManager(): CustomLabelManager? {
-        if (Build.VERSION.SDK_INT >= CustomLabelManager.MIN_API_LEVEL) {
-            val service = BrailleBackService.getActiveInstance()
-            if (service != null) {
-                return service.getLabelManager()
-            }
+        val service = BrailleBackService.getActiveInstance()
+        if (service != null) {
+            return service.getLabelManager()
         }
         return null
     }

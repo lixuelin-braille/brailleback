@@ -36,9 +36,6 @@ import java.util.LinkedList
  */
 class AccessibilityNodeInfoUtils private constructor() {
     companion object {
-        /** Whether isVisibleToUser() is supported by the current SDK. */
-        private val SUPPORTS_VISIBILITY = Build.VERSION.SDK_INT >= 16
-
         /**
          * Class for Samsung's TouchWiz implementation of AdapterView. May be
          * `null` on non-Samsung devices.
@@ -128,21 +125,13 @@ class AccessibilityNodeInfoUtils private constructor() {
                 return true
             }
 
-            if (Build.VERSION.SDK_INT < 16) {
-                // In pre-JellyBean, always focus ALL top-level list items and items
-                // that should have independently focusable children.
-                if (isTopLevelScrollItem(context, node)) {
-                    return true
-                }
-            } else {
-                // In post-JellyBean, only focus top-level list items with
-                // non-actionable speaking children.
-                if (isTopLevelScrollItem(context, node)
-                    && (isSpeakingNode(context, node)
-                        || hasNonActionableSpeakingChildren(context, node))
-                ) {
-                    return true
-                }
+            // 只在顶层滚动项里选「有可朗读子节点/本身可朗读」的：minSdk 29，
+            // pre-JellyBean 那套「全选中」的分支已经没有可达设备。
+            if (isTopLevelScrollItem(context, node)
+                && (isSpeakingNode(context, node)
+                    || hasNonActionableSpeakingChildren(context, node))
+            ) {
+                return true
             }
 
             return false
@@ -936,12 +925,12 @@ class AccessibilityNodeInfoUtils private constructor() {
         }
 
         /**
-         * Helper method that returns `true` if the specified node is visible
-         * to the user or if the current SDK doesn't support checking visibility.
+         * Helper method: `isVisibleToUser` 从 API 16 起可用，而 minSdk 已是 29，
+         * 所以这里不再需要「老系统按可见处理」的兜底（名字保留是为了不动调用点）。
          */
         @JvmStatic
         fun isVisibleOrLegacy(node: AccessibilityNodeInfoCompat): Boolean {
-            return !SUPPORTS_VISIBILITY || node.isVisibleToUser
+            return node.isVisibleToUser
         }
 
         /**

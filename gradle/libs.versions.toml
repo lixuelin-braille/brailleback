@@ -16,7 +16,10 @@ kotlinCompose = "2.2.10"
 
 android-compileSdk = "37"
 android-targetSdk = "37"
-android-minSdk = "23"
+# 2026-11-18 从 23（Android 6.0，2015）抬到 29（Android 10）。
+# 理由：23 那一代设备已无维护意义，抬到 29 后大量 SDK_INT 分支变成死代码可删，
+# 维护面从 15 个系统版本收敛到 9 个；29 仍是校内/老点显器用户能覆盖的下限。
+android-minSdk = "29"
 
 # 刻意不引 Compose BOM：离线构建时 BOM 解析会失败，逐个写死更可控。
 compose = "1.7.6"

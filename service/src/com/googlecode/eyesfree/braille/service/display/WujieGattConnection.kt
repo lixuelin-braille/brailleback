@@ -110,9 +110,7 @@ class WujieGattConnection {
                 Timber.i("Wujie GATT connected; requesting MTU %d",
                         REQUESTED_MTU)
                 mHandler.removeCallbacks(mConnectTimeout)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                    gatt.requestMtu(REQUESTED_MTU)
-                }
+                gatt.requestMtu(REQUESTED_MTU)
                 if (!gatt.discoverServices()) {
                     Timber.e("Wujie GATT discoverServices() failed to start")
                     fail(ERROR_SERVICE)

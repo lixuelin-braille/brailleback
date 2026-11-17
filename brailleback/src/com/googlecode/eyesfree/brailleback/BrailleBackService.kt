@@ -541,33 +541,24 @@ class BrailleBackService : AccessibilityService(),
      * and throws if they are unmet.
      */
     private fun promoteToForeground() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                    FGS_CHANNEL_ID,
-                    getString(R.string.braille_display_notif_channel),
-                    NotificationManager.IMPORTANCE_LOW)
-            channel.setDescription(
-                    getString(R.string.braille_display_notif_title))
-            // 极少数机型可能没有这个系统服务：取不到就跳过渠道创建，不要崩。
-            getSystemService(NotificationManager::class.java)
-                    ?.createNotificationChannel(channel)
-        }
-        val builder =
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                        Notification.Builder(this, FGS_CHANNEL_ID)
-                else Notification.Builder(this)
+        val channel = NotificationChannel(
+                FGS_CHANNEL_ID,
+                getString(R.string.braille_display_notif_channel),
+                NotificationManager.IMPORTANCE_LOW)
+        channel.setDescription(
+                getString(R.string.braille_display_notif_title))
+        // 极少数机型可能没有这个系统服务：取不到就跳过渠道创建，不要崩。
+        getSystemService(NotificationManager::class.java)
+                ?.createNotificationChannel(channel)
+        val builder = Notification.Builder(this, FGS_CHANNEL_ID)
         val notification = builder
                 .setContentTitle(getString(R.string.braille_display_notif_title))
                 .setContentText(getString(R.string.braille_display_notif_text))
                 .setSmallIcon(R.drawable.ic_brailleback)
                 .setOngoing(true)
                 .build()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(FGS_NOTIFICATION_ID, notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MANIFEST)
-        } else {
-            startForeground(FGS_NOTIFICATION_ID, notification)
-        }
+        startForeground(FGS_NOTIFICATION_ID, notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MANIFEST)
     }
 
     override fun onCreate() {
@@ -652,11 +643,7 @@ class BrailleBackService : AccessibilityService(),
         handler.removeCallbacksAndMessages(null)
         mVolumeKeyHandler.removeCallbacksAndMessages(null)
         // Leave the foreground state explicitly; the notification is removed.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-        } else {
-            stopForeground(true)
-        }
+        stopForeground(STOP_FOREGROUND_REMOVE)
         // Drop the static BrailleDisplayController reference held by HidBridge.
         // It must be cleared before shutdownDependencies(): otherwise the static
         // outlives this service, HidBridge.isAvailable() keeps returning true, and
@@ -786,25 +773,23 @@ class BrailleBackService : AccessibilityService(),
     }
 
     private fun initializeLabelManager() {
-        if (Build.VERSION.SDK_INT >= CustomLabelManager.MIN_API_LEVEL) {
-            try {
-                labelManager = CustomLabelManager(this)
-            } catch (e: SecurityException) {
-                // Don't use labeling features if there's a permission denial
-                // due to a key mismatch
-                LogUtils.log(this, Log.ERROR,
-                        "Not using labeling due to permission denial.")
-            }
+        try {
+            labelManager = CustomLabelManager(this)
+        } catch (e: SecurityException) {
+            // Don't use labeling features if there's a permission denial
+            // due to a key mismatch
+            LogUtils.log(this, Log.ERROR,
+                    "Not using labeling due to permission denial.")
+        }
 
-            // CustomLabelManager 可能因签名不匹配而没建起来：下面三行都用同一份局部引用。
-            val labels = labelManager
-            if (labels != null) {
-                val receiver = PackageRemovalReceiver()
-                packageReceiver = receiver
-                ContextCompat.registerReceiver(this, receiver,
-                    receiver.getFilter(), ContextCompat.RECEIVER_NOT_EXPORTED)
-                labels.ensureDataConsistency()
-            }
+        // CustomLabelManager 可能因签名不匹配而没建起来：下面三行都用同一份局部引用。
+        val labels = labelManager
+        if (labels != null) {
+            val receiver = PackageRemovalReceiver()
+            packageReceiver = receiver
+            ContextCompat.registerReceiver(this, receiver,
+                receiver.getFilter(), ContextCompat.RECEIVER_NOT_EXPORTED)
+            labels.ensureDataConsistency()
         }
     }
 

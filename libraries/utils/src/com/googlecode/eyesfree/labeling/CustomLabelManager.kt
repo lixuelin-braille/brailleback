@@ -59,9 +59,6 @@ import kotlinx.coroutines.withContext
 @TargetApi(18)
 class CustomLabelManager(context: Context) : AccessibilityEventListener {
     companion object {
-        /** The minimum API level supported by the manager. */
-        const val MIN_API_LEVEL = Build.VERSION_CODES.JELLY_BEAN_MR2
-
         /** The maximum number of package sets of labels to keep in memory. */
         private const val MAX_CACHE_SIZE = 10
 

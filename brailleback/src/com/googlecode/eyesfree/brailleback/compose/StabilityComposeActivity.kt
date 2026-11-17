@@ -128,17 +128,15 @@ class StabilityComposeActivity : AppCompatActivity() {
     }
 
     private fun isIgnoringBatteryOptimizations(): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true
         val power = getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return false
         return power.isIgnoringBatteryOptimizations(packageName)
     }
 
     /**
      * 小米官方文档明确：被 Powerkeeper 限制时 isBackgroundRestricted() 返回 true。
-     * Android 9 以下没有这个 API，按「未受限」处理。
+     * 这个 API 从 Android 9 起才有，而 minSdk 已是 29，不需要再判版本。
      */
     private fun isBackgroundRestricted(): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return false
         val am = getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return false
         return am.isBackgroundRestricted
     }
@@ -159,11 +157,9 @@ class StabilityComposeActivity : AppCompatActivity() {
 
     /** 直接弹系统的「忽略电池优化」确认框；系统不支持时退到电池优化列表。 */
     private fun openBatteryOptimizationRequest() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val direct = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
-                .setData(Uri.parse("package:$packageName"))
-            if (startSafely(direct)) return
-        }
+        val direct = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+            .setData(Uri.parse("package:$packageName"))
+        if (startSafely(direct)) return
         if (!startSafely(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))) {
             openAppDetails()
         }

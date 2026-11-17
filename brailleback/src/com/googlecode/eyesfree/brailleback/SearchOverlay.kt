@@ -18,7 +18,6 @@ package com.googlecode.eyesfree.brailleback
 
 import android.content.Context
 import android.content.DialogInterface
-import android.os.Build
 import android.view.WindowManager
 
 import com.googlecode.eyesfree.widget.SimpleOverlay
@@ -34,12 +33,9 @@ open class SearchOverlay(context: Context, queryText: StringBuilder) :
 
     init {
         // Make overlay appear on everything it can.
+        // minSdk 29：TYPE_ACCESSIBILITY_OVERLAY 自 API 22 起可用。
         val params = getParams()
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) {
-            params.type = WindowManager.LayoutParams.TYPE_SYSTEM_ERROR
-        } else {
-            params.type = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
-        }
+        params.type = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
         setParams(params)
 
         setContentView(mSearchView)

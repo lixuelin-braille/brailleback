@@ -18,7 +18,6 @@ package com.googlecode.eyesfree.utils
 
 import android.content.SharedPreferences
 import android.content.res.Resources
-import android.os.Build
 
 /**
  * Utility methods for interacting with [SharedPreferences] objects.
@@ -173,12 +172,6 @@ object SharedPreferencesUtils {
      */
     @JvmStatic
     fun storeBooleanAsync(prefs: SharedPreferences, key: String, value: Boolean) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.GINGERBREAD) {
-            prefs.edit().putBoolean(key, value).apply()
-        } else {
-            Thread {
-                prefs.edit().putBoolean(key, value).commit()
-            }.start()
-        }
+        prefs.edit().putBoolean(key, value).apply()
     }
 }

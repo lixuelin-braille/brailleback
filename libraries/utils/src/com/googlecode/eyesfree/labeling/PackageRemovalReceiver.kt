@@ -30,8 +30,6 @@ import com.googlecode.eyesfree.utils.LogUtils
  */
 class PackageRemovalReceiver : BroadcastReceiver() {
     companion object {
-        const val MIN_API_LEVEL: Int = CustomLabelManager.MIN_API_LEVEL
-
         private val INTENT_FILTER: IntentFilter = IntentFilter(Intent.ACTION_PACKAGE_REMOVED).apply {
             addDataScheme("package")
         }

@@ -368,12 +368,10 @@ class UsbDisplayConnection : DriverThread.OnInitListener {
     }
 
     private fun safeSerialNumber(device: UsbDevice): String? {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            try {
-                return device.getSerialNumber()
-            } catch (t: Throwable) {
-                LogUtils.w(this, t, "USB serial number unavailable; matching by VID/PID")
-            }
+        try {
+            return device.getSerialNumber()
+        } catch (t: Throwable) {
+            LogUtils.w(this, t, "USB serial number unavailable; matching by VID/PID")
         }
         // Empty is safe: usbVerifyString() skips verification for an empty value.
         return ""

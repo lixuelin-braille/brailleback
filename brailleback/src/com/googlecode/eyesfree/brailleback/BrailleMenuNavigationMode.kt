@@ -22,7 +22,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
 import android.text.TextUtils
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -69,12 +68,6 @@ class BrailleMenuNavigationMode(
     private var currentIndex = 0
 
     override fun onActivate() {
-        // No point in activating if labeling isn't supported on the OS.
-        if (Build.VERSION.SDK_INT < CustomLabelManager.MIN_API_LEVEL) {
-            closeMenu()
-            return
-        }
-
         active = true
 
         // If the currently focused node doesn't warrant a menu, deactivate.

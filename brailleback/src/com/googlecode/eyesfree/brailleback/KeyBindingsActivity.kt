@@ -19,7 +19,6 @@ package com.googlecode.eyesfree.brailleback
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
 import android.view.MenuItem
 import android.view.View
@@ -33,7 +32,6 @@ import com.googlecode.eyesfree.braille.display.BrailleKeyBinding
 import com.googlecode.eyesfree.braille.display.Display
 import com.googlecode.eyesfree.braille.display.DisplayClient
 import com.googlecode.eyesfree.brailleback.utils.BrailleKeyBindingUtils
-import com.googlecode.eyesfree.labeling.CustomLabelManager
 
 /**
  * Shows key bindings for the currently connected Braille display.
@@ -95,10 +93,8 @@ class KeyBindingsActivity : Activity(), Display.OnConnectionStateChangeListener 
             val name = supportedCommands[i]
             val command = BrailleInputEvent.stringToCommand(name)
 
-            // Labeling menu command not supported in all versions.
-            val labelingSupported =
-                    BrailleBackService.LABELING_ENABLED &&
-                            Build.VERSION.SDK_INT >= CustomLabelManager.MIN_API_LEVEL
+            // 标签菜单命令只在 LABELING_ENABLED 时列出（版本门槛已随 minSdk 29 消失）。
+            val labelingSupported = BrailleBackService.LABELING_ENABLED
             if (command == BrailleInputEvent.CMD_TOGGLE_BRAILLE_MENU && !labelingSupported) {
                 continue
             }

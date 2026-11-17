@@ -39,6 +39,7 @@
 | **[32-结果回传API统一](./32-结果回传API统一.md)** | 6 处旧 `startActivityForResult`/`requestPermissions` 换 launcher、基类选 `ComponentActivity` 的主题理由、4 例契约测试与 4 例仪器测试 | 改文件选择或权限申请前必读 |
 | **[33-版本目录](./33-版本目录.md)** | 11 个模块的依赖与 `compileSdk/minSdk/targetSdk` 收进 `gradle/libs.versions.toml`、两条契约测试、刻意没进目录的三类版本 | 加依赖或升版本前必读 |
 | **[34-线程与Handler盘点](./34-线程与Handler盘点.md)** | 54 处 Handler / 19 个 HandlerThread / 12 个裸线程的分类、为什么驱动线程不能换协程、剩下的收敛空间评估 | 想改线程模型前必读 |
+| **[35-minSdk提升到29](./35-minSdk提升到29.md)** | minSdk 23（2015）→ 29（Android 10）、随之删掉的 10 个文件的分支、debug APK 因 dex 不压缩变大到 49 MB | 改安装下限或纠结包体积前必读 |
 
 ---
 

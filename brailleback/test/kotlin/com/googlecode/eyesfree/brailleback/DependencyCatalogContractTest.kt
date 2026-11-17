@@ -89,7 +89,7 @@ class DependencyCatalogContractTest {
             "activityCompose = \"1.9.3\"",
             "coroutines = \"1.9.0\"",
             "android-compileSdk = \"37\"",
-            "android-minSdk = \"23\"",
+            "android-minSdk = \"29\"",
         ).forEach { pin ->
             assertTrue("版本目录缺少已验证的版本钉：$pin", text.contains(pin))
         }
