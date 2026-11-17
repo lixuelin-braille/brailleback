@@ -84,10 +84,11 @@ class DependencyCatalogContractTest {
     fun catalogPinsTheComposeAndCoroutineVersionsWeVerified() {
         val text = catalog()
         listOf(
-            "compose = \"1.7.6\"",
-            "material3 = \"1.3.1\"",
-            "activityCompose = \"1.9.3\"",
-            "coroutines = \"1.9.0\"",
+            // 2026-11-18 依赖解冻后实测通过的组合（见 docs/38-依赖解冻.md）。
+            "compose = \"1.12.1\"",
+            "material3 = \"1.4.0\"",
+            "activityCompose = \"1.13.0\"",
+            "coroutines = \"1.11.0\"",
             "android-compileSdk = \"37\"",
             "android-minSdk = \"29\"",
         ).forEach { pin ->

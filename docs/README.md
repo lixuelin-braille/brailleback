@@ -42,6 +42,7 @@
 | **[35-minSdk提升到29](./35-minSdk提升到29.md)** | minSdk 23（2015）→ 29（Android 10）、随之删掉的 10 个文件的分支、debug APK 因 dex 不压缩变大到 49 MB | 改安装下限或纠结包体积前必读 |
 | **[36-界面层协程化](./36-界面层协程化.md)** | 113 行 Handler 命中的逐类判定、真正改了哪三处（引导页两个自调度 Runnable + IME 向导 300ms）、为什么驱动链/手势时序不动 | 想继续协程化线程模型前必读 |
 | **[37-服务层协程化](./37-服务层协程化.md)** | `BrailleImeHostBridge` 一个作用域管三种延迟、`PassthroughProbe` 作用域随 install/uninstall、顺手补上的两处取消漏窗 | 改服务生命周期里的定时逻辑前必读 |
+| **[38-依赖解冻](./38-依赖解冻.md)** | 网络恢复后把 Compose 1.7.6→1.12.1、activity→1.13.0、material3→1.4.0、coroutines→1.11.0 等一次抬齐；`material-icons-core` 停更要单钉、Compose 1.12 新 lint 抓到的非可观察 Locale | 动依赖版本前必读 |
 
 ---
 

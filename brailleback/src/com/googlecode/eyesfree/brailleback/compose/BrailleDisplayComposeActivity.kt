@@ -29,6 +29,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.core.content.ContextCompat
 import androidx.preference.PreferenceManager
 import com.googlecode.eyesfree.braille.translate.TableInfo
@@ -180,7 +181,10 @@ class BrailleDisplayComposeActivity : AppCompatActivity(),
                 currentSuffix = getString(R.string.compose_code_current_suffix),
                 cancel = getString(R.string.compose_settings_cancel),
             )
-            val systemLanguage = Locale.getDefault().language
+            // 用可观察的配置取语言：Compose 1.12 的 lint（NonObservableLocale）把
+            // Locale.getDefault() 在 composable 里的调用判为 error——切语言时不会重组，
+            // 分组会停在旧语言。LocalConfiguration 随配置变化触发重组。
+            val systemLanguage = LocalConfiguration.current.locales[0].language
             val tableGroups = BrailleTableCatalog.build(
                 tables,
                 systemLanguage,
