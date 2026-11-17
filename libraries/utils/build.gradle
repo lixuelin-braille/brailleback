@@ -1,12 +1,12 @@
 apply plugin: 'com.android.library'
 
 android {
-    compileSdk 37
+    compileSdk libs.versions.android.compileSdk.get().toInteger()
     namespace 'com.googlecode.eyesfree.utils'
 
     defaultConfig {
-        minSdk 23
-        targetSdk 37
+        minSdk libs.versions.android.minSdk.get().toInteger()
+        targetSdk libs.versions.android.targetSdk.get().toInteger()
     }
 
     sourceSets {
@@ -40,10 +40,10 @@ dependencies {
     // 用到 androidx.core 的 AccessibilityNodeInfoCompat（6 个文件：AccessibilityNodeInfoRef /
     // AccessibilityNodeInfoUtils / NodeFilter / NodeFocusFinder / TreeDebug / WebInterfaceUtils）。
     // 原 legacy-support-v4 会额外拖入 androidx.media 整包，已摘除。
-    implementation 'androidx.core:core:1.9.0'
+    implementation libs.androidx.core
     // CustomLabelManager 的标签库任务改用协程（原 AsyncTask 子类族）。
     // 锁 1.9.0：Compose 1.7.6 传递的是 1.7.3，这里显式抬到 1.9.0 并保持全仓一套
 // （1.7.3 里有 Dispatchers.Main 的 Looper 边界与 StateFlow 并发 emit 的已知问题）。
-    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0'
-    testImplementation 'junit:junit:4.13.2'
+    implementation libs.kotlinx.coroutines.android
+    testImplementation libs.junit
 }

@@ -3,12 +3,12 @@
 apply plugin: 'com.android.library'
 
 android {
-    compileSdk 37
+    compileSdk libs.versions.android.compileSdk.get().toInteger()
     namespace 'com.google.android.accessibility.utils'
 
     defaultConfig {
-        minSdk 23
-        targetSdk 37
+        minSdk libs.versions.android.minSdk.get().toInteger()
+        targetSdk libs.versions.android.targetSdk.get().toInteger()
         // BuildVersionUtils.isSystemPreload() 读取这个字段；BrailleBack 是用户态安装包，恒为 False。
         buildConfigField "String", "IS_SYSTEM_PRELOAD", "\"False\""
         // 宿主 applicationId。盲文键盘的 IME 组件名依赖它，
@@ -41,15 +41,15 @@ android {
 }
 
 dependencies {
-    api 'androidx.annotation:annotation:1.8.1'
-    api 'androidx.core:core:1.9.0'
-    api 'androidx.appcompat:appcompat:1.6.1'
-    api 'androidx.preference:preference-ktx:1.2.1'
-    api 'com.google.android.material:material:1.11.0'
-    api 'com.google.guava:guava:32.0.1-jre'
+    api libs.androidx.annotation
+    api libs.androidx.core
+    api libs.androidx.appcompat
+    api libs.androidx.preference.ktx
+    api libs.material
+    api libs.guava
     // BrailleUserPreferences 用 Gson 序列化"已添加的语言"列表。
-    api 'com.google.code.gson:gson:2.11.0'
-    api 'com.google.errorprone:error_prone_annotations:2.27.0'
-    api 'com.google.auto.value:auto-value-annotations:1.11.0'
-    testImplementation 'junit:junit:4.13.2'
+    api libs.gson
+    api libs.errorprone.annotations
+    api libs.autovalue.annotations
+    testImplementation libs.junit
 }

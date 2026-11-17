@@ -31,7 +31,9 @@
 | `libraries/compatutils` | Android 各版本兼容封装 |
 
 ## 构建
-环境：AGP 9.2.0 + Gradle 9.4.1，JDK 17+，Android SDK 35，NDK 28.2（AGP 默认）。
+环境：AGP 9.2.0 + Gradle 9.4.1，JDK 17+，compileSdk/targetSdk 37（Android 17），NDK 28.2（AGP 默认）。
+依赖版本与 `compileSdk/targetSdk/minSdk` 统一在 **`gradle/libs.versions.toml`**，
+模块脚本里不再出现 `group:artifact:version` 字面量（有契约测试守着）。
 
 ```bash
 # 推荐：用系统 gradle 并强制重跑（wrapper 会从网络下载；不加强制可能全 UP-TO-DATE 不出包）

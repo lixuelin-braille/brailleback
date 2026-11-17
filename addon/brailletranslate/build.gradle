@@ -1,12 +1,12 @@
 apply plugin: 'com.android.library'
 
 android {
-    compileSdk 37
+    compileSdk libs.versions.android.compileSdk.get().toInteger()
     namespace 'com.google.android.accessibility.braille.translate'
 
     defaultConfig {
-        minSdk 23
-        targetSdk 37
+        minSdk libs.versions.android.minSdk.get().toInteger()
+        targetSdk libs.versions.android.targetSdk.get().toInteger()
         ndk {
             abiFilters 'armeabi-v7a', 'arm64-v8a'
         }
@@ -43,6 +43,6 @@ android {
 dependencies {
     api project(':addon:tbcompat')
     api project(':addon:brailleinterfaces')
-    annotationProcessor 'com.google.auto.value:auto-value:1.11.0'
-    testImplementation 'junit:junit:4.13.2'
+    annotationProcessor libs.autovalue
+    testImplementation libs.junit
 }

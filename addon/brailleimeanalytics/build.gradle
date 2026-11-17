@@ -1,12 +1,12 @@
 apply plugin: 'com.android.library'
 
 android {
-    compileSdk 37
+    compileSdk libs.versions.android.compileSdk.get().toInteger()
     namespace 'com.google.android.accessibility.brailleime.analytics'
 
     defaultConfig {
-        minSdk 23
-        targetSdk 37
+        minSdk libs.versions.android.minSdk.get().toInteger()
+        targetSdk libs.versions.android.targetSdk.get().toInteger()
     }
 
     compileOptions {
@@ -33,5 +33,5 @@ dependencies {
     api project(':addon:tbcompat')
     api project(':addon:brailleinterfaces')
     api project(':addon:braillecommon')
-    testImplementation 'junit:junit:4.13.2'
+    testImplementation libs.junit
 }

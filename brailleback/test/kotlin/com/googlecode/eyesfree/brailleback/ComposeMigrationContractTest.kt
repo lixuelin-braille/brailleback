@@ -56,18 +56,26 @@ class ComposeMigrationContractTest {
     @Test
     fun composeCompilerPluginMatchesBuiltInKotlin() {
         val root = rootGradle()
+        // 版本搬进 gradle/libs.versions.toml 后，这里锁两件事：
+        // 根脚本必须走目录里的插件别名，目录里的版本必须与 AGP 9.2 内置 Kotlin 一致。
         assertTrue(
-            "根构建脚本必须声明 Compose 编译器插件，且版本与 AGP 9.2 内置 Kotlin 2.2.10 一致",
-            root.contains("id 'org.jetbrains.kotlin.plugin.compose' version '2.2.10' apply false")
+            "根构建脚本必须通过版本目录声明 Compose 编译器插件",
+            root.contains("alias(libs.plugins.kotlin.compose)")
+        )
+        val catalog = text("gradle/libs.versions.toml")
+        assertTrue("版本目录里 AGP 必须是 9.2.0", catalog.contains("agp = \"9.2.0\""))
+        assertTrue(
+            "版本目录里 Compose 编译器插件必须与 AGP 9.2 内置 Kotlin（2.2.10）同版",
+            catalog.contains("kotlinCompose = \"2.2.10\"")
         )
         val module = text(base + "build.gradle")
         listOf(
             "apply plugin: 'org.jetbrains.kotlin.plugin.compose'",
             "compose = true",
-            "androidx.activity:activity-compose:1.9.3",
-            "androidx.compose.ui:ui:1.7.6",
-            "androidx.compose.foundation:foundation:1.7.6",
-            "androidx.compose.material3:material3:1.3.1"
+            "libs.androidx.activity.compose",
+            "libs.compose.ui",
+            "libs.compose.foundation",
+            "libs.compose.material3",
         ).forEach { fragment ->
             assertTrue("brailleback/build.gradle 缺少：$fragment", module.contains(fragment))
         }

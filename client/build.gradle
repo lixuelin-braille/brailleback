@@ -1,12 +1,12 @@
 apply plugin: 'com.android.library'
 
 android {
-    compileSdk 37
+    compileSdk libs.versions.android.compileSdk.get().toInteger()
     namespace 'com.googlecode.eyesfree.braille.client'
 
     defaultConfig {
-        minSdk 23
-        targetSdk 37
+        minSdk libs.versions.android.minSdk.get().toInteger()
+        targetSdk libs.versions.android.targetSdk.get().toInteger()
         
     }
 

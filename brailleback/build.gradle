@@ -16,7 +16,7 @@ if (hasReleaseKey) {
 }
 
 android {
-    compileSdk 37
+    compileSdk libs.versions.android.compileSdk.get().toInteger()
     if (hasReleaseKey) {
         signingConfigs {
             release {
@@ -35,8 +35,8 @@ android {
 
     defaultConfig {
         applicationId "com.googlecode.eyesfree.brailleback"
-        minSdk 23
-        targetSdk 37
+        minSdk libs.versions.android.minSdk.get().toInteger()
+        targetSdk libs.versions.android.targetSdk.get().toInteger()
         versionCode appVersionCode
         versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
@@ -106,30 +106,29 @@ dependencies {
     // 这里声明 1.9.0 只是「下限备忘」，实际解析结果不是它：`:brailleback:dependencies`
     // 显示 androidx.core:core:1.9.0 -> 1.13.1，是 Compose 迁移带进来的
     // activity-compose:1.9.3 传递抬上去的。真要降回 1.9.0 得同时处理 Compose 运行时。
-    implementation 'androidx.core:core:1.9.0'
+    implementation libs.androidx.core
     // 设置页框架迁移（step 1）：androidx.preference + appcompat
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'androidx.preference:preference-ktx:1.2.1'
-    // Jetpack Compose：固定版本（本机离线缓存已有 1.7.6 / material3 1.3.1），
-    // 不引 BOM，避免离线构建时 BOM 解析失败。
-    implementation 'androidx.activity:activity-compose:1.9.3'
-    implementation 'androidx.compose.ui:ui:1.7.6'
-    implementation 'androidx.compose.ui:ui-tooling-preview:1.7.6'
-    implementation 'androidx.compose.foundation:foundation:1.7.6'
-    implementation 'androidx.compose.material:material-icons-core:1.7.6'
-    implementation 'androidx.compose.material3:material3:1.3.1'
-    debugImplementation 'androidx.compose.ui:ui-tooling:1.7.6'
-    testImplementation 'junit:junit:4.13.2'
+    implementation libs.androidx.appcompat
+    implementation libs.androidx.preference.ktx
+    // Jetpack Compose：不引 BOM，逐个写死（见 libs.versions.toml）。
+    implementation libs.androidx.activity.compose
+    implementation libs.compose.ui
+    implementation libs.compose.ui.tooling.preview
+    implementation libs.compose.foundation
+    implementation libs.compose.material.icons.core
+    implementation libs.compose.material3
+    debugImplementation libs.compose.ui.tooling
+    testImplementation libs.junit
     // 虚拟时间验证定时器（空闲清屏 / 运动去抖 / 闪烁），不用真等三分钟。
-    testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0'
+    testImplementation libs.kotlinx.coroutines.test
     // 仪器测试：只做「真机/模拟器上真的能起来」的冒烟。版本锁在本机离线缓存已有的组合，
     // 不引 espresso / compose-ui-test（缓存里只有 1.10.2，与 Compose 1.7.6 不同版）。
-    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
-    androidTestImplementation 'androidx.test:runner:1.5.2'
-    androidTestImplementation 'androidx.test:core:1.5.0'
+    androidTestImplementation libs.androidx.test.ext.junit
+    androidTestImplementation libs.androidx.test.runner
+    androidTestImplementation libs.androidx.test.core
     // 真实触摸点击：设置分类是 Preference 行，标题 TextView 本身不可点击，
     // Espresso 的 click 会在「View is not clickable」上失败；UiAutomator 的 click
     // 打到行容器，和手指一致。版本来自阿里镜像拉取（见 tools/dependency-probe）。
-    androidTestImplementation 'androidx.test.uiautomator:uiautomator:2.3.0'
+    androidTestImplementation libs.androidx.test.uiautomator
 }
 
