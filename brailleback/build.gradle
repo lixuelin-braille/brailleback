@@ -103,8 +103,9 @@ dependencies {
     implementation project(':libraries:compatutils')
     // 只用到 androidx.core 的 AccessibilityNodeInfoCompat。
     // 原 legacy-support-v4 会额外拖入 androidx.media 整包，已摘除。
-    // 版本必须锁 1.9.0：这是 appcompat:1.6.1 / preference-ktx:1.2.1 传递解析出的最高版本，
-    // 显式声明更高的（如 1.13.1）会把整个依赖图的 core 一起抬上去，实测反而 +0.87MB。
+    // 这里声明 1.9.0 只是「下限备忘」，实际解析结果不是它：`:brailleback:dependencies`
+    // 显示 androidx.core:core:1.9.0 -> 1.13.1，是 Compose 迁移带进来的
+    // activity-compose:1.9.3 传递抬上去的。真要降回 1.9.0 得同时处理 Compose 运行时。
     implementation 'androidx.core:core:1.9.0'
     // 设置页框架迁移（step 1）：androidx.preference + appcompat
     implementation 'androidx.appcompat:appcompat:1.6.1'

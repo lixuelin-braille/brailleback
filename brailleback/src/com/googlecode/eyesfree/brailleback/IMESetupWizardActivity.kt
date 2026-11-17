@@ -34,14 +34,25 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 
 /**
  * Setup wizard that helps the user to enable the braille IME and make
  * it the default input method.
  */
-class IMESetupWizardActivity : Activity() {
+class IMESetupWizardActivity : ComponentActivity() {
 
     private var inputMethodManager: InputMethodManager? = null
+
+    /**
+     * 系统输入法设置页返回后统一重查一次状态。
+     * 这页只关心「回来之后 IME 是否已启用」，不关心具体结果码。
+     */
+    private val imeSettingsLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()) {
+        checkStatus()
+    }
 
     /**
      * Screens to prompt for enabling and activating braille IME. Use screen directly in this
@@ -101,9 +112,8 @@ class IMESetupWizardActivity : Activity() {
             val button = Button(context)
             button.setText(R.string.ime_setup_need_enable_positive)
             button.setOnClickListener {
-                // Start IME-enable activity, and have the wizard activity handle the result.
-                val intent = Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)
-                context.startActivityForResult(intent, IMESetupWizardActivity.REQUEST_ENABLE_IME)
+                // 结果回到宿主的 launcher，回来后就重查一次状态。
+                (activity as? IMESetupWizardActivity)?.launchImeSettings()
             }
             enableBrailleImeLayout.addView(button)
 
@@ -157,7 +167,6 @@ class IMESetupWizardActivity : Activity() {
 
     /** Creates a text-view with a little bit of formatting. */
     companion object {
-        internal const val REQUEST_ENABLE_IME = 1
 
         internal fun createMessageText(context: Context, textResourceId: Int): TextView {
             val message = TextView(context)
@@ -179,13 +188,13 @@ class IMESetupWizardActivity : Activity() {
         }
     }
 
+    /** 由向导页按钮调用：打开系统输入法设置页。 */
+    internal fun launchImeSettings() {
+        imeSettingsLauncher.launch(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
+    }
+
     ////////////////////////////////////////////////////////////////////////////////////////
     // Methods to handle completion of spawned IME setup sub-activities.
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        checkStatus()
-    }
 
     private fun checkStatus() {
         if (!IMEHelper.isInputMethodEnabled(this, BrailleIME::class.java)) {

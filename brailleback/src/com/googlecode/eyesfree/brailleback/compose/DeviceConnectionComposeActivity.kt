@@ -16,6 +16,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -51,12 +52,23 @@ class DeviceConnectionComposeActivity : AppCompatActivity(),
     Display.OnConnectionStateChangeListener,
     Display.OnConnectionChangeProgressListener {
 
-    private companion object {
-        const val REQUEST_BLUETOOTH = 1
-        const val REQUEST_NOTIFICATIONS = 2
+    private var displayClient: DisplayClient? = null
+
+    /**
+     * 蓝牙权限结果。判定沿用旧逻辑：只要 CONNECT 到手就重扫一次，
+     * 不看「本次是不是刚授出」（原先也只查最终权限状态）。
+     */
+    private val bluetoothPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()) {
+        if (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)
+            == PackageManager.PERMISSION_GRANTED) {
+            displayClient?.poll()
+        }
     }
 
-    private var displayClient: DisplayClient? = null
+    /** 通知权限只影响能否发提醒，不改变本页任何状态。 */
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()) { }
     /** 首次状态只更新 UI、不播报，避免每次进页面都重复念「已连接」。 */
     private var firstConnectionState = true
 
@@ -192,31 +204,16 @@ class DeviceConnectionComposeActivity : AppCompatActivity(),
                 }
             }
             if (missing.isNotEmpty()) {
-                requestPermissions(missing.toTypedArray(), REQUEST_BLUETOOTH)
+                bluetoothPermissionLauncher.launch(missing.toTypedArray())
             }
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED
         ) {
-            requestPermissions(
-                arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_NOTIFICATIONS
+            notificationPermissionLauncher.launch(
+                Manifest.permission.POST_NOTIFICATIONS
             )
-        }
-    }
-
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray,
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQUEST_BLUETOOTH &&
-            checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)
-            == PackageManager.PERMISSION_GRANTED
-        ) {
-            // 刚拿到 CONNECT：重新扫一次已连接的点显器。
-            displayClient?.poll()
         }
     }
 }

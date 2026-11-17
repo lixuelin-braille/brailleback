@@ -28,12 +28,22 @@ import android.widget.EditText
 import android.widget.ListView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 
-class BookshelfActivity : Activity() {
+class BookshelfActivity : ComponentActivity() {
 
     private var mEmptyText: TextView? = null
     private var mList: ListView? = null
     private var mBooks: List<Book> = emptyList()
+
+    /** 导入书籍：系统文档选择器，取消时回调为 null。 */
+    private val importBookLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri != null) {
+            onDocumentSelected(uri)
+        }
+    }
 
     /**
      * 一本书：uri 唯一标识，name 为显示名（可重命名）。
@@ -115,28 +125,19 @@ class BookshelfActivity : Activity() {
     // ------------------------------------------------------------------
 
     private fun importBook() {
-        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "*/*"
-        }
-        startActivityForResult(intent, REQUEST_OPEN)
+        importBookLauncher.launch(arrayOf("*/*"))
     }
 
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (resultCode != Activity.RESULT_OK) return
-        if (requestCode == REQUEST_OPEN) {
-            val uri = data?.data ?: return
-            try {
-                contentResolver.takePersistableUriPermission(uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            } catch (e: Exception) {
-                // 部分 provider 不支持持久化，本次仍可打开
-            }
-            addBook(uri)
-            refreshList()
-            openInReader(uri)
+    private fun onDocumentSelected(uri: Uri) {
+        try {
+            contentResolver.takePersistableUriPermission(uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        } catch (e: Exception) {
+            // 部分 provider 不支持持久化，本次仍可打开
         }
+        addBook(uri)
+        refreshList()
+        openInReader(uri)
     }
 
     // ------------------------------------------------------------------
@@ -302,7 +303,6 @@ class BookshelfActivity : Activity() {
     }
 
     companion object {
-        private const val REQUEST_OPEN = 3
         private const val MENU_CLEAR = 1
         private const val SEP = "\u0001"
 

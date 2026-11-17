@@ -36,6 +36,7 @@
 | **[29-点显器连接前台保活](./29-点显器连接前台保活.md)** | 无障碍服务未开启时连接跟着界面走、`onUnbind` 客户端归零即断；connectedDevice 前台保活 + `onUnbind` 保护、真机验证与边界 | 排查「退出界面点显器就不动」或改连接生命周期前必读 |
 | **[30-电子书格式支持](./30-电子书格式支持.md)** | 阅读器新增 EPUB/HTML/Markdown：zip→container→OPF spine 取文字、HTML 清洗与实体解码、失败原因分级、6 例单测与真机冒烟 | 改阅读器格式分派或加新电子书格式前必读 |
 | **[31-Word文档支持](./31-Word文档支持.md)** | 阅读器新增 DOCX/DOCM：只解 word/document.xml、段落/换行/制表符与实体处理、旧版 .doc 专用提示、3 例新增单测 | 改 Word 提取或文件格式提示前必读 |
+| **[32-结果回传API统一](./32-结果回传API统一.md)** | 6 处旧 `startActivityForResult`/`requestPermissions` 换 launcher、基类选 `ComponentActivity` 的主题理由、4 例契约测试与 4 例仪器测试 | 改文件选择或权限申请前必读 |
 
 ---
 

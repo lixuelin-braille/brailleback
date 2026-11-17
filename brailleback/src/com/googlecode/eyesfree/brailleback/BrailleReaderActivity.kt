@@ -12,7 +12,6 @@
 
 package com.googlecode.eyesfree.brailleback
 
-import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
 import android.net.Uri
@@ -25,6 +24,8 @@ import android.widget.EditText
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import com.googlecode.eyesfree.braille.display.Display
 import com.googlecode.eyesfree.braille.display.DisplayClient
 import com.googlecode.eyesfree.braille.translate.BrailleTranslator
@@ -32,7 +33,7 @@ import com.googlecode.eyesfree.brailleback.utils.LogFileWriter
 import java.io.ByteArrayOutputStream
 import kotlin.math.min
 
-class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListener {
+class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChangeListener {
 
     private var mDisplay: DisplayClient? = null
     private var mReaderText: TextView? = null
@@ -50,6 +51,17 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
     private var mOffset = 0
     private var mConnected = false
     private var mFileUri: Uri? = null
+
+    /**
+     * 文件选择结果。OpenDocument 契约内部就是 ACTION_OPEN_DOCUMENT + CATEGORY_OPENABLE，
+     * 与原手写 Intent 等价；用户取消时回调为 null。
+     */
+    private val openFileLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri != null) {
+            onDocumentSelected(uri)
+        }
+    }
 
     /** 翻译服务（明眼 txt 电子书 → 盲文）。懒初始化：绑定 service 模块的翻译服务。 */
     private val mTranslatorManager by lazy { TranslatorManager(this) }
@@ -260,28 +272,19 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
     private fun openFile() {
         // 不限定 MIME：.bdo/.bdoc/.brf 无标准 MIME 类型，
         // 用 */* 才能在各家文件管理器中选中它们。格式校验放在读取时做。
-        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "*/*"
-        }
-        startActivityForResult(intent, REQUEST_OPEN)
+        openFileLauncher.launch(arrayOf("*/*"))
     }
 
-    override fun onActivityResult(
-        requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQUEST_OPEN && resultCode == Activity.RESULT_OK) {
-            val uri = data?.data ?: return
-            // 持久化读权限，使下次启动仍能直接续读
-            try {
-                contentResolver.takePersistableUriPermission(uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            } catch (e: Exception) {
-                // 部分选择器不支持持久化，忽略（本次仍可正常读取）
-            }
-            mFileUri = uri
-            loadFile(uri)
+    private fun onDocumentSelected(uri: Uri) {
+        // 持久化读权限，使下次启动仍能直接续读
+        try {
+            contentResolver.takePersistableUriPermission(uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        } catch (e: Exception) {
+            // 部分选择器不支持持久化，忽略（本次仍可正常读取）
         }
+        mFileUri = uri
+        loadFile(uri)
     }
 
     private fun loadFile(uri: Uri, targetOffset: Int? = null) {
@@ -931,7 +934,6 @@ class BrailleReaderActivity : Activity(), Display.OnConnectionStateChangeListene
         /** 书架/最近打开跳转时携带待打开文件 uri（见 BookshelfActivity）。 */
         const val EXTRA_URI = "com.googlecode.eyesfree.brailleback.extra.OPEN_URI"
 
-        private const val REQUEST_OPEN = 1
         private const val DEFAULT_CELLS = 40
         private const val LINES_PER_PAGE = 20
         /**

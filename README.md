@@ -50,7 +50,7 @@ gradle :brailleback:assembleDebug --rerun-tasks
 
 `.github/workflows/ci.yml` 两个 job：
 
-- **单元测试**：push / PR 自动跑 `:brailleback:testDebugUnitTest`（41 套件 / 448 用例），
+- **单元测试**：push / PR 自动跑 `:brailleback:testDebugUnitTest`（53 套件 / 538 用例），
   输出用例总数并上传 XML 报告。
 - **lint 门禁**：`:brailleback:lintDebug :service:lintDebug`，`abortOnError=true`——
   error 级问题（`NewApi`、`RegisterReceiverFlag`、`WrongConstant` 等）直接让 CI 变红。

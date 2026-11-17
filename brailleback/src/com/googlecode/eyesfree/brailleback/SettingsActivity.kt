@@ -26,6 +26,7 @@ import android.provider.Settings
 import android.view.MenuItem
 import android.view.accessibility.AccessibilityManager
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
@@ -145,11 +146,20 @@ class SettingsActivity : AppCompatActivity(),
     class SettingsFragment : PreferenceFragmentCompat(),
         Preference.OnPreferenceClickListener {
 
-        /** Message from BrailleBackService, indicating that grade pref changed. */
-        companion object {
-            private const val REQUEST_BLUETOOTH_PERMISSIONS = 1
-            private const val REQUEST_POST_NOTIFICATIONS = 2
+        /** 蓝牙权限结果：CONNECT 到手就重扫一次已连接点显器。 */
+        private val bluetoothPermissionLauncher = registerForActivityResult(
+            ActivityResultContracts.RequestMultiplePermissions()) {
+            activity?.let { host ->
+                if (host.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)
+                    == PackageManager.PERMISSION_GRANTED) {
+                    (host as? SettingsActivity)?.displayClient?.poll()
+                }
+            }
         }
+
+        /** 通知权限只影响提醒，不改变主屏任何状态。 */
+        private val notificationPermissionLauncher = registerForActivityResult(
+            ActivityResultContracts.RequestPermission()) { }
 
         private var mLicensesPreference: Preference? = null
         private var mSetupServicePreference: Preference? = null
@@ -355,30 +365,15 @@ class SettingsActivity : AppCompatActivity(),
                     missing.add(Manifest.permission.BLUETOOTH_SCAN)
                 }
                 if (missing.isNotEmpty()) {
-                    requestPermissions(
-                        missing.toTypedArray(),
-                        REQUEST_BLUETOOTH_PERMISSIONS)
+                    bluetoothPermissionLauncher.launch(missing.toTypedArray())
                 }
             }
             if (Build.VERSION.SDK_INT >= 33 &&
                 context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
                     != PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(
-                    arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-                    REQUEST_POST_NOTIFICATIONS)
-            }
-        }
-
-        override fun onRequestPermissionsResult(
-            requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-            super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-            if (requestCode == REQUEST_BLUETOOTH_PERMISSIONS) {
-                val context = requireActivity()
-                if (context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)
-                    == PackageManager.PERMISSION_GRANTED) {
-                    // CONNECT just granted: re-scan for connected displays.
-                    (context as SettingsActivity).displayClient?.poll()
-                }
+                notificationPermissionLauncher.launch(
+                    Manifest.permission.POST_NOTIFICATIONS
+                )
             }
         }
     }

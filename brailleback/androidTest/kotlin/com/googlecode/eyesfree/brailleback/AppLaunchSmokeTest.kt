@@ -63,6 +63,44 @@ class AppLaunchSmokeTest {
     }
 
     @Test
+    fun bookshelfActivityReachesResumed() {
+        // 书架刚从 android.app.Activity 换成 ComponentActivity 承载 launcher，
+        // 主题仍是 DeviceDefault。这一步专门盯「换基类后窗口能不能正常挂载」。
+        ActivityScenario.launch(BookshelfActivity::class.java).use { scenario ->
+            assertEquals(
+                "书架没有走到 RESUMED：换基类后主题或窗口挂载失败",
+                Lifecycle.State.RESUMED,
+                scenario.state,
+            )
+        }
+    }
+
+    @Test
+    fun brailleReaderActivityReachesResumed() {
+        // 阅读器同样换了基类，且 onCreate 里绑点显器客户端；起不来会在 RESUMED 前暴露。
+        ActivityScenario.launch(BrailleReaderActivity::class.java).use { scenario ->
+            assertEquals(
+                "阅读器没有走到 RESUMED",
+                Lifecycle.State.RESUMED,
+                scenario.state,
+            )
+        }
+    }
+
+    @Test
+    fun imeWizardLaunchesWithoutThemeCrash() {
+        // 这页用的是 @android:style/Theme.Holo.Dialog，换基类后最容易在窗口背景上报错。
+        // 若手机上的盲文输入法已经是默认输入法，checkStatus 会立刻 finish，属正常路径。
+        ActivityScenario.launch(IMESetupWizardActivity::class.java).use { scenario ->
+            assertTrue(
+                "IME 向导弹窗既没停在 RESUMED 也没正常结束：${scenario.state}",
+                scenario.state == Lifecycle.State.RESUMED ||
+                    scenario.state == Lifecycle.State.DESTROYED,
+            )
+        }
+    }
+
+    @Test
     fun settingsCategoryKeysAndProtocolLabelsResolve() {
         val res = target.resources
         // 六个分类入口的 key 必须都能解析，否则 wireCategory 会静默不生效。

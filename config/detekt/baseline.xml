@@ -220,7 +220,7 @@
     <ID>TooManyFunctions:BrailleBackService.kt$BrailleBackService : AccessibilityServiceOnConnectionStateChangeListenerOnMappedInputEventListenerOnPanOverflowListenerSearchStateListenerBrailleMenuListener</ID>
     <ID>TooManyFunctions:BrailleIME.kt$BrailleIME : BrailleIme</ID>
     <ID>TooManyFunctions:BrailleImeHostBridge.kt$BrailleImeHostBridge : TalkBackForBrailleImeTalkBackForBrailleCommon</ID>
-    <ID>TooManyFunctions:BrailleReaderActivity.kt$BrailleReaderActivity : ActivityOnConnectionStateChangeListener</ID>
+    <ID>TooManyFunctions:BrailleReaderActivity.kt$BrailleReaderActivity : ComponentActivityOnConnectionStateChangeListener</ID>
     <ID>TooManyFunctions:DefaultNavigationMode.kt$DefaultNavigationMode : NavigationMode</ID>
     <ID>TooManyFunctions:DisplayManager.kt$DisplayManager : OnConnectionStateChangeListenerOnInputEventListenerOnTablesChangedListenerOnSharedPreferenceChangeListener</ID>
     <ID>TooManyFunctions:DisplayService.kt$DisplayService : ServiceOnInputEventListener</ID>

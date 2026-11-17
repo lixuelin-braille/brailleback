@@ -24,6 +24,7 @@ import android.app.NotificationManager
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,9 +42,15 @@ import com.googlecode.eyesfree.brailleback.parseComponent
 
 class StabilityComposeActivity : AppCompatActivity() {
 
-    private companion object {
-        const val REQUEST_NOTIFICATION = 1
-        const val REQUEST_BLUETOOTH = 2
+    /** 两个权限申请共用一个回调：无论结果如何都重算一次自检快照。 */
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()) {
+        refreshSnapshot()
+    }
+
+    private val bluetoothPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()) {
+        refreshSnapshot()
     }
 
     private var snapshot by mutableStateOf(
@@ -197,25 +204,16 @@ class StabilityComposeActivity : AppCompatActivity() {
 
     private fun requestNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            requestPermissions(
-                arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_NOTIFICATION
+            notificationPermissionLauncher.launch(
+                Manifest.permission.POST_NOTIFICATIONS
             )
         }
     }
 
     private fun requestBluetoothPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_CONNECT), REQUEST_BLUETOOTH)
+            bluetoothPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
         }
-    }
-
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray,
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        refreshSnapshot()
     }
 
     // -------------------------------------------------------------- 文案
