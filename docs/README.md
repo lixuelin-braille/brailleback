@@ -38,6 +38,7 @@
 | **[31-Word文档支持](./31-Word文档支持.md)** | 阅读器新增 DOCX/DOCM：只解 word/document.xml、段落/换行/制表符与实体处理、旧版 .doc 专用提示、3 例新增单测 | 改 Word 提取或文件格式提示前必读 |
 | **[32-结果回传API统一](./32-结果回传API统一.md)** | 6 处旧 `startActivityForResult`/`requestPermissions` 换 launcher、基类选 `ComponentActivity` 的主题理由、4 例契约测试与 4 例仪器测试 | 改文件选择或权限申请前必读 |
 | **[33-版本目录](./33-版本目录.md)** | 11 个模块的依赖与 `compileSdk/minSdk/targetSdk` 收进 `gradle/libs.versions.toml`、两条契约测试、刻意没进目录的三类版本 | 加依赖或升版本前必读 |
+| **[34-线程与Handler盘点](./34-线程与Handler盘点.md)** | 54 处 Handler / 19 个 HandlerThread / 12 个裸线程的分类、为什么驱动线程不能换协程、剩下的收敛空间评估 | 想改线程模型前必读 |
 
 ---
 
