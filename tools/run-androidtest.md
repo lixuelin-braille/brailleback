@@ -38,8 +38,12 @@ powershell -File .\tools\run-androidtest.ps1 -Class 'com.googlecode.eyesfree.bra
 
 - debug APK 的 `abiFilters` 只有 `armeabi-v7a` / `arm64-v8a`，模拟器是 `x86_64`，
   所以**任何会走到 `BrlttyWrapper` 的用例在模拟器上都会 `UnsatisfiedLinkError`**。
-  当前 14 个用例只启动设置主屏、保活屏、书架、阅读器、IME 向导、新手引导页、读资源数组、
-  跑引导页的演示动画，不碰 native，可以在模拟器跑；
+  当前 19 个用例只启动设置主屏、保活屏、书架、阅读器、IME 向导、新手引导页、读资源数组、
+  跑引导页演示动画，再渲染五个设置组件做点击闭环，不碰 native，可以在模拟器跑；
   以后加「服务能起」这类用例，必须跑真机（`-Serial '10.121.61.209:5555'`）。
-- 没用 espresso / compose-ui-test：离线缓存里 `androidx.compose.ui:ui-test` 只有 1.10.2，
-  与项目的 Compose 1.7.6 不同版，混用会在运行时版本冲突。要做 UI 交互测试，得先补上同版依赖。
+- 没用 espresso（会顺带拉一堆 androidx 运行时）。
+  Compose 测试依赖（`ui-test-junit4` / `ui-test-manifest`）**2026-11-18 起已接**：依赖解冻后
+  能取到与 Compose 同版的 1.12.1，组件级交互用例见 `compose/ComposeSettingsInteractionTest.kt`。
+  只是仍然不启动 Activity 做交互——那需要 espresso 或 Activity 级 Compose 测试，暂不需要。
+- 跑之前先 `adb shell settings put global hide_error_dialogs 1`：模拟器桌面 ANR 弹窗会抢焦点，
+  被测 Activity 被挤到后台，表现为「找不到按钮」的假失败（见 docs/19）。

@@ -132,5 +132,9 @@ dependencies {
     // Espresso 的 click 会在「View is not clickable」上失败；UiAutomator 的 click
     // 打到行容器，和手指一致。版本来自阿里镜像拉取（见 tools/dependency-probe）。
     androidTestImplementation libs.androidx.test.uiautomator
+    // Compose 交互测试：createComposeRule 需要 ui-test-junit4；
+    // ui-test-manifest 提供 createComposeRule 用的空 ComponentActivity（debug 包专用）。
+    androidTestImplementation libs.compose.ui.test.junit4
+    debugImplementation libs.compose.ui.test.manifest
 }
 
