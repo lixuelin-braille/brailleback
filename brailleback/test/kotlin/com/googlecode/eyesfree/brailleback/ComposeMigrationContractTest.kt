@@ -369,4 +369,81 @@ class ComposeMigrationContractTest {
         assertFalse("帮助页不应写偏好", activity.contains("prefs.edit()"))
         assertFalse("帮助页不应写偏好", activity.contains(".putBoolean("))
     }
+
+    // ------------------------------------------------ 第七批：盲文书架
+
+    private val bookshelfActivityPath =
+        base + "src/com/googlecode/eyesfree/brailleback/BookshelfActivity.kt"
+
+    @Test
+    fun bookshelfIsComposeAndXmlLayoutIsGone() {
+        val activity = text(bookshelfActivityPath)
+        assertTrue("书架必须用 setContent 承载界面", activity.contains("setContent {"))
+        assertTrue("列表交给 BookshelfScreen", activity.contains("BookshelfScreen("))
+        assertFalse("不该再 setContentView", activity.contains("setContentView"))
+        assertFalse("不该再 import ListView", activity.contains("import android.widget.ListView"))
+        assertFalse("不该再用 ArrayAdapter", activity.contains("import android.widget.ArrayAdapter"))
+
+        val layout = listOf(
+            File(base + "res/layout/bookshelf.xml"),
+            File("..", base + "res/layout/bookshelf.xml"),
+            File("../..", base + "res/layout/bookshelf.xml"),
+        )
+        assertFalse("bookshelf.xml 应已删除", layout.any { it.exists() })
+    }
+
+    @Test
+    fun bookshelfKeepsStorageFormat() {
+        // 存储格式是用户已有书籍的 ABI：换了编码，用户的 200 本书就全部读不出来。
+        val activity = text(bookshelfActivityPath)
+        listOf(
+            "const val SEP",
+            "split(SEP)",
+            "PREFS_NAME = \"bookshelf\"",
+            "KEY_BOOKS = \"books\"",
+            "BOOK_LIMIT = 200",
+            "p.size >= 4",         // 四段格式
+            "p.size == 2",         // 旧两段格式的兼容分支
+        ).forEach { fragment ->
+            assertTrue("书架存储格式被改动：$fragment", activity.contains(fragment))
+        }
+        // 阅读器依赖这个静态入口把打开过的书送回书架，签名不能变。
+        assertTrue(
+            "recordRecent 签名必须保持",
+            activity.contains("fun recordRecent(context: Activity, uri: String, name: String)"),
+        )
+    }
+
+    @Test
+    fun bookshelfKeepsLongPressMenuAndConfirmations() {
+        // 长按菜单与两次确认是防误删的最后一道闸：长按菜单丢了，用户就只能在列表上乱点。
+        val activity = text(bookshelfActivityPath)
+        assertTrue("长按菜单丢了", activity.contains("BookshelfDialog.Menu("))
+        assertTrue("删除确认丢了", activity.contains("BookshelfDialog.DeleteConfirm("))
+        assertTrue("清空确认丢了", activity.contains("BookshelfDialog.ClearConfirm("))
+        assertTrue("重命名入口丢了", activity.contains("BookshelfDialog.Rename("))
+        assertTrue(
+            "删除确认文案必须带上书名",
+            activity.contains("R.string.bookshelf_delete_confirm, entry.name"),
+        )
+        assertTrue(
+            "清空确认必须带上本数",
+            activity.contains("R.string.bookshelf_clear_confirm, mBooks.size"),
+        )
+    }
+
+    @Test
+    fun bookshelfRowsReadNameTypeAndTime() {
+        // 读屏念的是「书名 + 格式 + 上次打开时间」，不是只有书名。
+        val screen = compose("BookshelfScreen.kt")
+        assertTrue("条目必须用 description 覆盖朗读内容", screen.contains("contentDescription = entry.description"))
+        val activity = text(bookshelfActivityPath)
+        listOf(
+            "R.string.bookshelf_item_desc,",
+            "R.string.bookshelf_item_desc_no_time,",
+            "DateUtils.getRelativeTimeSpanString(",
+        ).forEach { fragment ->
+            assertTrue("朗读文案装配缺：$fragment", activity.contains(fragment))
+        }
+    }
 }

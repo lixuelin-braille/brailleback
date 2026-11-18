@@ -31,11 +31,13 @@ class ImportFlowSmokeTest {
     fun importButtonOpensSystemDocumentPicker() {
         ActivityScenario.launch(BookshelfActivity::class.java).use {
             val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+            val context = InstrumentationRegistry.getInstrumentation().targetContext
 
-            // 按资源 id 找按钮，不依赖文案（文案会随语言与改版变化）。
-            val button = device.wait(
-                Until.findObject(By.res("$packageName:id/btn_bookshelf_open")), 5_000)
-            assertNotNull("书架上没找到「导入」按钮", button)
+            // 2026-11-18 书架改成 Compose，按钮没有资源 id 可找了；
+            // 但文案取自资源本身，所以按文案找仍然与语言无关。
+            val importLabel = context.getString(R.string.bookshelf_import)
+            val button = device.wait(Until.findObject(By.text(importLabel)), 10_000)
+            assertNotNull("书架上没找到「$importLabel」按钮", button)
             button!!.click()
 
             // 选择器是另一个包（AOSP 是 documentsui，小米可能是文件管理）。

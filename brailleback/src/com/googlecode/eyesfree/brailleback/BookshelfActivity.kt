@@ -4,38 +4,44 @@
  * 盲文书架：只做「导入 + 书籍管理（增删改查）」，不做文件夹树浏览/收藏。
  *
  * - 增：导入文件（系统选择器），或阅读器里打开过的书自动进书架
- * - 查：书架列表展示全部藏书，点击直接阅读；TalkBack 朗读书名 + 格式 + 上次打开时间
- * - 删：长按条目删除单本（带确认）；菜单「清空书架」清空全部（带确认）
+ * - 查：书架列表展示全部藏书，点击直接阅读；读屏念书名 + 格式 + 上次打开时间
+ * - 删：长按条目删除单本（带确认）；顶栏「清空书架」清空全部（带确认）
  * - 改：长按条目重命名显示名
+ *
+ * 2026-11-18：界面从 ListView + ArrayAdapter 换成 Compose（`bookshelf.xml` 已删除），
+ * 存储层与编码格式刻意不动 —— 书架用的是自己的 `bookshelf` 偏好文件，
+ * 不与 `SettingsStore`（默认偏好）共用。
  */
 
 package com.googlecode.eyesfree.brailleback
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.view.Menu
-import android.view.MenuItem
 import android.text.format.DateUtils
-import android.view.View
-import android.view.ViewGroup
-import android.widget.AdapterView
-import android.widget.ArrayAdapter
-import android.widget.Button
-import android.widget.EditText
-import android.widget.ListView
-import android.widget.TextView
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.googlecode.eyesfree.brailleback.compose.BookshelfActions
+import com.googlecode.eyesfree.brailleback.compose.BookshelfDialog
+import com.googlecode.eyesfree.brailleback.compose.BookshelfEntry
+import com.googlecode.eyesfree.brailleback.compose.BookshelfLabels
+import com.googlecode.eyesfree.brailleback.compose.BookshelfScreen
+import com.googlecode.eyesfree.utils.LogUtils
 
 class BookshelfActivity : ComponentActivity() {
 
-    private var mEmptyText: TextView? = null
-    private var mList: ListView? = null
     private var mBooks: List<Book> = emptyList()
+
+    // 列表与对话框状态放 Activity 层：内容来自偏好文件，onResume 时要整体刷新。
+    private var entries by mutableStateOf<List<BookshelfEntry>>(emptyList())
+    private var dialog by mutableStateOf<BookshelfDialog?>(null)
 
     /** 导入书籍：系统文档选择器，取消时回调为 null。 */
     private val importBookLauncher = registerForActivityResult(
@@ -54,22 +60,7 @@ class BookshelfActivity : ComponentActivity() {
         val uri: String,
         var name: String,
         val ext: String,
-        val openedAt: Long) {
-        /** ArrayAdapter 默认用 toString 渲染可见文本，必须返回书名。 */
-        override fun toString(): String = name
-    }
-
-    /** ListView 条目：视觉显示书名，TalkBack 朗读完整上下文。 */
-    private inner class BookAdapter(books: List<Book>)
-        : ArrayAdapter<Book>(this@BookshelfActivity,
-            android.R.layout.simple_list_item_1, books) {
-        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
-            val view = super.getView(position, convertView, parent) as TextView
-            val book = getItem(position) ?: return view
-            view.contentDescription = describe(book)
-            return view
-        }
-    }
+        val openedAt: Long)
 
     /** 朗读文本：书名 + 类型 + 上次打开时间（旧数据无时间则省略）。 */
     private fun describe(book: Book): String {
@@ -98,26 +89,98 @@ class BookshelfActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.bookshelf)
-        mEmptyText = findViewById(R.id.bookshelf_empty)
-        mList = findViewById(R.id.bookshelf_list)
-
-        findViewById<Button>(R.id.btn_bookshelf_open).setOnClickListener { importBook() }
-
-        mList?.onItemClickListener = AdapterView.OnItemClickListener { _, _, position, _ ->
-            openInReader(Uri.parse(mBooks[position].uri))
-        }
-        mList?.onItemLongClickListener = AdapterView.OnItemLongClickListener { _, _, position, _ ->
-            showItemMenu(position)
-            true
-        }
         refreshList()
+
+        setContent {
+            val labels = BookshelfLabels(
+                title = getString(R.string.bookshelf_title),
+                importBook = getString(R.string.bookshelf_import),
+                empty = getString(R.string.bookshelf_empty),
+                clear = getString(R.string.bookshelf_clear),
+                open = getString(R.string.bookshelf_open),
+                rename = getString(R.string.bookshelf_rename),
+                delete = getString(R.string.bookshelf_delete),
+                confirm = getString(android.R.string.ok),
+                cancel = getString(android.R.string.cancel),
+            )
+            BookshelfScreen(
+                labels = labels,
+                entries = entries,
+                dialog = dialog,
+                actions = bookshelfActions(),
+            )
+        }
     }
 
     override fun onResume() {
         super.onResume()
         // 阅读器里打开过的书会 recordRecent 进书架，返回时刷新列表。
+        // 列表用 uri 做 key，刷新后滚动位置仍然保持。
         refreshList()
+    }
+
+    // ------------------------------------------------------------------
+    // 屏幕回调（匿名实现，状态改动都收在这里）
+    // ------------------------------------------------------------------
+
+    /** 内部类型不能出现在 public 成员签名里，所以用匿名对象而不是让 Activity 实现接口。 */
+    private fun bookshelfActions() = object : BookshelfActions {
+        override fun onImport() {
+            importBook()
+        }
+
+        override fun onOpen(entry: BookshelfEntry) {
+            openInReader(Uri.parse(entry.uri))
+        }
+
+        override fun onLongPress(entry: BookshelfEntry) {
+            dialog = BookshelfDialog.Menu(entry, entry.name)
+        }
+
+        override fun onClear() {
+            requestClear()
+        }
+
+        override fun onDismissDialog() {
+            dialog = null
+        }
+
+        override fun onMenuOpen(entry: BookshelfEntry) {
+            dialog = null
+            openInReader(Uri.parse(entry.uri))
+        }
+
+        override fun onMenuRename(entry: BookshelfEntry) {
+            dialog = BookshelfDialog.Rename(entry.uri, entry.name)
+        }
+
+        override fun onMenuDelete(entry: BookshelfEntry) {
+            dialog = BookshelfDialog.DeleteConfirm(
+                uri = entry.uri,
+                title = entry.name,
+                message = getString(R.string.bookshelf_delete_confirm, entry.name),
+            )
+        }
+
+        override fun onConfirmDelete() {
+            val pending = dialog as? BookshelfDialog.DeleteConfirm
+            dialog = null
+            if (pending != null) removeBook(pending.uri)
+        }
+
+        override fun onConfirmRename(newName: String) {
+            val pending = dialog as? BookshelfDialog.Rename
+            dialog = null
+            val name = newName.trim()
+            if (pending != null && name.isNotEmpty()) {
+                renameBook(pending.uri, name)
+            }
+        }
+
+        override fun onConfirmClear() {
+            dialog = null
+            clearBooks()
+        }
     }
 
     // ------------------------------------------------------------------
@@ -132,8 +195,10 @@ class BookshelfActivity : ComponentActivity() {
         try {
             contentResolver.takePersistableUriPermission(uri,
                 Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        } catch (e: Exception) {
-            // 部分 provider 不支持持久化，本次仍可打开
+        } catch (e: SecurityException) {
+            // 部分 provider 不支持持久化，本次仍可打开；但要留痕，
+            // 否则「重启后书打不开」会变成找不到原因的神秘问题。
+            LogUtils.logWithTag(Log.WARN, TAG, "无法持久化 URI 权限：%s", e.toString())
         }
         addBook(uri)
         refreshList()
@@ -145,68 +210,22 @@ class BookshelfActivity : ComponentActivity() {
     // ------------------------------------------------------------------
 
     private fun refreshList() {
-        // 保留滚动位置：从阅读器返回时无条件重建 adapter 会让盲人用户
-        // 丢失在长列表里的位置，重新定位成本很高。
-        val list = mList
-        val savedPosition = list?.firstVisiblePosition ?: 0
         mBooks = loadBooks()
-        mEmptyText?.visibility = if (mBooks.isEmpty()) TextView.VISIBLE else TextView.GONE
-        list?.adapter = BookAdapter(mBooks)
-        if (list != null && mBooks.isNotEmpty()) {
-            list.setSelection(savedPosition.coerceAtMost(mBooks.size - 1))
+        entries = mBooks.map { book ->
+            BookshelfEntry(uri = book.uri, name = book.name, description = describe(book))
         }
     }
 
-    // ------------------------------------------------------------------
-    // 删 / 改：长按菜单
-    // ------------------------------------------------------------------
-
-    private fun showItemMenu(position: Int) {
-        val book = mBooks[position]
-        val items = arrayOf(
-            getString(R.string.bookshelf_open),
-            getString(R.string.bookshelf_rename),
-            getString(R.string.bookshelf_delete))
-        AlertDialog.Builder(this)
-            .setTitle(book.name)
-            .setItems(items) { _, which ->
-                when (which) {
-                    0 -> openInReader(Uri.parse(book.uri))
-                    1 -> showRenameDialog(book)
-                    2 -> showDeleteConfirm(book)
-                }
-            }
-            .show()
-    }
-
-    /** 删除前确认：盲人用户误触长按菜单的代价高，直接删不可接受。 */
-    private fun showDeleteConfirm(book: Book) {
-        AlertDialog.Builder(this)
-            .setTitle(book.name)
-            .setMessage(getString(R.string.bookshelf_delete_confirm, book.name))
-            .setPositiveButton(android.R.string.ok) { _, _ ->
-                removeBook(book.uri)
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
-    }
-
-    private fun showRenameDialog(book: Book) {
-        val input = EditText(this).apply {
-            setText(book.name)
-            setSelection(book.name.length)
+    private fun requestClear() {
+        if (mBooks.isEmpty()) {
+            Toast.makeText(this, R.string.bookshelf_empty, Toast.LENGTH_SHORT).show()
+            return
         }
-        AlertDialog.Builder(this)
-            .setTitle(R.string.bookshelf_rename)
-            .setView(input)
-            .setPositiveButton(android.R.string.ok) { _, _ ->
-                val newName = input.text.toString().trim()
-                if (newName.isNotEmpty()) {
-                    renameBook(book.uri, newName)
-                }
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
+        // 清空一次最多丢 200 本书的记录，必须二次确认。
+        dialog = BookshelfDialog.ClearConfirm(
+            title = getString(R.string.bookshelf_clear),
+            message = getString(R.string.bookshelf_clear_confirm, mBooks.size),
+        )
     }
 
     // ------------------------------------------------------------------
@@ -263,29 +282,6 @@ class BookshelfActivity : ComponentActivity() {
         startActivity(intent)
     }
 
-    override fun onCreateOptionsMenu(menu: Menu): Boolean {
-        menu.add(0, MENU_CLEAR, 0, R.string.bookshelf_clear)
-        return true
-    }
-
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        if (item.itemId == MENU_CLEAR) {
-            if (mBooks.isEmpty()) {
-                Toast.makeText(this, R.string.bookshelf_empty, Toast.LENGTH_SHORT).show()
-            } else {
-                // 清空一次最多丢 200 本书的记录，必须二次确认。
-                AlertDialog.Builder(this)
-                    .setTitle(R.string.bookshelf_clear)
-                    .setMessage(getString(R.string.bookshelf_clear_confirm, mBooks.size))
-                    .setPositiveButton(android.R.string.ok) { _, _ -> clearBooks() }
-                    .setNegativeButton(android.R.string.cancel, null)
-                    .show()
-            }
-            return true
-        }
-        return super.onOptionsItemSelected(item)
-    }
-
     private fun encode(books: List<Book>): Set<String> =
         books.map { "${it.uri}$SEP${it.name}$SEP${it.ext}$SEP${it.openedAt}" }.toSet()
 
@@ -303,7 +299,7 @@ class BookshelfActivity : ComponentActivity() {
     }
 
     companion object {
-        private const val MENU_CLEAR = 1
+        private const val TAG = "BookshelfActivity"
         private const val SEP = "\u0001"
 
         private const val PREFS_NAME = "bookshelf"
