@@ -25,7 +25,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.preference.PreferenceManager
+import com.googlecode.eyesfree.utils.SettingsStore
 import com.googlecode.eyesfree.brailleback.OverlayTutorialActivity
 import com.googlecode.eyesfree.brailleback.R
 import com.googlecode.eyesfree.brailleback.utils.DebugLogActions
@@ -70,7 +70,7 @@ internal data class DeveloperOptionsLabels(
 
 class DeveloperOptionsComposeActivity : AppCompatActivity() {
 
-    private val prefs by lazy { PreferenceManager.getDefaultSharedPreferences(this) }
+    private val prefs by lazy { SettingsStore.get(this) }
 
     private var logLevelValue by mutableStateOf("")
     private var overlayEnabled by mutableStateOf(DeveloperOptionsLogic.OVERLAY_DEFAULT)

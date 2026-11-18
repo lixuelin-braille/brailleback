@@ -25,7 +25,7 @@ import android.os.Looper
 import android.os.Message
 import android.os.PowerManager
 import android.os.SystemClock
-import android.preference.PreferenceManager
+import com.googlecode.eyesfree.utils.SettingsStore
 import android.text.Spanned
 import android.util.Log
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
@@ -268,7 +268,7 @@ class DisplayManager(
         displayHandler = DisplayHandler(displayLooper)
         callbackHandler = DisplayCallbackHandler(this)
 
-        sharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
+        sharedPreferences = SettingsStore.get(context)
         sharedPreferences.registerOnSharedPreferenceChangeListener(this)
         updateWrapStrategyFromPreferences()
         reloadCustomKeyMap()

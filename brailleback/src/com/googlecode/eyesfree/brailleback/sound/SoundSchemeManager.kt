@@ -10,7 +10,7 @@ package com.googlecode.eyesfree.brailleback.sound
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.preference.PreferenceManager
+import com.googlecode.eyesfree.utils.SettingsStore
 import com.googlecode.eyesfree.brailleback.R
 import com.googlecode.eyesfree.utils.FeedbackController
 
@@ -28,7 +28,7 @@ import com.googlecode.eyesfree.utils.FeedbackController
 class SoundSchemeManager private constructor(context: Context) {
 
     private val mPrefs: SharedPreferences =
-        PreferenceManager.getDefaultSharedPreferences(context)
+        SettingsStore.get(context)
 
     private val mBuiltInSchemes: List<SoundScheme> = listOf(
         SoundScheme("default",

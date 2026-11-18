@@ -21,7 +21,7 @@ import android.content.SharedPreferences
 import android.os.Looper
 import android.os.Message
 import android.os.SystemClock
-import android.preference.PreferenceManager
+import com.googlecode.eyesfree.utils.SettingsStore
 import android.view.MotionEvent
 import android.view.View
 import android.widget.ImageButton
@@ -77,7 +77,7 @@ class OverlayDisplay(
         // Finish initializing based on user preferences later.
         // This gives the caller enough time to change the listeners, as long
         // as it is done before control is returned to the Looper.
-        val prefs = PreferenceManager.getDefaultSharedPreferences(mContext)
+        val prefs = SettingsStore.get(mContext)
         prefs.registerOnSharedPreferenceChangeListener(this)
         mDisplayThreadHandler.reportPreferenceChange(prefs)
     }
@@ -120,7 +120,7 @@ class OverlayDisplay(
 
     override fun shutdown() {
         mShutdown = true
-        val prefs = PreferenceManager.getDefaultSharedPreferences(mContext)
+        val prefs = SettingsStore.get(mContext)
         prefs.unregisterOnSharedPreferenceChangeListener(this)
         mMainThreadHandler.hideOverlay()
 

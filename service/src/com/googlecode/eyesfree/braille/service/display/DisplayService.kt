@@ -30,7 +30,7 @@ import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.hardware.usb.UsbManager
-import android.preference.PreferenceManager
+import com.googlecode.eyesfree.utils.SettingsStore
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -464,7 +464,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         if (BuildConfig.DIAG_LOG_LEVEL > 0) {
             return BuildConfig.DIAG_LOG_LEVEL
         }
-        val raw: String? = PreferenceManager.getDefaultSharedPreferences(this)
+        val raw: String? = SettingsStore.get(this)
                 .getString("log_level", null)
         if (raw != null) {
             try {
@@ -493,10 +493,10 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         // shared file sink here so USB diagnostics never depend on start order.
         configureProcessLogging()
         mTablesDir = getDir("keytables", Context.MODE_PRIVATE)
-        PreferenceManager.getDefaultSharedPreferences(this)
+        SettingsStore.get(this)
                 .registerOnSharedPreferenceChangeListener(
                         mProtocolPrefListener)
-        PreferenceManager.getDefaultSharedPreferences(this)
+        SettingsStore.get(this)
                 .registerOnSharedPreferenceChangeListener(
                         mAutoConnectPrefListener)
         registerBroadcastReceiver()
@@ -515,10 +515,10 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
     override fun onDestroy() {
         super.onDestroy()
         Log.i(LOG_TAG, "Destroying service.")
-        PreferenceManager.getDefaultSharedPreferences(this)
+        SettingsStore.get(this)
                 .unregisterOnSharedPreferenceChangeListener(
                         mProtocolPrefListener)
-        PreferenceManager.getDefaultSharedPreferences(this)
+        SettingsStore.get(this)
                 .unregisterOnSharedPreferenceChangeListener(
                         mAutoConnectPrefListener)
         HidBridge.setControllerChangeListener(this, null)
@@ -1115,8 +1115,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         if (named != null) {
             return named
         }
-        return PreferenceManager
-                .getDefaultSharedPreferences(this)
+        return SettingsStore.get(this)
                 .getString("lastBluetoothDevice", null)
     }
 

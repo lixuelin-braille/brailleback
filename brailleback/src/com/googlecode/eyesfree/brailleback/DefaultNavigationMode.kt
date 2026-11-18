@@ -20,7 +20,7 @@ import android.accessibilityservice.AccessibilityService
 import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
-import android.preference.PreferenceManager
+import com.googlecode.eyesfree.utils.SettingsStore
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -599,7 +599,7 @@ internal class DefaultNavigationMode(
     }
 
     internal fun isQuietNavigationEnabled(): Boolean {
-        return PreferenceManager.getDefaultSharedPreferences(mAccessibilityService)
+        return SettingsStore.get(mAccessibilityService)
                 .getBoolean(
                         mAccessibilityService.getString(R.string.pref_quiet_navigation_key),
                         mAccessibilityService.resources.getBoolean(

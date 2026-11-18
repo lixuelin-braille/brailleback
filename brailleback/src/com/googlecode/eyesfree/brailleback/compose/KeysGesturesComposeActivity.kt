@@ -17,7 +17,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.preference.PreferenceManager
+import com.googlecode.eyesfree.utils.SettingsStore
 import com.googlecode.eyesfree.braille.display.Display
 import com.googlecode.eyesfree.braille.display.DisplayClient
 import com.googlecode.eyesfree.brailleback.CustomKeyMapActivity
@@ -67,7 +67,7 @@ class KeysGesturesComposeActivity : AppCompatActivity(),
         // 标题栏交给 Compose 的 TopAppBar，避免两个标题栏叠加、读屏重复朗读。
         supportActionBar?.hide()
 
-        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val prefs = SettingsStore.get(this)
         val gesturesKey = getString(R.string.pref_volume_gestures_enabled_key)
         gesturesEnabled = prefs.getBoolean(
             gesturesKey, resources.getBoolean(R.bool.pref_volume_gestures_enabled_default)

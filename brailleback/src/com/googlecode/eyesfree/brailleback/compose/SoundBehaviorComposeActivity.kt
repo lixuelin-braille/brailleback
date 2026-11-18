@@ -22,7 +22,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.preference.PreferenceManager
+import com.googlecode.eyesfree.utils.SettingsStore
 import com.googlecode.eyesfree.brailleback.R
 import com.googlecode.eyesfree.brailleback.sound.SoundSchemeManager
 
@@ -63,7 +63,7 @@ internal data class SoundBehaviorLabels(
 
 class SoundBehaviorComposeActivity : AppCompatActivity() {
 
-    private val prefs by lazy { PreferenceManager.getDefaultSharedPreferences(this) }
+    private val prefs by lazy { SettingsStore.get(this) }
     private val soundManager by lazy { SoundSchemeManager.getInstance(this) }
 
     private var soundEnabled by mutableStateOf(true)

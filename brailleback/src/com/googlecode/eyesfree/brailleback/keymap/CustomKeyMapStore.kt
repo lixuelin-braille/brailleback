@@ -6,15 +6,15 @@ package com.googlecode.eyesfree.brailleback.keymap
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.preference.PreferenceManager
+import com.googlecode.eyesfree.utils.SettingsStore
 import com.googlecode.eyesfree.braille.display.BrailleInputEvent
 import com.googlecode.eyesfree.brailleback.R
 
 /**
  * 自定义按键映射的持久化层。
  *
- * 与项目其它设置共用 `PreferenceManager.getDefaultSharedPreferences`（见
- * `settings.xml` 顶部注释、`DisplayManager` 构造函数）。整张表只占一个 String 偏好项，
+ * 与项目其它设置共用同一个存储：默认偏好文件由 `SettingsStore`（DataStore + 内存快照）
+ * 承载（见 `SettingsStore` 顶部注释、`DisplayManager` 构造函数）。整张表只占一个 String 偏好项，
  * 设置页写入后 `DisplayManager.onSharedPreferenceChanged` 会即时重载，无需重启服务。
  *
  * 对应 Google TalkBack 的 `KeyComboPersister` / `BrailleUserPreferences.writeGestureAction`：
@@ -28,7 +28,7 @@ object CustomKeyMapStore {
         context.getString(R.string.pref_custom_key_map_key)
 
     private fun prefs(context: Context): SharedPreferences =
-        PreferenceManager.getDefaultSharedPreferences(context)
+        SettingsStore.get(context)
 
     /** 读取并校验整张映射表；没有任何自定义时返回空表（即全部保持默认）。 */
     @JvmStatic

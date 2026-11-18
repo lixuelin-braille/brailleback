@@ -32,7 +32,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.Message
 import android.os.SystemClock
-import android.preference.PreferenceManager
+import com.googlecode.eyesfree.utils.SettingsStore
 import androidx.core.content.ContextCompat
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import android.text.TextUtils
@@ -146,7 +146,7 @@ class BrailleBackService : AccessibilityService(),
             }
         }
         if (state == Display.STATE_CONNECTED && dm != null) {
-            applyMotionModeDefault(PreferenceManager.getDefaultSharedPreferences(this))
+            applyMotionModeDefault(SettingsStore.get(this))
         }
         focusTracker?.onConnectionStateChanged(state)
     }
@@ -456,7 +456,7 @@ class BrailleBackService : AccessibilityService(),
      */
     private fun hasVolumeGestures(): Boolean {
         val prefs =
-                PreferenceManager.getDefaultSharedPreferences(this)
+                SettingsStore.get(this)
         if (!prefs.getBoolean(getString(R.string.pref_volume_gestures_enabled_key),
                 resources.getBoolean(
                         R.bool.pref_volume_gestures_enabled_default))) {
@@ -483,7 +483,7 @@ class BrailleBackService : AccessibilityService(),
                 return getString(R.string.pref_volume_action_none_value)
             }
         }
-        return PreferenceManager.getDefaultSharedPreferences(this)
+        return SettingsStore.get(this)
                 .getString(key, getString(R.string.pref_volume_action_none_value))
                 ?: getString(R.string.pref_volume_action_none_value)
     }
@@ -506,7 +506,7 @@ class BrailleBackService : AccessibilityService(),
             val contractedKey =
                     getString(R.string.pref_braille_contracted_mode_key)
             val prefs =
-                    PreferenceManager.getDefaultSharedPreferences(this)
+                    SettingsStore.get(this)
             val contracted = prefs.getBoolean(contractedKey, false)
             prefs.edit().putBoolean(contractedKey, !contracted).apply()
             feedback.emitFeedback(
@@ -605,7 +605,7 @@ class BrailleBackService : AccessibilityService(),
                 + " sdk=" + Build.VERSION.SDK_INT)
             HidBridge.setController(this, bdc)
         }
-        PreferenceManager.getDefaultSharedPreferences(this)
+        SettingsStore.get(this)
                 .registerOnSharedPreferenceChangeListener(mPreferenceListener)
         PreferenceUtils.initLogLevel(this)
         LogFileWriter.init(this)
@@ -652,7 +652,7 @@ class BrailleBackService : AccessibilityService(),
         // Ownership is checked: when this instance has already been superseded,
         // the newer controller stays published.
         HidBridge.setController(this, null)
-        PreferenceManager.getDefaultSharedPreferences(this)
+        SettingsStore.get(this)
                 .unregisterOnSharedPreferenceChangeListener(mPreferenceListener)
         // 服务销毁前必须撤销透传，否则设备会停留在"读屏摸不动"的状态。
         PassthroughProbe.uninstall(this)
@@ -806,7 +806,7 @@ class BrailleBackService : AccessibilityService(),
                 this /*inputEventListener*/)
         displayManager = dm
         dm.setContent(Content(getString(R.string.display_connected)))
-        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val prefs = SettingsStore.get(this)
         applyMotionModeDefault(prefs)
         dm.setPauseClear(
                 getString(R.string.pref_pause_behavior_clear_value)

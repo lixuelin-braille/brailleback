@@ -117,7 +117,8 @@ class BrailleDisplayContractTest {
             "getString(R.string.pref_preferred_codes_key)",
             "R.bool.pref_braille_word_wrap_default",
             "R.bool.pref_chinese_segmentation_default",
-            "PreferenceManager.getDefaultSharedPreferences(this)",
+            // 2026-11-18：默认偏好文件改由 SettingsStore（DataStore + 内存快照）承载。
+            "SettingsStore.get(this)",
             "BrailleSettingsKeys(",
         ).forEach { fragment ->
             assertTrue("Activity 必须解析原偏好键：$fragment", activity.contains(fragment))

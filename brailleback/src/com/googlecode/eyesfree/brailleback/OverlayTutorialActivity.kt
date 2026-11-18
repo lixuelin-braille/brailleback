@@ -21,7 +21,7 @@ import android.content.Context
 import android.content.DialogInterface
 import android.content.Intent
 import android.os.Bundle
-import android.preference.PreferenceManager
+import com.googlecode.eyesfree.utils.SettingsStore
 import android.provider.Settings
 import android.view.View
 import androidx.activity.ComponentActivity
@@ -120,7 +120,7 @@ class OverlayTutorialActivity : ComponentActivity() {
         private const val ROUTING_KEY_DEMO_INTERVAL = 1500L
 
         internal fun startIfFirstTime(context: Context) {
-            val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+            val prefs = SettingsStore.get(context)
             if (prefs.getBoolean(PREF_HAS_RUN, false)) {
                 return
             }

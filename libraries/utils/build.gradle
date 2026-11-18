@@ -45,5 +45,8 @@ dependencies {
     // 锁 1.9.0：Compose 1.7.6 传递的是 1.7.3，这里显式抬到 1.9.0 并保持全仓一套
 // （1.7.3 里有 Dispatchers.Main 的 Looper 边界与 StateFlow 并发 emit 的已知问题）。
     implementation libs.kotlinx.coroutines.android
+    // DataStore：默认偏好文件的唯一写源（见 SettingsStore）。用 api 而不是 implementation，
+    // 因为 brailleback 与 service 两个模块都要能引用 SettingsStore 的类型（它实现 SharedPreferences）。
+    api libs.androidx.datastore.preferences
     testImplementation libs.junit
 }

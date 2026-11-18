@@ -21,7 +21,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.os.Bundle
-import android.preference.PreferenceManager
+import com.googlecode.eyesfree.utils.SettingsStore
 import android.view.View
 import android.widget.CheckBox
 import android.widget.TextView
@@ -48,7 +48,7 @@ class SearchTutorialActivity : Activity(),
 
         setContentView(R.layout.search_tutorial_activity)
 
-        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val prefs = SettingsStore.get(this)
         val doNotShowCheckBox = findViewById(R.id.doNotShowCheckBox) as CheckBox
         doNotShowCheckBox.isChecked = prefs.getBoolean(PREF_DO_NOT_SHOW, false)
     }
@@ -146,7 +146,7 @@ class SearchTutorialActivity : Activity(),
 
         @JvmStatic
         fun tryStartActivity(context: Context): Boolean {
-            val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+            val prefs = SettingsStore.get(context)
             if (prefs.getBoolean(PREF_DO_NOT_SHOW, false)) {
                 return false
             }
@@ -165,7 +165,7 @@ class SearchTutorialActivity : Activity(),
      * to display the tutorial in the future.
      */
     fun onClickCloseButton(v: View) {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val prefs = SettingsStore.get(this)
         val doNotShowCheckBox = findViewById(R.id.doNotShowCheckBox) as CheckBox
         prefs.edit()
                 .putBoolean(PREF_DO_NOT_SHOW, doNotShowCheckBox.isChecked)

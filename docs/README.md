@@ -45,6 +45,7 @@
 | **[38-依赖解冻](./38-依赖解冻.md)** | 网络恢复后把 Compose 1.7.6→1.12.1、activity→1.13.0、material3→1.4.0、coroutines→1.11.0 等一次抬齐；`material-icons-core` 停更要单钉、Compose 1.12 新 lint 抓到的非可观察 Locale | 动依赖版本前必读 |
 | **[39-Compose组件级交互测试](./39-Compose组件级交互测试.md)** | 接上同版 `ui-test-junit4`、五例设置组件点击闭环（开关取反/禁用态/选择行只回调一次）、模拟器桌面 ANR 抢焦点导致的假失败 | 加 UI 交互测试前读 |
 | **[40-设置主屏Compose化](./40-设置主屏Compose化.md)** | 最后一处 `PreferenceFragmentCompat` 退场：目录数据表 + 无 back stack 导航、六个契约测试怎么跟、detekt baseline 因搬家失效的坑、为什么这是 DataStore 的前置 | 改设置主屏或要迁 DataStore 前必读 |
+| **[41-设置存储DataStore化](./41-设置存储DataStore化.md)** | 默认偏好改 DataStore 唯一写源 + 内存快照同步读、`chinese_segmentation` 为什么留在旧文件、幂等迁移、初始化锁与快照锁必须分开（否则设置页卡死） | 改存储层或往 `:service` 加读键前必读 |
 
 ---
 

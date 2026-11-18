@@ -25,7 +25,7 @@ import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.PowerManager
 import android.os.SystemClock
-import android.preference.PreferenceManager
+import com.googlecode.eyesfree.utils.SettingsStore
 import android.util.Log
 import com.googlecode.eyesfree.braille.service.R
 import timber.log.Timber
@@ -93,7 +93,7 @@ import timber.log.Timber
 
     /** Returns the user-selected connection protocol. */
     internal fun DisplayService.getConnectionProtocol(): String {
-        val value = PreferenceManager.getDefaultSharedPreferences(this)
+        val value = SettingsStore.get(this)
                 .getString(ConnectionProtocolPolicy.PREFERENCE_KEY,
                         ConnectionProtocolPolicy.BLUETOOTH)
         return ConnectionProtocolPolicy.normalize(value)
@@ -171,7 +171,7 @@ import timber.log.Timber
         mAutoReconnectSuppressed = false
         mAutoReconnectAttempt = 0
         mHandler.cancelAutoReconnect()
-        if (PreferenceManager.getDefaultSharedPreferences(this)
+        if (SettingsStore.get(this)
                 .getBoolean("auto_connect", true)) {
             if (!isConnectionActive()) {
                 resetConnectionAttemptFlags()
@@ -291,7 +291,7 @@ import timber.log.Timber
     }
 
     internal fun DisplayService.shouldAutoReconnect(): Boolean {
-        if (!PreferenceManager.getDefaultSharedPreferences(this)
+        if (!SettingsStore.get(this)
                 .getBoolean("auto_connect", true)) {
             return false
         }
@@ -345,7 +345,7 @@ import timber.log.Timber
             }
         }
         return BluetoothDiscoveryPolicy.shouldStartDiscovery(
-                PreferenceManager.getDefaultSharedPreferences(this)
+                SettingsStore.get(this)
                         .getBoolean("auto_connect", true),
                 mAutoReconnectSuppressed,
                 haveClients(),

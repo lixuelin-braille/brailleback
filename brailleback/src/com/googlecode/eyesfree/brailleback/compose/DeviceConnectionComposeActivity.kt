@@ -21,7 +21,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.preference.PreferenceManager
+import com.googlecode.eyesfree.utils.SettingsStore
 import com.googlecode.eyesfree.braille.display.Display
 import com.googlecode.eyesfree.braille.display.DisplayClient
 import com.googlecode.eyesfree.braille.service.display.ConnectionProtocolPolicy
@@ -84,7 +84,7 @@ class DeviceConnectionComposeActivity : AppCompatActivity(),
         // Compose 的 TopAppBar，避免两个标题栏叠加、读屏重复朗读。
         supportActionBar?.hide()
 
-        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val prefs = SettingsStore.get(this)
         val protocolKey = getString(R.string.pref_connection_protocol_key)
         val autoConnectKey = getString(R.string.pref_auto_connect_key)
 

@@ -35,7 +35,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.preference.PreferenceManager
+import com.googlecode.eyesfree.utils.SettingsStore
 import com.googlecode.eyesfree.braille.display.Display
 import com.googlecode.eyesfree.braille.display.DisplayClient
 import com.googlecode.eyesfree.braille.service.display.ConnectionProtocolPolicy
@@ -216,7 +216,7 @@ class SettingsActivity : AppCompatActivity(),
 
     /** 旧版六种协议值归一到「蓝牙 / USB」，避免两处读到不同值。 */
     private fun migrateConnectionProtocolPreference() {
-        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val prefs = SettingsStore.get(this)
         val key = getString(R.string.pref_connection_protocol_key)
         val value = prefs.getString(key, null)
         val normalized = ConnectionProtocolPolicy.normalize(value)

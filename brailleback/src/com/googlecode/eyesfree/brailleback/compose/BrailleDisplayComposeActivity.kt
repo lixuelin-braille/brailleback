@@ -31,7 +31,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.core.content.ContextCompat
-import androidx.preference.PreferenceManager
+import com.googlecode.eyesfree.utils.SettingsStore
 import com.googlecode.eyesfree.braille.translate.TableInfo
 import com.googlecode.eyesfree.brailleback.R
 import com.googlecode.eyesfree.brailleback.SettingsActivity
@@ -92,7 +92,7 @@ class BrailleDisplayComposeActivity : AppCompatActivity(),
     private val viewModel: BrailleDisplayViewModel by viewModels {
         BrailleDisplayViewModel.factory(
             SharedPreferencesBrailleSettingsStore(
-                PreferenceManager.getDefaultSharedPreferences(this)
+                SettingsStore.get(this)
             ),
             BrailleDisplayComposeActivity.keys(this),
         )

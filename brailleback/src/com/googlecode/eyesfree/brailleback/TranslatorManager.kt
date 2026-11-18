@@ -7,7 +7,7 @@ package com.googlecode.eyesfree.brailleback
 import android.content.Context
 import android.content.SharedPreferences
 import android.content.res.Configuration
-import android.preference.PreferenceManager
+import com.googlecode.eyesfree.utils.SettingsStore
 import android.util.Log
 import com.googlecode.eyesfree.braille.translate.BrailleTranslator
 import com.googlecode.eyesfree.braille.translate.TableInfo
@@ -64,7 +64,7 @@ class TranslatorManager(context: Context) :
         mPrefPreferredCodesKey = context.getString(R.string.pref_preferred_codes_key)
         mTableValueDefault = context.getString(R.string.table_value_default)
 
-        mSharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
+        mSharedPreferences = SettingsStore.get(context)
         migrateLegacyTablePreference()
         mSharedPreferences.registerOnSharedPreferenceChangeListener(this)
         mTranslatorClient = TranslatorClient(

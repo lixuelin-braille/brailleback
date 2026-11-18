@@ -23,7 +23,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
-import android.preference.PreferenceManager
+import com.googlecode.eyesfree.utils.SettingsStore
 import android.util.Log
 import com.googlecode.eyesfree.braille.display.BluetoothDeviceEntry
 import com.googlecode.eyesfree.braille.service.R
@@ -38,7 +38,7 @@ class DeviceFinder(context: Context) {
 
     private val mContext: Context = context.applicationContext
     private val mSharedPreferences: SharedPreferences =
-            PreferenceManager.getDefaultSharedPreferences(mContext)
+            SettingsStore.get(mContext)
 
     /**
      * Information about a supported bonded bluetooth device.

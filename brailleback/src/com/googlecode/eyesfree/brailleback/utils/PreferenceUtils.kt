@@ -6,7 +6,7 @@ package com.googlecode.eyesfree.brailleback.utils
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.preference.PreferenceManager
+import com.googlecode.eyesfree.utils.SettingsStore
 import android.util.Log
 import com.googlecode.eyesfree.brailleback.BuildConfig
 import com.googlecode.eyesfree.brailleback.R
@@ -43,7 +43,7 @@ object PreferenceUtils {
             return
         }
         if (BuildConfig.DEBUG) {
-            val prefs = PreferenceManager.getDefaultSharedPreferences(context)
+            val prefs = SettingsStore.get(context)
             val key = context.getString(R.string.pref_log_level_key)
             val stored = prefs.getString(key, null)?.toIntOrNull()
             if (stored != null && stored > DEBUG_LOG_LEVEL) {
@@ -84,7 +84,7 @@ object PreferenceUtils {
             return BuildConfig.DIAG_LOG_LEVEL
         }
         val prefs: SharedPreferences =
-            PreferenceManager.getDefaultSharedPreferences(context)
+            SettingsStore.get(context)
         // A level chosen on the settings screen always wins, including in
         // debug builds: a tester must be able to raise the verbosity while
         // reproducing an issue and then hand back a detailed log.
