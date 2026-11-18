@@ -131,12 +131,13 @@ class KeyMapResourceContractTest {
 
     @Test
     fun settingsEntryAndActivityAreWired() {
-        // 旧界面已归档：入口行还在主屏，内容项与键只在归档原文里。
-        val settings = text(base + "res/xml/settings.xml")
-        assertTrue(settings.contains("@string/pref_category_keys_key"))
+        // 旧界面已归档：入口行在 Compose 主屏目录里，内容项与键只在归档原文里。
+        val settings =
+            text(base + "src/com/googlecode/eyesfree/brailleback/compose/SettingsHomeCatalog.kt")
+        assertTrue(settings.contains("R.string.pref_category_keys_key"))
         assertFalse(
-            "自定义键位内容项应随旧子屏归档，不再出现在 settings.xml",
-            settings.contains("@string/pref_custom_key_map_key")
+            "自定义键位内容项应随旧子屏归档，不再出现在主屏目录",
+            settings.contains("pref_custom_key_map")
         )
         val archived = text(ARCHIVE_PATH)
         assertTrue(archived.contains("@string/pref_custom_key_map_key"))

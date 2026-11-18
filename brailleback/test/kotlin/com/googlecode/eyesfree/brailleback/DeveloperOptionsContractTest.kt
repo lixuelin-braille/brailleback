@@ -133,10 +133,10 @@ class DeveloperOptionsContractTest {
             "日志级别默认值必须留在 XML 里",
             xml.contains("""app:defaultValue="@string/pref_log_level_default"""")
         )
-        assertEquals(
-            "主屏不应再有子屏定义：五个子屏内容已归档，入口改为 Preference + 点击监听",
-            0,
-            Regex("""<PreferenceScreen""").findAll(text(base + "res/xml/settings.xml")).count() - 1
+        assertFalse(
+            "主屏已改为 Compose 目录数据（settings.xml 已删除），不应再引用旧 XML 资源",
+            text(base + "src/com/googlecode/eyesfree/brailleback/SettingsActivity.kt")
+                .contains("R.xml.settings"),
         )
     }
 
@@ -248,7 +248,7 @@ class DeveloperOptionsContractTest {
         ).forEach { fragment ->
             assertTrue("Compose 页必须复用同一真源：$fragment", activity.contains(fragment))
         }
-        assertTrue(oldFragment.contains("LogFileWriter.init(requireActivity())"))
+        assertTrue(oldFragment.contains("LogFileWriter.init(this)"))
     }
 
     // --------------------------------------------- 叠加层与首次教程
@@ -475,8 +475,11 @@ class DeveloperOptionsContractTest {
     }
 
     @Test
-    fun allFiveLegacySubScreensRemainInXmlForRollback() {
-        val xml = text(base + "res/xml/settings.xml")
+    fun mainScreenCatalogKeepsAllFiveLegacySubScreenEntries() {
+        // 主屏从 XML 改成 Compose 目录数据（SettingsHomeCatalog），入口与旧 app:key 一致；
+        // 旧的子屏原文仍在 docs/归档-旧设置界面/ 里可回退。
+        val catalog =
+            text(base + "src/com/googlecode/eyesfree/brailleback/compose/SettingsHomeCatalog.kt")
         listOf(
             "pref_category_device_key",
             "pref_category_keys_key",
@@ -484,7 +487,7 @@ class DeveloperOptionsContractTest {
             "pref_category_sound_behavior_key",
             "pref_category_developer_key",
         ).forEach { key ->
-            assertTrue("子屏 XML 必须完整保留以便回退：$key", xml.contains("@string/$key"))
+            assertTrue("主屏目录必须保留入口：$key", catalog.contains("R.string.$key"))
         }
     }
 }

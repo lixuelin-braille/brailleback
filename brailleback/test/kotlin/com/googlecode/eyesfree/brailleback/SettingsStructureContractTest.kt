@@ -1,5 +1,15 @@
 /*
  * Copyright (C) 2026 盲文服务 (Braille Service)
+ *
+ * 设置主屏信息架构的静态契约。
+ *
+ * 2026-11-18：主屏从 PreferenceFragmentCompat（settings.xml）改成 Compose
+ * （SettingsHomeCatalog + SettingsHomeScreen），本测试跟着改成校验「目录数据」——
+ * 分组层级、入口数量、key 稳定性、摘要齐全都仍然必须成立，只是载体从 XML 换成了
+ * Kotlin 数据表。
+ *
+ * 无障碍视角没变：读屏用户线性浏览列表，分组层级与一屏节点数直接决定能否找到设置；
+ * key 就是旧 app:key（也仍是服务端读的偏好键口径），一旦改动，老用户设置会被静默丢弃。
  */
 
 package com.googlecode.eyesfree.brailleback
@@ -13,16 +23,6 @@ import org.w3c.dom.Node
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
 
-/**
- * 设置页信息架构的静态契约。
- *
- * 无障碍视角：读屏用户是线性浏览列表的，分类层级与每屏项目数直接决定能否找到设置；
- * 而 Preference 的 key 就是 SharedPreferences 的键，一旦在重排中被改动，用户已有的
- * 设置会被静默丢弃。因此把「两层导航 / 单屏上限 / key 零迁移 / 摘要齐全」固化为测试。
- *
- * 纯 JVM 单测读不了 Android 资源，直接解析 res/xml 文本；项目已有同类契约测试先例
- * （VersionCatalogTest / KeyMapResourceContractTest）。
- */
 class SettingsStructureContractTest {
 
     private fun projectFile(path: String): File {
@@ -34,6 +34,10 @@ class SettingsStructureContractTest {
     private fun text(path: String) = projectFile(path).readText()
 
     private val base = "brailleback/"
+
+    /** 主屏目录数据。 */
+    private val catalog get() =
+        text(base + "src/com/googlecode/eyesfree/brailleback/compose/SettingsHomeCatalog.kt")
 
     /** 旧五子屏冻结原文的位置（相对仓库根，机读路径见 docs/归档-旧设置界面/README.md）。 */
     private val ARCHIVE_PATH get() = "docs/归档-旧设置界面/settings-legacy.xml"
@@ -54,9 +58,6 @@ class SettingsStructureContractTest {
         }
         return factory.newDocumentBuilder().parse(projectFile(path)).documentElement
     }
-
-    private val settingsXml: Element
-        get() = parse(base + "res/xml/settings.xml")
 
     /** 旧五子屏的冻结原文：界面已归档，偏好键与出厂默认值仍以它为准核对。 */
     private val archivedXml: Element
@@ -89,90 +90,126 @@ class SettingsStructureContractTest {
         return out
     }
 
-    /** 一屏内读屏会朗读到的节点数：叶子项 + 分组标题。 */
-    private fun audibleNodes(screen: Element): Int {
-        var total = 0
-        for (child in screen.children()) {
-            when {
-                child.tagName in leafTags -> total++
-                child.tagName == "PreferenceCategory" -> {
-                    total++ // 分组标题本身也是可聚焦的朗读节点
-                    // 分组内既可能有叶子项，也可能有子屏入口（主屏的五个分类）。
-                    total += child.children().count { it.tagName in leafTags }
-                }
-            }
+    // ------------------------------------------------- 主屏目录数据（新载体）
+
+    /** 主屏上的一行入口。 */
+    private data class CatalogEntry(
+        val key: String,
+        val section: String,
+        val action: String,
+        val screenKeyRes: String?,
+        val dynamicSummary: Boolean,
+        val block: String,
+    )
+
+    /**
+     * 从 SettingsHomeCatalog 的 `HomeEntry(...)` 块里取字段。
+     * 数据表是刻意写成「一行一个字段」的，正则才稳定；改格式要先改这里。
+     */
+    private fun catalogEntries(): List<CatalogEntry> {
+        val blocks = Regex("""HomeEntry\(([\s\S]*?)\n {8}\),""")
+            .findAll(catalog).map { it.groupValues[1] }.toList()
+        require(blocks.isNotEmpty()) { "SettingsHomeCatalog 里没解析到任何 HomeEntry" }
+        return blocks.map { block ->
+            CatalogEntry(
+                key = Regex("""key = "([^"]+)"""").find(block)?.groupValues?.get(1)
+                    ?: error("HomeEntry 缺 key：$block"),
+                section = Regex("""section = HomeSection\.(\w+)""").find(block)
+                    ?.groupValues?.get(1)
+                    ?: error("HomeEntry 缺 section：$block"),
+                action = Regex("""action = HomeAction\.(\w+)""").find(block)
+                    ?.groupValues?.get(1)
+                    ?: error("HomeEntry 缺 action：$block"),
+                screenKeyRes = Regex("""HomeAction\.Screen\(R\.string\.(\w+)\)""")
+                    .find(block)?.groupValues?.get(1),
+                dynamicSummary = block.contains("dynamicSummary = true"),
+                block = block,
+            )
         }
-        return total
     }
+
+    private fun sectionOrder(): List<String> =
+        Regex("""\b(\w+)\("(category_[a-z_]+)""").findAll(catalog)
+            .map { it.groupValues[1] }.toList()
+
+    private fun sectionKeys(): List<String> =
+        Regex("""\b(\w+)\("(category_[a-z_]+)""").findAll(catalog)
+            .map { it.groupValues[2] }.toList()
 
     // ------------------------------------------------------------- 信息架构
 
     @Test
     fun mainScreenUsesThreeSemanticGroups() {
-        val groups = settingsXml.children().filter { it.tagName == "PreferenceCategory" }
-        val keys = groups.map { resolveKey(it.getAttribute("app:key")) }
+        val sections = sectionOrder()
         assertEquals(
             "主屏必须且只能有三个语义分组：开始使用 / 设置分类 / 功能与内容",
-            listOf("category_start", "category_settings", "category_features"),
-            keys
+            listOf("START", "SETTINGS", "FEATURES"),
+            sections,
         )
+        val keys = sectionKeys()
         assertEquals(
-            "主屏不应再出现与分组混排的裸 Preference 或裸子屏",
-            settingsXml.children().size,
-            groups.size
+            listOf("category_start", "category_settings", "category_features"),
+            keys,
         )
     }
 
     @Test
-    fun categoryEntriesAreFlatAndNeverScreens() {
-        // 子屏内容已经移出本文件，这里只剩入口行。入口行必须是 Preference：
-        // androidx 1.2.1 的 PreferenceScreen.onClick() 在「无 intent、无 fragment、无子项」
-        // 时会直接 return（宁可静默失败也不抛异常）；而且它覆写了 onClick，
-        // setOnPreferenceClickListener 对 PreferenceScreen 无效。归档时就踩过这个坑：
-        // 五个入口点了全部没反应。
+    fun categoryEntriesAreFlatAndNeverSubScreens() {
+        val entries = catalogEntries()
+        val settingsEntries = entries.filter { it.section == "SETTINGS" }
+        assertEquals("设置分类下应为六个平级入口", 6, settingsEntries.size)
         assertEquals(
-            "settings.xml 不应再有任何子屏，只保留根 PreferenceScreen",
-            0,
-            allElements(settingsXml).count { it.tagName == "PreferenceScreen" }
-        )
-        val entries = settingsXml.children()
-            .filter {
-                it.tagName == "PreferenceCategory" &&
-                    resolveKey(it.getAttribute("app:key")) == "category_settings"
-            }
-            .flatMap { it.children() }
-        assertEquals("设置分类下应为六个平级入口", 6, entries.size)
-        entries.forEach { entry ->
-            assertEquals(
-                "入口 ${entry.getAttribute("app:key")} 必须是 Preference，否则点击不会有反应",
-                "Preference",
-                entry.tagName
-            )
-        }
-        assertEquals(
-            "六个入口的 key 必须稳定（代码按 key 接线）",
+            "六个入口的 key 必须稳定（与旧 app:key 同值）",
             setOf(
                 "category_device", "category_keys", "category_braille",
-                "category_sound_behavior", "category_developer", "category_stability"
+                "category_sound_behavior", "category_developer", "category_stability",
             ),
-            entries.map { resolveKey(it.getAttribute("app:key")) }.toSet()
+            settingsEntries.map { it.key }.toSet(),
         )
+        settingsEntries.forEach { entry ->
+            assertTrue(
+                "入口 ${entry.key} 必须以 Screen 动作打开独立 Activity，" +
+                    "任何「子屏」都要单独一层（主屏不再有 back stack）",
+                entry.action == "Screen",
+            )
+        }
+    }
+
+    @Test
+    fun categoryEntriesResolveToTheirOwnPreferenceKeys() {
+        val expected = mapOf(
+            "category_device" to "pref_category_device_key",
+            "category_keys" to "pref_category_keys_key",
+            "category_braille" to "pref_category_braille_key",
+            "category_sound_behavior" to "pref_category_sound_behavior_key",
+            "category_developer" to "pref_category_developer_key",
+            "category_stability" to "pref_category_stability_key",
+        )
+        catalogEntries().filter { it.section == "SETTINGS" }.forEach { entry ->
+            assertEquals(
+                "入口 ${entry.key} 引用的偏好键必须与旧 settings.xml 一致",
+                expected[entry.key],
+                entry.screenKeyRes,
+            )
+        }
     }
 
     @Test
     fun everyScreenHasBoundedNodeCount() {
-        // 归档后只剩一个主屏：3 个分组标题 + 启用服务 + 6 个分类入口 + 3 个功能入口 = 13。
+        // 3 个分组标题 + 启用服务 + 6 个分类入口 + 3 个功能入口 = 13。
+        val entries = catalogEntries()
+        val sections = sectionOrder().size
         assertTrue(
             "主屏朗读节点不得超过 13 个，超过会让线性浏览重新变拥挤",
-            audibleNodes(settingsXml) <= 13
+            sections + entries.size <= 13,
         )
+        assertEquals("主屏入口应为十行", 10, entries.size)
     }
 
     @Test
     fun allLegacyPreferenceKeysStillResolveAndStayInTheArchive() {
-        // 旧子屏内容已归档（界面不再渲染），但偏好键就是 SharedPreferences 的键：
+        // 旧子屏内容已归档（界面不再渲染），但偏好键是 SharedPreferences 的键：
         // 服务端与 Compose 两侧仍在读写，键名一旦丢失，老用户设置会被静默丢弃。
-        // 因此这里对「归档原文」做完整性校验，同时确认每个 @string 键仍能解析。
         val legacyKeys = listOf(
             "setup_service", "bookshelf", "pref_braille_keyboard_key",
             "connection_status", "key_bindings", "custom_key_map",
@@ -185,18 +222,15 @@ class SettingsStructureContractTest {
             "pref_sound_enabled", "pref_sound_volume",
             "opensource_license_notice",
             "log_level", "view_log", "share_log", "copy_log", "clear_log",
-            "overlay_enabled", "show_overlay_tutorial"
+            "overlay_enabled", "show_overlay_tutorial",
         )
         // 归档里出现的键（@string 引用已解析成实际值）
         val archived = allElements(archivedXml)
             .filter { it.hasAttribute("app:key") }
             .map { resolveKey(it.getAttribute("app:key")) }
             .toSet()
-        // 主屏仍保留的叶子项（启用服务、书架、键盘、许可）也一起算
-        val present = archived + allElements(settingsXml)
-            .filter { it.hasAttribute("app:key") }
-            .map { resolveKey(it.getAttribute("app:key")) }
-            .toSet()
+        // 主屏目录里仍保留的 key
+        val present = archived + catalogEntries().map { it.key }.toSet()
         val missing = legacyKeys.filter { it !in present }
         assertTrue("归档后丢失了这些偏好 key，老用户设置会被丢弃：$missing", missing.isEmpty())
 
@@ -206,55 +240,51 @@ class SettingsStructureContractTest {
         archivedScreens.forEach { screen ->
             assertTrue(
                 "归档子屏 ${screen.getAttribute("app:key")} 是空的，回退后设置项会不见",
-                allElements(screen).any { it.tagName in leafTags }
+                allElements(screen).any { it.tagName in leafTags },
             )
         }
     }
 
     @Test
-    fun categoryEntriesWireToComposeScreens() {
-        // 入口行自己不带内容，靠点击监听跳 Compose 页。这里锁的是真正的跳转路径，
-        // 而不只是「编译通过」：五个入口每一个都必须有对应的 wireCategory 接线。
-        val wiring = text(base + "src/com/googlecode/eyesfree/brailleback/SettingsActivity.kt")
-        listOf(
-            "pref_category_device_key" to "DeviceConnectionComposeActivity",
-            "pref_category_keys_key" to "KeysGesturesComposeActivity",
-            "pref_category_braille_key" to "BrailleDisplayComposeActivity",
-            "pref_category_sound_behavior_key" to "SoundBehaviorComposeActivity",
-            "pref_category_developer_key" to "DeveloperOptionsComposeActivity",
-        ).forEach { (keyRes, activity) ->
-            val pattern = Regex(
-                """wireCategory\(\s*R\.string\.$keyRes,\s*$activity::class\.java"""
-            )
-            assertTrue(
-                "入口 $keyRes 没有接线到 $activity：没有点击监听器的入口点了不会有反应",
-                pattern.containsMatchIn(wiring)
-            )
+    fun everyEntryHasTitleAndSummaryExceptDynamicOne() {
+        val dynamicKeys = setOf("setup_service")
+        catalogEntries().forEach { entry ->
+            assertTrue("${entry.key} 缺少 titleRes", entry.block.contains("titleRes = R.string."))
+            assertTrue("${entry.key} 缺少 summaryRes", entry.block.contains("summaryRes = R.string."))
+            if (entry.key in dynamicKeys) {
+                assertTrue(
+                    "${entry.key} 的摘要由实时状态决定，必须标 dynamicSummary",
+                    entry.dynamicSummary,
+                )
+            } else {
+                assertFalse(
+                    "${entry.key} 的摘要是静态文案，不应标 dynamicSummary",
+                    entry.dynamicSummary,
+                )
+            }
         }
-        // 回到 PreferenceScreen 导航就等于回到「空屏幕点了没反应」，明确禁止。
+    }
+
+    @Test
+    fun noLegacyPreferenceInfrastructureLeft() {
+        // 主屏改成 Compose 后，旧的三件套必须彻底退场；只要还留一件，
+        // 就会出现「同一屏两套 UI」或「键被两处写」的风险。
         assertFalse(
-            "不应再依赖 OnPreferenceStartScreenCallback（空 PreferenceScreen 走不到它）",
-            wiring.contains("OnPreferenceStartScreenCallback")
+            "settings.xml 应已删除（主屏数据改由 SettingsHomeCatalog 提供）",
+            File("brailleback/res/xml/settings.xml").exists() ||
+                File("../brailleback/res/xml/settings.xml").exists(),
         )
-        assertTrue(
-            "点击监听器必须真的 startActivity",
-            wiring.contains("startActivity(Intent(requireActivity(), target))")
-        )
-    }
-
-    @Test
-    fun everyLeafHasTitleAndExceptDynamicOnesHasSummary() {
-        // 这两项由代码在 onResume 里写入实时状态（连接状态 / 当前盲文表名）。
-        val dynamicSummaryKeys = setOf("connection_status", "braille_table")
-        allElements(settingsXml).filter { it.tagName in leafTags }.forEach { leaf ->
-            val key = resolveKey(leaf.getAttribute("app:key"))
-            assertTrue("$key 缺少 app:title", leaf.hasAttribute("app:title"))
-            if (key in dynamicSummaryKeys) return@forEach
-            val hasSummary = leaf.hasAttribute("app:summary") ||
-                leaf.hasAttribute("app:summaryOn") ||
-                leaf.hasAttribute("app:summaryOff")
-            assertTrue("$key 缺少摘要，读屏用户听不到当前值或用途", hasSummary)
+        val source = text(base + "src/com/googlecode/eyesfree/brailleback/SettingsActivity.kt")
+        listOf(
+            "PreferenceFragmentCompat", "supportFragmentManager",
+            "setPreferencesFromResource", "R.xml.settings", "OnPreferenceStartScreenCallback",
+        ).forEach { legacy ->
+            assertFalse("SettingsActivity 仍残留旧 preference 设施：$legacy", source.contains(legacy))
         }
+        assertTrue(
+            "主屏必须是 Compose 渲染",
+            source.contains("setContent {") && source.contains("SettingsHomeScreen("),
+        )
     }
 
     // --------------------------------------------------------------- 文案
@@ -271,7 +301,7 @@ class SettingsStructureContractTest {
             "pref_category_log_title", "pref_connection_status_summary",
             "pref_key_bindings_summary", "pref_braille_word_wrap_summary_on",
             "pref_braille_word_wrap_summary_off", "pref_os_license_summary",
-            "pref_braille_overlay_summary", "pref_braille_overlay_tutorial_summary"
+            "pref_braille_overlay_summary", "pref_braille_overlay_tutorial_summary",
         ).forEach { name ->
             val pattern = """<string name="$name">""".toRegex()
             assertTrue("英文 strings.xml 缺少 $name", pattern.containsMatchIn(english))
@@ -287,26 +317,44 @@ class SettingsStructureContractTest {
             ?: error("找不到 pref_sound_category_title")
         assertFalse(
             "英文 locale 里曾经误写中文，英文用户会听到无法理解的标题",
-            value.any { it.code in 0x4E00..0x9FFF }
+            value.any { it.code in 0x4E00..0x9FFF },
         )
     }
 
     // ------------------------------------------------------------ 导航接线
 
     @Test
-    fun subScreenTitleAndUpNavigationAreWired() {
-        val source = text(base + "src/com/googlecode/eyesfree/brailleback/SettingsActivity.kt")
-        val resumeBody = source.substringAfter("override fun onResume()")
-            .substringBefore("UsbDisplayConnection.allowPermissionPromptAgain()")
-        assertTrue("onResume 必须刷新子屏标题", resumeBody.contains("updateScreenTitle()"))
+    fun categoryEntriesWireToComposeScreens() {
+        // 入口行自己不带内容，靠接线表跳 Compose 页。这里锁的是真正的跳转路径：
+        // 六个入口每一个都必须有一条 wireCategory 接线，且点击后真的 startActivity。
+        val wiring = text(base + "src/com/googlecode/eyesfree/brailleback/SettingsActivity.kt")
+            .substringAfter("// 六个分类入口跳各自的 Compose 页。")
+            .substringBefore("// 屏幕盲文键盘")
         listOf(
-            "private fun updateScreenTitle()",
-            "supportActionBar?.setDisplayHomeAsUpEnabled(isSubScreen)",
-            "host.announceSubScreenTitle(subScreenTitle)",
-            "override fun onOptionsItemSelected(item: MenuItem)",
-            "supportFragmentManager.popBackStack()"
-        ).forEach { fragment ->
-            assertTrue("SettingsActivity 缺少子屏导航代码：$fragment", source.contains(fragment))
+            "pref_category_device_key" to "DeviceConnectionComposeActivity",
+            "pref_category_keys_key" to "KeysGesturesComposeActivity",
+            "pref_category_braille_key" to "BrailleDisplayComposeActivity",
+            "pref_category_sound_behavior_key" to "SoundBehaviorComposeActivity",
+            "pref_category_developer_key" to "DeveloperOptionsComposeActivity",
+            "pref_category_stability_key" to "StabilityComposeActivity",
+        ).forEach { (keyRes, activity) ->
+            val pattern = Regex(
+                """wireCategory\(\s*R\.string\.$keyRes,\s*$activity::class\.java"""
+            )
+            assertTrue(
+                "入口 $keyRes 没有接线到 $activity：没有查表的入口点了不会有反应",
+                pattern.containsMatchIn(wiring),
+            )
         }
+        assertEquals(
+            "六个分类入口应各有一条 wireCategory 接线",
+            6,
+            Regex("""wireCategory\(""").findAll(wiring).count(),
+        )
+        val source = text(base + "src/com/googlecode/eyesfree/brailleback/SettingsActivity.kt")
+        assertTrue(
+            "点击后必须真的 startActivity，否则接线表只是装饰",
+            source.contains("startActivity(Intent(this, it))"),
+        )
     }
 }

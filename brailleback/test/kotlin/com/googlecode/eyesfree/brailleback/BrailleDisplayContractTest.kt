@@ -677,10 +677,10 @@ class BrailleDisplayContractTest {
         ).forEach { key ->
             assertTrue("旧子屏必须完整保留以便回退：$key", xml.contains("""@string/$key"""))
         }
-        assertEquals(
-            "主屏不应再有子屏定义：五个子屏内容已归档，入口改为 Preference + 点击监听",
-            0,
-            Regex("""<PreferenceScreen""").findAll(text(base + "res/xml/settings.xml")).count() - 1
+        assertFalse(
+            "主屏已改为 Compose 目录数据（settings.xml 已删除），不应再引用旧 XML 资源",
+            text(base + "src/com/googlecode/eyesfree/brailleback/SettingsActivity.kt")
+                .contains("R.xml.settings"),
         )
     }
 }

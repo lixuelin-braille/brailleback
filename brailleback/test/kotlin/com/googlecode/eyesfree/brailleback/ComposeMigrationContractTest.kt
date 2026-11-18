@@ -194,7 +194,7 @@ class ComposeMigrationContractTest {
         )
         assertTrue(
             "入口点击必须真的 startActivity",
-            settings.contains("startActivity(Intent(requireActivity(), target))")
+            settings.contains("startActivity(Intent(this, it))")
         )
     }
 
@@ -221,7 +221,9 @@ class ComposeMigrationContractTest {
 
     @Test
     fun legacySubScreensAreArchivedAndMainScreenKeepsOnlyEntryRows() {
-        val xml = text(base + "res/xml/settings.xml")
+        // 2026-11-18：主屏从 settings.xml 改成 Compose 目录数据（SettingsHomeCatalog）。
+        val xml =
+            text(base + "src/com/googlecode/eyesfree/brailleback/compose/SettingsHomeCatalog.kt")
         val archived = text(ARCHIVE_PATH)
         // 主屏只剩入口行：迁移的 5 个子屏内容移出编译路径，主屏层级不变；
         // 稳定性与省电是新增屏（没有旧 XML 可归档），单独断言它必须在主屏上。
@@ -232,13 +234,13 @@ class ComposeMigrationContractTest {
             "pref_category_sound_behavior_key",
             "pref_category_developer_key"
         ).forEach { key ->
-            assertTrue("主屏入口行不得丢失：$key", xml.contains("@string/$key"))
+            assertTrue("主屏入口行不得丢失：$key", xml.contains("R.string.$key"))
             assertTrue("旧子屏原文必须进归档：$key", archived.contains("@string/$key"))
         }
         // 稳定性与省电是新增入口，没有旧 XML 可归档，所以只要求主屏有它。
         assertTrue(
             "新增的稳定性与省电入口必须出现在主屏",
-            xml.contains("@string/pref_category_stability_key"),
+            xml.contains("R.string.pref_category_stability_key"),
         )
         // 内容项与全部偏好键只保留在归档里：两代 UI 共用同一份偏好数据。
         listOf(
@@ -268,12 +270,12 @@ class ComposeMigrationContractTest {
             "pref_braille_overlay_tutorial_key"
         ).forEach { key ->
             assertTrue("旧界面的偏好 key 必须留在归档里（可回退）：$key", archived.contains("@string/$key"))
-            assertFalse("旧界面的内容项不得再留在 settings.xml：$key", xml.contains("@string/$key"))
+            assertFalse("旧界面的内容项不得再留在主屏目录：$key", xml.contains("R.string.$key"))
         }
-        assertEquals(
-            "主屏不应再有子屏定义：内容已移出编译路径，入口改为 Preference + 点击监听",
-            0,
-            Regex("""<PreferenceScreen""").findAll(xml).count() - 1
+        assertFalse(
+            "主屏已改为 Compose 目录数据（settings.xml 已删除），不应再引用旧 XML 资源",
+            text(base + "src/com/googlecode/eyesfree/brailleback/SettingsActivity.kt")
+                .contains("R.xml.settings"),
         )
         assertEquals(
             "归档必须仍是完整的五个子屏原文",

@@ -80,6 +80,30 @@ fun SettingsScreenScaffold(
     onBack: () -> Unit,
     content: LazyListScope.() -> Unit,
 ) {
+    SettingsScaffold(title = title, backLabel = backLabel, onBack = onBack, content = content)
+}
+
+/**
+ * 主屏外壳：与子屏同一套主题与列表，但没有返回箭头——主屏就是导航根，
+ * 返回键交给系统（按返回直接离开设置）。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsHomeScaffold(
+    title: String,
+    content: LazyListScope.() -> Unit,
+) {
+    SettingsScaffold(title = title, backLabel = null, onBack = null, content = content)
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SettingsScaffold(
+    title: String,
+    backLabel: String?,
+    onBack: (() -> Unit)?,
+    content: LazyListScope.() -> Unit,
+) {
     val colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()
     MaterialTheme(colorScheme = colorScheme) {
         Scaffold(
@@ -93,11 +117,13 @@ fun SettingsScreenScaffold(
                         )
                     },
                     navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = backLabel,
-                            )
+                        if (onBack != null && backLabel != null) {
+                            IconButton(onClick = onBack) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = backLabel,
+                                )
+                            }
                         }
                     },
                 )

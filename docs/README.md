@@ -43,6 +43,8 @@
 | **[36-界面层协程化](./36-界面层协程化.md)** | 113 行 Handler 命中的逐类判定、真正改了哪三处（引导页两个自调度 Runnable + IME 向导 300ms）、为什么驱动链/手势时序不动 | 想继续协程化线程模型前必读 |
 | **[37-服务层协程化](./37-服务层协程化.md)** | `BrailleImeHostBridge` 一个作用域管三种延迟、`PassthroughProbe` 作用域随 install/uninstall、顺手补上的两处取消漏窗 | 改服务生命周期里的定时逻辑前必读 |
 | **[38-依赖解冻](./38-依赖解冻.md)** | 网络恢复后把 Compose 1.7.6→1.12.1、activity→1.13.0、material3→1.4.0、coroutines→1.11.0 等一次抬齐；`material-icons-core` 停更要单钉、Compose 1.12 新 lint 抓到的非可观察 Locale | 动依赖版本前必读 |
+| **[39-Compose组件级交互测试](./39-Compose组件级交互测试.md)** | 接上同版 `ui-test-junit4`、五例设置组件点击闭环（开关取反/禁用态/选择行只回调一次）、模拟器桌面 ANR 抢焦点导致的假失败 | 加 UI 交互测试前读 |
+| **[40-设置主屏Compose化](./40-设置主屏Compose化.md)** | 最后一处 `PreferenceFragmentCompat` 退场：目录数据表 + 无 back stack 导航、六个契约测试怎么跟、detekt baseline 因搬家失效的坑、为什么这是 DataStore 的前置 | 改设置主屏或要迁 DataStore 前必读 |
 
 ---
 
