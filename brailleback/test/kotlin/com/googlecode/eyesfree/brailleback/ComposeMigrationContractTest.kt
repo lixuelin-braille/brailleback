@@ -323,4 +323,50 @@ class ComposeMigrationContractTest {
         const val PROTOCOL = "connection_protocol"
         const val AUTO_CONNECT = "auto_connect"
     }
+
+    // ------------------------------------------------ 第六批：键盘帮助屏（只读帮助页）
+
+    private val keyBindingsActivityPath =
+        base + "src/com/googlecode/eyesfree/brailleback/KeyBindingsActivity.kt"
+
+    @Test
+    fun keyBindingsScreenIsComposeAndXmlLayoutIsGone() {
+        val activity = text(keyBindingsActivityPath)
+        assertTrue("这屏必须用 setContent 承载界面", activity.contains("setContent {"))
+        assertFalse("不该再 setContentView", activity.contains("setContentView"))
+        assertFalse("不该再持有 ListView", activity.contains("import android.widget.ListView"))
+        assertTrue("列表交给 KeyBindingsScreen", activity.contains("KeyBindingsScreen("))
+
+        // 布局删掉以后，「界面还在」这件事只剩 Compose 一个来源，不是双份维护。
+        val layout = listOf(
+            File(base + "res/layout/key_bindings.xml"),
+            File("..", base + "res/layout/key_bindings.xml"),
+            File("../..", base + "res/layout/key_bindings.xml"),
+        )
+        assertFalse("key_bindings.xml 应已删除", layout.any { it.exists() })
+    }
+
+    @Test
+    fun keyBindingsKeepsBindingAssemblyLogic() {
+        // 界面可以换，取键位的逻辑不能丢：命令表、描述表、排序、友好键名、菜单命令门槛。
+        val activity = text(keyBindingsActivityPath)
+        listOf(
+            "help_supportedCommands",
+            "help_commandDescriptions",
+            "getSortedBindingsForDisplay",
+            "getFriendlyKeyNamesForCommand",
+            "CMD_TOGGLE_BRAILLE_MENU",
+            "LABELING_ENABLED",
+        ).forEach { fragment ->
+            assertTrue("取键位逻辑缺：$fragment", activity.contains(fragment))
+        }
+    }
+
+    @Test
+    fun keyBindingsStaysReadOnly() {
+        // 帮助页只读：一旦它开始写偏好，就是在没人验证的路径上改用户设置。
+        val activity = text(keyBindingsActivityPath)
+        assertFalse("帮助页不应写偏好", activity.contains("prefs.edit()"))
+        assertFalse("帮助页不应写偏好", activity.contains(".putBoolean("))
+    }
 }

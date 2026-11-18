@@ -16,37 +16,53 @@
 
 package com.googlecode.eyesfree.brailleback
 
-import android.app.Activity
-import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import android.view.MenuItem
-import android.view.View
-import android.view.ViewGroup
-import android.widget.ArrayAdapter
-import android.widget.ListView
-import android.widget.TextView
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.googlecode.eyesfree.braille.display.BrailleDisplayProperties
 import com.googlecode.eyesfree.braille.display.BrailleInputEvent
-import com.googlecode.eyesfree.braille.display.BrailleKeyBinding
 import com.googlecode.eyesfree.braille.display.Display
 import com.googlecode.eyesfree.braille.display.DisplayClient
+import com.googlecode.eyesfree.brailleback.compose.DisplayBinding
+import com.googlecode.eyesfree.brailleback.compose.KeyBindingsScreen
 import com.googlecode.eyesfree.brailleback.utils.BrailleKeyBindingUtils
 
 /**
  * Shows key bindings for the currently connected Braille display.
+ *
+ * 2026-11-18：界面从 `TextView + ListView` 换成 Compose（`key_bindings.xml` 已删除），
+ * 取键位的逻辑一行没动 —— 它依赖 `BrailleDisplayProperties`，是这屏唯一的真逻辑。
  */
-class KeyBindingsActivity : Activity(), Display.OnConnectionStateChangeListener {
+class KeyBindingsActivity : ComponentActivity(), Display.OnConnectionStateChangeListener {
     private var mDisplay: DisplayClient? = null
+
+    // 键位表由服务端回调填充，所以状态必须能触发重组。
+    private var bindings by mutableStateOf<List<DisplayBinding>>(emptyList())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 这屏用 BraillebackTheme（Theme.DeviceDefault），不是 AppCompat 主题，
+        // 所以基类只能是 ComponentActivity；标题交给 Compose 的 TopAppBar。
 
-        setTitle(R.string.key_bindings_title)
-        setContentView(R.layout.key_bindings)
-        // 没有 actionBar 的机型（或主题）上这两个设置本来就是空操作。
-        actionBar?.setHomeButtonEnabled(true)
-        actionBar?.setDisplayHomeAsUpEnabled(true)
+        setContent {
+            KeyBindingsScreen(
+                title = getString(R.string.key_bindings_title),
+                backLabel = getString(R.string.compose_settings_back),
+                instructions = getString(R.string.key_bindings_instructions),
+                bindings = bindings,
+                // 与原实现一致：返回箭头回设置主屏（CLEAR_TOP，不叠栈）。
+                onBack = {
+                    startActivity(
+                        Intent(this@KeyBindingsActivity, SettingsActivity::class.java)
+                            .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    )
+                },
+            )
+        }
     }
 
     override fun onStart() {
@@ -64,27 +80,15 @@ class KeyBindingsActivity : Activity(), Display.OnConnectionStateChangeListener 
 
     override fun onConnectionStateChanged(state: Int) {
         if (state == Display.STATE_CONNECTED) {
-            populateListView()
+            bindings = loadBindings()
         }
     }
 
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        when (item.itemId) {
-            android.R.id.home -> {
-                val intent = Intent(this, SettingsActivity::class.java)
-                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                startActivity(intent)
-                return true
-            }
-            else -> return super.onOptionsItemSelected(item)
-        }
-    }
-
-    private fun populateListView() {
-        val props = mDisplay?.displayProperties ?: return
+    private fun loadBindings(): List<DisplayBinding> {
+        val props: BrailleDisplayProperties = mDisplay?.displayProperties ?: return emptyList()
         val sortedBindings = BrailleKeyBindingUtils.getSortedBindingsForDisplay(props)
 
-        val result = ArrayList<KeyBinding>()
+        val result = ArrayList<DisplayBinding>()
 
         val supportedCommands = resources.getStringArray(R.array.help_supportedCommands)
         val descriptions = resources.getStringArray(R.array.help_commandDescriptions)
@@ -101,41 +105,11 @@ class KeyBindingsActivity : Activity(), Display.OnConnectionStateChangeListener 
 
             val binding = BrailleKeyBindingUtils.getBrailleKeyBindingForCommand(
                     command, sortedBindings) ?: continue
-            addBindingForCommand(binding, descriptions[i], friendlyKeyNames, result)
+
+            val keys = BrailleKeyBindingUtils.getFriendlyKeyNamesForCommand(
+                    binding, friendlyKeyNames, this)
+            result.add(DisplayBinding(descriptions[i], keys))
         }
-
-        val adapter = KeyBindingsAdapter(
-                this, android.R.layout.simple_list_item_2, android.R.id.text1)
-        adapter.addAll(result)
-
-        val list = findViewById(R.id.list) as ListView
-        list.adapter = adapter
-    }
-
-    private fun addBindingForCommand(
-            binding: BrailleKeyBinding,
-            commandDescription: String,
-            friendlyKeyNames: Map<String, String>,
-            result: ArrayList<KeyBinding>) {
-        val keys = BrailleKeyBindingUtils.getFriendlyKeyNamesForCommand(
-                binding, friendlyKeyNames, this)
-        result.add(KeyBinding(commandDescription, keys))
-    }
-
-    private class KeyBindingsAdapter(
-            context: Context,
-            layout: Int,
-            textViewResourceId: Int) : ArrayAdapter<KeyBinding>(context, layout, textViewResourceId) {
-
-        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
-            val view = super.getView(position, convertView, parent)
-            val item = getItem(position)
-            (view.findViewById(android.R.id.text2) as TextView).text = item?.binding
-            return view
-        }
-    }
-
-    private class KeyBinding(val label: String, val binding: String) {
-        override fun toString(): String = label
+        return result
     }
 }

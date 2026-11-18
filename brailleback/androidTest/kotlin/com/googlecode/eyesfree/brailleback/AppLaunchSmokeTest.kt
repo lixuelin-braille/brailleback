@@ -63,6 +63,27 @@ class AppLaunchSmokeTest {
     }
 
     @Test
+    fun keyBindingsActivityReachesResumed() {
+        // 这屏 2026-11-18 从 TextView+ListView 换成 Compose，基类随之改成 ComponentActivity；
+        // 主题是 Theme.DeviceDefault（非 AppCompat），起不来就是主题/基类不匹配。
+        ActivityScenario.launch(KeyBindingsActivity::class.java).use { scenario ->
+            assertEquals(
+                "键盘帮助屏没有走到 RESUMED：多半是基类与主题不匹配",
+                Lifecycle.State.RESUMED,
+                scenario.state,
+            )
+        }
+    }
+
+    @Test
+    fun keyBindingsInstructionsResolve() {
+        // 屏首那段说明由资源提供；老版本里它和 ListView 一起放在 key_bindings.xml，
+        // 布局删掉后只剩这一个来源，读不到就等于屏幕空白。
+        val instructions = target.resources.getString(R.string.key_bindings_instructions)
+        assertTrue("键盘帮助说明为空", instructions.isNotBlank())
+    }
+
+    @Test
     fun bookshelfActivityReachesResumed() {
         // 书架刚从 android.app.Activity 换成 ComponentActivity 承载 launcher，
         // 主题仍是 DeviceDefault。这一步专门盯「换基类后窗口能不能正常挂载」。
