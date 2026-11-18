@@ -48,6 +48,7 @@
 | **[41-设置存储DataStore化](./41-设置存储DataStore化.md)** | 默认偏好改 DataStore 唯一写源 + 内存快照同步读、`chinese_segmentation` 为什么留在旧文件、幂等迁移、初始化锁与快照锁必须分开（否则设置页卡死） | 改存储层或往 `:service` 加读键前必读 |
 | **[42-键盘帮助屏Compose化](./42-键盘帮助屏Compose化.md)** | 8 个残留布局里的第一个：`TextView+ListView` → `LazyColumn`；`Theme.DeviceDefault` 决定基类只能 `ComponentActivity`；两行文字要 `mergeDescendants` 才不会被读屏拆焦点；剩余布局的迁移难度排序 | 继续迁 XML 布局前必读 |
 | **[43-书架Compose化](./43-书架Compose化.md)** | 第二个布局退场：长按菜单/删除确认/清空确认三道误删护栏怎么钉；书架偏好文件的编码是「用户书籍 ABI」不许动；`internal` 类型不能出现在 public override 里（改用匿名实现）；Compose 控件没有资源 id 后仪器测试怎么找按钮 | 改书架或继续迁布局前必读 |
+| **[44-规范连写词表](./44-规范连写词表.md)** | 第一次动分词结果本身：分写库 6,782 条里 44.5% 拆出了单字片段（分钟、一瞬/间、一丘/之/貉），新增 `segment_connect.txt` 2,702 条压过阳光库；为什么只做「两套口径都同意」的部分；2+2 成语仍缺一张成语表 | 动分词、词库或汉盲翻译前必读 |
 
 ---
 

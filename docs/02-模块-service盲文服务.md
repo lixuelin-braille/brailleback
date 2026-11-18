@@ -42,7 +42,8 @@ service/src/com/googlecode/eyesfree/braille/
 │   ├── jiebadt.txt          5.07 MB  词库（34.9 万词）
 │   ├── sunshine_supplement.txt 139 KB 阳光补充词库（12,405 词，低频补缺）
 │   ├── zh_segment_overrides.txt 679 B 高优先级覆盖表（8 条，专名/领域词/词频纠正）
-│   └── sunshine_split.txt   185 KB   阳光强制分写词库（6,782 条）
+│   ├── sunshine_split.txt   185 KB   阳光强制分写词库（6,782 条）
+│   ├── segment_connect.txt   35 KB   规范连写词表（2,702 条，优先级高于分写库，见 docs/44）
 ├── res/raw/
 │   ├── translationtables.zip  2.26 MB / 131 张表（含 zhcn-cbs-full.ctb）
 │   └── keytables.zip          146 KB / 196 张键位表
@@ -73,7 +74,8 @@ onCreate()
 2. `loadSupplement(getAssets().open("sunshine_supplement.txt"))`（补缺，不覆盖主词典）
 3. `loadOverrides(getAssets().open("zh_segment_overrides.txt"))`（专名/领域词 + 词频纠正）
 4. `new BrailleSegmenter(mJiebaDict)` → `loadSplitDict(getAssets().open("sunshine_split.txt"))`
-5. 置 `mSegmenterReady = true`
+5. `loadConnectExtra(getAssets().open("segment_connect.txt"))`（规范连写词表，压过分写库，见 docs/44）
+6. 置 `mSegmenterReady = true`
 
 > 设计要点：分词器初始化是**异步**的。在它 Ready 之前，中文表会**降级**走纯 liblouis（不分词），
 > 不会崩溃，但盲文分词质量差。这是个可观测的启动竞态。
@@ -199,6 +201,11 @@ newBtt[c] = seg.segToOrig[ btt[c] ]
 把相邻 jieba token 拼接后匹配词条，命中则按词库切分（对标阳光读屏 6,782 条决策；
 `CONNECT` 连写白名单优先）。这样规则词即使被 jieba 切成多个 token 也能生效。
 分片必须能无损拼回原词，否则忽略该行以防位置映射错位；加载失败不阻塞主流程。
+
+**`loadConnectExtra()`** — 读 `segment_connect.txt`，每行一个纯汉字词面。
+命中即整体连写，并且会把同名词条从 `splitDict` 里摘除 —— 两者冲突时以连写表为准，
+加载顺序不影响结果。优先级：用户分词覆盖表 > 连写表 > `CONNECT` > 阳光分写库 > 2+2 语节。
+设计与取舍见 `docs/44-规范连写词表.md`。
 
 **阳光补充词库**（`sunshine_supplement.txt`）在 `JiebaDict` 初始化后加载：
 只补主词典没有的词（二字词频 10，三字及以上 100），不覆盖主词典、不改变

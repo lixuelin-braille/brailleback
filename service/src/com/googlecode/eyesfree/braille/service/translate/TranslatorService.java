@@ -190,6 +190,22 @@ public class TranslatorService extends Service {
                         } catch (Exception e) {
                             Log.w(LOG_TAG, "Split dict load failed", e);
                         }
+                        // 规范连写词表（成语/三音节整体/词典词）：优先级高于阳光分写库。
+                        try {
+                            InputStream ci = getAssets().open("segment_connect.txt");
+                            try {
+                                int added = mSegmenter.loadConnectExtra(ci);
+                                Log.i(LOG_TAG, "Connect dict loaded, added=" + added);
+                            } finally {
+                                try {
+                                    ci.close();
+                                } catch (Exception e) {
+                                    Log.w(LOG_TAG, "Failed to close connect dict stream", e);
+                                }
+                            }
+                        } catch (Exception e) {
+                            Log.w(LOG_TAG, "Connect dict load failed", e);
+                        }
                         // liblouis 多音字词组：避免词间空格拆散 always 规则
                         try {
                             InputStream lp = getAssets().open("liblouis_phrases.txt");

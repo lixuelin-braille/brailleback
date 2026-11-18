@@ -24,6 +24,11 @@ class BrailleSegmenter(private val dict: JiebaDict) {
     private var protectedMaxLen = 0
     // 用户分词覆盖表：显式指定词面应当如何切分，优先级最高。
     private val userSegDict = UserSegDict()
+    // 规范连写词表（成语/三音节整体概念/词典词）：命中即整体连写，
+    // 优先级高于阳光分写词库——这是「多连少分」方向上的显式决策。
+    private val connectDict = HashSet<String>()
+    // 连写词最大长度，限制相邻 token 拼接匹配的窗口。
+    private var connectMaxLen = 0
 
     init {
         for (w in SPLIT4) {
@@ -74,6 +79,52 @@ class BrailleSegmenter(private val dict: JiebaDict) {
         } catch (e: Exception) {
             // 词库加载失败不阻塞主流程
         }
+    }
+
+    /**
+     * 加载规范连写词表：每行一个纯汉字词面，命中即整体连写。
+     *
+     * 与 [loadSplitDict] 天然冲突（同一个词不可能既连写又分写），
+     * 所以加载时把同名词条从分写库里摘除，两者不共存。
+     * 这也让「回退」变得简单：不加载这个文件，行为就退回阳光库。
+     */
+    @Synchronized
+    @Throws(java.io.IOException::class)
+    fun loadConnectExtra(inputStream: InputStream?): Int {
+        if (inputStream == null) {
+            return 0
+        }
+        var added = 0
+        // 不做内部吞异常：读词表失败由调用方（TranslatorService）记录 WARN，
+        // 否则词表丢了日志里也看不出来。
+        BufferedReader(InputStreamReader(inputStream, "UTF-8")).use { br ->
+            var firstLine = true
+            while (true) {
+                var line = br.readLine() ?: break
+                if (firstLine) {
+                    if (line.isNotEmpty() && line[0] == '\uFEFF') {
+                        line = line.substring(1)
+                    }
+                    firstLine = false
+                }
+                val w = line.trim()
+                if (w.length < 2 || w.startsWith("#")) {
+                    continue
+                }
+                if (w.any { it < '\u4E00' || it > '\u9FFF' }) {
+                    continue
+                }
+                if (connectDict.add(w)) {
+                    added++
+                    if (w.length > connectMaxLen) {
+                        connectMaxLen = w.length
+                    }
+                    splitDict.remove(w)
+                    dict.addWord(w, 100000)
+                }
+            }
+        }
+        return added
     }
 
     /** 加载用户分词词库：每行 "词面\t分片1 分片2"，单字段行表示整体连写。 */
@@ -592,6 +643,20 @@ class BrailleSegmenter(private val dict: JiebaDict) {
                 wi = userMatch.endIndex
                 continue
             }
+            // 规范连写词表命中：jieba 可能把「一口气」切成「一口」+「气」，
+            // 先按相邻 token 拼接匹配，命中就整体并回一个片段。
+            val connectMatch = matchConnectRule(words, wi)
+            if (connectMatch > 1) {
+                val surface = StringBuilder()
+                for (k in 0 until connectMatch) {
+                    surface.append(words[wi + k][0])
+                }
+                val ws = words[wi][1]
+                val we = words[wi + connectMatch - 1][2]
+                merged.add(arrayOf(surface.toString(), ws, we))
+                wi += connectMatch
+                continue
+            }
             // 阳光强制分写词库命中：jieba 可能把规则词切成多个 token，
             // 因此按相邻 token 拼接后再匹配，避免规则因前期切分不同而失效。
             val splitMatch = matchSplitRule(words, wi)
@@ -632,8 +697,7 @@ class BrailleSegmenter(private val dict: JiebaDict) {
                 continue
             }
             // 四字词 2+2 语节分写（不在黑白名单/专名，且前2后2各自成词）
-            if (word.length == 4 && !CONNECT.contains(word) && !SPLIT4.contains(word)
-                && !NAMESET.contains(word) && !SPLIT4_INNER.contains(word)) {
+            if (word.length == 4 && !keepsWholeWord(word)) {
                 val a = word.substring(0, 2)
                 val b = word.substring(2, 4)
                 // 跨拆分点双字（如「二氧化碳」的「氧化」、「氢氧化钠」的「氧化」）：
@@ -707,8 +771,43 @@ class BrailleSegmenter(private val dict: JiebaDict) {
             }
             val cand = sb.toString()
             val parts = splitDict[cand]
-            if (parts != null && !CONNECT.contains(cand)) {
+            if (parts != null && !CONNECT.contains(cand) && !connectDict.contains(cand)) {
                 best = Pair(parts, end - start + 1)
+            }
+            end++
+        }
+        return best
+    }
+
+    /**
+     * 四字词是否不允许走 2+2 语节分写：内置黑白名单、专名表、
+     * 分写后要保留的内部词，以及规范连写词表里的成语。
+     */
+    private fun keepsWholeWord(word: String): Boolean {
+        return CONNECT.contains(word) || SPLIT4.contains(word) ||
+            NAMESET.contains(word) || SPLIT4_INNER.contains(word) ||
+            connectDict.contains(word)
+    }
+
+    /**
+     * 从 jieba 的第 start 个 token 起，按相邻 token 拼接匹配规范连写词表。
+     * 返回可合并的 token 个数（0 表示未命中）。取最长匹配，避免
+     * 「一席话」被更短的「一席」抢先命中。
+     */
+    private fun matchConnectRule(words: List<Array<String>>, start: Int): Int {
+        if (connectDict.isEmpty() || connectMaxLen <= 0) {
+            return 0
+        }
+        val sb = StringBuilder()
+        var end = start
+        var best = 0
+        while (end < words.size && sb.length < connectMaxLen) {
+            sb.append(words[end][0])
+            if (sb.length > connectMaxLen) {
+                break
+            }
+            if (connectDict.contains(sb.toString())) {
+                best = end - start + 1
             }
             end++
         }
