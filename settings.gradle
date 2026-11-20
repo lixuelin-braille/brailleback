@@ -8,6 +8,9 @@ pluginManagement {
     }
 }
 
+// 约定插件所在的本机构建（gradle/convention 见 build-logic/src/main/groovy/）。
+includeBuild('build-logic')
+
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.PREFER_PROJECT)
     repositories {

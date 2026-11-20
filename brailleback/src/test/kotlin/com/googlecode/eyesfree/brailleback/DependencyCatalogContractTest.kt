@@ -36,6 +36,22 @@ class DependencyCatalogContractTest {
 
         /** 形如 'androidx.core:core:1.9.0' 的硬编码坐标。 */
         val HARDCODED_COORDINATE = Regex("""'[A-Za-z0-9_.\-]+:[A-Za-z0-9_.\-]+:[0-9][^']*'""")
+
+        /** 版本目录里的三个 SDK 别名：只在约定插件里读，模块脚本再出现就算重复定义。 */
+        val CATALOG_SDK_ALIASES = listOf(
+            "android-compileSdk",
+            "android-minSdk",
+            "android-targetSdk",
+        )
+
+        /** 裸 SDK 数字：`compileSdk 37`、`minSdk = 29` 之类。 */
+        val HARDCODED_SDK = Regex("""\b(compileSdk|minSdk|targetSdk)\s*(=\s*)?\d""")
+
+        /** 约定插件脚本：SDK 三档的唯一读取点（见 docs/48）。 */
+        val CONVENTION_SCRIPTS = listOf(
+            "build-logic/src/main/groovy/brailleback.android.library.gradle",
+            "build-logic/src/main/groovy/brailleback.android.application.gradle",
+        )
     }
 
     private fun repoRoot(): File =
@@ -68,16 +84,42 @@ class DependencyCatalogContractTest {
 
     @Test
     fun everyModuleTakesSdkLevelsFromTheCatalog() {
-        val offenders = MODULES.filter {
-            val text = moduleScript(it)
-            // 每个模块都必须从目录取编译/目标/最低版本，不允许再出现裸数字。
-            !text.contains("libs.versions.android.compileSdk") ||
-                Regex("""\bcompileSdk\s+\d""").containsMatchIn(text)
+        // 2026-11-20 起（docs/48）：SDK 三档只在 build-logic 的约定插件里从版本目录读一次，
+        // 模块脚本只声明「用哪个约定插件」。此前 11 个模块各自抄三行，
+        // 改一次版本要改 11 处，漏掉一处不会报错，只会让某个模块悄悄用旧 SDK。
+        val conventionIds = listOf("brailleback.android.library", "brailleback.android.application")
+        val offenders = MODULES.filter { module ->
+            val text = moduleScript(module)
+            val appliesConvention = conventionIds.any { text.contains("id '$it'") }
+            // 模块自己再读一遍目录，或出现裸数字，都算把这个值散回去了。
+            val duplicatesCatalogRead = CATALOG_SDK_ALIASES.any { text.contains(it) }
+            val hardcoded = HARDCODED_SDK.containsMatchIn(text)
+            !appliesConvention || duplicatesCatalogRead || hardcoded
         }
-        assertTrue("这些模块的 compileSdk 不是从版本目录取的：$offenders", offenders.isEmpty())
-        // minSdk 与 targetSdk 在客户端库里也必须有（否则会继承默认值）。
-        val missingMin = MODULES.filter { !moduleScript(it).contains("libs.versions.android.minSdk") }
-        assertTrue("这些模块没从目录取 minSdk：$missingMin", missingMin.isEmpty())
+        assertTrue(
+            "这些模块没有统一走约定插件取 SDK 三档（或又抄了一遍）：$offenders",
+            offenders.isEmpty(),
+        )
+    }
+
+    @Test
+    fun sdkLevelsAreDeclaredOnceInTheConventionPlugin() {
+        CONVENTION_SCRIPTS.forEach { path ->
+            val file = File(repoRoot(), path)
+            assertTrue("缺少约定插件脚本：$path", file.isFile)
+            val text = file.readText()
+            CATALOG_SDK_ALIASES.forEach { alias ->
+                assertTrue("$path 必须从版本目录读 $alias", text.contains(alias))
+            }
+        }
+        val catalogText = catalog()
+        listOf(
+            "android-compileSdk = \"37\"",
+            "android-targetSdk = \"37\"",
+            "android-minSdk = \"29\"",
+        ).forEach { fragment ->
+            assertTrue("版本目录缺少：$fragment", catalogText.contains(fragment))
+        }
     }
 
     @Test

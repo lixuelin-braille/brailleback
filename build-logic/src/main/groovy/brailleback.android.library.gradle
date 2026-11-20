@@ -1,0 +1,28 @@
+// 约定插件：所有 Android 库模块共用的平台配置。
+//
+// 收进来的只有三件事——compileSdk、minSdk、targetSdk。它们此前在 11 个模块里
+// 逐字重复（都从 libs.versions.toml 取同一个值），改一次版本要改 11 处。
+//
+// 刻意**不**收的：namespace（每模块不同）、lint（策略分两档：主模块 error 即失败、
+// addon 移植代码只报不拦）、compileOptions（部分模块没有，统一加会改变字节码目标）、
+// buildTypes/proguard（文件名与是否 minify 各模块不同）、ndk/abiFilters。
+//
+// 为什么用动态 Groovy（不 import com.android.build.api.dsl.*）：
+// 那会让 build-logic 在编译期解析 AGP 的 gradle-api，而它传递依赖
+// org.jetbrains.kotlin:kotlin-gradle-plugin-api:2.2.10 —— 本机离线缓存里没有这个包，
+// 一旦 import 就整条构建离线失败。动态访问不需要 AGP 的编译期类型，
+// 约定插件本身零依赖，运行期由主构建的 classpath 提供 AGP。
+import org.gradle.api.artifacts.VersionCatalogsExtension
+
+pluginManager.apply('com.android.library')
+
+def libraryVersions = extensions.getByType(VersionCatalogsExtension).named('libs')
+
+def versionOf = { String alias ->
+    libraryVersions.findVersion(alias).get().requiredVersion.toInteger()
+}
+
+def android = extensions.getByName('android')
+android.compileSdk = versionOf('android-compileSdk')
+android.defaultConfig.minSdk = versionOf('android-minSdk')
+android.defaultConfig.targetSdk = versionOf('android-targetSdk')

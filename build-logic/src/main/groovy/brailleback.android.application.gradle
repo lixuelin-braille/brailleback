@@ -1,0 +1,20 @@
+// 约定插件：Android 应用模块的平台配置（内容与库模块一致，只是换了插件名）。
+//
+// 应用模块特有的东西全部留在 brailleback/build.gradle：
+// 签名配置、applicationId、versionCode/versionName、Compose、buildTypes、lint 门禁。
+//
+// 动态 Groovy 的理由见 brailleback.android.library.gradle 顶部注释。
+import org.gradle.api.artifacts.VersionCatalogsExtension
+
+pluginManager.apply('com.android.application')
+
+def libraryVersions = extensions.getByType(VersionCatalogsExtension).named('libs')
+
+def versionOf = { String alias ->
+    libraryVersions.findVersion(alias).get().requiredVersion.toInteger()
+}
+
+def android = extensions.getByName('android')
+android.compileSdk = versionOf('android-compileSdk')
+android.defaultConfig.minSdk = versionOf('android-minSdk')
+android.defaultConfig.targetSdk = versionOf('android-targetSdk')

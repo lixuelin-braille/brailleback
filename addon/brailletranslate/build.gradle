@@ -1,12 +1,11 @@
-apply plugin: 'com.android.library'
+plugins {
+    id 'brailleback.android.library'
+}
 
 android {
-    compileSdk = libs.versions.android.compileSdk.get().toInteger()
     namespace = 'com.google.android.accessibility.braille.translate'
 
     defaultConfig {
-        minSdk = libs.versions.android.minSdk.get().toInteger()
-        targetSdk = libs.versions.android.targetSdk.get().toInteger()
         ndk {
             abiFilters 'armeabi-v7a', 'arm64-v8a'
         }

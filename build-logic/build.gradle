@@ -1,0 +1,8 @@
+// 约定插件用 Groovy 编写：主构建的 11 个模块脚本都是 Groovy，
+// 约定插件跟着用同一门语言，避免为了 3 行配置再引入 Kotlin DSL 编译链。
+//
+// 没有任何 dependencies：约定插件里不引用 AGP 的编译期类型（用动态 Groovy），
+// 因此不需要把 AGP 拉进 build-logic 的编译类路径（离线缓存里缺它的传递依赖）。
+plugins {
+    id 'groovy-gradle-plugin'
+}

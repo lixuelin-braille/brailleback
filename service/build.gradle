@@ -8,18 +8,18 @@ import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 
-apply plugin: 'com.android.library'
+// 平台配置（compileSdk / minSdk / targetSdk）来自约定插件，见 build-logic/。
+plugins {
+    id 'brailleback.android.library'
+}
 
 android {
-    compileSdk = libs.versions.android.compileSdk.get().toInteger()
     buildFeatures {
         buildConfig = true
     }
     namespace = 'com.googlecode.eyesfree.braille.service'
 
     defaultConfig {
-        minSdk = libs.versions.android.minSdk.get().toInteger()
-        targetSdk = libs.versions.android.targetSdk.get().toInteger()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // 诊断包专用：把日志级别硬编码进 APK，不再读设置项。
         // 正常构建为 -1（不生效）；出诊断包用 -PdiagLogLevel=3（DEBUG）。

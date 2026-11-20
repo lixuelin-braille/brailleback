@@ -59,6 +59,8 @@ autovalue = "1.11.0"
 detekt = "1.23.7"
 
 [libraries]
+# 仅 build-logic 的约定插件编译时用（模块脚本不直接引用）。
+android-gradlePlugin = { module = "com.android.tools.build:gradle", version.ref = "agp" }
 androidx-core = { module = "androidx.core:core", version.ref = "core" }
 androidx-appcompat = { module = "androidx.appcompat:appcompat", version.ref = "appcompat" }
 androidx-preference-ktx = { module = "androidx.preference:preference-ktx", version.ref = "preference" }

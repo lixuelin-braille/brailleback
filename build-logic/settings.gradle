@@ -1,0 +1,31 @@
+// build-logic：约定插件（convention plugin）所在的本机构建。
+//
+// 存在的唯一目的：把 11 个模块里逐字重复的平台配置（compileSdk / minSdk / targetSdk）
+// 收成一份。模块自己的 namespace、lint 策略、proguard 文件名、ndk 配置都留在模块里，
+// 因为它们是各模块的差异，不是约定。
+//
+// 版本号不在这里写死：从根目录的 gradle/libs.versions.toml 读（唯一版本源）。
+pluginManagement {
+    repositories {
+        maven { url = 'https://maven.aliyun.com/repository/gradle-plugin' }
+        maven { url = 'https://maven.aliyun.com/repository/google' }
+        maven { url = 'https://maven.aliyun.com/repository/public' }
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+dependencyResolutionManagement {
+    repositories {
+        maven { url = 'https://maven.aliyun.com/repository/google' }
+        maven { url = 'https://maven.aliyun.com/repository/public' }
+        mavenCentral()
+    }
+    versionCatalogs {
+        libs {
+            from(files('../gradle/libs.versions.toml'))
+        }
+    }
+}
+
+rootProject.name = 'build-logic'

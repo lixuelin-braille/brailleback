@@ -1,5 +1,8 @@
-apply plugin: 'com.android.application'
-apply plugin: 'org.jetbrains.kotlin.plugin.compose'
+// 平台配置（compileSdk / minSdk / targetSdk）来自约定插件，见 build-logic/。
+plugins {
+    id 'brailleback.android.application'
+    id 'org.jetbrains.kotlin.plugin.compose'
+}
 
 // Version lives in the root gradle.properties only (see VersionCatalogTest).
 // providers.gradleProperty() keeps configuration-cache compatibility.
@@ -16,7 +19,6 @@ if (hasReleaseKey) {
 }
 
 android {
-    compileSdk = libs.versions.android.compileSdk.get().toInteger()
     if (hasReleaseKey) {
         signingConfigs {
             release {
@@ -35,8 +37,6 @@ android {
 
     defaultConfig {
         applicationId = "com.googlecode.eyesfree.brailleback"
-        minSdk = libs.versions.android.minSdk.get().toInteger()
-        targetSdk = libs.versions.android.targetSdk.get().toInteger()
         versionCode = appVersionCode
         versionName = appVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

@@ -1,13 +1,9 @@
-apply plugin: 'com.android.library'
+plugins {
+    id 'brailleback.android.library'
+}
 
 android {
-    compileSdk = libs.versions.android.compileSdk.get().toInteger()
     namespace = 'com.google.android.accessibility.braille.common'
-
-    defaultConfig {
-        minSdk = libs.versions.android.minSdk.get().toInteger()
-        targetSdk = libs.versions.android.targetSdk.get().toInteger()
-    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

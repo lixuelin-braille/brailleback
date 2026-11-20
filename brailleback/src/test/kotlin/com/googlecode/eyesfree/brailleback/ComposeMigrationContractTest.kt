@@ -70,7 +70,9 @@ class ComposeMigrationContractTest {
         )
         val module = text(base + "build.gradle")
         listOf(
-            "apply plugin: 'org.jetbrains.kotlin.plugin.compose'",
+            // 2026-11-20 迁到 plugins {} 块（Gradle 10 兼容 + 约定插件，见 docs/47、48），
+            // 断言跟着新写法走：只要仍然是被显式应用、且版本来自目录即可。
+            "id 'org.jetbrains.kotlin.plugin.compose'",
             "compose = true",
             "libs.androidx.activity.compose",
             "libs.compose.ui",
