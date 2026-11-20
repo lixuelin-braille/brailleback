@@ -62,28 +62,8 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
-    sourceSets {
-        main {
-            manifest.srcFile 'AndroidManifest.xml'
-            java.srcDirs = ['src']
-            kotlin.srcDirs = ['src']
-            resources.srcDirs = ['src']
-            aidl.srcDirs = ['src']
-            res.srcDirs = ['res']
-            assets.srcDirs = ['assets']
-        }
-        test {
-            java.srcDirs = ['test/java']
-            kotlin.srcDirs = ['test/kotlin']
-            resources.srcDirs = ['test/resources']
-        }
-        androidTest {
-            java.srcDirs = ['androidTest/java']
-            kotlin.srcDirs = ['androidTest/kotlin']
-        }
-        debug.setRoot('build-types/debug')
-        release.setRoot('build-types/release')
-    }
+    // 源码布局已迁到 AGP 标准目录（src/main/java、src/main/res、src/main/assets、
+    // src/main/AndroidManifest.xml、src/test、src/androidTest），这里不再需要任何覆写。
     lint {
         // 门禁：error 级问题直接让构建失败（CI 跑 :brailleback:lintDebug）。
         // 为什么以前是 false：MissingTranslation 曾以 error 级刷出 276 条，

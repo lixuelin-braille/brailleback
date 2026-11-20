@@ -31,11 +31,11 @@ dependencies {
 }
 
 def detektInputs = [
-    "$rootDir/brailleback/src",
-    "$rootDir/service/src",
-    "$rootDir/client/src",
-    "$rootDir/libraries/utils/src",
-    "$rootDir/libraries/compatutils/src",
+    "$rootDir/brailleback/src/main/java",
+    "$rootDir/service/src/main/java",
+    "$rootDir/client/src/main/java",
+    "$rootDir/libraries/utils/src/main/java",
+    "$rootDir/libraries/compatutils/src/main/java",
 ]
 
 tasks.register('detektCheck', JavaExec) {

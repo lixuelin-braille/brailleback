@@ -37,8 +37,8 @@ tasks.register('ktlintProbe', JavaExec) {
     mainClass = 'com.pinterest.ktlint.Main'
     doFirst {
         def roots = [
-            new File(rootDir, '../../brailleback/src'),
-            new File(rootDir, '../../service/src'),
+            new File(rootDir, '../../brailleback/src/main/java'),
+            new File(rootDir, '../../service/src/main/java'),
         ]
         args = ['--relative'] + roots.collectMany { root ->
             root.directory ? fileTree(root).matching { include '**/*.kt' }.files.collect { it.absolutePath } : []
@@ -52,7 +52,7 @@ tasks.register('detektProbe', JavaExec) {
     classpath = configurations.runtimeClasspath
     mainClass = 'io.gitlab.arturbosch.detekt.cli.Main'
     args = [
-        '--input', "${rootDir}/../../brailleback/src,${rootDir}/../../service/src",
+        '--input', "${rootDir}/../../brailleback/src/main/java,${rootDir}/../../service/src/main/java",
         '--build-upon-default-config',
     ]
     ignoreExitValue = true

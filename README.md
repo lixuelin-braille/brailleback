@@ -30,6 +30,23 @@
 | `libraries/utils` | 通用工具（无障碍节点工具、标签管理、MIDI） |
 | `libraries/compatutils` | Android 各版本兼容封装 |
 
+## 工程布局
+
+2026-11-20 起统一为 AGP 标准目录，**11 个模块都不再有 `sourceSets` 覆写**：
+
+| 内容 | 位置 |
+|:---|:---|
+| Kotlin + Java 源码 | `src/main/java/`（Android 惯例：Kotlin 也放 java 源根） |
+| AIDL | `src/main/aidl/` |
+| 资源 / 资产 | `src/main/res/`、`src/main/assets/` |
+| 清单 | `src/main/AndroidManifest.xml` |
+| 单元测试 / 仪器测试 | `src/test/`、`src/androidTest/` |
+
+唯一保留的覆写是 `service` 的两条：`main.jniLibs.srcDirs = ['jniLibs']`（预编译 `.so` 的唯一入库位置）、
+`test.assets.srcDirs = ['src/main/assets']`（单测直接读同一份词表，不复制第二份）。
+迁移过程与踩坑见 [`docs/45-源码布局与工程结构现代化`](./docs/45-源码布局与工程结构现代化.md)。
+
+
 ## 构建
 环境：AGP 9.2.0 + Gradle 9.4.1，JDK 17+，compileSdk/targetSdk 37（Android 17），minSdk 29（Android 10），NDK 28.2（AGP 默认）。
 依赖版本与 `compileSdk/targetSdk/minSdk` 统一在 **`gradle/libs.versions.toml`**，
@@ -43,7 +60,7 @@ gradle :brailleback:assembleDebug --rerun-tasks
 ./gradlew assembleDebug
 ```
 
-产物：`brailleback/build/outputs/apk/debug/brailleback-debug.apk`（debug 实测约 33.4 MB，arm64-v8a + armeabi-v7a 双架构）
+产物：`brailleback/build/outputs/apk/debug/brailleback-debug.apk`（debug 实测 57.7 MB，arm64-v8a + armeabi-v7a 双架构；minSdk 抬到 29 后 dex 不压缩，体积比早期 33.4 MB 那一版大是预期内的。迁移布局并去掉重复的 layout-v17 后从 62.5 MB 降到 57.7 MB）
 
 > ⚠️ 已知小问题：`local.properties` 的 `ndk.dir` 指向 NDK 29，与 AGP 默认的 28.2 不一致，
 > 会报 `CXX1104` 且 `.so` 未 strip（不影响运行，仅 APK 偏大）。详见 `docs/00`。
@@ -52,8 +69,8 @@ gradle :brailleback:assembleDebug --rerun-tasks
 
 `.github/workflows/ci.yml` 两个 job：
 
-- **单元测试**：push / PR 自动跑 `:brailleback:testDebugUnitTest`（53 套件 / 538 用例），
-  输出用例总数并上传 XML 报告。
+- **单元测试**：push / PR 自动跑 `:brailleback:testDebugUnitTest`（本地实测 83 套件 / 743 用例，
+  含 `:service:testDebugUnitTest`），输出用例总数并上传 XML 报告。
 - **lint 门禁**：`:brailleback:lintDebug :service:lintDebug`，`abortOnError=true`——
   error 级问题（`NewApi`、`RegisterReceiverFlag`、`WrongConstant` 等）直接让 CI 变红。
   该 job 会装 NDK `28.2.13676358`（app 依赖 addon 的 ndk-build）。
@@ -81,3 +98,4 @@ CI 里额外传 `-x verifyNativeLibs`：那个任务比对「jni 源码 mtime vs
 | [05-中文盲文引擎详解](./docs/05-中文盲文引擎详解.md) | 分词规则、常量表、质量改进 |
 | [06-下一步开发指引](./docs/06-下一步开发指引.md) | 路线、TODO、扩展点、调试 |
 | **[07-稳定性改进清单](./docs/07-稳定性改进清单.md)** | **当前重点：5 个真问题及改法** |
+| *[45-源码布局与工程结构现代化](./docs/45-源码布局与工程结构现代化.md)* | *2026-11-20：11 模块迁到标准目录、契约测试路径改写、踩坑记录* |

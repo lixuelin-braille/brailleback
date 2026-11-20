@@ -34,22 +34,14 @@ android {
     }
     sourceSets {
         main {
-            manifest.srcFile 'AndroidManifest.xml'
-            java.srcDirs = ['src']
-            kotlin.srcDirs = ['src']
-            resources.srcDirs = ['src']
-            aidl.srcDirs = ['src']
-            res.srcDirs = ['res']
-            assets.srcDirs = ['assets']
+            // 预编译 .so 的唯一入库位置仍是模块根的 jniLibs/（jni/ 下那份是本地编译产物）。
             jniLibs.srcDirs = ['jniLibs']
         }
         test {
-            java.srcDirs = ['test/java']
-            kotlin.srcDirs = ['test/kotlin']
-            assets.srcDirs = ['assets']
+            // 分词词表与盲文表在 main 的 assets 里，单元测试直接从同一份读，
+            // 避免复制出第二份词库（复制会随词表更新而漂移）。
+            assets.srcDirs = ['src/main/assets']
         }
-        debug.setRoot('build-types/debug')
-        release.setRoot('build-types/release')
     }
     buildTypes {
         debug {

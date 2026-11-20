@@ -3,6 +3,12 @@
 > 项目：**brailleback盲文**（原「盲文迁移项目」/ 原林夕读屏）
 > 文档生成：2026-08-29（基于代码逐行审查）
 > 项目方针：**不迁移到 TalkBack，专注现有项目稳定性**
+>
+> ⚠️ **路径对照**：00–44 号文档里写的源码路径是 2026-11-20 之前的旧布局
+> （模块根 `src/`、`res/`、`AndroidManifest.xml`、`test/`）。对照规则：
+> `xxx/src/com/...` → `xxx/src/main/java/com/...`；`xxx/res/...` → `xxx/src/main/res/...`；
+> `xxx/AndroidManifest.xml` → `xxx/src/main/AndroidManifest.xml`；`xxx/test/` → `xxx/src/test/`。
+> 详见 [45-源码布局与工程结构现代化](./45-源码布局与工程结构现代化.md)。
 
 ---
 
@@ -49,6 +55,7 @@
 | **[42-键盘帮助屏Compose化](./42-键盘帮助屏Compose化.md)** | 8 个残留布局里的第一个：`TextView+ListView` → `LazyColumn`；`Theme.DeviceDefault` 决定基类只能 `ComponentActivity`；两行文字要 `mergeDescendants` 才不会被读屏拆焦点；剩余布局的迁移难度排序 | 继续迁 XML 布局前必读 |
 | **[43-书架Compose化](./43-书架Compose化.md)** | 第二个布局退场：长按菜单/删除确认/清空确认三道误删护栏怎么钉；书架偏好文件的编码是「用户书籍 ABI」不许动；`internal` 类型不能出现在 public override 里（改用匿名实现）；Compose 控件没有资源 id 后仪器测试怎么找按钮 | 改书架或继续迁布局前必读 |
 | **[44-规范连写词表](./44-规范连写词表.md)** | 第一次动分词结果本身：分写库 6,782 条里 44.5% 拆出了单字片段（分钟、一瞬/间、一丘/之/貉），新增 `segment_connect.txt` 2,702 条压过阳光库；为什么只做「两套口径都同意」的部分；2+2 成语仍缺一张成语表 | 动分词、词库或汉盲翻译前必读 |
+| **[45-源码布局与工程结构现代化](./45-源码布局与工程结构现代化.md)** | 11 个模块迁到 AGP 标准目录、sourceSets 覆写降到 1 处、36 个契约测试的路径改写与"扫整棵树"陷阱、增量资源合并陈旧与相对路径截断两个坑 | 找源码文件、加模块或改目录结构前必读 |
 
 ---
 
