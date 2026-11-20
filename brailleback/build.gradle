@@ -16,14 +16,14 @@ if (hasReleaseKey) {
 }
 
 android {
-    compileSdk libs.versions.android.compileSdk.get().toInteger()
+    compileSdk = libs.versions.android.compileSdk.get().toInteger()
     if (hasReleaseKey) {
         signingConfigs {
             release {
-                storeFile rootProject.file(keystoreProperties['storeFile'])
-                storePassword keystoreProperties['storePassword']
-                keyAlias keystoreProperties['keyAlias']
-                keyPassword keystoreProperties['keyPassword']
+                storeFile = rootProject.file(keystoreProperties['storeFile'])
+                storePassword = keystoreProperties['storePassword']
+                keyAlias = keystoreProperties['keyAlias']
+                keyPassword = keystoreProperties['keyPassword']
             }
         }
     }
@@ -31,15 +31,15 @@ android {
         buildConfig = true
         compose = true
     }
-    namespace 'com.googlecode.eyesfree.brailleback'
+    namespace = 'com.googlecode.eyesfree.brailleback'
 
     defaultConfig {
-        applicationId "com.googlecode.eyesfree.brailleback"
-        minSdk libs.versions.android.minSdk.get().toInteger()
-        targetSdk libs.versions.android.targetSdk.get().toInteger()
-        versionCode appVersionCode
-        versionName appVersionName
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        applicationId = "com.googlecode.eyesfree.brailleback"
+        minSdk = libs.versions.android.minSdk.get().toInteger()
+        targetSdk = libs.versions.android.targetSdk.get().toInteger()
+        versionCode = appVersionCode
+        versionName = appVersionName
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // 诊断包专用：把日志级别硬编码进 APK，设置页与偏好项都改不动它。
         // 正常构建为 -1（不生效）；出诊断包用 -PdiagLogLevel=3（DEBUG）。
         buildConfigField "int", "DIAG_LOG_LEVEL",
@@ -50,15 +50,15 @@ android {
     }
     buildTypes {
         debug {
-            minifyEnabled false
-            shrinkResources false
+            minifyEnabled = false
+            shrinkResources = false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         release {
-            minifyEnabled true
-            shrinkResources true
+            minifyEnabled = true
+            shrinkResources = true
             // 有 keystore 就用它，没有就沿用 debug 签名（保持「不配密钥也能打包」）。
-            signingConfig hasReleaseKey ? signingConfigs.release : signingConfigs.debug
+            signingConfig = hasReleaseKey ? signingConfigs.release : signingConfigs.debug
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
@@ -68,8 +68,8 @@ android {
         // 门禁：error 级问题直接让构建失败（CI 跑 :brailleback:lintDebug）。
         // 为什么以前是 false：MissingTranslation 曾以 error 级刷出 276 条，
         // 把它降级为 warning（见 brailleback/lint.xml），其余检查保持原样。
-        abortOnError true
-        checkReleaseBuilds false
+        abortOnError = true
+        checkReleaseBuilds = false
     }
 }
 

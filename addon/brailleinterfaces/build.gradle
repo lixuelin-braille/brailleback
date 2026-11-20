@@ -1,22 +1,22 @@
 apply plugin: 'com.android.library'
 
 android {
-    compileSdk libs.versions.android.compileSdk.get().toInteger()
-    namespace 'com.google.android.accessibility.braille.interfaces'
+    compileSdk = libs.versions.android.compileSdk.get().toInteger()
+    namespace = 'com.google.android.accessibility.braille.interfaces'
 
     defaultConfig {
-        minSdk libs.versions.android.minSdk.get().toInteger()
-        targetSdk libs.versions.android.targetSdk.get().toInteger()
+        minSdk = libs.versions.android.minSdk.get().toInteger()
+        targetSdk = libs.versions.android.targetSdk.get().toInteger()
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     lint {
-        abortOnError false
-        checkReleaseBuilds false
+        abortOnError = false
+        checkReleaseBuilds = false
     }
 }
 

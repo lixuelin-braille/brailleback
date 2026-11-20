@@ -3,12 +3,12 @@
 apply plugin: 'com.android.library'
 
 android {
-    compileSdk libs.versions.android.compileSdk.get().toInteger()
-    namespace 'com.google.android.accessibility.utils'
+    compileSdk = libs.versions.android.compileSdk.get().toInteger()
+    namespace = 'com.google.android.accessibility.utils'
 
     defaultConfig {
-        minSdk libs.versions.android.minSdk.get().toInteger()
-        targetSdk libs.versions.android.targetSdk.get().toInteger()
+        minSdk = libs.versions.android.minSdk.get().toInteger()
+        targetSdk = libs.versions.android.targetSdk.get().toInteger()
         // BuildVersionUtils.isSystemPreload() 读取这个字段；BrailleBack 是用户态安装包，恒为 False。
         buildConfigField "String", "IS_SYSTEM_PRELOAD", "\"False\""
         // 宿主 applicationId。盲文键盘的 IME 组件名依赖它，
@@ -21,13 +21,13 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     lint {
-        abortOnError false
-        checkReleaseBuilds false
+        abortOnError = false
+        checkReleaseBuilds = false
     }
 }
 

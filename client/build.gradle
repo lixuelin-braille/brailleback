@@ -1,22 +1,22 @@
 apply plugin: 'com.android.library'
 
 android {
-    compileSdk libs.versions.android.compileSdk.get().toInteger()
-    namespace 'com.googlecode.eyesfree.braille.client'
+    compileSdk = libs.versions.android.compileSdk.get().toInteger()
+    namespace = 'com.googlecode.eyesfree.braille.client'
 
     defaultConfig {
-        minSdk libs.versions.android.minSdk.get().toInteger()
-        targetSdk libs.versions.android.targetSdk.get().toInteger()
+        minSdk = libs.versions.android.minSdk.get().toInteger()
+        targetSdk = libs.versions.android.targetSdk.get().toInteger()
         
     }
 
     buildTypes {
         debug {
-            minifyEnabled false
+            minifyEnabled = false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'lib-proguard-rules.txt'
         }
         release {
-            minifyEnabled false
+            minifyEnabled = false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'lib-proguard-rules.txt'
         }
     }
