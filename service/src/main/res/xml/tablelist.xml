@@ -508,4 +508,381 @@ fileName="zhcn-cbs-full.ctb" />
          grade="2"
          variant="双拼盲文"
          fileName="zhcn-g2.ctb" />
+
+    <!-- 以下为补全：liblouis 上游已支持、本清单此前零登记的语言 -->
+
+    <!-- Afrikaans -->
+    <table
+         id="af-g1"
+         locale="af_ZA"
+         dots="6"
+         grade="1"
+         fileName="afr-za-g1.ctb" />
+    <table
+         id="af-g2"
+         locale="af_ZA"
+         dots="6"
+         grade="2"
+         fileName="afr-za-g2.ctb" />
+
+    <!-- Bashkir -->
+    <table
+         id="ba-g1"
+         locale="ba"
+         dots="6"
+         grade="1"
+         fileName="ba.utb" />
+
+    <!-- Belarusian -->
+    <table
+         id="be-g1"
+         locale="be"
+         dots="6"
+         grade="1"
+         fileName="bel.utb" />
+
+    <!-- Cherokee -->
+    <table
+         id="chr-g1"
+         locale="chr"
+         dots="6"
+         grade="1"
+         fileName="chr-us-g1.ctb" />
+
+    <!-- Welsh -->
+    <table
+         id="cy-g1"
+         locale="cy"
+         dots="6"
+         grade="1"
+         fileName="cy-cy-g1.utb" />
+    <table
+         id="cy-g2"
+         locale="cy"
+         dots="6"
+         grade="2"
+         fileName="cy-cy-g2.ctb" />
+
+    <!-- Esperanto -->
+    <table
+         id="eo-g1"
+         locale="eo"
+         dots="6"
+         grade="1"
+         fileName="eo-g1.ctb" />
+
+    <!-- Persian -->
+    <table
+         id="fa-g1"
+         locale="fa"
+         dots="6"
+         grade="1"
+         fileName="fa-ir-g1.utb" />
+
+    <!-- Persian computer -->
+    <table
+         id="fa-IR-comp8"
+         locale="fa_IR"
+         dots="8"
+         fileName="fa-ir-comp8.ctb" />
+
+    <!-- Filipino -->
+    <table
+         id="fil-g2"
+         locale="fil"
+         dots="6"
+         grade="2"
+         fileName="fil-g2.ctb" />
+
+    <!-- Irish -->
+    <table
+         id="ga-g2"
+         locale="ga"
+         dots="6"
+         grade="2"
+         fileName="ga-g2.ctb" />
+    <table
+         id="ga-g1"
+         locale="ga"
+         dots="6"
+         grade="1"
+         fileName="ga-g1.utb" />
+
+    <!-- Scots Gaelic -->
+    <table
+         id="gd-g1"
+         locale="gd"
+         dots="6"
+         grade="1"
+         fileName="gd.ctb" />
+
+    <!-- Hawaiian -->
+    <table
+         id="haw-g1"
+         locale="haw"
+         dots="6"
+         grade="1"
+         fileName="haw-us-g1.ctb" />
+
+    <!-- Hebrew -->
+    <table
+         id="he-g1"
+         locale="he"
+         dots="6"
+         grade="1"
+         fileName="he-IL.utb" />
+
+    <!-- Armenian -->
+    <table
+         id="hy-g1"
+         locale="hy"
+         dots="6"
+         grade="1"
+         fileName="hy.ctb" />
+
+    <!-- Inuktitut -->
+    <table
+         id="iu-g1"
+         locale="iu"
+         dots="6"
+         grade="1"
+         fileName="iu-ca-g1.ctb" />
+
+    <!-- Georgian -->
+    <table
+         id="ka-g1"
+         locale="ka"
+         dots="6"
+         grade="1"
+         fileName="ka.utb" />
+
+    <!-- Kazakh -->
+    <table
+         id="kk-g1"
+         locale="kk"
+         dots="6"
+         grade="1"
+         fileName="kk.utb" />
+
+    <!-- Khmer -->
+    <table
+         id="km-g1"
+         locale="km"
+         dots="6"
+         grade="1"
+         fileName="km-g1.utb" />
+
+    <!-- Luganda -->
+    <table
+         id="lg-g1"
+         locale="lg"
+         dots="6"
+         grade="1"
+         fileName="lg-ug-g1.utb" />
+
+    <!-- Lao -->
+    <table
+         id="lo-g1"
+         locale="lo"
+         dots="6"
+         grade="1"
+         fileName="lo-g1.utb" />
+
+    <!-- Macedonian -->
+    <table
+         id="mk-g1"
+         locale="mk"
+         dots="6"
+         grade="1"
+         fileName="mk-g1.utb" />
+
+    <!-- Mongolian -->
+    <table
+         id="mn-g2"
+         locale="mn"
+         dots="6"
+         grade="2"
+         fileName="mn-MN-g2.ctb" />
+    <table
+         id="mn-g1"
+         locale="mn"
+         dots="6"
+         grade="1"
+         fileName="mn-MN-g1.utb" />
+
+    <!-- Malay -->
+    <table
+         id="ms-g2"
+         locale="ms"
+         dots="6"
+         grade="2"
+         fileName="ms-my-g2.ctb" />
+
+    <!-- Maltese -->
+    <table
+         id="mt-g1"
+         locale="mt"
+         dots="6"
+         grade="1"
+         fileName="mt.ctb" />
+
+    <!-- Burmese -->
+    <table
+         id="my-g1"
+         locale="my"
+         dots="6"
+         grade="1"
+         fileName="my-g1.utb" />
+    <table
+         id="my-g2"
+         locale="my"
+         dots="6"
+         grade="2"
+         fileName="my-g2.ctb" />
+
+    <!-- Chichewa -->
+    <table
+         id="ny-g1"
+         locale="ny"
+         dots="6"
+         grade="1"
+         fileName="ny-mw.utb" />
+
+    <!-- Kinyarwanda -->
+    <table
+         id="rw-g1"
+         locale="rw"
+         dots="6"
+         grade="1"
+         fileName="rw-rw-g1.utb" />
+
+    <!-- Swahili -->
+    <table
+         id="sw-g1"
+         locale="sw"
+         dots="6"
+         grade="1"
+         fileName="sw-ke-g1.utb" />
+    <table
+         id="sw-g2"
+         locale="sw"
+         dots="6"
+         grade="2"
+         fileName="sw-ke-g2.ctb" />
+
+    <!-- Tamil -->
+    <table
+         id="ta-g1"
+         locale="ta"
+         dots="6"
+         grade="1"
+         fileName="ta-ta-g1.ctb" />
+
+    <!-- Thai -->
+    <table
+         id="th-g1"
+         locale="th"
+         dots="6"
+         grade="1"
+         fileName="th-g1.utb" />
+    <table
+         id="th-g2"
+         locale="th"
+         dots="6"
+         grade="2"
+         fileName="th-g2.ctb" />
+    <table
+         id="th-g0"
+         locale="th"
+         dots="6"
+         grade="0"
+         fileName="th-g0.utb" />
+
+    <!-- Tatar -->
+    <table
+         id="tt-g1"
+         locale="tt"
+         dots="6"
+         grade="1"
+         fileName="tt.utb" />
+
+    <!-- Ukrainian -->
+    <table
+         id="uk-g1"
+         locale="uk"
+         dots="6"
+         grade="1"
+         fileName="uk.utb" />
+
+    <!-- Urdu -->
+    <table
+         id="ur-g1"
+         locale="ur"
+         dots="6"
+         grade="1"
+         fileName="ur-pk-g1.utb" />
+    <table
+         id="ur-g2"
+         locale="ur"
+         dots="6"
+         grade="2"
+         fileName="ur-pk-g2.ctb" />
+
+    <!-- Uzbek -->
+    <table
+         id="uz-g1"
+         locale="uz"
+         dots="6"
+         grade="1"
+         fileName="uz-g1.utb" />
+
+    <!-- Tshivenda -->
+    <table
+         id="ve-g1"
+         locale="ve"
+         dots="6"
+         grade="1"
+         fileName="ve-za-g1.utb" />
+    <table
+         id="ve-g2"
+         locale="ve"
+         dots="6"
+         grade="2"
+         fileName="ve-za-g2.ctb" />
+
+    <!-- isiXhosa -->
+    <table
+         id="xh-g1"
+         locale="xh"
+         dots="6"
+         grade="1"
+         fileName="xh-za-g1.utb" />
+    <table
+         id="xh-g2"
+         locale="xh"
+         dots="6"
+         grade="2"
+         fileName="xh-za-g2.ctb" />
+
+    <!-- Yiddish -->
+    <table
+         id="yi-g1"
+         locale="yi"
+         dots="6"
+         grade="1"
+         fileName="yi.utb" />
+
+    <!-- isiZulu -->
+    <table
+         id="zu-g1"
+         locale="zu"
+         dots="6"
+         grade="1"
+         fileName="zu-za-g1.utb" />
+    <table
+         id="zu-g2"
+         locale="zu"
+         dots="6"
+         grade="2"
+         fileName="zu-za-g2.ctb" />
 </table-list>

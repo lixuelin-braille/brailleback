@@ -499,11 +499,11 @@ class BrailleDisplayContractTest {
             )
             seed.copy(localeName = BrailleTableCatalog.compliantLocaleName(seed, labels))
         }.toList()
-        assertEquals("服务侧表清单应有 72 张表", 72, seeds.size)
+        assertEquals("服务侧表清单应有 122 张表", 122, seeds.size)
 
         val groups = BrailleTableCatalog.build(seeds, "zh", labels)
-        assertEquals("72 张表一张都不能丢", 72, groups.flatMap { it.choices }.size)
-        assertEquals("34 种语言 = 34 个第一级条目", 34, groups.size)
+        assertEquals("122 张表一张都不能丢", 122, groups.flatMap { it.choices }.size)
+        assertEquals("70 种语言 = 70 个第一级条目", 70, groups.size)
         assertEquals("系统语言（中文）组必须置顶", "zh", groups.first().language)
         assertEquals("中文组实测 7 张表（通用 + 中国 + 中国台湾）", 7, groups.first().choices.size)
         val chineseLabels = groups.first().choices.map { it.label }
