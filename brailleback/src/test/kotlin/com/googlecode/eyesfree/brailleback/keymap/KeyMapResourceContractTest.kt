@@ -101,11 +101,42 @@ class KeyMapResourceContractTest {
             """CMD_NAMES\.append\(\s*\w+\s*,\s*"([A-Z0-9_]+)"\s*\)"""
         ).findAll(source).map { it.groupValues[1] }.toSet()
         for (name in BrailleKeyMapPolicy.ASSIGNABLE_ACTIONS) {
+            // NONE 是虚拟动作：它必须在 CMD_NAMES 里**缺席**，运行时由
+            // CustomKeyMapStore 翻译成 CMD_NONE，再由 DisplayManager 吞掉事件。
+            if (name == BrailleKeyMapPolicy.NO_ACTION) {
+                assertFalse(
+                    "NONE 不得登记为真实命令，否则 stringToCommand 会把它当成普通命令码",
+                    registered.contains(name)
+                )
+                continue
+            }
             assertTrue(
                 "$name 未在 BrailleInputEvent.CMD_NAMES 登记，stringToCommand 会解析成 CMD_NONE",
                 registered.contains(name)
             )
         }
+    }
+
+    @Test
+    fun noActionIsSwallowedAtTheDispatchPoint() {
+        val manager = text(base + "src/main/java/com/googlecode/eyesfree/brailleback/DisplayManager.kt")
+        val method = manager.substringAfter("private fun applyCustomKeyMap")
+            .substringBefore("private fun reloadCustomKeyMap")
+        assertTrue(
+            "「无动作」必须把整条事件吞掉（返回 null），而不是继续分发",
+            method.contains("BrailleInputEvent.CMD_NONE") &&
+                method.contains("return null")
+        )
+        assertTrue(
+            "onInputEvent 必须处理 null（?: return），否则会被吞掉后继续用空事件崩溃",
+            manager.contains("applyCustomKeyMap(event) ?: return")
+        )
+        val store = text(base + "src/main/java/com/googlecode/eyesfree/brailleback/keymap/CustomKeyMapStore.kt")
+        assertTrue(
+            "runtimeMap 必须把 NONE 翻译成 CMD_NONE（不能走 stringToCommand 后被当坏数据丢掉）",
+            store.contains("BrailleKeyMapPolicy.NO_ACTION") &&
+                store.contains("BrailleInputEvent.CMD_NONE")
+        )
     }
 
     // -------------------------------------------------------------- 接入点契约

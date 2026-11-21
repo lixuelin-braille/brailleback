@@ -299,7 +299,7 @@
     <string name="pref_custom_key_map_title">自定义按键</string>
     <string name="pref_custom_key_map_summary">把点显器上的按键改成其它动作</string>
     <string name="custom_key_map_title">自定义按键</string>
-    <string name="custom_key_map_instructions">选择一个按键，再指定它要执行的动作，修改后立即生效。光标路由键、盲文点位键，以及返回、主屏幕等系统键不允许被改掉；但可以把其它按键改成返回等系统动作。</string>
+    <string name="custom_key_map_instructions">选择一个按键，再指定它要执行的动作，修改后立即生效。光标路由键、盲文点位键，以及返回、主屏幕等系统键不允许被改掉；但可以把其它按键改成返回等系统动作。嫌某个键难按时，可以把它设为「无动作」——按了不再有任何反应。</string>
     <string name="custom_key_map_instructions_title">使用说明</string>
     <string name="custom_key_map_category_title">可自定义的按键</string>
     <string name="custom_key_map_default_action">保持默认（不修改）</string>

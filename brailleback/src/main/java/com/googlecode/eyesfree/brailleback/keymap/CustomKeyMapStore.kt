@@ -66,8 +66,17 @@ object CustomKeyMapStore {
         val result = HashMap<Int, Int>()
         for ((sourceName, targetName) in load(context)) {
             val source = BrailleInputEvent.stringToCommand(sourceName)
+            if (source == BrailleInputEvent.CMD_NONE) {
+                continue
+            }
+            // 虚拟动作 NONE（「无动作」）没有真实命令码：翻译成 CMD_NONE 交给
+            // DisplayManager 吞掉事件。不能走 stringToCommand，那会返回 CMD_NONE 并被当成坏数据跳过。
+            if (targetName == BrailleKeyMapPolicy.NO_ACTION) {
+                result[source] = BrailleInputEvent.CMD_NONE
+                continue
+            }
             val target = BrailleInputEvent.stringToCommand(targetName)
-            if (source == BrailleInputEvent.CMD_NONE || target == BrailleInputEvent.CMD_NONE) {
+            if (target == BrailleInputEvent.CMD_NONE) {
                 continue
             }
             result[source] = target

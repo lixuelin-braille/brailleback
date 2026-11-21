@@ -5,10 +5,11 @@
     静态锁定本文件与 Kotlin 常量一致，改动必须两边同步。
 
     key_map_source_values : 允许被重新定义的按键（24 条）
-    key_map_action_values : 允许选择的目标动作（24 条 + 5 条系统动作 = 29 条）
+    key_map_action_values : 允许选择的目标动作（24 条 + 5 条系统动作 + 1 条虚拟「无动作」= 30 条）
     key_map_action_labels : 与 action_values 一一对应的显示名；前 24 条同时用作按键名，
                             中文版在 values-zh-rCN/key_map.xml。
-    虚拟动作 "DEFAULT"（保持默认）不写在这里，由界面在列表首位动态插入。
+    虚拟动作 "DEFAULT"（保持默认）、"NONE"（无动作，事件被吞掉）都不登记在
+    BrailleInputEvent.CMD_NAMES 里；DEFAULT 由界面动态插到列表首位，NONE 作为最后一条动作列出。
 -->
 <resources>
     <string-array name="key_map_source_values" translatable="false">
@@ -68,6 +69,7 @@
         <item>CMD_GLOBAL_RECENTS</item>
         <item>CMD_GLOBAL_NOTIFICATIONS</item>
         <item>CMD_HELP</item>
+        <item>NONE</item>
     </string-array>
 
     <string-array name="key_map_action_labels">
@@ -100,5 +102,6 @@
         <item>Recent apps</item>
         <item>Notifications</item>
         <item>Keyboard help</item>
+        <item>No action (key does nothing)</item>
     </string-array>
 </resources>

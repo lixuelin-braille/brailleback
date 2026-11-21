@@ -59,6 +59,7 @@
 | **[46-界面层遗留与保留理由](./46-界面层遗留与保留理由.md)** | 剩下 6 个 XML 布局与最后一处 `PreferenceFragmentCompat` 的逐个判定：哪些是高重绘/IME 启动路径上必须留的 View，迁移要付什么代价、验收要过哪六关 | 有人（或未来的自己）再提"把所有 XML 都 Compose 化"时先读 |
 | **[47-Gradle10兼容性清零空格赋值](./47-Gradle10兼容性清零空格赋值.md)** | 106 行空格赋值改等号：`compileSdk`/`namespace`/`abortOnError`/`url` 等 21 个属性和方法调用的区分白名单、`settings.gradle` 内联 `url` 为什么会被正则漏掉、为什么刻意留 1 条 AGP 警告 | 动构建脚本、升 Gradle 或接 CI 前必读 |
 | **[48-约定插件收拢平台配置](./48-约定插件收拢平台配置.md)** | `build-logic` 两个约定插件取代 11 个模块 × 3 行 SDK 配置；为什么约定插件里不能 import AGP 类型（离线缺 `kotlin-gradle-plugin-api`）、`service` 脚本 import 在 plugins 之前为何可行、两条契约测试的语义平移 | 改模块构建脚本或新增模块前必读 |
+| **[49-按键映射补无动作](./49-按键映射补无动作.md)** | 让「难按的键」彻底空转：虚拟动作 `NONE` 与 `DEFAULT` 的语义区别、为什么不能走 `stringToCommand`（会被当坏数据静默丢弃）、`applyCustomKeyMap` 返回 null 吞事件、契约测试强制 NONE 在 CMD_NAMES 里缺席 | 改按键映射或回答「能不能映射某个键」前必读 |
 
 ---
 

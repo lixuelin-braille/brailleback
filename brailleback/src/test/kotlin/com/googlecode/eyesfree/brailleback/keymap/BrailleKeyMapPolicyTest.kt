@@ -20,6 +20,7 @@ class BrailleKeyMapPolicyTest {
 
     private companion object {
         const val PAN_LEFT = "CMD_NAV_PAN_LEFT"
+        const val PAN_RIGHT = "CMD_NAV_PAN_RIGHT"
         const val ITEM_NEXT = "CMD_NAV_ITEM_NEXT"
         const val ITEM_PREVIOUS = "CMD_NAV_ITEM_PREVIOUS"
         const val LINE_NEXT = "CMD_NAV_LINE_NEXT"
@@ -33,7 +34,8 @@ class BrailleKeyMapPolicyTest {
     @Test
     fun whitelistSizesAndNoDuplicates() {
         assertEquals(24, BrailleKeyMapPolicy.REMAPPABLE_COMMANDS.size)
-        assertEquals(29, BrailleKeyMapPolicy.ASSIGNABLE_ACTIONS.size)
+        // 24 条可改按键 + 5 条系统动作 + 1 条虚拟「无动作」。
+        assertEquals(30, BrailleKeyMapPolicy.ASSIGNABLE_ACTIONS.size)
         assertEquals(
             BrailleKeyMapPolicy.REMAPPABLE_COMMANDS.size,
             BrailleKeyMapPolicy.REMAPPABLE_COMMANDS.toSet().size
@@ -228,5 +230,59 @@ class BrailleKeyMapPolicyTest {
             ITEM_NEXT to ROUTE,
         )
         assertTrue(BrailleKeyMapPolicy.duplicateTargets(map).isEmpty())
+    }
+
+    // ----------------------------------------------------------- 虚拟「无动作」
+
+    @Test
+    fun noActionIsAssignableButNeverASource() {
+        assertTrue(BrailleKeyMapPolicy.isAssignable(BrailleKeyMapPolicy.NO_ACTION))
+        assertTrue(BrailleKeyMapPolicy.isAction(BrailleKeyMapPolicy.NO_ACTION))
+        assertFalse(BrailleKeyMapPolicy.isRemappable(BrailleKeyMapPolicy.NO_ACTION))
+        assertEquals("NONE", BrailleKeyMapPolicy.NO_ACTION)
+    }
+
+    @Test
+    fun noActionRoundTripsThroughPersistence() {
+        // 用户把「向左平移」（V3 的滚平键）设为无动作，必须能存下来、读回来。
+        val map = BrailleKeyMapPolicy.withMapping(
+            emptyMap(), PAN_LEFT, BrailleKeyMapPolicy.NO_ACTION
+        )
+        assertEquals(BrailleKeyMapPolicy.NO_ACTION, map[PAN_LEFT])
+        val raw = BrailleKeyMapPolicy.serialize(map)
+        assertEquals("$PAN_LEFT=NONE", raw)
+        assertEquals(map, BrailleKeyMapPolicy.parse(raw))
+    }
+
+    @Test
+    fun noActionCanBeRevertedByDefault() {
+        // 「保持默认」必须能撤销「无动作」，否则用户被自己的设置锁死。
+        val mapped = mapOf(PAN_LEFT to BrailleKeyMapPolicy.NO_ACTION)
+        val reverted = BrailleKeyMapPolicy.withMapping(
+            mapped, PAN_LEFT, BrailleKeyMapPolicy.DEFAULT_ACTION
+        )
+        assertTrue(reverted.isEmpty())
+        assertEquals(PAN_LEFT, BrailleKeyMapPolicy.resolvedTarget(reverted, PAN_LEFT))
+    }
+
+    @Test
+    fun noActionDoesNotCountAsDuplicateTarget() {
+        // 多个键都空转是刻意选择，不该弹「N 组按键被设为同一动作」。
+        val map = mapOf(
+            PAN_LEFT to BrailleKeyMapPolicy.NO_ACTION,
+            PAN_RIGHT to BrailleKeyMapPolicy.NO_ACTION,
+            LINE_NEXT to BrailleKeyMapPolicy.NO_ACTION,
+        )
+        assertTrue(BrailleKeyMapPolicy.duplicateTargets(map).isEmpty())
+    }
+
+    @Test
+    fun noActionIsAnAcceptableMappingButNotACommand() {
+        // NONE 不是真实命令：它能作为目标值存在，但用它当源按键必须被拒绝。
+        val original = mapOf(PAN_LEFT to ITEM_NEXT)
+        assertEquals(
+            original,
+            BrailleKeyMapPolicy.withMapping(original, BrailleKeyMapPolicy.NO_ACTION, ITEM_NEXT)
+        )
     }
 }

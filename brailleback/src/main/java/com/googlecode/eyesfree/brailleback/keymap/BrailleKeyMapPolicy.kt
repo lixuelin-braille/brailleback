@@ -27,11 +27,26 @@ package com.googlecode.eyesfree.brailleback.keymap
  *   明确标注「Global commands can't be overriden」，保留系统级出口防止用户把自己锁死。
  *   但这些命令允许作为**目标动作**（把某个导航键改成「返回」是常见且安全的需求）。
  * - 映射只查一层，不递归：A→B 且 B→C 时，A 只变成 B。避免循环与意外连锁。
+ * - 目标里有一个虚拟动作 [NO_ACTION]（「无动作」）：它不对应任何真实命令码，
+ *   运行时由 `CustomKeyMapStore.runtimeMap` 翻译成 `BrailleInputEvent.CMD_NONE`，
+ *   再由 `DisplayManager.applyCustomKeyMap` 吞掉整个事件。
+ *   用途：用户嫌某个物理键难按（典型是点显器侧面的滚屏/滚平条），可以把它彻底空转，
+ *   改用一个顺手的键来做同一个动作。没有它，任何映射都必须指向一个真实动作，
+ *   等于无法「停用」某个键。
  */
 object BrailleKeyMapPolicy {
 
     /** UI 虚拟动作：删除该按键的自定义映射，恢复默认行为。不会写入映射表。 */
     const val DEFAULT_ACTION = "DEFAULT"
+
+    /**
+     * UI 虚拟动作：该按键不做任何事（事件在 `DisplayManager` 被吞掉）。
+     *
+     * 与 [DEFAULT_ACTION] 的区别：DEFAULT 表示「表里没有这一条」（行为回到出厂），
+     * NONE 表示「表里这一条指向空动作」（出厂动作被显式覆盖为「不执行」）。
+     * 它不是 `BrailleInputEvent.CMD_NAMES` 里登记的真实命令，因此不参与运行时解析。
+     */
+    const val NO_ACTION = "NONE"
 
     const val ENTRY_SEPARATOR = ';'
     const val KEY_VALUE_SEPARATOR = '='
@@ -80,15 +95,16 @@ object BrailleKeyMapPolicy {
         "CMD_HELP",
     )
 
-    /** 允许选择的目标动作清单（不含虚拟项 [DEFAULT_ACTION]）。 */
-    val ASSIGNABLE_ACTIONS: List<String> = REMAPPABLE_COMMANDS + GLOBAL_ACTIONS
+    /** 允许选择的目标动作清单（不含虚拟项 [DEFAULT_ACTION]，含虚拟项 [NO_ACTION]）。 */
+    val ASSIGNABLE_ACTIONS: List<String> =
+        REMAPPABLE_COMMANDS + GLOBAL_ACTIONS + NO_ACTION
 
     private val REMAPPABLE_SET: Set<String> = REMAPPABLE_COMMANDS.toHashSet()
     private val ACTION_SET: Set<String> = ASSIGNABLE_ACTIONS.toHashSet()
 
     fun isRemappable(commandName: String): Boolean = REMAPPABLE_SET.contains(commandName)
 
-    /** 是否是可作为目标的真实动作（不含 [DEFAULT_ACTION]）。 */
+    /** 是否是可作为目标的真实动作（不含 [DEFAULT_ACTION]；含虚拟的 [NO_ACTION]）。 */
     fun isAction(commandName: String): Boolean = ACTION_SET.contains(commandName)
 
     /** 是否是可合法写入单条映射的目标值（含 [DEFAULT_ACTION]）。 */
@@ -162,6 +178,10 @@ object BrailleKeyMapPolicy {
         val grouped = LinkedHashMap<String, MutableList<String>>()
         for ((source, target) in map) {
             if (!isRemappable(source) || !isAction(target)) {
+                continue
+            }
+            // 「无动作」不算冲突：多个键都空转是用户有意的选择，提示出来只会让人困惑。
+            if (target == NO_ACTION) {
                 continue
             }
             val list = grouped.getOrPut(target) { ArrayList() }

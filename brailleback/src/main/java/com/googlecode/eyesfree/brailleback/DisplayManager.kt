@@ -425,7 +425,7 @@ class DisplayManager(
         // 自定义按键映射必须发生在所有分发之前：panLeft/panRight 在本类内被本地拦截，
         // sendMappedEvent 还会对带位置参数的命令做坐标换算，晚一步都会走错分支。
         // 这里是 brltty/JNI 主路径与 BLE 旁路（WujieGattConnection）的唯一汇聚点。
-        val effectiveEvent = applyCustomKeyMap(event)
+        val effectiveEvent = applyCustomKeyMap(event) ?: return
         // We're called from within the handler thread, so we forward
         // the call only if we are going to invoke the user's callback.
         when (effectiveEvent.command) {
@@ -436,8 +436,14 @@ class DisplayManager(
     }
 
     /** 单层查表替换命令码；白名单保证源命令不带位置/点位参数，argument 原样保留。 */
-    private fun applyCustomKeyMap(event: BrailleInputEvent): BrailleInputEvent {
+    private fun applyCustomKeyMap(event: BrailleInputEvent): BrailleInputEvent? {
         val target = customKeyMap.get()[event.command] ?: return event
+        if (target == BrailleInputEvent.CMD_NONE) {
+            // 用户把该按键设为「无动作」：整个事件在这里被吞掉，不反馈、不分发。
+            // 静默是刻意的——抱怨「这个键太难按」的用户要的正是「按了当没按」。
+            LogUtils.log(this, Log.VERBOSE, "CustomKeyMap: %d -> no action", event.command)
+            return null
+        }
         if (target == event.command) {
             return event
         }

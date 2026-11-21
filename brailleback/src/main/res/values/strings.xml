@@ -491,7 +491,7 @@
     <string name="pref_custom_key_map_title">Customize display keys</string>
     <string name="pref_custom_key_map_summary">Change what keys on your braille display do</string>
     <string name="custom_key_map_title">Customize display keys</string>
-    <string name="custom_key_map_instructions">Choose a key, then pick the action it should perform. Changes take effect immediately. Routing keys, braille input dots and system keys cannot be reassigned, but any other key can be set to a system action such as Back.</string>
+    <string name="custom_key_map_instructions">Choose a key, then pick the action it should perform. Changes take effect immediately. Routing keys, braille input dots and system keys cannot be reassigned, but any other key can be set to a system action such as Back. Pick \"No action\" to make a key that is hard to press stop doing anything.</string>
     <string name="custom_key_map_instructions_title">How it works</string>
     <string name="custom_key_map_category_title">Keys you can customize</string>
     <string name="custom_key_map_default_action">Keep default (no change)</string>

@@ -31,5 +31,6 @@
         <item>最近任务</item>
         <item>通知栏</item>
         <item>打开按键帮助</item>
+        <item>无动作（按了没反应）</item>
     </string-array>
 </resources>
