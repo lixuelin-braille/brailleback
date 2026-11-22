@@ -36,5 +36,14 @@ data class DeviceListEntry(
 
         /** Discovered but not paired; needs an explicit pairing action. */
         const val STATE_UNPAIRED = 1
+
+        /** Pairing in progress; repeat taps are ignored. */
+        const val STATE_BONDING = 2
+
+        /** Pairing failed (rejected / could not start / permission); retryable. */
+        const val STATE_FAILED = 3
+
+        /** Pairing timed out; retryable. */
+        const val STATE_TIMEOUT = 4
     }
 }

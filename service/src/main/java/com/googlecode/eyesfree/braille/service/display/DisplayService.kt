@@ -212,6 +212,9 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
                     } else if (state == BluetoothAdapter.STATE_OFF
                             || state == BluetoothAdapter.STATE_TURNING_OFF) {
                         stopDiscoverySession("Bluetooth disabled")
+                        // 蓝牙关闭后配对走不下去：撤超时兜底、回空闲，避免卡在「正在配对」。
+                        mHandler.cancelPairingTimeout()
+                        pairingMachine.reset()
                         cancelAutoReconnect()
                     }
                 } else if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(action)) {
@@ -375,6 +378,9 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
      * 本列表只做追加。
      */
     internal val mUnpairedCandidates = mutableListOf<DiscoveredDevice>()
+
+    /** 配对状态机：集中管理 idle→bonding→bonded/failed/timeout 迁移。 */
+    internal val pairingMachine = PairingStateMachine()
 
     /** Reconnects with a different protocol when the setting changes. */
     private val mProtocolPrefListener =
@@ -540,6 +546,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         mAutoReconnectSuppressed = true
         stopDiscoverySession("service destroyed")
         cancelAutoReconnect()
+        pairingMachine.reset()
         disconnectBraille()
         // Drop callbacks queued by a display that may already be torn down.
         mHandler.removeCallbacksAndMessages(null)
@@ -656,6 +663,10 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
 
         override fun startUserDiscovery() {
             mHandler.startUserDiscovery()
+        }
+
+        override fun pairDevice(address: String?) {
+            mHandler.pairDevice(address)
         }
     }
 
@@ -1194,11 +1205,18 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         }
         val bondState = intent?.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE,
                 BluetoothDevice.BOND_NONE) ?: BluetoothDevice.BOND_NONE
+        // 喂入配对状态机：BOND_BONDED / BOND_NONE / BOND_BONDING 的迁移由它集中处理。
+        pairingMachine.onBondState(bondState)
+        // 终态撤掉配对超时兜底，避免迟到的超时消息干扰下一次配对。
+        if (bondState == BluetoothDevice.BOND_BONDED ||
+            bondState == BluetoothDevice.BOND_NONE) mHandler.cancelPairingTimeout()
         if (bondState == BluetoothDevice.BOND_NONE) {
             if (address.equals(mPendingBluetoothAddress)) {
                 mPendingBluetoothAddress = null
                 Timber.i("Cleared pending Bluetooth device after unpair")
             }
+            // 配对被拒绝：候选留在列表里，状态回到可重试，由 UI 朗读原因。
+            broadcastDeviceList()
             return
         }
         if (bondState != BluetoothDevice.BOND_BONDED) {

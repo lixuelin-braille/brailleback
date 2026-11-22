@@ -118,4 +118,13 @@ data class DiscoveredDevice(
 object CandidateState {
     const val BONDED = 0
     const val UNPAIRED = 1
+
+    /** 正在配对中（已调 createBond，等待系统配对结果）。 */
+    const val BONDING = 2
+
+    /** 配对失败（被拒绝 / 启动失败 / 权限不足），可重试。 */
+    const val FAILED = 3
+
+    /** 配对超时，可重试。 */
+    const val TIMEOUT = 4
 }

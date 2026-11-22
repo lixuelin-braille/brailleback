@@ -544,8 +544,13 @@
     <string name="compose_settings_discover_denied">Bluetooth scan permission missing; pair the display in system Bluetooth settings</string>
     <string name="compose_settings_device_bonded">Paired, braille display</string>
     <string name="compose_settings_device_unpaired">Not paired, braille display</string>
+    <string name="compose_settings_device_bonding">Pairing, braille display</string>
+    <string name="compose_settings_device_failed">Pairing failed, tap to retry</string>
+    <string name="compose_settings_device_timeout">Pairing timed out, tap to retry</string>
     <string name="compose_settings_device_unknown">Unnamed device</string>
     <string name="compose_settings_device_connect">Double-tap to connect</string>
+    <string name="compose_settings_device_pair">Double-tap to pair</string>
+    <string name="compose_settings_device_retry">Double-tap to retry pairing</string>
 
     <!-- 第二批：按键与手势子屏。
          开关状态由 stateDescription 播报，这两条摘要刻意不含 On./Off. 前缀，

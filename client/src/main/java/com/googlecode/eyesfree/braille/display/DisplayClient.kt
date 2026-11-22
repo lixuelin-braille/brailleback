@@ -157,6 +157,19 @@ class DisplayClient(context: Context) : Display {
         }
     }
 
+    override fun pairDevice(address: String) {
+        val localService = brailleService
+        if (localService != null) {
+            try {
+                localService.pairDevice(address)
+            } catch (ex: RemoteException) {
+                Log.e(LOG_TAG, "Error in pairDevice", ex)
+            }
+        } else {
+            Log.v(LOG_TAG, "Error in pairDevice: service not connected")
+        }
+    }
+
     override val isSimulated: Boolean
         get() = false
 

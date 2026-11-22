@@ -67,14 +67,39 @@ object DeviceConnectionLogic {
         name?.takeIf { it.isNotBlank() } ?: unknownName
 
     /**
-     * 候选状态的可读标签。未配对状态必须写进朗读文本，不能只靠图标或颜色区分。
+     * 候选状态的可读标签。未配对 / 配对中 / 失败 / 超时都必须写进朗读文本，
+     * 不能只靠图标或颜色区分。
      */
     fun candidateStateLabel(
         state: Int,
         bondedLabel: String,
-        unpairedLabel: String
-    ): String =
-        if (state == DeviceListEntry.STATE_BONDED) bondedLabel else unpairedLabel
+        unpairedLabel: String,
+        bondingLabel: String,
+        failedLabel: String,
+        timeoutLabel: String
+    ): String = when (state) {
+        DeviceListEntry.STATE_BONDED -> bondedLabel
+        DeviceListEntry.STATE_BONDING -> bondingLabel
+        DeviceListEntry.STATE_FAILED -> failedLabel
+        DeviceListEntry.STATE_TIMEOUT -> timeoutLabel
+        else -> unpairedLabel
+    }
+
+    /**
+     * 候选行的动作标签：已配对走连接；配对中禁用重复点击；未配对发起配对；
+     * 失败 / 超时回到「重试配对」。
+     */
+    fun candidateActionLabel(
+        state: Int,
+        connectLabel: String,
+        pairLabel: String,
+        retryLabel: String
+    ): String = when (state) {
+        DeviceListEntry.STATE_BONDED -> connectLabel
+        DeviceListEntry.STATE_BONDING -> ""
+        DeviceListEntry.STATE_FAILED, DeviceListEntry.STATE_TIMEOUT -> retryLabel
+        else -> pairLabel
+    }
 
     /**
      * 用户主动查找入口是否可用。缺 `BLUETOOTH_SCAN` 权限时不弹扫描，界面降级为

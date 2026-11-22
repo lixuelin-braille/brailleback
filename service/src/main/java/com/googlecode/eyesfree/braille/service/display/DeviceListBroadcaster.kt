@@ -65,7 +65,7 @@ internal fun DisplayService.sendDeviceList(callback: IBrailleServiceCallback?) {
             }
             addresses.add(candidate.address)
             names.add(candidate.name)
-            states.add(CandidateState.UNPAIRED)
+            states.add(candidateStateFor(candidate.address))
         }
     }
     try {

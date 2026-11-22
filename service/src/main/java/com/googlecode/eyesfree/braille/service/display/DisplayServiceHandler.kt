@@ -69,6 +69,8 @@ class MainHandler(service: DisplayService) :
         private const val MSG_DISCOVERY_RESTART = 19
         private const val MSG_START_USER_DISCOVERY = 20
         private const val MSG_USER_DISCOVERY_TIMEOUT = 21
+        private const val MSG_PAIR_DEVICE = 22
+        private const val MSG_PAIRING_TIMEOUT = 23
     }
 
     fun registerCallback(callback: IBrailleServiceCallback?) {
@@ -208,6 +210,20 @@ class MainHandler(service: DisplayService) :
         removeMessages(MSG_USER_DISCOVERY_TIMEOUT)
     }
 
+    /** Client asked to pair the device with the given address. */
+    fun pairDevice(address: String?) {
+        obtainMessage(MSG_PAIR_DEVICE, address).sendToTarget()
+    }
+
+    fun schedulePairingTimeout(delayMillis: Long) {
+        removeMessages(MSG_PAIRING_TIMEOUT)
+        sendEmptyMessageDelayed(MSG_PAIRING_TIMEOUT, delayMillis)
+    }
+
+    fun cancelPairingTimeout() {
+        removeMessages(MSG_PAIRING_TIMEOUT)
+    }
+
     fun scheduleHidRetry() {
         sendEmptyMessageDelayed(MSG_RETRY_HID, DisplayService.HID_RETRY_DELAY)
     }
@@ -305,6 +321,12 @@ class MainHandler(service: DisplayService) :
             }
             MSG_USER_DISCOVERY_TIMEOUT -> {
                 service.finishUserDiscovery("user discovery window expired")
+            }
+            MSG_PAIR_DEVICE -> {
+                service.handlePairDevice(msg.obj as String?)
+            }
+            MSG_PAIRING_TIMEOUT -> {
+                service.handlePairingTimeout()
             }
             else -> {  // fall out
             }

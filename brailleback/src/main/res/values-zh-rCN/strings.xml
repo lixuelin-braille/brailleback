@@ -352,8 +352,13 @@
     <string name="compose_settings_discover_denied">缺少蓝牙扫描权限，请在系统蓝牙设置中配对设备</string>
     <string name="compose_settings_device_bonded">已配对，点显器</string>
     <string name="compose_settings_device_unpaired">未配对，点显器</string>
+    <string name="compose_settings_device_bonding">正在配对，点显器</string>
+    <string name="compose_settings_device_failed">配对失败，可重试</string>
+    <string name="compose_settings_device_timeout">配对超时，可重试</string>
     <string name="compose_settings_device_unknown">未命名设备</string>
     <string name="compose_settings_device_connect">双击连接</string>
+    <string name="compose_settings_device_pair">双击配对</string>
+    <string name="compose_settings_device_retry">双击重试配对</string>
 
     <!-- 第二批：按键与手势子屏。
          开关状态由 stateDescription 播报，这两条摘要刻意不含「已开启。/已关闭。」前缀，

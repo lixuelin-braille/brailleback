@@ -140,6 +140,13 @@ interface Display {
     fun startUserDiscovery()
 
     /**
+     * Asks the service to pair (bond) with the device at [address]. Progress and
+     * result arrive through [OnDeviceListListener]; on success the existing
+     * connection path takes over.
+     */
+    fun pairDevice(address: String)
+
+    /**
      * Unbinds from the braille display service and deallocates any resources.
      * This method should be called when the braille display is no longer in
      * use by this client.

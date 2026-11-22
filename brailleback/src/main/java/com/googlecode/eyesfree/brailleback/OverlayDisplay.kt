@@ -126,6 +126,10 @@ class OverlayDisplay(
         mBackingDisplay.startUserDiscovery()
     }
 
+    override fun pairDevice(address: String) {
+        mBackingDisplay.pairDevice(address)
+    }
+
     override fun shutdown() {
         mShutdown = true
         val prefs = SettingsStore.get(mContext)

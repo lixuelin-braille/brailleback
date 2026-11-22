@@ -96,18 +96,25 @@ internal fun DeviceConnectionScreen(
         // 状态（已配对 / 未配对）写进 summary，TalkBack 朗读整行时能听到，不只靠图标。
         items(candidates, key = { it.address }) { entry ->
             val stateLabel = DeviceConnectionLogic.candidateStateLabel(
-                entry.state, labels.bondedLabel, labels.unpairedLabel
+                entry.state,
+                labels.bondedLabel,
+                labels.unpairedLabel,
+                labels.bondingLabel,
+                labels.failedLabel,
+                labels.timeoutLabel
+            )
+            val actionLabel = DeviceConnectionLogic.candidateActionLabel(
+                entry.state,
+                labels.connectHint,
+                labels.pairLabel,
+                labels.retryLabel
             )
             SettingsActionRow(
                 title = DeviceConnectionLogic.candidateDisplayName(
                     entry.name, labels.unknownName
                 ),
                 summary = stateLabel,
-                clickLabel = if (entry.state == DeviceListEntry.STATE_BONDED) {
-                    labels.connectHint
-                } else {
-                    ""
-                },
+                clickLabel = actionLabel,
                 onClick = { onCandidateClicked(entry) },
             )
         }

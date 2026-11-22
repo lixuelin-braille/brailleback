@@ -65,4 +65,13 @@ interface IBrailleService {
      * trigger a connection on its own.
      */
     oneway void startUserDiscovery();
+
+    /**
+     * Starts pairing (bonding) with the device at the given Bluetooth address.
+     * Progress and the final result are reported through
+     * {@code IBrailleServiceCallback.onDeviceListChanged}. On success the
+     * existing auto-connect path takes over; this does not add a second
+     * connection route.
+     */
+    oneway void pairDevice(String address);
 }

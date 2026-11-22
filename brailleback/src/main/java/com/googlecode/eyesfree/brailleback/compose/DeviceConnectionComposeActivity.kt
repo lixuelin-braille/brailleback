@@ -53,8 +53,13 @@ internal data class DeviceConnectionLabels(
     val discoverDenied: String,
     val bondedLabel: String,
     val unpairedLabel: String,
+    val bondingLabel: String,
+    val failedLabel: String,
+    val timeoutLabel: String,
     val unknownName: String,
     val connectHint: String,
+    val pairLabel: String,
+    val retryLabel: String,
 )
 
 class DeviceConnectionComposeActivity : AppCompatActivity(),
@@ -158,8 +163,13 @@ class DeviceConnectionComposeActivity : AppCompatActivity(),
                 discoverDenied = getString(R.string.compose_settings_discover_denied),
                 bondedLabel = getString(R.string.compose_settings_device_bonded),
                 unpairedLabel = getString(R.string.compose_settings_device_unpaired),
+                bondingLabel = getString(R.string.compose_settings_device_bonding),
+                failedLabel = getString(R.string.compose_settings_device_failed),
+                timeoutLabel = getString(R.string.compose_settings_device_timeout),
                 unknownName = getString(R.string.compose_settings_device_unknown),
                 connectHint = getString(R.string.compose_settings_device_connect),
+                pairLabel = getString(R.string.compose_settings_device_pair),
+                retryLabel = getString(R.string.compose_settings_device_retry),
             )
             DeviceConnectionScreen(
                 labels = labels,
@@ -205,10 +215,11 @@ class DeviceConnectionComposeActivity : AppCompatActivity(),
     }
 
     private fun onCandidateClicked(entry: DeviceListEntry) {
-        if (entry.state == DeviceListEntry.STATE_BONDED) {
-            displayClient?.poll()
+        when (entry.state) {
+            DeviceListEntry.STATE_BONDED -> displayClient?.poll()
+            // 未配对 / 失败 / 超时都走配对入口；配对中由服务端忽略重复点击。
+            else -> displayClient?.pairDevice(entry.address)
         }
-        // 未配对项的配对动作在配对切片接入。
     }
 
     private fun refreshPermissionState() {
