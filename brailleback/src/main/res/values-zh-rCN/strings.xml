@@ -366,9 +366,13 @@
     <string name="compose_settings_transport_title">连接方式</string>
     <string name="compose_settings_transport_auto">自动（推荐）</string>
     <string name="compose_settings_transport_hid">标准 HID（蓝牙低功耗）</string>
+    <string name="compose_settings_transport_hid_usb">标准 HID（USB 有线）</string>
+    <string name="compose_settings_transport_hid_classic">经典蓝牙 HID</string>
     <string name="compose_settings_transport_serial">经典串口（SPP）</string>
     <string name="compose_settings_transport_summary_auto">优先 HID；无界或 Orbit 系列改走经典串口，因为它的 HID 通道从不推送按键</string>
     <string name="compose_settings_transport_summary_hid">只用标准 HID，不回落串口；链路由系统盲文控制器负责</string>
+    <string name="compose_settings_transport_summary_hid_usb">只走 USB 有线 HID，不试蓝牙；需要插线，并在系统弹窗里允许 USB 授权</string>
+    <string name="compose_settings_transport_summary_hid_classic">经典蓝牙 HID 由系统输入系统接管，本 App 写不进点显器、只能收到按键；需要双向使用请改选经典串口</string>
     <string name="compose_settings_transport_summary_serial">只用经典串口；按键由 brltty 驱动解析</string>
 
     <!-- 第二批：按键与手势子屏。

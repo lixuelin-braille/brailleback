@@ -18,6 +18,8 @@
     <string name="connprog_hid_failed">HID protocol connection failed</string>
     <!-- Displayed when the user forced HID but the platform does not support it. -->
     <string name="connprog_hid_unavailable">HID protocol unavailable (requires Android 15+)</string>
+    <!-- Displayed when the user pinned classic Bluetooth HID, which no third-party app may drive. -->
+    <string name="connprog_hid_classic_system_only">Classic Bluetooth HID selected: the system input stack owns that link, so this app cannot write to the display; pick classic serial for two-way use</string>
     <!-- Displayed when HID is selected but the accessibility service has not provided a controller. -->
     <string name="connprog_hid_waiting_controller">Waiting for the HID controller…</string>
     <!-- Displayed when the HID controller did not appear before the wait timeout. -->

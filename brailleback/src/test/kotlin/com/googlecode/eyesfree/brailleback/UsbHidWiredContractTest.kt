@@ -145,8 +145,8 @@ class UsbHidWiredContractTest {
     fun displayServiceRoutesUsbThroughUnifiedEntryPoint() {
         val source = displayServiceSource()
         val connectBraille = methodBody(source, "fun connectBraille()")
-        assertTrue(connectBraille.contains("if (isUsbProtocol()) {"))
-        assertTrue(connectBraille.contains("connectUsbUnified()"))
+        // 有线仍要合流到 unified（串口优先、失败回落 USB HID），只是改由路由分派。
+        assertTrue(connectBraille.contains("LinkRoute.USB_SERIAL -> connectUsbUnified()"))
         assertTrue(connectBraille.contains("connectBluetooth()"))
         assertTrue(source.contains("fun connectUsbUnified()"))
     }
@@ -164,15 +164,18 @@ class UsbHidWiredContractTest {
     fun autoPicksWiredOnlyWhenADisplayIsActuallyPluggedIn() {
         val source = displayServiceSource()
         val connectBraille = methodBody(source, "fun connectBraille()")
-        // 自动不能无条件走 USB：没插点显器时必须落到蓝牙，否则会对着空 USB 反复失败。
-        assertTrue(connectBraille.contains("isAutoProtocol() && isUsbBrailleDeviceAttached()"))
+        // 路由判定必须经过 HidTransportRouting：把「自动不无条件走 USB」这条语义
+        // 放进纯 JVM 用例里（HidTransportRoutingTest），这里只钉接入口没绕过它。
+        assertTrue(connectBraille.contains("HidTransportRouting.resolve("))
+        assertTrue(connectBraille.contains("isUsbBrailleDeviceAttached()"))
         assertTrue(connectBraille.contains("connectBluetooth()"))
+        assertTrue(connectBraille.contains("connectUsbHid()"))
         // 探针必须查同一张 brltty VID/PID 表，不能另写一份设备表。
         val probe = methodBody(source, "DisplayService.isUsbBrailleDeviceAttached()")
         assertTrue(probe.contains("BrlttyWrapper.getUsbDriverTable()"))
         assertTrue(probe.contains("UsbBrailleDevice.candidateDrivers("))
         // 自动也要能被 USB 插拔广播唤醒，否则插上线不会自动切过去。
-        assertTrue(source.contains("if (isWiredOrAutoProtocol() && !isConnectionActive())"))
+        assertTrue(source.contains("HidTransportRouting.shouldReactToUsbAttach("))
         val wiredOrAuto = methodBody(source, "DisplayService.isWiredOrAutoProtocol()")
         assertTrue(wiredOrAuto.contains("isUsbProtocol() || isAutoProtocol()"))
     }
@@ -230,15 +233,17 @@ class UsbHidWiredContractTest {
         val source = displayServiceSource()
         assertTrue(source.contains("DisplayService.isWiredProtocol()"))
         assertTrue(source.contains("return isUsbProtocol()"))
-        // 自动模式下插线也要能唤醒连接，所以挂接判断放宽到「有线或自动」。
-        assertTrue(source.contains("if (isWiredOrAutoProtocol() && !isConnectionActive())"))
+        // 自动模式下插线也要能唤醒连接；现在这个判据多了「连接方式」这一维，
+        // 所以钉的是路由函数本身，纯逻辑用例在 HidTransportRoutingTest 里。
+        assertTrue(source.contains("HidTransportRouting.shouldReactToUsbAttach("))
         // 拆分成扩展函数后，有线放行与「自动且插着点显器」并进了同一个前瞻；
         // 意图不变：蓝牙关着时，有线路径仍要能被重连唤醒。
         assertTrue(source.contains("if (isWiredProtocol()"))
 
         val detached = block(source, "UsbManager.ACTION_USB_DEVICE_DETACHED.equals(action)")
-        assertTrue(detached.contains("isUsbProtocol()"))
-        assertTrue(detached.contains("mHidConnection != null"))
+        // 拔线判定改成「串口连接或 USB HID 连接」，USB HID 也必须跟着断，
+        // 否则拔线后还会对着已消失的端点写单元格。
+        assertTrue(detached.contains("mUsbConnection != null || mHidConnectionIsUsb"))
     }
 
     /**

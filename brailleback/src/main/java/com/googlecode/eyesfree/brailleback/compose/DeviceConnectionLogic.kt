@@ -147,16 +147,22 @@ object DeviceConnectionLogic {
     fun normalizeTransport(value: String?): String = ConnectionTransportPolicy.normalize(value)
 
     /**
-     * 「连接方式」行下面那句说明。三种取值各有一句：自动要讲清「无界系列会被送去
-     * 串口」，标准 HID 要讲清「不回落串口」，串口要讲清「按键由 brltty 解析」。
+     * 「连接方式」行下面那句说明。五条取值各有一句：自动要讲清「无界系列会被
+     * 送去串口」；蓝牙 HID 要讲清「不回落串口」；USB HID 要讲清「需要插线并授权」；
+     * 经典 HID 要讲清「只能由系统接管、本 App 写不进点显器」；串口要讲清
+     * 「按键由 brltty 解析」。
      */
     fun transportSummary(
         value: String?,
         auto: String,
-        hid: String,
+        hidBle: String,
+        hidUsb: String,
+        hidClassic: String,
         serial: String,
     ): String = when (normalizeTransport(value)) {
-        ConnectionTransportPolicy.HID -> hid
+        ConnectionTransportPolicy.HID_BLE -> hidBle
+        ConnectionTransportPolicy.HID_USB -> hidUsb
+        ConnectionTransportPolicy.HID_CLASSIC -> hidClassic
         ConnectionTransportPolicy.SERIAL -> serial
         else -> auto
     }
@@ -166,5 +172,5 @@ object DeviceConnectionLogic {
      * 属于「HID 不推按键」那一类时才算。提醒不是拦阻，用户仍可选。
      */
     fun transportHidNeedsKeyWarning(value: String?, legacyWouldSkipHid: Boolean): Boolean =
-        normalizeTransport(value) == ConnectionTransportPolicy.HID && legacyWouldSkipHid
+        normalizeTransport(value) == ConnectionTransportPolicy.HID_BLE && legacyWouldSkipHid
 }

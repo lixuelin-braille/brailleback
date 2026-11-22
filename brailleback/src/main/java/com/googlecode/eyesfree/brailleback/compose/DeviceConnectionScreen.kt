@@ -101,8 +101,9 @@ internal fun DeviceConnectionScreen(
             )
         }
 
-        // 蓝牙内部链路：自动 / 标准 HID / 经典串口。摘要里必须带上「这样选意味着什么」，
-        // 只说一个词会让读屏用户分不清 HID 与串口的差别。
+        // 连接方式：自动 / 蓝牙 HID / USB HID / 经典蓝牙 HID / 串口。摘要里必须带上
+        // 「这样选意味着什么」，只说一个词会让读屏用户分不清几种 HID 的区别，
+        // 尤其是经典蓝牙 HID 在 Android 上根本不由本 App 驱动。
         item(key = DeviceConnectionLogic.KEY_TRANSPORT) {
             SettingsListRow(
                 title = labels.transportTitle,
@@ -110,6 +111,8 @@ internal fun DeviceConnectionScreen(
                     transportValue,
                     labels.transportAutoSummary,
                     labels.transportHidSummary,
+                    labels.transportUsbSummary,
+                    labels.transportClassicSummary,
                     labels.transportSerialSummary
                 ),
                 chooseHint = labels.chooseHint,

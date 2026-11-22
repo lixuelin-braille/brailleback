@@ -7,6 +7,7 @@
     <string name="connprog_no_devices" msgid="2532622651138767831">"没有已识别的配对设备"</string><string name="connprog_trying_hid">"正在通过 HID 协议连接……"</string>
 <string name="connprog_trying_rfcomm">"正在通过蓝牙串口(RFCOMM)协议连接……"</string><string name="connprog_hid_failed">"HID 协议连接失败"</string>
 <string name="connprog_hid_unavailable">"HID 协议不可用（需要 Android 15 及以上）"</string>
+<string name="connprog_hid_classic_system_only">"已选经典蓝牙 HID：这条链路由系统输入系统接管，本应用无法写入点显器；要双向使用请改选经典串口"</string>
 <string name="connprog_hid_waiting_controller">"正在等待 HID 控制器……"</string>
 <string name="connprog_hid_controller_unavailable">"HID 控制器暂未就绪，正在自动重试；若长时间无响应，请关闭再重新开启 brailleback盲文 无障碍服务"</string>
 <string name="connprog_hid_not_found">"系统未识别到盲文 HID 显示器：请先把显示器切到 HID 模式，再在系统蓝牙中删除旧配对并重新配对"</string>

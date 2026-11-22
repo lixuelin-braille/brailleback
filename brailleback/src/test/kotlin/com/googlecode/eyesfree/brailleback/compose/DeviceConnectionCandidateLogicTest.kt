@@ -101,29 +101,60 @@ class DeviceConnectionCandidateLogicTest {
     fun transportNormalizesUnknownToAuto() {
         assertEquals("auto", DeviceConnectionLogic.normalizeTransport(null))
         assertEquals("auto", DeviceConnectionLogic.normalizeTransport("nonsense"))
-        assertEquals("hid", DeviceConnectionLogic.normalizeTransport("BLE"))
+        assertEquals("hid_ble", DeviceConnectionLogic.normalizeTransport("BLE"))
+        // 升级前存的 "hid" 语义是蓝牙低功耗 HID，不能变成别的档。
+        assertEquals("hid_ble", DeviceConnectionLogic.normalizeTransport("hid"))
+        assertEquals("hid_usb", DeviceConnectionLogic.normalizeTransport("usbhid"))
+        assertEquals("hid_classic", DeviceConnectionLogic.normalizeTransport("hidp"))
         assertEquals("serial", DeviceConnectionLogic.normalizeTransport("SPP"))
     }
 
     @Test
     fun transportSummaryFollowsSelection() {
         val auto = "自动：优先 HID，无界系列送去串口"
-        val hid = "只用标准 HID"
+        val ble = "只用标准 HID（蓝牙）"
+        val usb = "只走 USB 有线 HID"
+        val classic = "经典蓝牙 HID 由系统接管"
         val serial = "只用经典串口"
-        assertEquals(auto, DeviceConnectionLogic.transportSummary("auto", auto, hid, serial))
-        assertEquals(hid, DeviceConnectionLogic.transportSummary("hid", auto, hid, serial))
-        assertEquals(serial, DeviceConnectionLogic.transportSummary("serial", auto, hid, serial))
+        assertEquals(
+            auto,
+            DeviceConnectionLogic.transportSummary("auto", auto, ble, usb, classic, serial)
+        )
+        assertEquals(
+            ble,
+            DeviceConnectionLogic.transportSummary("hid_ble", auto, ble, usb, classic, serial)
+        )
+        assertEquals(
+            usb,
+            DeviceConnectionLogic.transportSummary("hid_usb", auto, ble, usb, classic, serial)
+        )
+        assertEquals(
+            classic,
+            DeviceConnectionLogic.transportSummary("hid_classic", auto, ble, usb, classic, serial)
+        )
+        assertEquals(
+            serial,
+            DeviceConnectionLogic.transportSummary("serial", auto, ble, usb, classic, serial)
+        )
+        // 老值 "hid" 必须落到蓝牙低功耗那一句，不能掉到自动。
+        assertEquals(
+            ble,
+            DeviceConnectionLogic.transportSummary("hid", auto, ble, usb, classic, serial)
+        )
     }
 
     /**
-     * 「标准 HID」遇到「自动本来会送去串口」的设备时要提示只能显示、不能输入。
-     * 只在 HID 选项下提示，其它选项下不该出现这条警告。
+     * 「标准 HID（蓝牙）」遇到「自动本来会送去串口」的设备时要提示只能显示、不能输入。
+     * 只在蓝牙 HID 选项下提示，其它选项下不该出现这条警告。
      */
     @Test
     fun hidKeyWarningOnlyForHidOnSerialOnlyDevice() {
-        assertEquals(true, DeviceConnectionLogic.transportHidNeedsKeyWarning("hid", true))
-        assertEquals(false, DeviceConnectionLogic.transportHidNeedsKeyWarning("hid", false))
+        assertEquals(true, DeviceConnectionLogic.transportHidNeedsKeyWarning("hid_ble", true))
+        assertEquals(false, DeviceConnectionLogic.transportHidNeedsKeyWarning("hid_ble", false))
         assertEquals(false, DeviceConnectionLogic.transportHidNeedsKeyWarning("serial", true))
         assertEquals(false, DeviceConnectionLogic.transportHidNeedsKeyWarning("auto", true))
+        // USB 有线那条不是 GATT 链路，套用「固件不推按键」的警告会误导。
+        assertEquals(false, DeviceConnectionLogic.transportHidNeedsKeyWarning("hid_usb", true))
+        assertEquals(false, DeviceConnectionLogic.transportHidNeedsKeyWarning("hid_classic", true))
     }
 }

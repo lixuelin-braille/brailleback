@@ -46,12 +46,16 @@
     <string name="pref_connection_transport_key">connection_transport</string>
     <string-array name="pref_connection_transport_values">
         <item>auto</item>
-        <item>hid</item>
+        <item>hid_ble</item>
+        <item>hid_usb</item>
+        <item>hid_classic</item>
         <item>serial</item>
     </string-array>
     <string-array name="pref_connection_transport_entries">
         <item>@string/compose_settings_transport_auto</item>
         <item>@string/compose_settings_transport_hid</item>
+        <item>@string/compose_settings_transport_hid_usb</item>
+        <item>@string/compose_settings_transport_hid_classic</item>
         <item>@string/compose_settings_transport_serial</item>
     </string-array>
     <string name="pref_auto_connect_key">auto_connect</string>

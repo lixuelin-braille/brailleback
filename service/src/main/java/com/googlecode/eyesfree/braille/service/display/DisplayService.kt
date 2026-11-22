@@ -221,16 +221,17 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
                     // Wired displays only: a USB stick or keyboard must not
                     // disturb a working Bluetooth connection. Auto counts here
                     // because plugging the display in should switch it over.
-                    if (isWiredOrAutoProtocol() && !isConnectionActive()) {
+                    if (HidTransportRouting.shouldReactToUsbAttach(
+                            getConnectionProtocol(),
+                            ConnectionTransportPolicy.current(this@DisplayService))
+                            && !isConnectionActive()) {
                         // 重新插入属于新的枚举，可以再问一次 USB 授权。
                         UsbDisplayConnection.allowPermissionPromptAgain()
                         Timber.i("USB device attached; trying wired connection");
                         autoConnectBraille(userInitiated = true)
                     }
                 } else if (UsbManager.ACTION_USB_DEVICE_DETACHED.equals(action)) {
-                    if (mUsbConnection != null
-                            || (isUsbProtocol()
-                                && mHidConnection != null)) {
+                    if (mUsbConnection != null || mHidConnectionIsUsb) {
                         Timber.i("USB device detached; disconnecting display")
                         disconnectBraille()
                     }
@@ -823,17 +824,14 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         // inquiry is not competing with them.
         stopDiscoverySession("connecting display")
         val protocol = getConnectionProtocol()
-        Timber.i("Starting connection with protocol %s", protocol)
-        if (isUsbProtocol()) {
-            connectUsbUnified()
-        } else if (isAutoProtocol() && isUsbBrailleDeviceAttached()) {
-            // Auto: a plugged display wins. The probe below only reads the USB
-            // device list against the same brltty VID/PID table the wired path
-            // uses, so it can not report a match that connectUsb() would reject.
-            Timber.i("Auto protocol: attached braille display found, using USB")
-            connectUsbUnified()
-        } else {
-            connectBluetooth()
+        val route = HidTransportRouting.resolve(protocol,
+                ConnectionTransportPolicy.current(this), isUsbBrailleDeviceAttached())
+        Timber.i("Starting connection: protocol=%s route=%s", protocol, route)
+        when (route) {
+            LinkRoute.USB_SERIAL -> connectUsbUnified()
+            LinkRoute.USB_HID -> connectUsbHid()
+            LinkRoute.NONE -> reportSystemOnlyTransport()
+            else -> connectBluetooth()
         }
     }
 
@@ -859,6 +857,9 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
                 waitForHidController()
                 return
             }
+        }
+        if (stopBeforeSerialFallback()) {
+            return
         }
         // HID failed / is unavailable: classic Bluetooth serial (RFCOMM).
         // 先落局部再赋值：属性不参与智能转换，也避免两次读之间被别的线程改掉。

@@ -69,6 +69,8 @@ internal data class DeviceConnectionLabels(
     val transportValues: List<String>,
     val transportAutoSummary: String,
     val transportHidSummary: String,
+    val transportUsbSummary: String,
+    val transportClassicSummary: String,
     val transportSerialSummary: String,
 )
 
@@ -209,6 +211,10 @@ class DeviceConnectionComposeActivity : AppCompatActivity(),
                 ).toList(),
                 transportAutoSummary = getString(R.string.compose_settings_transport_summary_auto),
                 transportHidSummary = getString(R.string.compose_settings_transport_summary_hid),
+                transportUsbSummary = getString(R.string.compose_settings_transport_summary_hid_usb),
+                transportClassicSummary = getString(
+                    R.string.compose_settings_transport_summary_hid_classic
+                ),
                 transportSerialSummary = getString(R.string.compose_settings_transport_summary_serial),
             )
             DeviceConnectionScreen(
