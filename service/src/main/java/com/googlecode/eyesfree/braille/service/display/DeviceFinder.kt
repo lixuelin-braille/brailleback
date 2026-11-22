@@ -222,7 +222,30 @@ class DeviceFinder(context: Context) {
                 }
             }
         }
-        return ret
+        // 一台物理设备可能同时命中手写表里的多条正则：那样 [ret] 里会出现
+        // 两个相同地址，服务端下发的数组带重复项，客户端 Compose 列表以地址
+        // 作 key 就会抛出 "Key ... was already used" 直接崩掉界面。这里按地址
+        // 去重并保留最先出现的那条——表内靠前的条目对该设备的描述更精确。
+        val deduped: MutableList<DeviceInfo> = ArrayList(ret.size)
+        val seenAddresses = HashSet<String>()
+        for (info in ret) {
+            val address: String? = try {
+                info.getBluetoothDevice()?.address
+            } catch (e: SecurityException) {
+                null
+            }
+            if (address == null) {
+                // 没有地址就无从判重，保留以免漏掉条目。
+                deduped.add(info)
+                continue
+            }
+            if (seenAddresses.add(address.uppercase(java.util.Locale.ROOT))) {
+                deduped.add(info)
+            } else {
+                Log.w(LOG_TAG, "duplicate device address dropped: " + address)
+            }
+        }
+        return deduped
     }
 
     /**
@@ -324,6 +347,22 @@ class DeviceFinder(context: Context) {
                 return true
             }
             return brlttyDevices().any { it.matchesName(name) }
+        }
+
+        /**
+         * 一个设备名在手写表里命中多少条条目。
+         *
+         * <p>正常情况就是 1。命中多于 1 条意味着同一台被配对的设备会在候选
+         * 列表里出现两次（同一个地址），客户端 Compose 列表以地址为 key，
+         * 重复 key 会抛 IllegalArgumentException 把界面崩掉——所以这个计数
+         * 被单元测试钉死为 1。
+         */
+        @JvmStatic
+        fun matchCountForName(name: String?): Int {
+            if (name == null || name.isEmpty()) {
+                return 0
+            }
+            return SUPPORTED_DEVICES.count { it.matchesName(name) }
         }
 
         @JvmStatic
@@ -540,10 +579,14 @@ private val SUPPORTED_DEVICES: List<SupportedDevice> =
             // Orbit（无界）系列点显器。固件走经典蓝牙 SPP，序列协议与
             // BRLTTY 的 Baum 驱动（码 bm，上游名称表把 "Orbit Reader" 映
             // 射到 bm）兼容，因此直接按 bm 连接，显示与按键都走串口。
-            // 名称前缀匹配 "Orbit"，覆盖 "Orbit wujie 30" 这类型号名。
+            // 名称正则只认 "wujie" 系列（"Orbit wujie 30" 这类）。
+            // 早先这里写成宽泛的 "Orbit"，会连 APH 的 "Orbit Reader" 一起命中，
+            // 使同一台设备命中两条条目、候选列表出现两个相同地址，
+            // Compose 列表以地址为 key 直接崩溃。
             add(NameRegexSupportedDevice("bm", true,
                     KeyNameMapBuilder().dots8().build(),
-                    Pattern.compile("Orbit")))
+                    Pattern.compile("Orbit\\s*wujie|wujie",
+                            Pattern.CASE_INSENSITIVE)))
 
             // BraillePen
             add(NameRegexSupportedDevice("vo", true,
@@ -684,7 +727,10 @@ private val SUPPORTED_DEVICES: List<SupportedDevice> =
                             .add("Display5", R.string.key_APH_AdvanceRight)
                             .add("Space", R.string.key_Space)
                             .build(),
-                    Pattern.compile("Orbit")))
+                    // 只认 APH 的 "Orbit Reader"。早先这里写成 "Orbit"，与上面
+                    // 无界（Orbit wujie 30）那条同时命中同一台设备，导致同一地址
+                    // 在候选列表里出现两次，Compose 列表以地址为 key 会直接崩。
+                    Pattern.compile("Orbit Reader")))
 
             // Baum VarioConnect
             add(NameRegexSupportedDevice("bm", false,

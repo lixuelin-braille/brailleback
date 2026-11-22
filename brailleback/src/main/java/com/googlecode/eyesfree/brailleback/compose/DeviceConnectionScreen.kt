@@ -94,7 +94,9 @@ internal fun DeviceConnectionScreen(
 
         // 候选设备列表：已配对设备顺序来自服务端既有逻辑，未配对项追加在后。
         // 状态（已配对 / 未配对）写进 summary，TalkBack 朗读整行时能听到，不只靠图标。
-        items(candidates, key = { it.address }) { entry ->
+        // 地址作 key 必须唯一：服务端已按地址去重，这里再兜一层，避免任何
+        // 重复项把整页崩掉（Compose 对重复 key 直接抛异常）。
+        items(candidates.distinctBy { it.address }, key = { it.address }) { entry ->
             val stateLabel = DeviceConnectionLogic.candidateStateLabel(
                 entry.state,
                 labels.bondedLabel,

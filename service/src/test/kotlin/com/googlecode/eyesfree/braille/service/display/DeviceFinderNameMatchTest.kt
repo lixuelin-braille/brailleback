@@ -15,6 +15,7 @@
  */
 package com.googlecode.eyesfree.braille.service.display
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -44,5 +45,20 @@ class DeviceFinderNameMatchTest {
         assertFalse(DeviceFinder.matchesKnownName("   "))
         assertFalse(DeviceFinder.matchesKnownName("iPhone 15 Pro"))
         assertFalse(DeviceFinder.matchesKnownName("Bluetooth Mouse"))
+    }
+
+    /**
+     * 同一台设备只能命中手写表里的 1 条条目。
+     *
+     * 命中 2 条会让服务端下发的候选数组里出现两个相同地址，客户端 Compose
+     * 列表以地址为 key，重复 key 抛 IllegalArgumentException 直接闪退。
+     * 早先 "Orbit" 这条正则同时命中无界（Orbit wujie 30）和 APH 条目，
+     * 就是真机上闪退的原因。
+     */
+    @Test
+    fun eachKnownDisplayNameMatchesExactlyOneEntry() {
+        assertEquals(1, DeviceFinder.matchCountForName("Orbit wujie 30"))
+        assertEquals(1, DeviceFinder.matchCountForName("Orbit Reader 20"))
+        assertEquals(1, DeviceFinder.matchCountForName("Brailliant BI 14"))
     }
 }
