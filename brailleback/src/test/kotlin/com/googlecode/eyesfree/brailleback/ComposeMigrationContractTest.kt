@@ -134,7 +134,24 @@ class ComposeMigrationContractTest {
         ).forEach { key ->
             assertTrue("试点屏缺少原设置项 $key", screen.contains("KEY_${key.uppercase()}"))
         }
-        assertEquals("试点屏只应有三个设置项", 3, Regex("""\bitem\(key =""").findAll(screen).count())
+        // 数量断言升级成集合断言：三个旧设置键必须都在，且只准再多一个纯界面键
+        // （断开连接，不写偏好）。任何第五个键都要先来这里登记，防止顺手往设置页
+        // 塞新的持久化项。
+        val usedKeys = Regex("""item\(key = DeviceConnectionLogic\.(KEY_[A-Z_]+)\)""")
+            .findAll(screen)
+            .map { it.groupValues[1] }
+            .toSet()
+        assertEquals(
+            "试点屏的 item key 集合必须正好是「三个旧设置键 + 断开 + 连接方式（后两者是纯界面键）」",
+            setOf(
+                "KEY_CONNECTION_STATUS",
+                "KEY_CONNECTION_PROTOCOL",
+                "KEY_AUTO_CONNECT",
+                "KEY_DISCONNECT",
+                "KEY_TRANSPORT"
+            ),
+            usedKeys
+        )
         val activity = compose("DeviceConnectionComposeActivity.kt")
         assertTrue(
             "协议写入必须回写原 key",

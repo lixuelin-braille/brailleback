@@ -552,6 +552,25 @@
     <string name="compose_settings_device_pair">Double-tap to pair</string>
     <string name="compose_settings_device_retry">Double-tap to retry pairing</string>
 
+    <!-- Disconnecting on demand. The done text has to say that automatic
+         reconnect is paused, otherwise a blind user cannot tell whether the
+         display will silently come back a moment later. -->
+    <string name="compose_settings_disconnect_title">Disconnect</string>
+    <string name="compose_settings_disconnect_hint">Double-tap to disconnect the current braille display</string>
+    <string name="compose_settings_disconnect_idle">No braille display connected</string>
+    <string name="compose_settings_disconnect_done">Disconnected. Automatic reconnect is paused; double-tap a device to connect again</string>
+
+    <!-- Bluetooth-internal transport. Automatic keeps the existing behaviour
+         (Wujie-family displays skip HID and use SPP); the two explicit values
+         let the user pin one path instead of letting the fallback chain decide. -->
+    <string name="compose_settings_transport_title">Connection type</string>
+    <string name="compose_settings_transport_auto">Automatic (recommended)</string>
+    <string name="compose_settings_transport_hid">Standard HID (Bluetooth LE)</string>
+    <string name="compose_settings_transport_serial">Classic serial (SPP)</string>
+    <string name="compose_settings_transport_summary_auto">HID first; a Wujie or Orbit display is sent to classic serial because its HID channel never reports keys</string>
+    <string name="compose_settings_transport_summary_hid">Standard HID only, no serial fallback; the link is handled by the system braille controller</string>
+    <string name="compose_settings_transport_summary_serial">Classic serial only; keys are parsed by the brltty driver</string>
+
     <!-- 第二批：按键与手势子屏。
          开关状态由 stateDescription 播报，这两条摘要刻意不含 On./Off. 前缀，
          避免读屏把同一个状态念两遍。 -->

@@ -43,6 +43,17 @@
     <string name="pref_category_developer_key">category_developer</string>
   <string name="pref_category_stability_key">category_stability</string>
     <string name="pref_connection_protocol_key">connection_protocol</string>
+    <string name="pref_connection_transport_key">connection_transport</string>
+    <string-array name="pref_connection_transport_values">
+        <item>auto</item>
+        <item>hid</item>
+        <item>serial</item>
+    </string-array>
+    <string-array name="pref_connection_transport_entries">
+        <item>@string/compose_settings_transport_auto</item>
+        <item>@string/compose_settings_transport_hid</item>
+        <item>@string/compose_settings_transport_serial</item>
+    </string-array>
     <string name="pref_auto_connect_key">auto_connect</string>
     <string name="pref_setup_service_key">setup_service</string>
     

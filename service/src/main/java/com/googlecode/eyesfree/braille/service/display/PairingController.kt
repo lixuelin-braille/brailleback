@@ -69,7 +69,8 @@ internal fun DisplayService.handlePairDevice(address: String?) {
     if (bondState == BluetoothDevice.BOND_BONDED) {
         Timber.i("Device %s already bonded; connecting via existing path", normalized)
         mPendingBluetoothAddress = normalized
-        autoConnectBraille()
+        // 用户在设备页点了这一行，属于显式动作，解除用户断开留下的暂停。
+        autoConnectBraille(userInitiated = true)
         return
     }
 

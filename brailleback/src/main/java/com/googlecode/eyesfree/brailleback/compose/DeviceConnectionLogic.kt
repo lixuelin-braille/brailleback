@@ -6,6 +6,7 @@ package com.googlecode.eyesfree.brailleback.compose
 
 import com.googlecode.eyesfree.braille.display.DeviceListEntry
 import com.googlecode.eyesfree.braille.service.display.ConnectionProtocolPolicy
+import com.googlecode.eyesfree.braille.service.display.ConnectionTransportPolicy
 
 /**
  * 「设备与连接」子屏的纯逻辑：不依赖 Android Context，便于 JVM 单测。
@@ -20,8 +21,22 @@ object DeviceConnectionLogic {
     const val KEY_CONNECTION_PROTOCOL = "connection_protocol"
     const val KEY_AUTO_CONNECT = "auto_connect"
 
+    /**
+     * 「断开连接」这一行的稳定列表 key。
+     *
+     * <p>它是纯界面键，不写进任何偏好文件，因此不与 res/xml/settings.xml
+     * 对齐；单独放一个前缀以免和上面三个真实偏好键混淆。
+     */
+    const val KEY_DISCONNECT = "ui_disconnect"
+
+    /** 「连接方式」行的稳定列表 key；真实偏好键见 [ConnectionTransportPolicy.PREFERENCE_KEY]。 */
+    const val KEY_TRANSPORT = "ui_transport"
+
     const val STATE_CONNECTED = 1
     const val STATE_NOT_CONNECTED = 0
+
+    /** 客户端刚绑定、还没收到首个状态时的取值（与 Display.STATE_UNKNOWN 同值）。 */
+    const val STATE_UNKNOWN = -1
 
     /**
      * 连接状态的展示文本。进度描述由服务端本地化，优先显示；
@@ -109,7 +124,6 @@ object DeviceConnectionLogic {
 
     /**
      * 双击一行候选时是否要真的向服务端下发请求。
-     *
      * <p>已配对条目也走同一个配对入口：服务端对已配对地址的处理就是「把待连
      * 地址设为这一台，然后走既有连接路径」，所以点哪一台就连哪一台——否则有
      * 两台已配对点显器时，只能连到上次用的那台。
@@ -119,4 +133,38 @@ object DeviceConnectionLogic {
      */
     fun shouldSendCandidateClick(state: Int): Boolean =
         state != DeviceListEntry.STATE_BONDING
+
+    /**
+     * 「断开连接」这一行是否可用：只有真连上才可点。未连接时行还在（读屏能听到
+     * 「当前没有连接的点显器」），但不能触发断开，避免连点两下把刚连上的设备断掉。
+     */
+    fun shouldOfferDisconnect(state: Int): Boolean = state == STATE_CONNECTED
+
+    /**
+     * 连接方式（蓝牙内部链路）的标准化：复用服务端 `ConnectionTransportPolicy`，
+     * 不认识的值一律回落到「自动」，保证读屏不会停在空白项上。
+     */
+    fun normalizeTransport(value: String?): String = ConnectionTransportPolicy.normalize(value)
+
+    /**
+     * 「连接方式」行下面那句说明。三种取值各有一句：自动要讲清「无界系列会被送去
+     * 串口」，标准 HID 要讲清「不回落串口」，串口要讲清「按键由 brltty 解析」。
+     */
+    fun transportSummary(
+        value: String?,
+        auto: String,
+        hid: String,
+        serial: String,
+    ): String = when (normalizeTransport(value)) {
+        ConnectionTransportPolicy.HID -> hid
+        ConnectionTransportPolicy.SERIAL -> serial
+        else -> auto
+    }
+
+    /**
+     * 选「标准 HID」时要不要提醒这台设备没有按键通道：只有在自动判断认为该设备
+     * 属于「HID 不推按键」那一类时才算。提醒不是拦阻，用户仍可选。
+     */
+    fun transportHidNeedsKeyWarning(value: String?, legacyWouldSkipHid: Boolean): Boolean =
+        normalizeTransport(value) == ConnectionTransportPolicy.HID && legacyWouldSkipHid
 }

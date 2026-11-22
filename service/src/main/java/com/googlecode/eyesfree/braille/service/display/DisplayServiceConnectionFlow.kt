@@ -173,8 +173,11 @@ internal const val USER_DISCOVERY_WINDOW_DURATION = 12000L
      * {@code poll()} / {@code disconnect()} always bypass this check so that
      * the volume-key toggle keeps working regardless of the setting.
      */
-    internal fun DisplayService.autoConnectBraille() {
-        mAutoReconnectSuppressed = false
+    internal fun DisplayService.autoConnectBraille(userInitiated: Boolean = false) {
+        // 暂停判定见 AutoConnectPause.kt（本文件有 600 行非空行预算）。
+        if (!clearPauseForUserAction(this, userInitiated)) {
+            return
+        }
         mAutoReconnectAttempt = 0
         mHandler.cancelAutoReconnect()
         if (SettingsStore.get(this)

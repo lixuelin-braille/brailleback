@@ -26,6 +26,7 @@ import com.googlecode.eyesfree.braille.display.DeviceListEntry
 import com.googlecode.eyesfree.braille.display.Display
 import com.googlecode.eyesfree.braille.display.DisplayClient
 import com.googlecode.eyesfree.braille.service.display.ConnectionProtocolPolicy
+import com.googlecode.eyesfree.braille.service.display.ConnectionTransportPolicy
 import com.googlecode.eyesfree.brailleback.R
 
 /** 一次性收集好的中文文案，让 Screen 保持无 Context 依赖。 */
@@ -60,6 +61,15 @@ internal data class DeviceConnectionLabels(
     val connectHint: String,
     val pairLabel: String,
     val retryLabel: String,
+    val disconnectTitle: String,
+    val disconnectHint: String,
+    val disconnectIdle: String,
+    val transportTitle: String,
+    val transportEntries: List<String>,
+    val transportValues: List<String>,
+    val transportAutoSummary: String,
+    val transportHidSummary: String,
+    val transportSerialSummary: String,
 )
 
 class DeviceConnectionComposeActivity : AppCompatActivity(),
@@ -96,11 +106,23 @@ class DeviceConnectionComposeActivity : AppCompatActivity(),
     /** 服务端上报的候选设备：已配对 + 本轮发现到的未配对。 */
     private var candidates by mutableStateOf<List<DeviceListEntry>>(emptyList())
 
+    /** 蓝牙内部链路：自动 / 标准 HID / 经典串口。切换后从下一次连接开始生效。 */
+    private var transportValue by mutableStateOf(ConnectionTransportPolicy.AUTO)
+
     /** 用户主动查找是否正在进行（本地一次性窗口的界面态）。 */
     private var searching by mutableStateOf(false)
 
     /** BLUETOOTH_SCAN 运行时权限是否到手；缺失时查找入口降级为系统设置提示。 */
     private var scanPermissionGranted by mutableStateOf(false)
+
+    /** 断开成功后的朗读文案；断开是用户点的，要念出「自动重连已暂停」。 */
+    private lateinit var disconnectDoneText: String
+
+    /**
+     * 用户刚在本页点了「断开连接」。下一次回到「未连接」状态时改念断开专属文案，
+     * 而不是干巴巴的「未连接」——否则读屏用户分不清是自己断的还是自己掉的。
+     */
+    private var awaitingDisconnectAnnounce = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -111,6 +133,8 @@ class DeviceConnectionComposeActivity : AppCompatActivity(),
         val prefs = SettingsStore.get(this)
         val protocolKey = getString(R.string.pref_connection_protocol_key)
         val autoConnectKey = getString(R.string.pref_auto_connect_key)
+        val transportKey = getString(R.string.pref_connection_transport_key)
+        disconnectDoneText = getString(R.string.compose_settings_disconnect_done)
 
         // 与 SettingsFragment.migrateConnectionProtocolPreference 完全同一策略：
         // 旧版六种协议值归一到「蓝牙 / USB」，并回写，避免两代 UI 读到不同值。
@@ -120,6 +144,9 @@ class DeviceConnectionComposeActivity : AppCompatActivity(),
             prefs.edit().putString(protocolKey, normalized).apply()
         }
         protocolValue = normalized
+        transportValue = DeviceConnectionLogic.normalizeTransport(
+            prefs.getString(transportKey, null)
+        )
         autoConnect = prefs.getBoolean(
             autoConnectKey, resources.getBoolean(R.bool.pref_auto_connect_default)
         )
@@ -170,19 +197,40 @@ class DeviceConnectionComposeActivity : AppCompatActivity(),
                 connectHint = getString(R.string.compose_settings_device_connect),
                 pairLabel = getString(R.string.compose_settings_device_pair),
                 retryLabel = getString(R.string.compose_settings_device_retry),
+                disconnectTitle = getString(R.string.compose_settings_disconnect_title),
+                disconnectHint = getString(R.string.compose_settings_disconnect_hint),
+                disconnectIdle = getString(R.string.compose_settings_disconnect_idle),
+                transportTitle = getString(R.string.compose_settings_transport_title),
+                transportEntries = resources.getStringArray(
+                    R.array.pref_connection_transport_entries
+                ).toList(),
+                transportValues = resources.getStringArray(
+                    R.array.pref_connection_transport_values
+                ).toList(),
+                transportAutoSummary = getString(R.string.compose_settings_transport_summary_auto),
+                transportHidSummary = getString(R.string.compose_settings_transport_summary_hid),
+                transportSerialSummary = getString(R.string.compose_settings_transport_summary_serial),
             )
             DeviceConnectionScreen(
                 labels = labels,
                 stateText = currentStateText(),
                 protocolValue = protocolValue,
+                transportValue = transportValue,
                 autoConnect = autoConnect,
                 candidates = candidates,
                 searching = searching,
                 discoveryEnabled = DeviceConnectionLogic.canStartDiscovery(scanPermissionGranted),
+                canDisconnect = DeviceConnectionLogic.shouldOfferDisconnect(connectionState),
                 onRefresh = { displayClient?.poll() },
+                onDisconnect = { onDisconnectClicked() },
                 onProtocolSelected = { value ->
                     protocolValue = value
                     prefs.edit().putString(protocolKey, value).apply()
+                },
+                onTransportSelected = { value ->
+                    val next = DeviceConnectionLogic.normalizeTransport(value)
+                    transportValue = next
+                    prefs.edit().putString(transportKey, next).apply()
                 },
                 onAutoConnectChange = { value ->
                     autoConnect = value
@@ -227,6 +275,15 @@ class DeviceConnectionComposeActivity : AppCompatActivity(),
         displayClient?.pairDevice(entry.address)
     }
 
+    /**
+     * 用户点「断开连接」。服务端的 disconnect 按「用户主动断开」处理：抑制自动
+     * 重连、取消已排队的重试，直到用户下次显式连接（点设备行、插 USB、重新配对）。
+     */
+    private fun onDisconnectClicked() {
+        awaitingDisconnectAnnounce = true
+        displayClient?.disconnect()
+    }
+
     private fun refreshPermissionState() {
         scanPermissionGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
             checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) ==
@@ -252,7 +309,12 @@ class DeviceConnectionComposeActivity : AppCompatActivity(),
     override fun onConnectionStateChanged(state: Int) {
         connectionState = state
         if (progressText != null) return
-        val text = currentStateText()
+        val text = if (awaitingDisconnectAnnounce && state == Display.STATE_NOT_CONNECTED) {
+            awaitingDisconnectAnnounce = false
+            disconnectDoneText
+        } else {
+            currentStateText()
+        }
         if (firstConnectionState) {
             firstConnectionState = false
         } else {

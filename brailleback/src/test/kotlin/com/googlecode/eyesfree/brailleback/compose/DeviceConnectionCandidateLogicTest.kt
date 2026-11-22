@@ -81,4 +81,49 @@ class DeviceConnectionCandidateLogicTest {
         assertEquals(false, DeviceConnectionLogic.shouldSendCandidateClick(
             DeviceListEntry.STATE_BONDING))
     }
+
+    /**
+     * 「断开连接」只在真连上时可用：未连接时术语上没什么可断的，
+     * 允许点会让连点两下把刚连上的设备断掉。
+     */
+    @Test
+    fun disconnectOnlyOfferedWhileConnected() {
+        assertEquals(true, DeviceConnectionLogic.shouldOfferDisconnect(
+            DeviceConnectionLogic.STATE_CONNECTED))
+        assertEquals(false, DeviceConnectionLogic.shouldOfferDisconnect(
+            DeviceConnectionLogic.STATE_NOT_CONNECTED))
+        assertEquals(false, DeviceConnectionLogic.shouldOfferDisconnect(
+            DeviceConnectionLogic.STATE_UNKNOWN))
+    }
+
+    /** 连接方式：坏值不许让读屏停在空白项上，一律回落「自动」。 */
+    @Test
+    fun transportNormalizesUnknownToAuto() {
+        assertEquals("auto", DeviceConnectionLogic.normalizeTransport(null))
+        assertEquals("auto", DeviceConnectionLogic.normalizeTransport("nonsense"))
+        assertEquals("hid", DeviceConnectionLogic.normalizeTransport("BLE"))
+        assertEquals("serial", DeviceConnectionLogic.normalizeTransport("SPP"))
+    }
+
+    @Test
+    fun transportSummaryFollowsSelection() {
+        val auto = "自动：优先 HID，无界系列送去串口"
+        val hid = "只用标准 HID"
+        val serial = "只用经典串口"
+        assertEquals(auto, DeviceConnectionLogic.transportSummary("auto", auto, hid, serial))
+        assertEquals(hid, DeviceConnectionLogic.transportSummary("hid", auto, hid, serial))
+        assertEquals(serial, DeviceConnectionLogic.transportSummary("serial", auto, hid, serial))
+    }
+
+    /**
+     * 「标准 HID」遇到「自动本来会送去串口」的设备时要提示只能显示、不能输入。
+     * 只在 HID 选项下提示，其它选项下不该出现这条警告。
+     */
+    @Test
+    fun hidKeyWarningOnlyForHidOnSerialOnlyDevice() {
+        assertEquals(true, DeviceConnectionLogic.transportHidNeedsKeyWarning("hid", true))
+        assertEquals(false, DeviceConnectionLogic.transportHidNeedsKeyWarning("hid", false))
+        assertEquals(false, DeviceConnectionLogic.transportHidNeedsKeyWarning("serial", true))
+        assertEquals(false, DeviceConnectionLogic.transportHidNeedsKeyWarning("auto", true))
+    }
 }

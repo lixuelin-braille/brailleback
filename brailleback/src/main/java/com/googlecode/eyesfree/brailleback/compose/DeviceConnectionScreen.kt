@@ -23,20 +23,28 @@ internal fun DeviceConnectionScreen(
     labels: DeviceConnectionLabels,
     stateText: String,
     protocolValue: String,
+    transportValue: String,
     autoConnect: Boolean,
     candidates: List<DeviceListEntry>,
     searching: Boolean,
     discoveryEnabled: Boolean,
+    canDisconnect: Boolean,
     onRefresh: () -> Unit,
+    onDisconnect: () -> Unit,
     onProtocolSelected: (String) -> Unit,
+    onTransportSelected: (String) -> Unit,
     onAutoConnectChange: (Boolean) -> Unit,
     onStartDiscovery: () -> Unit,
     onCandidateClicked: (DeviceListEntry) -> Unit,
     onBack: () -> Unit,
 ) {
     var showProtocolDialog by remember { mutableStateOf(false) }
+    var showTransportDialog by remember { mutableStateOf(false) }
     val protocolLabel = DeviceConnectionLogic.labelForValue(
         labels.protocolValues, labels.protocolEntries, protocolValue
+    )
+    val transportLabel = DeviceConnectionLogic.labelForValue(
+        labels.transportValues, labels.transportEntries, transportValue
     )
 
     SettingsScreenScaffold(
@@ -72,6 +80,18 @@ internal fun DeviceConnectionScreen(
             )
         }
 
+        // 断开当前点显器：只有真连上才可点。断开后服务端会暂停自动重连，
+        // 所以这一行必须存在且能随时按到，否则用户只能去系统蓝牙设置里断。
+        item(key = DeviceConnectionLogic.KEY_DISCONNECT) {
+            SettingsActionRow(
+                title = labels.disconnectTitle,
+                summary = if (canDisconnect) labels.disconnectHint else labels.disconnectIdle,
+                clickLabel = if (canDisconnect) labels.disconnectTitle else "",
+                onClick = onDisconnect,
+                enabled = canDisconnect,
+            )
+        }
+
         item(key = DeviceConnectionLogic.KEY_CONNECTION_PROTOCOL) {
             SettingsListRow(
                 title = labels.protocolTitle,
@@ -81,8 +101,23 @@ internal fun DeviceConnectionScreen(
             )
         }
 
-        item(key = DeviceConnectionLogic.KEY_AUTO_CONNECT) {
-            SettingsSwitchRow(
+        // 蓝牙内部链路：自动 / 标准 HID / 经典串口。摘要里必须带上「这样选意味着什么」，
+        // 只说一个词会让读屏用户分不清 HID 与串口的差别。
+        item(key = DeviceConnectionLogic.KEY_TRANSPORT) {
+            SettingsListRow(
+                title = labels.transportTitle,
+                currentLabel = transportLabel + " · " + DeviceConnectionLogic.transportSummary(
+                    transportValue,
+                    labels.transportAutoSummary,
+                    labels.transportHidSummary,
+                    labels.transportSerialSummary
+                ),
+                chooseHint = labels.chooseHint,
+                onClick = { showTransportDialog = true },
+            )
+        }
+
+        item(key = DeviceConnectionLogic.KEY_AUTO_CONNECT) {            SettingsSwitchRow(
                 title = labels.autoConnectTitle,
                 summary = labels.autoConnectSummary,
                 checked = autoConnect,
@@ -136,6 +171,23 @@ internal fun DeviceConnectionScreen(
                 onProtocolSelected(value)
             },
             onDismiss = { showProtocolDialog = false },
+        )
+    }
+
+    if (showTransportDialog) {
+        SettingsChoiceDialog(
+            title = labels.transportTitle,
+            entries = labels.transportEntries,
+            values = labels.transportValues,
+            currentValue = transportValue,
+            cancelLabel = labels.cancel,
+            selectedLabel = labels.selected,
+            unselectedLabel = labels.unselected,
+            onSelect = { value ->
+                showTransportDialog = false
+                onTransportSelected(value)
+            },
+            onDismiss = { showTransportDialog = false },
         )
     }
 }

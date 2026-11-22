@@ -359,6 +359,17 @@
     <string name="compose_settings_device_connect">双击连接</string>
     <string name="compose_settings_device_pair">双击配对</string>
     <string name="compose_settings_device_retry">双击重试配对</string>
+    <string name="compose_settings_disconnect_title">断开连接</string>
+    <string name="compose_settings_disconnect_hint">双击断开当前点显器</string>
+    <string name="compose_settings_disconnect_idle">当前没有连接的点显器</string>
+    <string name="compose_settings_disconnect_done">已断开。自动重连已暂停，双击设备列表里的设备可重新连接</string>
+    <string name="compose_settings_transport_title">连接方式</string>
+    <string name="compose_settings_transport_auto">自动（推荐）</string>
+    <string name="compose_settings_transport_hid">标准 HID（蓝牙低功耗）</string>
+    <string name="compose_settings_transport_serial">经典串口（SPP）</string>
+    <string name="compose_settings_transport_summary_auto">优先 HID；无界或 Orbit 系列改走经典串口，因为它的 HID 通道从不推送按键</string>
+    <string name="compose_settings_transport_summary_hid">只用标准 HID，不回落串口；链路由系统盲文控制器负责</string>
+    <string name="compose_settings_transport_summary_serial">只用经典串口；按键由 brltty 驱动解析</string>
 
     <!-- 第二批：按键与手势子屏。
          开关状态由 stateDescription 播报，这两条摘要刻意不含「已开启。/已关闭。」前缀，

@@ -225,7 +225,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
                         // 重新插入属于新的枚举，可以再问一次 USB 授权。
                         UsbDisplayConnection.allowPermissionPromptAgain()
                         Timber.i("USB device attached; trying wired connection");
-                        autoConnectBraille()
+                        autoConnectBraille(userInitiated = true)
                     }
                 } else if (UsbManager.ACTION_USB_DEVICE_DETACHED.equals(action)) {
                     if (mUsbConnection != null
@@ -1091,7 +1091,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
      * declares an HID input report but never sends it, so HID would give a
      * display-only link with dead keys; SPP carries both directions.
      */
-    private fun shouldSkipHidForWujie(): Boolean {
+    internal fun legacyShouldSkipHidByVendor(): Boolean {
         if (!PREFER_RFCOMM_FOR_WUJIE) {
             return false
         }
@@ -1243,7 +1243,8 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         mHidTried = false
         mHidRetryCount = 0
         mLastHidError = 0
-        autoConnectBraille()
+        // 刚在设备页配对成功，属于用户动作，解除用户断开留下的暂停。
+        autoConnectBraille(userInitiated = true)
     }
 
     // 注册本身已按 API 33 分版本：33+ 用带 flag 的重载，低版本走旧重载。旧重载那条分支
