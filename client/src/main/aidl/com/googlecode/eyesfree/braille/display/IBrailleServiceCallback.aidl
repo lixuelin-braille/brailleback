@@ -28,4 +28,11 @@ interface IBrailleServiceCallback {
     void onDisplayDisconnected();
     void onInput(in BrailleInputEvent inputEvent);
     oneway void onConnectionChangeProgress(String descroption);
+    /**
+     * Reports the current candidate device list. Parallel arrays:
+     * [addresses] Bluetooth MAC addresses, [names] remote display names (may be
+     * null), [states] one of {@code DeviceListEntry.STATE_*}. Bonded devices
+     * keep their original order; discovered unpaired devices are appended.
+     */
+    oneway void onDeviceListChanged(in String[] addresses, in String[] names, in int[] states);
 }

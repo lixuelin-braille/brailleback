@@ -23,6 +23,9 @@ public interface IBrailleServiceCallback extends android.os.IInterface
     @Override public void onConnectionChangeProgress(java.lang.String descroption) throws android.os.RemoteException
     {
     }
+    @Override public void onDeviceListChanged(java.lang.String[] addresses, java.lang.String[] names, int[] states) throws android.os.RemoteException
+    {
+    }
     @Override
     public android.os.IBinder asBinder() {
       return null;
@@ -98,6 +101,17 @@ public interface IBrailleServiceCallback extends android.os.IInterface
           java.lang.String _arg0;
           _arg0 = data.readString();
           this.onConnectionChangeProgress(_arg0);
+          break;
+        }
+        case TRANSACTION_onDeviceListChanged:
+        {
+          java.lang.String[] _arg0;
+          java.lang.String[] _arg1;
+          int[] _arg2;
+          _arg0 = data.createStringArray();
+          _arg1 = data.createStringArray();
+          _arg2 = data.createIntArray();
+          this.onDeviceListChanged(_arg0, _arg1, _arg2);
           break;
         }
         default:
@@ -178,17 +192,33 @@ public interface IBrailleServiceCallback extends android.os.IInterface
           _data.recycle();
         }
       }
+      @Override public void onDeviceListChanged(java.lang.String[] addresses, java.lang.String[] names, int[] states) throws android.os.RemoteException
+      {
+        android.os.Parcel _data = android.os.Parcel.obtain();
+        try {
+          _data.writeInterfaceToken(DESCRIPTOR);
+          _data.writeStringArray(addresses);
+          _data.writeStringArray(names);
+          _data.writeIntArray(states);
+          boolean _status = mRemote.transact(Stub.TRANSACTION_onDeviceListChanged, _data, null, android.os.IBinder.FLAG_ONEWAY);
+        }
+        finally {
+          _data.recycle();
+        }
+      }
     }
     static final int TRANSACTION_onDisplayConnected = (android.os.IBinder.FIRST_CALL_TRANSACTION + 0);
     static final int TRANSACTION_onDisplayDisconnected = (android.os.IBinder.FIRST_CALL_TRANSACTION + 1);
     static final int TRANSACTION_onInput = (android.os.IBinder.FIRST_CALL_TRANSACTION + 2);
     static final int TRANSACTION_onConnectionChangeProgress = (android.os.IBinder.FIRST_CALL_TRANSACTION + 3);
+    static final int TRANSACTION_onDeviceListChanged = (android.os.IBinder.FIRST_CALL_TRANSACTION + 4);
   }
   public static final java.lang.String DESCRIPTOR = "com.googlecode.eyesfree.braille.display.IBrailleServiceCallback";
   public void onDisplayConnected(com.googlecode.eyesfree.braille.display.BrailleDisplayProperties displayProperties) throws android.os.RemoteException;
   public void onDisplayDisconnected() throws android.os.RemoteException;
   public void onInput(com.googlecode.eyesfree.braille.display.BrailleInputEvent inputEvent) throws android.os.RemoteException;
   public void onConnectionChangeProgress(java.lang.String descroption) throws android.os.RemoteException;
+  public void onDeviceListChanged(java.lang.String[] addresses, java.lang.String[] names, int[] states) throws android.os.RemoteException;
   /** @hide */
   static class _Parcel {
     static private <T> T readTypedObject(

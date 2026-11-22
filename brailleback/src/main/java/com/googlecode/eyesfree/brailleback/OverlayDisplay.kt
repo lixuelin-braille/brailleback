@@ -96,6 +96,10 @@ class OverlayDisplay(
         mInputEventListener = listener
     }
 
+    override fun setOnDeviceListListener(listener: Display.OnDeviceListListener?) {
+        mBackingDisplay.setOnDeviceListListener(listener)
+    }
+
     override val displayProperties: BrailleDisplayProperties?
         get() = if (!mSimulateDisplay) {
             mBackingDisplay.displayProperties
@@ -116,6 +120,10 @@ class OverlayDisplay(
 
     override fun disconnect() {
         mBackingDisplay.disconnect()
+    }
+
+    override fun startUserDiscovery() {
+        mBackingDisplay.startUserDiscovery()
     }
 
     override fun shutdown() {

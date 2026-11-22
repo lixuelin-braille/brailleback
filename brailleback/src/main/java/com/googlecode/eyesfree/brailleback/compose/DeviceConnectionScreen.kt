@@ -4,11 +4,13 @@
 
 package com.googlecode.eyesfree.brailleback.compose
 
+import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.googlecode.eyesfree.braille.display.DeviceListEntry
 
 /**
  * 「设备与连接」子屏：三个设置项，与 res/xml/settings.xml 中同名子屏一一对应。
@@ -22,9 +24,14 @@ internal fun DeviceConnectionScreen(
     stateText: String,
     protocolValue: String,
     autoConnect: Boolean,
+    candidates: List<DeviceListEntry>,
+    searching: Boolean,
+    discoveryEnabled: Boolean,
     onRefresh: () -> Unit,
     onProtocolSelected: (String) -> Unit,
     onAutoConnectChange: (Boolean) -> Unit,
+    onStartDiscovery: () -> Unit,
+    onCandidateClicked: (DeviceListEntry) -> Unit,
     onBack: () -> Unit,
 ) {
     var showProtocolDialog by remember { mutableStateOf(false) }
@@ -38,6 +45,23 @@ internal fun DeviceConnectionScreen(
         onBack = onBack,
     ) {
         settingsSectionHeader(labels.section)
+
+        // 用户主动查找入口：单独一行动作。新行不挂 key，保持既有三个设置项的
+        // 结构不变。
+        item {
+            val discoverSummary = when {
+                !discoveryEnabled -> labels.discoverDenied
+                searching -> labels.discoverSearching
+                else -> labels.discoverHint
+            }
+            SettingsActionRow(
+                title = labels.discoverTitle,
+                summary = discoverSummary,
+                clickLabel = if (discoveryEnabled) labels.discoverTitle else "",
+                onClick = onStartDiscovery,
+                enabled = discoveryEnabled,
+            )
+        }
 
         item(key = DeviceConnectionLogic.KEY_CONNECTION_STATUS) {
             SettingsActionRow(
@@ -65,6 +89,26 @@ internal fun DeviceConnectionScreen(
                 onLabel = labels.on,
                 offLabel = labels.off,
                 onCheckedChange = onAutoConnectChange,
+            )
+        }
+
+        // 候选设备列表：已配对设备顺序来自服务端既有逻辑，未配对项追加在后。
+        // 状态（已配对 / 未配对）写进 summary，TalkBack 朗读整行时能听到，不只靠图标。
+        items(candidates, key = { it.address }) { entry ->
+            val stateLabel = DeviceConnectionLogic.candidateStateLabel(
+                entry.state, labels.bondedLabel, labels.unpairedLabel
+            )
+            SettingsActionRow(
+                title = DeviceConnectionLogic.candidateDisplayName(
+                    entry.name, labels.unknownName
+                ),
+                summary = stateLabel,
+                clickLabel = if (entry.state == DeviceListEntry.STATE_BONDED) {
+                    labels.connectHint
+                } else {
+                    ""
+                },
+                onClick = { onCandidateClicked(entry) },
             )
         }
     }

@@ -43,6 +43,9 @@ fun handleRegisterCallback(
     if (service.mConnectionProgress != null) {
         service.sendConnectionProgress(callback)
     }
+    // 新客户端注册时把当前候选列表（已配对 + 本轮发现的未配对）发一份，
+    // 避免设置页重新进入后列表空白。
+    service.sendDeviceList(callback)
     // HID 连接取一次局部：可空属性不能智能转换，原来这里只能靠非空断言。
     val hidConnection = service.mHidConnection
     val hidBusy = hidConnection != null && !hidConnection.isDisconnecting()

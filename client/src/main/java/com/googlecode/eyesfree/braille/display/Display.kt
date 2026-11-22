@@ -60,6 +60,15 @@ interface Display {
     }
 
     /**
+     * A callback interface for the candidate device list reported by the
+     * service (bonded displays plus freshly discovered unpaired ones).
+     * `fun` so a Kotlin lambda can be passed where this listener is expected.
+     */
+    fun interface OnDeviceListListener {
+        fun onDeviceListChanged(devices: List<DeviceListEntry>)
+    }
+
+    /**
      * Sets a [listener] for connection state changes.
      * [listener] can be `null` to remove a previously set listener.
      */
@@ -76,6 +85,12 @@ interface Display {
      * remove a previously set listener.
      */
     fun setOnInputEventListener(listener: OnInputEventListener?)
+
+    /**
+     * Sets a [listener] for candidate device list changes. [listener] can be
+     * `null` to remove a previously set listener.
+     */
+    fun setOnDeviceListListener(listener: OnDeviceListListener?)
 
     /**
      * Returns the display properties, or `null` if not connected to a display.
@@ -115,6 +130,14 @@ interface Display {
      * @see IBrailleService.disconnect
      */
     fun disconnect()
+
+    /**
+     * Asks the service to start a short user-driven scan for unpaired braille
+     * displays. Results arrive through [OnDeviceListListener].
+     *
+     * @see IBrailleService.startUserDiscovery
+     */
+    fun startUserDiscovery()
 
     /**
      * Unbinds from the braille display service and deallocates any resources.

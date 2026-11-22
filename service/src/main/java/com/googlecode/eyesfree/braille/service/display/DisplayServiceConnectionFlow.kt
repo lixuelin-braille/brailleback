@@ -31,6 +31,12 @@ import com.googlecode.eyesfree.braille.service.R
 import timber.log.Timber
 
 /**
+ * 用户主动发现窗口时长（毫秒）。比自动重连窗口短：这是用户盯着列表等一轮
+ * 扫描的一次性窗口，到期即收，不长期占着电台。
+ */
+internal const val USER_DISCOVERY_WINDOW_DURATION = 12000L
+
+/**
  * DisplayService 的连接编排：协议判定、连接入口、自动重连与发现窗口。
  *
  * 这些函数从 DisplayService.kt 原样搬出，仍以 DisplayService 作接收者，因此
@@ -365,21 +371,112 @@ import timber.log.Timber
             return false
         }
         val now = SystemClock.uptimeMillis()
-        if (mDiscoverySessionActive && now < mDiscoverySessionDeadline) {
-            mDiscoverySessionDeadline = now + DisplayService.DISCOVERY_SESSION_DURATION
+        // 用户主动窗口在用时，自动重连不抢电台、不延长用户窗口。
+        if (discoveryWindow.isUserActive && now < discoveryWindow.deadlineMillis) {
+            Timber.v("Auto reconnect leaves the user discovery window alone (%s)", reason)
+            return false
+        }
+        if (discoveryWindow.isAutoActive && now < discoveryWindow.deadlineMillis) {
+            discoveryWindow.extendAuto(now, DisplayService.DISCOVERY_SESSION_DURATION)
+            mDiscoverySessionDeadline = discoveryWindow.deadlineMillis
             mHandler.scheduleDiscoveryTimeout(DisplayService.DISCOVERY_SESSION_DURATION)
             Timber.d("Extending Bluetooth discovery window (%s)", reason)
             startDiscoveryInternal(reason)
             return true
         }
+        if (!discoveryWindow.startAuto(now, DisplayService.DISCOVERY_SESSION_DURATION)) {
+            return false
+        }
         mDiscoverySessionActive = true
         mDiscoveryStartedByUs = false
-        mDiscoverySessionDeadline = now + DisplayService.DISCOVERY_SESSION_DURATION
+        mDiscoverySessionDeadline = discoveryWindow.deadlineMillis
         mHandler.scheduleDiscoveryTimeout(DisplayService.DISCOVERY_SESSION_DURATION)
         Timber.i("Starting %d ms Bluetooth discovery window (%s)",
                 DisplayService.DISCOVERY_SESSION_DURATION / 1000, reason)
         startDiscoveryInternal(reason)
         return mDiscoverySessionActive
+    }
+
+    /**
+     * Eligibility for the user-driven discovery window. Unlike the auto-reconnect
+     * policy this does not require auto-connect to be enabled or not suppressed:
+     * an explicit tap on "find display" must be honored even when the user has
+     * turned automatic connection off. Connection busy, no client, data files
+     * not ready, screen off, Bluetooth off or missing scan permission still
+     * block it.
+     */
+    internal fun DisplayService.shouldStartUserDiscovery(): Boolean {
+        if (isConnectionActive()) {
+            return false
+        }
+        if (!haveClients()) {
+            return false
+        }
+        if (mDataFileState != DisplayService.FILES_EXTRACTED) {
+            return false
+        }
+        if (!isScreenInteractive()) {
+            return false
+        }
+        val adapter = BluetoothAdapter.getDefaultAdapter() ?: return false
+        val adapterEnabled = try {
+            adapter.isEnabled()
+        } catch (e: SecurityException) {
+            Timber.w(e, "BLUETOOTH_CONNECT denied checking adapter")
+            false
+        }
+        return adapterEnabled && hasBluetoothScanPermission()
+    }
+
+    /**
+     * Opens the one-shot user discovery window (12 seconds). The user tap takes
+     * the radio over any existing auto-reconnect window; when the window ends,
+     * is cancelled, Bluetooth goes off or the scan permission is revoked,
+     * [finishUserDiscovery] returns everything to the idle rest state without
+     * touching the auto-reconnect policy.
+     *
+     * MIUI / 国产 ROM 后台限制：息屏或后台时 `startDiscovery()` 可能被系统直接
+     * 拦下或立刻回传 `ACTION_DISCOVERY_FINISHED`。这种情况下本窗口同样会在
+     * 截止时间前收尾，界面上表现为「本轮没有发现设备」，降级路径是让用户到
+     * 系统蓝牙设置里完成配对——不要在后台反复重开扫描。
+     */
+    internal fun DisplayService.startUserDiscoveryWindow(): Boolean {
+        if (!shouldStartUserDiscovery()) {
+            Timber.v("Not starting user discovery: not eligible")
+            return false
+        }
+        // 让位：先收掉既有自动窗口，避免两个窗口共用一个电台互相打断。
+        stopDiscoverySession("user discovery takes over")
+        val now = SystemClock.uptimeMillis()
+        discoveryWindow.startUser(now, USER_DISCOVERY_WINDOW_DURATION)
+        mDiscoverySessionActive = true
+        mDiscoveryStartedByUs = false
+        mDiscoverySessionDeadline = discoveryWindow.deadlineMillis
+        mHandler.scheduleUserDiscoveryTimeout(USER_DISCOVERY_WINDOW_DURATION)
+        // 新一轮查找清掉上一轮残留的未配对候选，再把（清空后的）列表推给 UI。
+        synchronized(mUnpairedCandidates) {
+            mUnpairedCandidates.clear()
+        }
+        broadcastDeviceList()
+        Timber.i("Starting %d ms user discovery window",
+                USER_DISCOVERY_WINDOW_DURATION / 1000)
+        startDiscoveryInternal("user discovery")
+        return mDiscoverySessionActive
+    }
+
+    /**
+     * Closes the user discovery window and returns to idle. The collected
+     * candidates are kept for the current settings page; a new discovery clears
+     * them. Pushing the list once more lets the UI freeze the final state
+     * (e.g. "search finished, 1 device found").
+     */
+    internal fun DisplayService.finishUserDiscovery(reason: String) {
+        if (!discoveryWindow.isUserActive && !mDiscoverySessionActive) {
+            return
+        }
+        Timber.i("Finishing user discovery window (%s)", reason)
+        stopDiscoverySession(reason)
+        broadcastDeviceList()
     }
 
     internal fun DisplayService.startDiscoveryInternal(reason: String) {
@@ -443,13 +540,30 @@ import timber.log.Timber
         }
         var address: String? = null
         var name: String? = null
+        var bondState = BluetoothDevice.BOND_NONE
         try {
             address = device.getAddress()
             name = device.getName()
+            bondState = device.bondState
         } catch (e: SecurityException) {
             Timber.w(e, "BLUETOOTH_CONNECT permission denied reading discovery result")
         }
-        if (address == null || !DeviceFinder(this).isKnownDevice(address)) {
+        if (address == null) {
+            return
+        }
+
+        // 用户主动发现窗口：只把名称命中点显器名称表的未配对设备收进候选，
+        // 不自动连接——配对动作由用户在列表里触发。
+        if (discoveryWindow.isUserActive) {
+            if (bondState != BluetoothDevice.BOND_BONDED
+                    && DeviceFinder.matchesKnownName(name)) {
+                addUnpairedCandidate(address, name)
+            }
+            return
+        }
+
+        // 既有自动重连路径：只认已配对的已知设备，语义保持不变。
+        if (!DeviceFinder(this).isKnownDevice(address)) {
             Timber.v("Discovery found unrelated device %s (%s)", name, address)
             return
         }
@@ -467,11 +581,37 @@ import timber.log.Timber
         mDiscoveryAllowedForCycle = false
     }
 
+    /**
+     * Adds a freshly discovered unpaired braille display to the candidate list,
+     * deduplicated by address. Re-discovering the same address refreshes the
+     * name (the remote name may arrive after the first inquiry result).
+     */
+    internal fun DisplayService.addUnpairedCandidate(address: String, name: String?) {
+        val normalized = address.uppercase(java.util.Locale.US)
+        synchronized(mUnpairedCandidates) {
+            val existing = mUnpairedCandidates.firstOrNull {
+                it.address.equals(normalized, ignoreCase = true)
+            }
+            if (existing != null) {
+                if (existing.name != name) {
+                    mUnpairedCandidates.remove(existing)
+                    mUnpairedCandidates.add(DiscoveredDevice(normalized, name))
+                }
+            } else {
+                mUnpairedCandidates.add(DiscoveredDevice(normalized, name))
+            }
+        }
+        Timber.i("Added unpaired candidate %s (%s)", name, normalized)
+        broadcastDeviceList()
+    }
+
     internal fun DisplayService.stopDiscoverySession(reason: String) {
         mDiscoverySessionActive = false
         mDiscoverySessionDeadline = 0
+        discoveryWindow.finish()
         mHandler.cancelDiscoveryTimeout()
         mHandler.cancelDiscoveryRestart()
+        mHandler.cancelUserDiscoveryTimeout()
         val owned = mDiscoveryStartedByUs
         mDiscoveryStartedByUs = false
         if (!owned) {

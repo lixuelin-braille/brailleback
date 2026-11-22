@@ -47,6 +47,9 @@ public interface IBrailleService extends android.os.IInterface
     @Override public void disconnect() throws android.os.RemoteException
     {
     }
+    @Override public void startUserDiscovery() throws android.os.RemoteException
+    {
+    }
     @Override
     public android.os.IBinder asBinder() {
       return null;
@@ -127,6 +130,11 @@ public interface IBrailleService extends android.os.IInterface
         case TRANSACTION_disconnect:
         {
           this.disconnect();
+          break;
+        }
+        case TRANSACTION_startUserDiscovery:
+        {
+          this.startUserDiscovery();
           break;
         }
         default:
@@ -241,12 +249,24 @@ public interface IBrailleService extends android.os.IInterface
           _data.recycle();
         }
       }
+      @Override public void startUserDiscovery() throws android.os.RemoteException
+      {
+        android.os.Parcel _data = android.os.Parcel.obtain();
+        try {
+          _data.writeInterfaceToken(DESCRIPTOR);
+          boolean _status = mRemote.transact(Stub.TRANSACTION_startUserDiscovery, _data, null, android.os.IBinder.FLAG_ONEWAY);
+        }
+        finally {
+          _data.recycle();
+        }
+      }
     }
     static final int TRANSACTION_registerCallback = (android.os.IBinder.FIRST_CALL_TRANSACTION + 0);
     static final int TRANSACTION_unregisterCallback = (android.os.IBinder.FIRST_CALL_TRANSACTION + 1);
     static final int TRANSACTION_displayDots = (android.os.IBinder.FIRST_CALL_TRANSACTION + 2);
     static final int TRANSACTION_poll = (android.os.IBinder.FIRST_CALL_TRANSACTION + 3);
     static final int TRANSACTION_disconnect = (android.os.IBinder.FIRST_CALL_TRANSACTION + 4);
+    static final int TRANSACTION_startUserDiscovery = (android.os.IBinder.FIRST_CALL_TRANSACTION + 5);
   }
   public static final java.lang.String DESCRIPTOR = "com.googlecode.eyesfree.braille.display.IBrailleService";
   /**
@@ -277,4 +297,5 @@ public interface IBrailleService extends android.os.IInterface
      * {@code poll()} will reconnect.
      */
     public void disconnect() throws android.os.RemoteException;
+    public void startUserDiscovery() throws android.os.RemoteException;
   }

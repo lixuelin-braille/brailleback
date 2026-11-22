@@ -4,6 +4,7 @@
 
 package com.googlecode.eyesfree.brailleback.compose
 
+import com.googlecode.eyesfree.braille.display.DeviceListEntry
 import com.googlecode.eyesfree.braille.service.display.ConnectionProtocolPolicy
 
 /**
@@ -57,4 +58,27 @@ object DeviceConnectionLogic {
         val index = values.indexOf(normalizeProtocol(value))
         return entries.getOrElse(index) { entries.firstOrNull().orEmpty() }
     }
+
+    /**
+     * 候选设备的显示名。扫描结果可能暂时没有远端名称（权限或名称查询未回传），
+     * 用占位名兜底，保证 TalkBack 至少能读出一行内容。
+     */
+    fun candidateDisplayName(name: String?, unknownName: String): String =
+        name?.takeIf { it.isNotBlank() } ?: unknownName
+
+    /**
+     * 候选状态的可读标签。未配对状态必须写进朗读文本，不能只靠图标或颜色区分。
+     */
+    fun candidateStateLabel(
+        state: Int,
+        bondedLabel: String,
+        unpairedLabel: String
+    ): String =
+        if (state == DeviceListEntry.STATE_BONDED) bondedLabel else unpairedLabel
+
+    /**
+     * 用户主动查找入口是否可用。缺 `BLUETOOTH_SCAN` 权限时不弹扫描，界面降级为
+     * 提示用户去系统蓝牙设置里配对（运行时申请由 Activity 的权限发起器负责）。
+     */
+    fun canStartDiscovery(scanPermissionGranted: Boolean): Boolean = scanPermissionGranted
 }

@@ -67,6 +67,8 @@ class MainHandler(service: DisplayService) :
         private const val MSG_AUTO_RECONNECT = 17
         private const val MSG_DISCOVERY_TIMEOUT = 18
         private const val MSG_DISCOVERY_RESTART = 19
+        private const val MSG_START_USER_DISCOVERY = 20
+        private const val MSG_USER_DISCOVERY_TIMEOUT = 21
     }
 
     fun registerCallback(callback: IBrailleServiceCallback?) {
@@ -192,6 +194,20 @@ class MainHandler(service: DisplayService) :
         removeMessages(MSG_DISCOVERY_RESTART)
     }
 
+    /** Client explicitly asked to scan for unpaired braille displays. */
+    fun startUserDiscovery() {
+        sendEmptyMessage(MSG_START_USER_DISCOVERY)
+    }
+
+    fun scheduleUserDiscoveryTimeout(delayMillis: Long) {
+        removeMessages(MSG_USER_DISCOVERY_TIMEOUT)
+        sendEmptyMessageDelayed(MSG_USER_DISCOVERY_TIMEOUT, delayMillis)
+    }
+
+    fun cancelUserDiscoveryTimeout() {
+        removeMessages(MSG_USER_DISCOVERY_TIMEOUT)
+    }
+
     fun scheduleHidRetry() {
         sendEmptyMessageDelayed(MSG_RETRY_HID, DisplayService.HID_RETRY_DELAY)
     }
@@ -283,6 +299,12 @@ class MainHandler(service: DisplayService) :
             }
             MSG_DISCOVERY_RESTART -> {
                 service.startDiscoveryInternal("discovery cycle restart")
+            }
+            MSG_START_USER_DISCOVERY -> {
+                service.startUserDiscoveryWindow()
+            }
+            MSG_USER_DISCOVERY_TIMEOUT -> {
+                service.finishUserDiscovery("user discovery window expired")
             }
             else -> {  // fall out
             }

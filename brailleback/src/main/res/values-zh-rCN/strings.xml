@@ -345,6 +345,16 @@
     <string name="compose_settings_selected">已选中</string>
     <string name="compose_settings_unselected">未选中</string>
 
+    <!-- 设备发现与配对：未配对状态写进朗读文本，不只靠图标或颜色区分。 -->
+    <string name="compose_settings_discover_title">查找点显器</string>
+    <string name="compose_settings_discover_hint">双击扫描附近未配对的点显器</string>
+    <string name="compose_settings_discover_searching">正在查找附近的点显器……</string>
+    <string name="compose_settings_discover_denied">缺少蓝牙扫描权限，请在系统蓝牙设置中配对设备</string>
+    <string name="compose_settings_device_bonded">已配对，点显器</string>
+    <string name="compose_settings_device_unpaired">未配对，点显器</string>
+    <string name="compose_settings_device_unknown">未命名设备</string>
+    <string name="compose_settings_device_connect">双击连接</string>
+
     <!-- 第二批：按键与手势子屏。
          开关状态由 stateDescription 播报，这两条摘要刻意不含「已开启。/已关闭。」前缀，
          避免读屏把同一个状态念两遍。 -->

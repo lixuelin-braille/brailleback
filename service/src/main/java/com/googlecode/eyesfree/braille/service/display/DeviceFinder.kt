@@ -306,6 +306,26 @@ class DeviceFinder(context: Context) {
     }
 
     companion object {
+        /**
+         * Pure name check used by the user-driven discovery window: a freshly
+         * found device is a braille display this app knows how to use when its
+         * name matches either the hand-written [SUPPORTED_DEVICES] table or
+         * the brltty name table (the "TSM" prefix maps to the `sk` driver).
+         *
+         * No [BluetoothDevice] or [Context] is required, so this is callable
+         * from JVM unit tests.
+         */
+        @JvmStatic
+        fun matchesKnownName(name: String?): Boolean {
+            if (name == null || name.isEmpty()) {
+                return false
+            }
+            if (SUPPORTED_DEVICES.any { it.matchesName(name) }) {
+                return true
+            }
+            return brlttyDevices().any { it.matchesName(name) }
+        }
+
         @JvmStatic
         fun shouldAutoConnectBondedDevice(
                 address: String?,
@@ -342,6 +362,12 @@ private const val LAST_CONNECTED_DEVICE_KEY = "lastBluetoothDevice"
 
 private interface SupportedDevice {
     fun match(bluetoothDevice: BluetoothDevice): DeviceFinder.DeviceInfo?
+
+    /**
+     * Pure name predicate, split out of [match] so the discovery filter can be
+     * unit tested on the JVM without a [BluetoothDevice] instance.
+     */
+    fun matchesName(name: String): Boolean
 }
 
 private class NameRegexSupportedDevice : SupportedDevice {
@@ -372,17 +398,16 @@ private class NameRegexSupportedDevice : SupportedDevice {
                     e)
             return null
         }
-        if (name == null) {
+        if (name == null || !matchesName(name)) {
             return null
         }
-        for (nameRegex in mNameRegexes) {
-            if (nameRegex.matcher(name).lookingAt()) {
-                return DeviceFinder.DeviceInfo(bluetoothDevice, mDriverCode,
-                        SERIAL_BOARD_UUID, mConnectSecurely,
-                        mFriendlyKeyNames)
-            }
-        }
-        return null
+        return DeviceFinder.DeviceInfo(bluetoothDevice, mDriverCode,
+                SERIAL_BOARD_UUID, mConnectSecurely,
+                mFriendlyKeyNames)
+    }
+
+    override fun matchesName(name: String): Boolean {
+        return mNameRegexes.any { it.matcher(name).lookingAt() }
     }
 
     override fun toString(): String {
@@ -423,12 +448,15 @@ private class BrlttyNameSupportedDevice(
                     e)
             return null
         }
-        if (name == null || !name.startsWith(mEntry.name)) {
+        if (name == null || !matchesName(name)) {
             return null
         }
         return DeviceFinder.DeviceInfo(bluetoothDevice, mEntry.driver,
                 SERIAL_BOARD_UUID, true, emptyMap<String, Int>())
     }
+
+    override fun matchesName(name: String): Boolean =
+            name.startsWith(mEntry.name)
 
     override fun toString(): String = mEntry.driver + " " + mEntry.name + "*"
 }

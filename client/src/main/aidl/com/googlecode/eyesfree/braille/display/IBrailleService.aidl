@@ -56,4 +56,13 @@ interface IBrailleService {
      * {@code poll()} will reconnect.
      */
     oneway void disconnect();
+
+    /**
+     * Starts a short, one-shot Bluetooth scan for unpaired braille displays
+     * requested explicitly by the user from the device list page. Discovered
+     * known displays are reported through
+     * {@code IBrailleServiceCallback.onDeviceListChanged}; this does not
+     * trigger a connection on its own.
+     */
+    oneway void startUserDiscovery();
 }

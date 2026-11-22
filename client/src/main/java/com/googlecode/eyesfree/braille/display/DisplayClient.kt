@@ -45,7 +45,15 @@ class DisplayClient(context: Context) : Display {
         private const val MSG_REPORT_CONNECTION_CHANGE_PROGRESS = 2
         private const val MSG_REPORT_INPUT_EVENT = 3
         private const val MSG_REBIND_SERVICE = 4
+        private const val MSG_REPORT_DEVICE_LIST = 5
     }
+
+    /** Holder for the three parallel arrays delivered in one list message. */
+    private class DeviceListPayload(
+        val addresses: Array<out String>?,
+        val names: Array<out String>?,
+        val states: IntArray?
+    )
 
     @Volatile
     private var mConnectionStateChangeListener: Display.OnConnectionStateChangeListener? = null
@@ -53,6 +61,8 @@ class DisplayClient(context: Context) : Display {
     private var mConnectionChangeProgressListener: Display.OnConnectionChangeProgressListener? = null
     @Volatile
     private var mInputEventListener: Display.OnInputEventListener? = null
+    @Volatile
+    private var mDeviceListListener: Display.OnDeviceListListener? = null
     private val mContext: Context = context
     private val mHandler = DisplayHandler()
     private var mConnection: Connection? = null
@@ -79,6 +89,10 @@ class DisplayClient(context: Context) : Display {
 
     override fun setOnInputEventListener(listener: Display.OnInputEventListener?) {
         mInputEventListener = listener
+    }
+
+    override fun setOnDeviceListListener(listener: Display.OnDeviceListListener?) {
+        mDeviceListListener = listener
     }
 
     override val displayProperties: BrailleDisplayProperties?
@@ -127,6 +141,19 @@ class DisplayClient(context: Context) : Display {
             }
         } else {
             Log.v(LOG_TAG, "Error in disconnect: service not connected")
+        }
+    }
+
+    override fun startUserDiscovery() {
+        val localService = brailleService
+        if (localService != null) {
+            try {
+                localService.startUserDiscovery()
+            } catch (ex: RemoteException) {
+                Log.e(LOG_TAG, "Error in startUserDiscovery", ex)
+            }
+        } else {
+            Log.v(LOG_TAG, "Error in startUserDiscovery: service not connected")
         }
     }
 
@@ -184,6 +211,14 @@ class DisplayClient(context: Context) : Display {
 
         override fun onConnectionChangeProgress(description: String?) {
             mHandler.reportConnectionChangeProgress(description)
+        }
+
+        override fun onDeviceListChanged(
+            addresses: Array<out String>?,
+            names: Array<out String>?,
+            states: IntArray?
+        ) {
+            mHandler.reportDeviceList(addresses, names, states)
         }
     }
 
@@ -247,6 +282,15 @@ class DisplayClient(context: Context) : Display {
             obtainMessage(MSG_REPORT_INPUT_EVENT, event).sendToTarget()
         }
 
+        fun reportDeviceList(
+            addresses: Array<out String>?,
+            names: Array<out String>?,
+            states: IntArray?
+        ) {
+            obtainMessage(MSG_REPORT_DEVICE_LIST,
+                    DeviceListPayload(addresses, names, states)).sendToTarget()
+        }
+
         fun scheduleRebind() {
             synchronized(this) {
                 if (mNumFailedBinds < MAX_REBIND_ATTEMPTS) {
@@ -272,6 +316,8 @@ class DisplayClient(context: Context) : Display {
                     handleReportConnectionChangeProgress(msg.obj as String?)
                 MSG_REPORT_INPUT_EVENT ->
                     handleReportInputEvent(msg.obj as BrailleInputEvent?)
+                MSG_REPORT_DEVICE_LIST ->
+                    handleReportDeviceList(msg.obj as DeviceListPayload)
                 MSG_REBIND_SERVICE -> handleRebindService()
             }
         }
@@ -299,6 +345,21 @@ class DisplayClient(context: Context) : Display {
             val localListener = mInputEventListener ?: return
             val input = event ?: return
             localListener.onInputEvent(input)
+        }
+
+        private fun handleReportDeviceList(payload: DeviceListPayload) {
+            val localListener = mDeviceListListener ?: return
+            val addresses = payload.addresses ?: emptyArray()
+            val names = payload.names ?: emptyArray()
+            val states = payload.states ?: IntArray(0)
+            val entries = addresses.indices.map { index ->
+                DeviceListEntry(
+                    address = addresses[index],
+                    name = names.getOrNull(index),
+                    state = states.getOrElse(index) { DeviceListEntry.STATE_UNPAIRED }
+                )
+            }
+            localListener.onDeviceListChanged(entries)
         }
 
         private fun handleRebindService() {

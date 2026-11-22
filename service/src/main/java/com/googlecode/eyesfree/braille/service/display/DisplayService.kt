@@ -363,6 +363,19 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
     internal var mDiscoveryStartedByUs = false
     internal var mDiscoverySessionDeadline: Long = 0
 
+    /**
+     * 发现窗口来源跟踪器：区分「用户主动查找」与「失败后自动重连」两个窗口，
+     * 见 [DiscoveryWindowTracker]。电台归属仍由 [mDiscoverySessionActive] 管。
+     */
+    internal val discoveryWindow = DiscoveryWindowTracker()
+
+    /**
+     * 用户主动发现窗口里收集到的未配对候选（地址 + 名称）。已配对设备不在
+     * 这里：它们始终来自 [DeviceFinder.findDevices()]，顺序与置顶逻辑保持原样，
+     * 本列表只做追加。
+     */
+    internal val mUnpairedCandidates = mutableListOf<DiscoveredDevice>()
+
     /** Reconnects with a different protocol when the setting changes. */
     private val mProtocolPrefListener =
         object : SharedPreferences.OnSharedPreferenceChangeListener {
@@ -639,6 +652,10 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
 
         override fun disconnect() {
             mHandler.disconnectBraille()
+        }
+
+        override fun startUserDiscovery() {
+            mHandler.startUserDiscovery()
         }
     }
 
@@ -1194,6 +1211,13 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
             Timber.i("Ignoring unrelated bonded Bluetooth device %s", address)
             return
         }
+        // 刚配对成功：从未配对候选里摘掉，避免列表里同一地址出现两条。
+        synchronized(mUnpairedCandidates) {
+            mUnpairedCandidates.removeAll {
+                it.address.equals(address, ignoreCase = true)
+            }
+        }
+        broadcastDeviceList()
         mPendingBluetoothAddress = address
         // A fresh bond starts a new connection attempt. Without this reset a
         // failed HID attempt from before the device was unpaired would make
@@ -1274,6 +1298,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
             // later.
         }
     }
+
 
     fun broadcastConnectionState() {
         var i = mClients.beginBroadcast()

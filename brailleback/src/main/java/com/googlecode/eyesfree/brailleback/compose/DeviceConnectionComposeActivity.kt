@@ -22,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.googlecode.eyesfree.utils.SettingsStore
+import com.googlecode.eyesfree.braille.display.DeviceListEntry
 import com.googlecode.eyesfree.braille.display.Display
 import com.googlecode.eyesfree.braille.display.DisplayClient
 import com.googlecode.eyesfree.braille.service.display.ConnectionProtocolPolicy
@@ -46,6 +47,14 @@ internal data class DeviceConnectionLabels(
     val unselected: String,
     val protocolEntries: List<String>,
     val protocolValues: List<String>,
+    val discoverTitle: String,
+    val discoverHint: String,
+    val discoverSearching: String,
+    val discoverDenied: String,
+    val bondedLabel: String,
+    val unpairedLabel: String,
+    val unknownName: String,
+    val connectHint: String,
 )
 
 class DeviceConnectionComposeActivity : AppCompatActivity(),
@@ -60,6 +69,7 @@ class DeviceConnectionComposeActivity : AppCompatActivity(),
      */
     private val bluetoothPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()) {
+        refreshPermissionState()
         if (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)
             == PackageManager.PERMISSION_GRANTED) {
             displayClient?.poll()
@@ -77,6 +87,15 @@ class DeviceConnectionComposeActivity : AppCompatActivity(),
     private var progressText by mutableStateOf<String?>(null)
     private var protocolValue by mutableStateOf(ConnectionProtocolPolicy.BLUETOOTH)
     private var autoConnect by mutableStateOf(true)
+
+    /** 服务端上报的候选设备：已配对 + 本轮发现到的未配对。 */
+    private var candidates by mutableStateOf<List<DeviceListEntry>>(emptyList())
+
+    /** 用户主动查找是否正在进行（本地一次性窗口的界面态）。 */
+    private var searching by mutableStateOf(false)
+
+    /** BLUETOOTH_SCAN 运行时权限是否到手；缺失时查找入口降级为系统设置提示。 */
+    private var scanPermissionGranted by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -103,6 +122,11 @@ class DeviceConnectionComposeActivity : AppCompatActivity(),
         displayClient = DisplayClient(this).also { client ->
             client.setOnConnectionStateChangeListener(this)
             client.setOnConnectionChangeProgressListener(this)
+            client.setOnDeviceListListener { entries ->
+                candidates = entries
+                // 列表回来了即视为本轮查找结束；超时/失败收尾也由服务端再推一次。
+                searching = false
+            }
         }
 
         setContent {
@@ -128,12 +152,23 @@ class DeviceConnectionComposeActivity : AppCompatActivity(),
                 protocolValues = resources.getStringArray(
                     R.array.pref_connection_protocol_values
                 ).toList(),
+                discoverTitle = getString(R.string.compose_settings_discover_title),
+                discoverHint = getString(R.string.compose_settings_discover_hint),
+                discoverSearching = getString(R.string.compose_settings_discover_searching),
+                discoverDenied = getString(R.string.compose_settings_discover_denied),
+                bondedLabel = getString(R.string.compose_settings_device_bonded),
+                unpairedLabel = getString(R.string.compose_settings_device_unpaired),
+                unknownName = getString(R.string.compose_settings_device_unknown),
+                connectHint = getString(R.string.compose_settings_device_connect),
             )
             DeviceConnectionScreen(
                 labels = labels,
                 stateText = currentStateText(),
                 protocolValue = protocolValue,
                 autoConnect = autoConnect,
+                candidates = candidates,
+                searching = searching,
+                discoveryEnabled = DeviceConnectionLogic.canStartDiscovery(scanPermissionGranted),
                 onRefresh = { displayClient?.poll() },
                 onProtocolSelected = { value ->
                     protocolValue = value
@@ -143,6 +178,8 @@ class DeviceConnectionComposeActivity : AppCompatActivity(),
                     autoConnect = value
                     prefs.edit().putBoolean(autoConnectKey, value).apply()
                 },
+                onStartDiscovery = { startUserDiscovery() },
+                onCandidateClicked = { entry -> onCandidateClicked(entry) },
                 onBack = { finish() },
             )
         }
@@ -150,7 +187,34 @@ class DeviceConnectionComposeActivity : AppCompatActivity(),
 
     override fun onResume() {
         super.onResume()
+        refreshPermissionState()
         requestBluetoothPermissions()
+    }
+
+    /**
+     * 用户点「查找点显器」。扫描权限到手才下发服务端扫描；权限缺失时重新走
+     * 运行时申请，被用户拒绝后界面降级为提示去系统蓝牙设置配对。
+     */
+    private fun startUserDiscovery() {
+        if (!DeviceConnectionLogic.canStartDiscovery(scanPermissionGranted)) {
+            requestBluetoothPermissions()
+            return
+        }
+        searching = true
+        displayClient?.startUserDiscovery()
+    }
+
+    private fun onCandidateClicked(entry: DeviceListEntry) {
+        if (entry.state == DeviceListEntry.STATE_BONDED) {
+            displayClient?.poll()
+        }
+        // 未配对项的配对动作在配对切片接入。
+    }
+
+    private fun refreshPermissionState() {
+        scanPermissionGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+            checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) ==
+                PackageManager.PERMISSION_GRANTED
     }
 
     override fun onDestroy() {
