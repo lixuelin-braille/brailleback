@@ -46,6 +46,15 @@ class HidTransportRoutingTest {
             LinkRoute.NONE,
             resolve(ConnectionProtocolPolicy.AUTO, ConnectionTransportPolicy.HID_CLASSIC)
         )
+        // USB 有线串口：协议是蓝牙也必须走线，不能被协议拽回蓝牙。
+        assertEquals(
+            LinkRoute.USB_SERIAL,
+            resolve(ConnectionProtocolPolicy.BLUETOOTH, ConnectionTransportPolicy.USB_SERIAL)
+        )
+        assertEquals(
+            LinkRoute.USB_SERIAL,
+            resolve(ConnectionProtocolPolicy.AUTO, ConnectionTransportPolicy.USB_SERIAL)
+        )
     }
 
     @Test
@@ -103,6 +112,12 @@ class HidTransportRoutingTest {
         assertTrue(
             HidTransportRouting.shouldReactToUsbAttach(
                 ConnectionProtocolPolicy.BLUETOOTH, ConnectionTransportPolicy.HID_USB
+            )
+        )
+        // 点名 USB 串口时要响应插线（这条链路本来就是线）。
+        assertTrue(
+            HidTransportRouting.shouldReactToUsbAttach(
+                ConnectionProtocolPolicy.BLUETOOTH, ConnectionTransportPolicy.USB_SERIAL
             )
         )
         // 串口档：只有协议本来就指 USB 时才响应插线。

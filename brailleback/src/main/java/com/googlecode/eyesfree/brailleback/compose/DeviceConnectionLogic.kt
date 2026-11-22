@@ -147,23 +147,55 @@ object DeviceConnectionLogic {
     fun normalizeTransport(value: String?): String = ConnectionTransportPolicy.normalize(value)
 
     /**
-     * 「连接方式」行下面那句说明。五条取值各有一句：自动要讲清「无界系列会被
-     * 送去串口」；蓝牙 HID 要讲清「不回落串口」；USB HID 要讲清「需要插线并授权」；
-     * 经典 HID 要讲清「只能由系统接管、本 App 写不进点显器」；串口要讲清
-     * 「按键由 brltty 解析」。
+     * 连接方式（链路）的展示标签。
+     *
+     * <p>必须用自己这域的归一化：早先这里直接复用 [labelForValue]，而它对入参
+     * 调的是协议归一化，于是 `hid_usb` 这类连接方式值匹配不到协议表，索引落成
+     * -1、回落到第一项，界面出现「自动（推荐）· 只走 USB 有线 HID」这种自相
+     * 矛盾的一行 —— 读屏用户听到的是标签和说明互相打脸。
+     */
+    fun transportLabelForValue(
+        values: List<String>,
+        entries: List<String>,
+        value: String?,
+    ): String {
+        val index = values.indexOf(normalizeTransport(value))
+        return entries.getOrElse(index) { entries.firstOrNull().orEmpty() }
+    }
+
+    /**
+     * 连接方式 → 回写协议偏好（旧键 `connection_protocol`）。
+     *
+     * <p>设置页只留一行「连接方式」，但服务端仍在若干处按协议偏好判断
+     * （USB HID 失败分支、拔线、重连），所以必须把等价协议值写回去，否则
+     * 选了「USB 有线 HID」而协议还是蓝牙，USB 失败会走进蓝牙的错误分支。
+     */
+    fun protocolForTransport(value: String?): String = when (normalizeTransport(value)) {
+        ConnectionTransportPolicy.HID_USB,
+        ConnectionTransportPolicy.USB_SERIAL -> ConnectionProtocolPolicy.USB
+        ConnectionTransportPolicy.AUTO -> ConnectionProtocolPolicy.AUTO
+        else -> ConnectionProtocolPolicy.BLUETOOTH
+    }
+
+    /**
+     * 「连接方式」行下面那句说明。六条取值各有一句：自动要讲清「插着线走 USB、
+     * 没插走蓝牙」；两种蓝牙 HID 要分别讲清限制；两种有线要讲清「需要插线并授权」；
+     * 经典蓝牙 HID 要讲清「只能由系统接管、本 App 写不进点显器」。
      */
     fun transportSummary(
         value: String?,
         auto: String,
         hidBle: String,
         hidUsb: String,
-        hidClassic: String,
+        usbSerial: String,
         serial: String,
+        hidClassic: String,
     ): String = when (normalizeTransport(value)) {
         ConnectionTransportPolicy.HID_BLE -> hidBle
         ConnectionTransportPolicy.HID_USB -> hidUsb
-        ConnectionTransportPolicy.HID_CLASSIC -> hidClassic
+        ConnectionTransportPolicy.USB_SERIAL -> usbSerial
         ConnectionTransportPolicy.SERIAL -> serial
+        ConnectionTransportPolicy.HID_CLASSIC -> hidClassic
         else -> auto
     }
 

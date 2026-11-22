@@ -21,17 +21,22 @@ import com.googlecode.eyesfree.utils.SettingsStore
  *   这条在 Android 上第三方应用拿不到：`HID_HOST` 是 @SystemApi，需要
  *   BLUETOOTH_PRIVILEGED，App 既不能注册 HID 主机，也不能发 output report。
  *   选中它时本 App 不发起连接，由系统输入系统接管（只能收到按键，无法写点显器）。
- * - [SERIAL]：经典串口 SPP（RFCOMM，0x1101），交给 brltty 驱动解析按键。
+ * - [USB_SERIAL]：USB 线 + brltty 的串口驱动（有线老设备最常见的一条）。
+ * - [SERIAL]：蓝牙经典串口 SPP（RFCOMM，0x1101），交给 brltty 驱动解析按键。
  * - [AUTO]：保持既有判断（对 HID 不推按键的厂商固件跳过 HID，其余 HID 优先）。
  *
  * <p>这是「蓝牙 / USB / 自动」协议偏好内部的细分，两层结构，因此单独一个键，
- * 不塞进 `connection_protocol`。
+ * 不塞进 `connection_protocol`。注意：六条取值已经覆盖了协议维度的全部组合，
+ * 所以设置页只保留这一行，协议偏好改成由它推导后回写（见
+ * [com.googlecode.eyesfree.brailleback.compose.DeviceConnectionLogic.protocolForTransport]），
+ * 避免同一件事在两行设置里各存一份、改一处另一处不变。
  */
 object ConnectionTransportPolicy {
     const val AUTO = "auto"
     const val HID_BLE = "hid_ble"
     const val HID_USB = "hid_usb"
     const val HID_CLASSIC = "hid_classic"
+    const val USB_SERIAL = "usb_serial"
     const val SERIAL = "serial"
 
     /** 偏好键。只被 Compose 设备页读写，旧 XML 设置页不显示这一项。 */
@@ -46,6 +51,7 @@ object ConnectionTransportPolicy {
         return when (value?.trim()?.lowercase()) {
             HID_BLE, "hid", "ble", "blehid", "hidfirst", "hogp", "gatt" -> HID_BLE
             HID_USB, "usb", "usbhid" -> HID_USB
+            USB_SERIAL, "usbserial", "usb_serial", "usb-serial" -> USB_SERIAL
             HID_CLASSIC, "hidp", "btclassic" -> HID_CLASSIC
             SERIAL, "spp", "rfcomm", "classic" -> SERIAL
             else -> AUTO

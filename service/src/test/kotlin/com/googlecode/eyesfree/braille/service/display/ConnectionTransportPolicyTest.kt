@@ -32,6 +32,10 @@ class ConnectionTransportPolicyTest {
         assertEquals(ConnectionTransportPolicy.HID_BLE, ConnectionTransportPolicy.normalize("hid_ble"))
         assertEquals(ConnectionTransportPolicy.HID_USB, ConnectionTransportPolicy.normalize("usbhid"))
         assertEquals(ConnectionTransportPolicy.HID_USB, ConnectionTransportPolicy.normalize("hid_usb"))
+        assertEquals(
+            ConnectionTransportPolicy.USB_SERIAL,
+            ConnectionTransportPolicy.normalize("usb_serial")
+        )
         assertEquals(ConnectionTransportPolicy.HID_CLASSIC, ConnectionTransportPolicy.normalize("hidp"))
         assertEquals(
             ConnectionTransportPolicy.HID_CLASSIC,

@@ -127,25 +127,24 @@ class ComposeMigrationContractTest {
     @Test
     fun pilotScreenKeepsExactlyThreeLegacyKeys() {
         val screen = compose("DeviceConnectionScreen.kt")
+        // 协议行已并入连接方式（同一件事不再存两份），但偏好键改由链路推导后
+        // 回写，所以 STATUS / AUTO_CONNECT 这两个原设置项必须还在界面上。
         listOf(
             DeviceConnectionKeys.STATUS,
-            DeviceConnectionKeys.PROTOCOL,
             DeviceConnectionKeys.AUTO_CONNECT
         ).forEach { key ->
             assertTrue("试点屏缺少原设置项 $key", screen.contains("KEY_${key.uppercase()}"))
         }
-        // 数量断言升级成集合断言：三个旧设置键必须都在，且只准再多一个纯界面键
-        // （断开连接，不写偏好）。任何第五个键都要先来这里登记，防止顺手往设置页
-        // 塞新的持久化项。
+        // 集合断言：原两个设置键 + 断开 + 连接方式。任何新增键都要先来这里登记，
+        // 防止顺手往设置页塞新的持久化项。
         val usedKeys = Regex("""item\(key = DeviceConnectionLogic\.(KEY_[A-Z_]+)\)""")
             .findAll(screen)
             .map { it.groupValues[1] }
             .toSet()
         assertEquals(
-            "试点屏的 item key 集合必须正好是「三个旧设置键 + 断开 + 连接方式（后两者是纯界面键）」",
+            "试点屏的 item key 集合必须正好是「两个原设置键 + 断开 + 连接方式」",
             setOf(
                 "KEY_CONNECTION_STATUS",
-                "KEY_CONNECTION_PROTOCOL",
                 "KEY_AUTO_CONNECT",
                 "KEY_DISCONNECT",
                 "KEY_TRANSPORT"
@@ -154,8 +153,8 @@ class ComposeMigrationContractTest {
         )
         val activity = compose("DeviceConnectionComposeActivity.kt")
         assertTrue(
-            "协议写入必须回写原 key",
-            activity.contains("prefs.edit().putString(protocolKey, value).apply()")
+            "协议偏好必须由连接方式推导后回写原 key，不能只写链路键",
+            activity.contains(".putString(protocolKey, protocolForTransport)")
         )
         assertTrue(
             "自动连接写入必须回写原 key",

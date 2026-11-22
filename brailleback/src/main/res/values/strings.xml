@@ -567,11 +567,13 @@
     <string name="compose_settings_transport_auto">Automatic (recommended)</string>
     <string name="compose_settings_transport_hid">Standard HID (Bluetooth LE)</string>
     <string name="compose_settings_transport_hid_usb">Standard HID (wired USB)</string>
+    <string name="compose_settings_transport_usb_serial">Wired USB serial</string>
     <string name="compose_settings_transport_hid_classic">Classic Bluetooth HID</string>
     <string name="compose_settings_transport_serial">Classic serial (SPP)</string>
     <string name="compose_settings_transport_summary_auto">HID first; a Wujie or Orbit display is sent to classic serial because its HID channel never reports keys</string>
     <string name="compose_settings_transport_summary_hid">Standard HID only, no serial fallback; the link is handled by the system braille controller</string>
     <string name="compose_settings_transport_summary_hid_usb">Wired USB HID only, no Bluetooth; plug the cable in and allow the USB prompt</string>
+    <string name="compose_settings_transport_summary_usb_serial">Wired USB serial only; plug the cable in and allow the USB prompt</string>
     <string name="compose_settings_transport_summary_hid_classic">Classic Bluetooth HID is owned by the system input stack; this app cannot write to the display and only receives keys, so pick classic serial for two-way use</string>
     <string name="compose_settings_transport_summary_serial">Classic serial only; keys are parsed by the brltty driver</string>
 

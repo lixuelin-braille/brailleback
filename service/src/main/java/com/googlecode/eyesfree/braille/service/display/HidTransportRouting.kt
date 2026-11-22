@@ -38,8 +38,10 @@ object HidTransportRouting {
         val transportValue = ConnectionTransportPolicy.normalize(transport)
         return when (transportValue) {
             ConnectionTransportPolicy.HID_USB -> LinkRoute.USB_HID
+            ConnectionTransportPolicy.USB_SERIAL -> LinkRoute.USB_SERIAL
             ConnectionTransportPolicy.HID_CLASSIC -> LinkRoute.NONE
             ConnectionTransportPolicy.HID_BLE -> LinkRoute.BLUETOOTH
+            // 旧配置可能只把协议改成 usb、连接方式还停在串口；别把它拽回蓝牙。
             ConnectionTransportPolicy.SERIAL ->
                 if (protocolValue == ConnectionProtocolPolicy.USB) {
                     LinkRoute.USB_SERIAL
@@ -65,10 +67,12 @@ object HidTransportRouting {
     fun shouldReactToUsbAttach(protocol: String?, transport: String?): Boolean {
         val protocolValue = ConnectionProtocolPolicy.normalize(protocol)
         return when (ConnectionTransportPolicy.normalize(transport)) {
-            ConnectionTransportPolicy.HID_USB -> true
-            ConnectionTransportPolicy.HID_BLE, ConnectionTransportPolicy.HID_CLASSIC -> false
+            ConnectionTransportPolicy.HID_USB,
+            ConnectionTransportPolicy.USB_SERIAL -> true
+            ConnectionTransportPolicy.HID_BLE,
+            ConnectionTransportPolicy.HID_CLASSIC -> false
             ConnectionTransportPolicy.SERIAL -> protocolValue == ConnectionProtocolPolicy.USB
-            else -> protocolValue != ConnectionProtocolPolicy.BLUETOOTH
+            else -> true
         }
     }
 

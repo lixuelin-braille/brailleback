@@ -111,36 +111,71 @@ class DeviceConnectionCandidateLogicTest {
 
     @Test
     fun transportSummaryFollowsSelection() {
-        val auto = "自动：优先 HID，无界系列送去串口"
+        val auto = "自动：插着线走 USB，没插走蓝牙"
         val ble = "只用标准 HID（蓝牙）"
         val usb = "只走 USB 有线 HID"
+        val usbSerial = "只走 USB 有线串口"
+        val serial = "只用蓝牙经典串口"
         val classic = "经典蓝牙 HID 由系统接管"
-        val serial = "只用经典串口"
+        val all = listOf(ble, usb, usbSerial, serial, classic)
         assertEquals(
             auto,
-            DeviceConnectionLogic.transportSummary("auto", auto, ble, usb, classic, serial)
+            DeviceConnectionLogic.transportSummary("auto", auto, ble, usb, usbSerial, serial, classic)
         )
-        assertEquals(
-            ble,
-            DeviceConnectionLogic.transportSummary("hid_ble", auto, ble, usb, classic, serial)
-        )
-        assertEquals(
-            usb,
-            DeviceConnectionLogic.transportSummary("hid_usb", auto, ble, usb, classic, serial)
-        )
-        assertEquals(
-            classic,
-            DeviceConnectionLogic.transportSummary("hid_classic", auto, ble, usb, classic, serial)
-        )
-        assertEquals(
-            serial,
-            DeviceConnectionLogic.transportSummary("serial", auto, ble, usb, classic, serial)
-        )
+        for ((index, value) in listOf("hid_ble", "hid_usb", "usb_serial", "serial", "hid_classic")
+            .withIndex()) {
+            assertEquals(
+                all[index],
+                DeviceConnectionLogic.transportSummary(
+                    value, auto, ble, usb, usbSerial, serial, classic
+                )
+            )
+        }
         // 老值 "hid" 必须落到蓝牙低功耗那一句，不能掉到自动。
         assertEquals(
             ble,
-            DeviceConnectionLogic.transportSummary("hid", auto, ble, usb, classic, serial)
+            DeviceConnectionLogic.transportSummary("hid", auto, ble, usb, usbSerial, serial, classic)
         )
+    }
+
+    /**
+     * 回归：连接方式行的标签一度借用了协议归一化，`hid_usb` 匹配不到协议表，
+     * 索引落成 -1 回落到第一项，界面出现「自动（推荐）· 只走 USB 有线 HID」。
+     * 现在每个取值都必须念出自己那一项。
+     */
+    @Test
+    fun transportLabelNeverFallsBackToAutoForKnownValues() {
+        val values = listOf("auto", "hid_ble", "hid_usb", "usb_serial", "serial", "hid_classic")
+        val entries = listOf("自动", "蓝牙 HID", "USB HID", "USB 串口", "蓝牙串口", "经典蓝牙 HID")
+        for ((index, value) in values.withIndex()) {
+            assertEquals(
+                entries[index],
+                DeviceConnectionLogic.transportLabelForValue(values, entries, value)
+            )
+        }
+        // 老值与坏值：老值要有正确标签，坏值才允许回落第一项。
+        assertEquals(
+            "蓝牙 HID",
+            DeviceConnectionLogic.transportLabelForValue(values, entries, "hid")
+        )
+        assertEquals(
+            "自动",
+            DeviceConnectionLogic.transportLabelForValue(values, entries, "nonsense")
+        )
+        assertEquals("", DeviceConnectionLogic.transportLabelForValue(emptyList(), emptyList(), "auto"))
+    }
+
+    /** 链路改变必须回写等价协议值，否则服务端 USB 失败分支会按蓝牙处理。 */
+    @Test
+    fun protocolForTransportKeepsLegacyKeyConsistent() {
+        assertEquals("usb", DeviceConnectionLogic.protocolForTransport("hid_usb"))
+        assertEquals("usb", DeviceConnectionLogic.protocolForTransport("usb_serial"))
+        assertEquals("auto", DeviceConnectionLogic.protocolForTransport("auto"))
+        assertEquals("bluetooth", DeviceConnectionLogic.protocolForTransport("hid_ble"))
+        assertEquals("bluetooth", DeviceConnectionLogic.protocolForTransport("serial"))
+        assertEquals("bluetooth", DeviceConnectionLogic.protocolForTransport("hid_classic"))
+        // 老值也要折对。
+        assertEquals("usb", DeviceConnectionLogic.protocolForTransport("usbhid"))
     }
 
     /**

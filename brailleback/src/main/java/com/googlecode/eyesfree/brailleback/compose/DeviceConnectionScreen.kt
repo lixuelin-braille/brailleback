@@ -13,7 +13,12 @@ import androidx.compose.runtime.setValue
 import com.googlecode.eyesfree.braille.display.DeviceListEntry
 
 /**
- * 「设备与连接」子屏：三个设置项，与 res/xml/settings.xml 中同名子屏一一对应。
+ * 「设备与连接」子屏。
+ *
+ * <p>设置项只保留一行链路选择（[DeviceConnectionLogic.KEY_TRANSPORT]）。早先还有
+ * 一行「协议」（蓝牙 / USB / 自动），与链路选择信息重复：两行都叫「连接方式」、
+ * 都带一个「自动」，改一处另一处不变，读屏用户听到两行几乎相同的标题根本分不清
+ * 该改哪一行。现在由六条链路取值覆盖全部组合，协议偏好改由链路推导后回写。
  *
  * 纯展示 + 显式回调，不持有 Context、不直接读写 SharedPreferences；
  * 状态由 Activity 提供，符合项目的 state holder + 显式参数约定。
@@ -22,7 +27,6 @@ import com.googlecode.eyesfree.braille.display.DeviceListEntry
 internal fun DeviceConnectionScreen(
     labels: DeviceConnectionLabels,
     stateText: String,
-    protocolValue: String,
     transportValue: String,
     autoConnect: Boolean,
     candidates: List<DeviceListEntry>,
@@ -31,19 +35,14 @@ internal fun DeviceConnectionScreen(
     canDisconnect: Boolean,
     onRefresh: () -> Unit,
     onDisconnect: () -> Unit,
-    onProtocolSelected: (String) -> Unit,
     onTransportSelected: (String) -> Unit,
     onAutoConnectChange: (Boolean) -> Unit,
     onStartDiscovery: () -> Unit,
     onCandidateClicked: (DeviceListEntry) -> Unit,
     onBack: () -> Unit,
 ) {
-    var showProtocolDialog by remember { mutableStateOf(false) }
     var showTransportDialog by remember { mutableStateOf(false) }
-    val protocolLabel = DeviceConnectionLogic.labelForValue(
-        labels.protocolValues, labels.protocolEntries, protocolValue
-    )
-    val transportLabel = DeviceConnectionLogic.labelForValue(
+    val transportLabel = DeviceConnectionLogic.transportLabelForValue(
         labels.transportValues, labels.transportEntries, transportValue
     )
 
@@ -54,8 +53,7 @@ internal fun DeviceConnectionScreen(
     ) {
         settingsSectionHeader(labels.section)
 
-        // 用户主动查找入口：单独一行动作。新行不挂 key，保持既有三个设置项的
-        // 结构不变。
+        // 用户主动查找入口：单独一行动作。新行不挂 key，保持既有设置项的结构不变。
         item {
             val discoverSummary = when {
                 !discoveryEnabled -> labels.discoverDenied
@@ -92,17 +90,8 @@ internal fun DeviceConnectionScreen(
             )
         }
 
-        item(key = DeviceConnectionLogic.KEY_CONNECTION_PROTOCOL) {
-            SettingsListRow(
-                title = labels.protocolTitle,
-                currentLabel = protocolLabel,
-                chooseHint = labels.chooseHint,
-                onClick = { showProtocolDialog = true },
-            )
-        }
-
-        // 连接方式：自动 / 蓝牙 HID / USB HID / 经典蓝牙 HID / 串口。摘要里必须带上
-        // 「这样选意味着什么」，只说一个词会让读屏用户分不清几种 HID 的区别，
+        // 连接方式：自动 / 蓝牙 HID / USB HID / USB 串口 / 蓝牙串口 / 经典蓝牙 HID。
+        // 摘要里必须带上「这样选意味着什么」，只说一个词会让读屏用户分不清几种链路，
         // 尤其是经典蓝牙 HID 在 Android 上根本不由本 App 驱动。
         item(key = DeviceConnectionLogic.KEY_TRANSPORT) {
             SettingsListRow(
@@ -112,15 +101,17 @@ internal fun DeviceConnectionScreen(
                     labels.transportAutoSummary,
                     labels.transportHidSummary,
                     labels.transportUsbSummary,
-                    labels.transportClassicSummary,
-                    labels.transportSerialSummary
+                    labels.transportUsbSerialSummary,
+                    labels.transportSerialSummary,
+                    labels.transportClassicSummary
                 ),
                 chooseHint = labels.chooseHint,
                 onClick = { showTransportDialog = true },
             )
         }
 
-        item(key = DeviceConnectionLogic.KEY_AUTO_CONNECT) {            SettingsSwitchRow(
+        item(key = DeviceConnectionLogic.KEY_AUTO_CONNECT) {
+            SettingsSwitchRow(
                 title = labels.autoConnectTitle,
                 summary = labels.autoConnectSummary,
                 checked = autoConnect,
@@ -158,23 +149,6 @@ internal fun DeviceConnectionScreen(
                 onClick = { onCandidateClicked(entry) },
             )
         }
-    }
-
-    if (showProtocolDialog) {
-        SettingsChoiceDialog(
-            title = labels.dialogTitle,
-            entries = labels.protocolEntries,
-            values = labels.protocolValues,
-            currentValue = protocolValue,
-            cancelLabel = labels.cancel,
-            selectedLabel = labels.selected,
-            unselectedLabel = labels.unselected,
-            onSelect = { value ->
-                showProtocolDialog = false
-                onProtocolSelected(value)
-            },
-            onDismiss = { showProtocolDialog = false },
-        )
     }
 
     if (showTransportDialog) {

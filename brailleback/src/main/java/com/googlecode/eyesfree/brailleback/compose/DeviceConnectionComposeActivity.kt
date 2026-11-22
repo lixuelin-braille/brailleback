@@ -36,9 +36,7 @@ internal data class DeviceConnectionLabels(
     val section: String,
     val statusTitle: String,
     val refreshHint: String,
-    val protocolTitle: String,
     val chooseHint: String,
-    val dialogTitle: String,
     val cancel: String,
     val autoConnectTitle: String,
     val autoConnectSummary: String,
@@ -46,8 +44,6 @@ internal data class DeviceConnectionLabels(
     val off: String,
     val selected: String,
     val unselected: String,
-    val protocolEntries: List<String>,
-    val protocolValues: List<String>,
     val discoverTitle: String,
     val discoverHint: String,
     val discoverSearching: String,
@@ -70,6 +66,7 @@ internal data class DeviceConnectionLabels(
     val transportAutoSummary: String,
     val transportHidSummary: String,
     val transportUsbSummary: String,
+    val transportUsbSerialSummary: String,
     val transportClassicSummary: String,
     val transportSerialSummary: String,
 )
@@ -102,13 +99,12 @@ class DeviceConnectionComposeActivity : AppCompatActivity(),
     // Compose 状态放在 Activity 层：连接回调来自服务，需要直接驱动重组。
     private var connectionState by mutableStateOf(Display.STATE_NOT_CONNECTED)
     private var progressText by mutableStateOf<String?>(null)
-    private var protocolValue by mutableStateOf(ConnectionProtocolPolicy.BLUETOOTH)
     private var autoConnect by mutableStateOf(true)
 
     /** 服务端上报的候选设备：已配对 + 本轮发现到的未配对。 */
     private var candidates by mutableStateOf<List<DeviceListEntry>>(emptyList())
 
-    /** 蓝牙内部链路：自动 / 标准 HID / 经典串口。切换后从下一次连接开始生效。 */
+    /** 链路选择：自动 / 两种 HID / 两种串口 / 经典蓝牙 HID。切换后从下一次连接开始生效。 */
     private var transportValue by mutableStateOf(ConnectionTransportPolicy.AUTO)
 
     /** 用户主动查找是否正在进行（本地一次性窗口的界面态）。 */
@@ -145,7 +141,6 @@ class DeviceConnectionComposeActivity : AppCompatActivity(),
         if (rawProtocol != normalized) {
             prefs.edit().putString(protocolKey, normalized).apply()
         }
-        protocolValue = normalized
         transportValue = DeviceConnectionLogic.normalizeTransport(
             prefs.getString(transportKey, null)
         )
@@ -170,9 +165,7 @@ class DeviceConnectionComposeActivity : AppCompatActivity(),
                 section = getString(R.string.compose_settings_section_connection),
                 statusTitle = getString(R.string.pref_connection_status_title),
                 refreshHint = getString(R.string.compose_settings_refresh),
-                protocolTitle = getString(R.string.pref_connection_protocol_title),
                 chooseHint = getString(R.string.compose_settings_choose),
-                dialogTitle = getString(R.string.compose_settings_protocol_dialog_title),
                 cancel = getString(R.string.compose_settings_cancel),
                 autoConnectTitle = getString(R.string.pref_auto_connect_title),
                 autoConnectSummary = getString(R.string.pref_auto_connect_summary),
@@ -180,12 +173,6 @@ class DeviceConnectionComposeActivity : AppCompatActivity(),
                 off = getString(R.string.compose_settings_off),
                 selected = getString(R.string.compose_settings_selected),
                 unselected = getString(R.string.compose_settings_unselected),
-                protocolEntries = resources.getStringArray(
-                    R.array.pref_connection_protocol_entries
-                ).toList(),
-                protocolValues = resources.getStringArray(
-                    R.array.pref_connection_protocol_values
-                ).toList(),
                 discoverTitle = getString(R.string.compose_settings_discover_title),
                 discoverHint = getString(R.string.compose_settings_discover_hint),
                 discoverSearching = getString(R.string.compose_settings_discover_searching),
@@ -212,6 +199,9 @@ class DeviceConnectionComposeActivity : AppCompatActivity(),
                 transportAutoSummary = getString(R.string.compose_settings_transport_summary_auto),
                 transportHidSummary = getString(R.string.compose_settings_transport_summary_hid),
                 transportUsbSummary = getString(R.string.compose_settings_transport_summary_hid_usb),
+                transportUsbSerialSummary = getString(
+                    R.string.compose_settings_transport_summary_usb_serial
+                ),
                 transportClassicSummary = getString(
                     R.string.compose_settings_transport_summary_hid_classic
                 ),
@@ -220,7 +210,6 @@ class DeviceConnectionComposeActivity : AppCompatActivity(),
             DeviceConnectionScreen(
                 labels = labels,
                 stateText = currentStateText(),
-                protocolValue = protocolValue,
                 transportValue = transportValue,
                 autoConnect = autoConnect,
                 candidates = candidates,
@@ -229,14 +218,16 @@ class DeviceConnectionComposeActivity : AppCompatActivity(),
                 canDisconnect = DeviceConnectionLogic.shouldOfferDisconnect(connectionState),
                 onRefresh = { displayClient?.poll() },
                 onDisconnect = { onDisconnectClicked() },
-                onProtocolSelected = { value ->
-                    protocolValue = value
-                    prefs.edit().putString(protocolKey, value).apply()
-                },
                 onTransportSelected = { value ->
                     val next = DeviceConnectionLogic.normalizeTransport(value)
+                    // 协议偏好仍是服务端若干判定的依据（USB HID 失败分支、拔线、
+                    // 重连），所以链路一变就把等价协议值回写，别让两处各说各话。
+                    val protocolForTransport = DeviceConnectionLogic.protocolForTransport(next)
                     transportValue = next
-                    prefs.edit().putString(transportKey, next).apply()
+                    prefs.edit()
+                        .putString(transportKey, next)
+                        .putString(protocolKey, protocolForTransport)
+                        .apply()
                 },
                 onAutoConnectChange = { value ->
                     autoConnect = value
