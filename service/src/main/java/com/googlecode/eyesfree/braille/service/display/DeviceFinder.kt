@@ -27,6 +27,7 @@ import com.googlecode.eyesfree.utils.SettingsStore
 import android.util.Log
 import com.googlecode.eyesfree.braille.display.BluetoothDeviceEntry
 import com.googlecode.eyesfree.braille.service.R
+import timber.log.Timber
 import java.util.Collections
 import java.util.UUID
 import java.util.regex.Pattern
@@ -242,7 +243,7 @@ class DeviceFinder(context: Context) {
             if (seenAddresses.add(address.uppercase(java.util.Locale.ROOT))) {
                 deduped.add(info)
             } else {
-                Log.w(LOG_TAG, "duplicate device address dropped: " + address)
+                Timber.w("duplicate device address dropped: %s", address)
             }
         }
         return deduped
