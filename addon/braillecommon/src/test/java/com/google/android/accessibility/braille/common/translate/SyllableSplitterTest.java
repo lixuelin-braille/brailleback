@@ -401,6 +401,52 @@ public class SyllableSplitterTest {
     assertEquals(index.getCandidates("145-26").get(0), result.confirmedText);
   }
 
+  @Test
+  public void pendingUnit_reportsCellRangeAndDots() {
+    // 确认时要按格区间把选定文本绑住，所以尾部的"终点格下标"和点位串必须一起报出来，
+    // 少一个都会让绑定对不上位置或被误用到别的格上。
+    SyllableSplitter.Result result =
+        SyllableSplitter.split(new BrailleWord("145-26"), index, STUB_TRANSLATOR, cursor, -1, true);
+
+    assertEquals(0, result.pendingStart);
+    assertEquals(2, result.pendingEnd);
+    assertEquals("145-26", result.pendingDots);
+  }
+
+  @Test
+  public void boundWord_isEmittedVerbatimAndNotResplit() {
+    // 用户把这一格选成了"地"（第三个候选）之后又继续打字：重新切分时这段格不能再按候选重算，
+    // 否则会跳回字频最高的"的"，或者把选过的序号套到别的音节上。
+    cursor.bindWord(0, 2, "145-26", "地");
+
+    SyllableSplitter.Result result =
+        SyllableSplitter.split(new BrailleWord("145-26-156-23"), index, STUB_TRANSLATOR, cursor, -1, true);
+
+    assertTrue(result.confirmedText.startsWith("地"));
+  }
+
+  @Test
+  public void boundWord_isIgnoredWhenCellsWereEdited() {
+    // 绑定靠点位签名辨认。用户删掉重打成别的格时，签名不符就必须作废，
+    // 否则会在新内容上贴一个旧的字。
+    cursor.bindWord(0, 2, "145-26", "地");
+
+    SyllableSplitter.Result result =
+        SyllableSplitter.split(new BrailleWord("156-23-145-26"), index, STUB_TRANSLATOR, cursor, -1, true);
+
+    assertFalse(result.confirmedText.startsWith("地"));
+  }
+
+  @Test
+  public void trimTo_dropsBindingsBeyondHoldings() {
+    cursor.bindWord(0, 2, "145-26", "地");
+    assertEquals(1, cursor.wordCount());
+
+    cursor.trimTo(1);
+
+    assertEquals(0, cursor.wordCount());
+  }
+
   private static ChineseBrailleTableIndex assertDoesNotThrowParse(BufferedReader reader) {
     try {
       return ChineseBrailleTableIndex.parse(reader);
