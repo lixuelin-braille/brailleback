@@ -79,7 +79,7 @@ class SingleImeRegistrationTest {
     fun componentConstantPointsAtTheOnlyRegisteredIme() {
         val src = projectFile(
             "addon/tbcompat/src/main/java/com/google/android/accessibility/utils/" +
-                "AccessibilityServiceCompatUtils.java"
+                "AccessibilityServiceCompatUtils.kt"
         ).readText()
         assertTrue("BRAILLE_IME_CLASS_NAME 必须指向唯一注册的 BrailleIME",
             src.contains("\"com.googlecode.eyesfree.brailleback.BrailleIME\""))
@@ -112,7 +112,12 @@ class SingleImeRegistrationTest {
             src.contains("class BrailleIME : BrailleIme {"))
         assertTrue("触屏模式必须能加载移植键盘的 InputView",
             src.contains("super.onCreateInputView()"))
-        assertTrue("必须按形态开关决定是否激活移植键盘生命周期",
+        // 2026-11-21 产品决策改为「屏幕键盘与点显器并行」：满屏输入区挂出时硬件形态
+        // 也走父类，否则触摸区、候选、手势控制器都不初始化。锚点因此从形态开关
+        // 换成 fullInputView，并反向钉死，防止退回「硬件形态跳过父类」。
+        assertTrue("必须按满屏输入区开关决定是否激活移植键盘生命周期",
+            src.contains("if (fullInputView)"))
+        assertFalse("不许再用触屏形态开关决定父类激活",
             src.contains("if (touchKeyboardEnabled())"))
     }
 

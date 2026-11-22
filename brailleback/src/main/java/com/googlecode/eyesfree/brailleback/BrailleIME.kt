@@ -33,10 +33,13 @@ import android.view.inputmethod.ExtractedTextRequest
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
+import com.google.android.accessibility.braille.common.BrailleCommonTalkBackSpeaker
 import com.google.android.accessibility.brailleime.BrailleIme
 import com.googlecode.eyesfree.braille.display.BrailleInputEvent
 import com.googlecode.eyesfree.braille.translate.BrailleTranslator
 import com.googlecode.eyesfree.brailleback.ime.BrailleInputPolicy
+import com.googlecode.eyesfree.brailleback.ime.ImeDisplayBridge
+import com.googlecode.eyesfree.brailleback.ime.ImeSpeech
 import com.googlecode.eyesfree.brailleback.ime.SingleImeViewPolicy
 import com.googlecode.eyesfree.brailleback.ime.UnifiedBrailleInput
 import com.googlecode.eyesfree.utils.LogUtils
@@ -157,6 +160,23 @@ class BrailleIME : BrailleIme {
      * 点位不再在本类里自行累积和回译，全部交给 EditBuffer。
      */
     private var unifiedBraille: UnifiedBrailleInput? = null
+    /**
+     * 点位累积器：单点事件先攒着，攒到第二个点、或者按空格时，才作为一格提交。
+     *
+     * 刻意不引入任何计时器（不做「停顿多少毫秒算一格」）：节奏完全由用户按键决定，
+     * 手慢手快都不影响结果，行为与普通输入法一致。一次事件就带两个以上点（真正同时
+     * 按下的 chord）时立刻上屏，不受累积影响。
+     */
+    private var pendingDots = 0
+
+    /**
+     * 没有无障碍宿主时，输入法自己连点显器。
+     *
+     * 点显器连接本身不依赖无障碍服务（`DisplayService` 是独立的前台服务），所以输入法可以
+     * 单独把点显器接过来打字。宿主在跑时必须为 null：`DisplayService` 把按键广播给所有
+     * 客户端，两套同时活着会一个按键做两遍。
+     */
+    private var imeDisplay: ImeDisplayBridge? = null
 
     /** Constructor for general use. */
     constructor() : super() {
@@ -177,6 +197,10 @@ class BrailleIME : BrailleIme {
         mInputMethodManager = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
         // 复制在 BrailleInputPolicy 里的命令常量必须与 AIDL 事件定义保持一致。
         UnifiedBrailleInput.assertCommandContract()
+        // 输入法可以脱离无障碍服务单独跑：那种情形下读屏桥是空的，候选播报交给系统 TTS 兜底。
+        // 读屏在跑时桥会被注入，兜底不会被用到，所以不会重复播报。
+        BrailleCommonTalkBackSpeaker.setFallbackSpeaker(ImeSpeech)
+        ImeSpeech.warmUp(this)
         LogUtils.log(this, Log.VERBOSE, "Created Braille IME")
 
         getHost()?.onCreateIME()
@@ -190,9 +214,15 @@ class BrailleIME : BrailleIme {
         updateCurrentText()
         unifiedBraille?.reset()
         unifiedBraille = null
+        pendingDots = 0
+        imeDisplay?.stop()
+        imeDisplay = null
         sInstance = null
 
         getHost()?.onDestroyIME()
+
+        // 兜底播报随输入法一起退场，别让已销毁的实例占着 TTS 引擎。
+        ImeSpeech.shutdown()
     }
 
     override fun onBindInput() {
@@ -235,6 +265,7 @@ class BrailleIME : BrailleIme {
         LogUtils.log(this, Log.VERBOSE, "onFinishInput")
         // 统一引擎里可能还挂着 composing 的音节，切走输入框前先落定，避免丢字。
         unifiedBraille?.finish()
+        pendingDots = 0
         mExtractedText = null
         updateCurrentText()
 
@@ -242,19 +273,47 @@ class BrailleIME : BrailleIme {
     }
 
     override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
-        // 只有触屏模式才让父类激活移植键盘（overlay / 教程 / 手势控制器）。
-        // InputMethodService 对这两个 View 生命周期回调默认是空实现，硬件模式跳过
-        // 父类不会破坏 input view 的显示状态。
-        if (touchKeyboardEnabled()) {
+        // 满屏输入区挂出来时，父类的 onStartInputView 是它生效的必经一步：BrailleInputView
+        // 的触摸区、候选、手势控制器都在父类里初始化，跳过就不会工作。
+        //
+        // 硬件模式也走这里——两种键盘同时可用是明确要求：点显器照旧通过 onHardwareInputEvent
+        // 送字，屏幕上的触摸键盘走自己的触摸区，两者共用同一个 UnifiedBrailleInput 与
+        // EditBuffer，候选是同一份。
+        if (fullInputView) {
             super.onStartInputView(info, restarting)
         }
-        LogUtils.log(this, Log.VERBOSE, "onStartInputView: touchKeyboard=$touchKeyboard")
+        LogUtils.log(this, Log.VERBOSE, "onStartInputView: touchKeyboard=$touchKeyboard full=$fullInputView")
 
+        reconcileImeDisplay()
         getHost()?.onStartInputView(info, restarting)
     }
 
+    /**
+     * 按「有没有无障碍宿主」决定输入法是否自己连点显器。
+     *
+     * 宿主在跑：立刻断开自己的连接并让出。宿主启动/关闭可能发生在本输入法已经活着的时候，
+     * 所以每次弹出输入区都重新对齐一次，不靠一次性判断。
+     */
+    private fun reconcileImeDisplay() {
+        val hostPresent = getHost() != null
+        if (hostPresent) {
+            imeDisplay?.let {
+                it.stop()
+                imeDisplay = null
+            }
+            return
+        }
+        if (imeDisplay == null) {
+            imeDisplay = ImeDisplayBridge(
+                applicationContext,
+                { getActiveInstance() },
+                { getHost() != null },
+            ).also { it.start() }
+        }
+    }
+
     override fun onFinishInputView(finishingInput: Boolean) {
-        if (touchKeyboardEnabled()) {
+        if (fullInputView) {
             super.onFinishInputView(finishingInput)
         }
         LogUtils.log(this, Log.VERBOSE, "onFinishInputView")
@@ -269,10 +328,21 @@ class BrailleIME : BrailleIme {
     override fun onCreateInputView(): View {
         // touchKeyboard 在这里定格：onCreateInputView 每个 IME 会话只调用一次，
         // 同一会话里切模式必须保持一致，否则 onStart/FinishInputView 的判断会错位。
-        touchKeyboard = resolveTouchKeyboardMode(readViewMode(),
+        val mode = readViewMode()
+        touchKeyboard = resolveTouchKeyboardMode(mode,
                 BrailleBackService.isBrailleDisplayConnected())
-        if (touchKeyboard) {
-            return super.onCreateInputView()
+        // 只有用户显式选了 off（"只用点显器、不要屏幕键盘"）时，才退回原来自带的提示条。
+        // 其余情况——包括点显器已连接的 auto——都挂 TalkBack 那颗满屏输入区，屏幕和点显器并行。
+        fullInputView = mode != MODE_OFF
+        if (fullInputView) {
+            // 满屏输入区来自移植的 TalkBack 实现，依赖宿主桥接齐全；万一某台机器上初始化
+            // 失败（缺失手势控制器等），退回提示条也比整个输入法崩掉强——崩了用户连字都打不了。
+            try {
+                return super.onCreateInputView()
+            } catch (e: RuntimeException) {
+                LogUtils.log(this, Log.ERROR, "super.onCreateInputView failed", e)
+                fullInputView = false
+            }
         }
         val inflater = getLayoutInflater()
         val inputView = inflater.inflate(R.layout.braille_ime, null)
@@ -287,7 +357,8 @@ class BrailleIME : BrailleIme {
     /** 本会话是否处于触屏点字形态；在 onCreateInputView 时确定，之后不再变化。 */
     private var touchKeyboard = false
 
-    private fun touchKeyboardEnabled(): Boolean = touchKeyboard
+    /** 本会话是否挂了满屏输入区（触屏键盘与硬件点显器可以并行）。 */
+    private var fullInputView = false
 
     private fun readViewMode(): String =
         getSharedPreferences(BRAILLE_KEYBOARD_PREFS, Context.MODE_PRIVATE)
@@ -455,32 +526,94 @@ class BrailleIME : BrailleIme {
         val engine = unifiedEngine() ?: return null
         val route = BrailleInputPolicy.route(command, argument, /* unified= */ true, engine.isEightDot())
         return when (route.action) {
-            BrailleInputPolicy.Action.LEGACY -> null
-            BrailleInputPolicy.Action.APPEND_CELL ->
-                emitFeedbackOnFailure(
-                    engine.appendCell(route.cell),
-                    FeedbackManager.TYPE_COMMAND_FAILED,
-                )
-            BrailleInputPolicy.Action.COMMIT ->
-                emitFeedbackOnFailure(
-                    engine.commit(),
-                    FeedbackManager.TYPE_COMMAND_FAILED,
-                )
-            BrailleInputPolicy.Action.DELETE ->
-                emitFeedbackOnFailure(
-                    engine.delete(),
-                    FeedbackManager.TYPE_COMMAND_FAILED,
-                )
-            BrailleInputPolicy.Action.ENTER ->
-                emitFeedbackOnFailure(
-                    engine.enter(),
-                    FeedbackManager.TYPE_COMMAND_FAILED,
-                )
-            BrailleInputPolicy.Action.NEXT_CANDIDATE ->
+            BrailleInputPolicy.Action.LEGACY -> {
+                // 离开输入语义前先把攒着的点交出去，别把用户的点吞掉。
+                flushPendingDots(engine)
+                null
+            }
+            BrailleInputPolicy.Action.APPEND_CELL -> accumulateCell(engine, route.cell)
+            BrailleInputPolicy.Action.COMMIT -> {
+                // 空格既结这一格，也做「上屏」：先交攒点，再提交。
+                val appended = flushPendingDots(engine) ?: true
+                emitFeedbackOnFailure(appended && engine.commit(), FeedbackManager.TYPE_COMMAND_FAILED)
+            }
+            BrailleInputPolicy.Action.DELETE -> {
+                // 攒点阶段退格只撤最后按下的一个点，不动已上屏内容。
+                if (pendingDots != 0) {
+                    pendingDots = clearLastDot(pendingDots)
+                    true
+                } else {
+                    emitFeedbackOnFailure(engine.delete(), FeedbackManager.TYPE_COMMAND_FAILED)
+                }
+            }
+            BrailleInputPolicy.Action.ENTER -> {
+                val appended = flushPendingDots(engine) ?: true
+                emitFeedbackOnFailure(appended && engine.enter(), FeedbackManager.TYPE_COMMAND_FAILED)
+            }
+            BrailleInputPolicy.Action.NEXT_CANDIDATE -> {
+                flushPendingDots(engine)
                 if (engine.nextCandidate()) true else null
-            BrailleInputPolicy.Action.PREVIOUS_CANDIDATE ->
+            }
+            BrailleInputPolicy.Action.PREVIOUS_CANDIDATE -> {
+                flushPendingDots(engine)
                 if (engine.previousCandidate()) true else null
+            }
         }
+    }
+
+    /**
+     * 点位累积：一次事件只带一个点就继续攒；一次事件本身就带多个点（真正同时按下的
+     * chord）才算一格打完，立刻上屏。
+     *
+     * 注意不要在「攒到第二个点」时就上屏——那样按 1、2、3 会被切成 12 和 3 两格，
+     * 逻辑就乱了。攒多少个点由用户决定，结清的一刻只有两个：按空格，或者按回车。
+     */
+    private fun echoPressedDots(dots: Int) {
+        val manager = getCurrentDisplayManager()
+        if (manager != null) {
+            manager.showPressedDots(dots)
+        } else {
+            // 没有宿主时点显器由输入法自己连，回显也得自己画。
+            imeDisplay?.showPressedDots(dots)
+        }
+    }
+
+    private fun accumulateCell(engine: UnifiedBrailleInput, cell: Int): Boolean? {
+        if (Integer.bitCount(cell) >= 2) {
+            // 一格内多点同时按下：本身就是完整一格，立即提交。
+            val mask = pendingDots or cell
+            pendingDots = 0
+            echoPressedDots(mask)
+            return emitFeedbackOnFailure(
+                engine.appendCell(mask),
+                FeedbackManager.TYPE_COMMAND_FAILED,
+            )
+        }
+        // 单点事件：继续攒，不出声、不提交，等空格或回车结清；先把已攒的点亮到点显器上。
+        pendingDots = pendingDots or cell
+        echoPressedDots(pendingDots)
+        return true
+    }
+
+    /** 把攒着的点作为一格提交；没有攒点时返回 null，调用方可据此跳过。 */
+    private fun flushPendingDots(engine: UnifiedBrailleInput): Boolean? {
+        if (pendingDots == 0) {
+            return null
+        }
+        val mask = pendingDots
+        pendingDots = 0
+        return emitFeedbackOnFailure(
+            engine.appendCell(mask),
+            FeedbackManager.TYPE_COMMAND_FAILED,
+        )
+    }
+
+    /** 撤掉最后按下的那个点（按点号从高到低），用于攒点阶段的退格。 */
+    private fun clearLastDot(mask: Int): Int {
+        if (mask == 0) {
+            return 0
+        }
+        return mask and (mask - 1)
     }
 
     fun handleBrailleKey(dots: Int): Boolean {

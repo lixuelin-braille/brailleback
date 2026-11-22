@@ -156,8 +156,8 @@ class DisplayManager(
     private var overlaidBrailleContent: ByteArray = brailleContent
 
     private var overlaysOn = false
-    private val mFrozen: Boolean get() = runtimeState.value.frozen
-    private val mMotionMode: Boolean get() = runtimeState.value.motionMode
+    /** 点位回显的独立小闭环；构造在 [displayScope] 之后，跑同一条 display 线程。 */
+    private val pressEcho: DisplayPressEcho
     private lateinit var wrapStrategy: WrapStrategy
     private val editingWrapStrategy: WrapStrategy = SimpleWrapStrategy()
     private var preferredWrapStrategy: WrapStrategy = SimpleWrapStrategy()
@@ -265,6 +265,7 @@ class DisplayManager(
         idleClearTimer = RepeatingTimer(displayScope)
         motionDebouncer = Debouncer(displayScope)
         pulseTimer = OneShotTimer(displayScope)
+        pressEcho = DisplayPressEcho(displayScope, { display }, { connected && !frozen }, { refresh() })
         displayHandler = DisplayHandler(displayLooper)
         callbackHandler = DisplayCallbackHandler(this)
 
@@ -824,6 +825,9 @@ class DisplayManager(
         currentDisplay.displayDots(ByteArray(cells), "", null)
     }
 
+    /** 点位回显的唯一入口；叠加与超时还原的细节都在 [DisplayPressEcho]。 */
+    fun showPressedDots(dots: Int) = pressEcho.show(dots)
+
     /**
      * Pauses or resumes the display output. While paused, the current content
      * stays on the display and updates are suppressed until resumed.
@@ -831,7 +835,7 @@ class DisplayManager(
     fun setFrozen(frozen: Boolean) {
         displayHandler.post {
             runtimeState.update { it.copy(frozen = frozen) }
-            if (mFrozen) {
+            if (frozen) {
                 if (mPauseClear) {
                     // Paused: clear the display.
                     doSendEmptyCommand()
@@ -847,7 +851,7 @@ class DisplayManager(
      * paused.
      */
     fun toggleFrozen(): Boolean {
-        val nowFrozen = !mFrozen
+        val nowFrozen = !frozen
         setFrozen(nowFrozen)
         return nowFrozen
     }
@@ -881,11 +885,11 @@ class DisplayManager(
      */
     fun setMotionMode(motionMode: Boolean) {
         displayHandler.post {
-            if (mMotionMode == motionMode) {
+            if (this.motionMode == motionMode) {
                 return@post
             }
             runtimeState.update { it.copy(motionMode = motionMode) }
-            if (!mMotionMode) {
+            if (!this.motionMode) {
                 // Apply any deferred content immediately.
                 motionDebouncer.cancel()
                 refresh()

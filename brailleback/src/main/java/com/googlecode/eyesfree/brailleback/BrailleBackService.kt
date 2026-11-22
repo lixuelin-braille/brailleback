@@ -28,6 +28,7 @@ import android.content.pm.ServiceInfo
 import android.content.res.Configuration
 import android.media.AudioManager
 import android.os.Build
+import com.google.android.accessibility.braille.common.translate.PinyinIndex
 import android.os.Handler
 import android.os.Looper
 import android.os.Message
@@ -568,6 +569,13 @@ class BrailleBackService : AccessibilityService(),
         // 不能跟着一起丢，否则用户点"清除日志/分享日志"只会看到上一次进程的旧文件。
         PreferenceUtils.initLogLevel(this)
         LogFileWriter.init(this)
+        // 中文输入用的拼音侧索引（字频 / 点位串→拼音 / 拼音串→词）有 3.6 万条，
+        // 在服务启动时预热：第一次打字就不用等它解析，日志里也能直接看到是否加载成功。
+        try {
+            PinyinIndex.getInstance(this)
+        } catch (e: RuntimeException) {
+            Log.w("BrailleBack", "PinyinIndex warm-up failed: " + e)
+        }
     }
 
     override fun onServiceConnected() {
