@@ -58,4 +58,27 @@ class DeviceConnectionCandidateLogicTest {
         assertEquals(true, DeviceConnectionLogic.canStartDiscovery(scanPermissionGranted = true))
         assertEquals(false, DeviceConnectionLogic.canStartDiscovery(scanPermissionGranted = false))
     }
+
+    /**
+     * 已配对条目也要下发请求：服务端对已配对地址的处理就是「连这一台」。
+     * 早先客户端对已配对条目只调 poll()（通用重连），有两台已配对点显器时
+     * 点第二台其实连的还是上次那台，读屏用户无从察觉。
+     */
+    @Test
+    fun bondedCandidateClickAlsoGoesToService() {
+        assertEquals(true, DeviceConnectionLogic.shouldSendCandidateClick(
+            DeviceListEntry.STATE_BONDED))
+        assertEquals(true, DeviceConnectionLogic.shouldSendCandidateClick(
+            DeviceListEntry.STATE_UNPAIRED))
+        assertEquals(true, DeviceConnectionLogic.shouldSendCandidateClick(
+            DeviceListEntry.STATE_FAILED))
+        assertEquals(true, DeviceConnectionLogic.shouldSendCandidateClick(
+            DeviceListEntry.STATE_TIMEOUT))
+    }
+
+    @Test
+    fun bondingCandidateClickIsIgnored() {
+        assertEquals(false, DeviceConnectionLogic.shouldSendCandidateClick(
+            DeviceListEntry.STATE_BONDING))
+    }
 }

@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,7 +34,9 @@ internal fun KeyBindingsScreen(
 ) {
     SettingsScreenScaffold(title = title, backLabel = backLabel, onBack = onBack) {
         keyBindingInstructions(instructions)
-        items(bindings, key = { "binding:${it.label}" }) { row ->
+        // key 里带下标：同一个动作名可能出现在多行（不同分组各有一条），
+        // 只用 label 作 key 会撞车，Compose 对重复 key 直接抛异常崩屏。
+        itemsIndexed(bindings, key = { index, row -> "binding:$index:${row.label}" }) { _, row ->
             KeyBindingRow(row)
         }
     }

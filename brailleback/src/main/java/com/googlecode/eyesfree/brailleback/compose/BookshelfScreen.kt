@@ -17,7 +17,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
@@ -137,7 +137,9 @@ internal fun BookshelfScreen(
                     Text(labels.importBook)
                 }
             }
-            items(entries, key = { "book:${it.uri}" }) { entry ->
+            // key 里带下标：同一本书可能被导入两次（同一 URI 出现两行），
+            // 只用 URI 作 key 会撞车，Compose 对重复 key 直接抛异常崩屏。
+            itemsIndexed(entries, key = { index, entry -> "book:$index:${entry.uri}" }) { _, entry ->
                 BookRow(
                     entry = entry,
                     onClick = { actions.onOpen(entry) },

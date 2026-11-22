@@ -214,12 +214,17 @@ class DeviceConnectionComposeActivity : AppCompatActivity(),
         displayClient?.startUserDiscovery()
     }
 
+    /**
+     * 双击一行候选。已配对条目也走配对入口：服务端遇到已配对地址会直接把这
+     * 一台设成待连设备并走既有连接路径，于是「点哪台连哪台」；未配对 / 失败 /
+     * 超时都发起配对，配对中由 [DeviceConnectionLogic.shouldSendCandidateClick]
+     * 挡掉。
+     */
     private fun onCandidateClicked(entry: DeviceListEntry) {
-        when (entry.state) {
-            DeviceListEntry.STATE_BONDED -> displayClient?.poll()
-            // 未配对 / 失败 / 超时都走配对入口；配对中由服务端忽略重复点击。
-            else -> displayClient?.pairDevice(entry.address)
+        if (!DeviceConnectionLogic.shouldSendCandidateClick(entry.state)) {
+            return
         }
+        displayClient?.pairDevice(entry.address)
     }
 
     private fun refreshPermissionState() {

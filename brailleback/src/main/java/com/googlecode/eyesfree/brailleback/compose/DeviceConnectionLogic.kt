@@ -106,4 +106,17 @@ object DeviceConnectionLogic {
      * 提示用户去系统蓝牙设置里配对（运行时申请由 Activity 的权限发起器负责）。
      */
     fun canStartDiscovery(scanPermissionGranted: Boolean): Boolean = scanPermissionGranted
+
+    /**
+     * 双击一行候选时是否要真的向服务端下发请求。
+     *
+     * <p>已配对条目也走同一个配对入口：服务端对已配对地址的处理就是「把待连
+     * 地址设为这一台，然后走既有连接路径」，所以点哪一台就连哪一台——否则有
+     * 两台已配对点显器时，只能连到上次用的那台。
+     *
+     * <p>配对进行中的条目忽略点击：服务端也会忽略，但客户端不该白发一次请求，
+     * 读屏用户连点两下时会以为「第二下把配对取消了」。
+     */
+    fun shouldSendCandidateClick(state: Int): Boolean =
+        state != DeviceListEntry.STATE_BONDING
 }
