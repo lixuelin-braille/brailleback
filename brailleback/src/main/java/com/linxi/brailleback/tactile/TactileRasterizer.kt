@@ -9,6 +9,13 @@ import kotlin.math.roundToInt
  * （面积平均重采样，不能最近邻，否则缩放线稿会断线）；再把每个亮度翻译成抬升等级
  * （阈值线稿 / 灰度层次 / 边缘轮廓三种策略）；最后按需整幅翻转。这里是纯 JVM 的栅格化内核，
  * 不碰 Android Bitmap，方便在 JVM 单测里把每条边界钉死；BMP 字节反转留给编码器一处做。
+ *
+ * 页面贴合口径（对冻结契约的补充）：
+ * - 双侧毫米都明确给出时，原图按宽高比缩放到刚好装进这个毫米框（两轴缩放比取较小者），
+ *   居中放置，四周多出的部分是平坦留白（level=0），不拉伸变形、不裁剪。
+ * - 某一侧毫米为 0：另一侧按原图比例推算，缩放比唯一，不存在变形，沿用原行为。
+ * - 双侧都为 0：长边取 160 mm，沿用原行为。
+ * - 出图像素数严格等于毫米框换算结果；invert 只翻图形本身的等级，留白边永远平坦，不跟着翻。
  */
 object TactileRasterizer {
 
@@ -39,46 +46,50 @@ object TactileRasterizer {
         // 设置只在这里统一钳制、补默认一次，下游不再各自猜边界。
         val s = settings.normalized()
 
-        val (widthMm, heightMm) = derivePhysicalSizeMm(image, s)
-        val targetWidth = profile.mmToPx(widthMm).coerceAtLeast(1)
-        val targetHeight = profile.mmToPx(heightMm).coerceAtLeast(1)
+        val (boxWidthMm, boxHeightMm) = derivePhysicalSizeMm(image, s)
+        val pageWidth = profile.mmToPx(boxWidthMm).coerceAtLeast(1)
+        val pageHeight = profile.mmToPx(boxHeightMm).coerceAtLeast(1)
 
         // 先按像素总数拦截，避免几千万级数组直接撑爆堆。
-        val pixelCount = targetWidth.toLong() * targetHeight
+        val pixelCount = pageWidth.toLong() * pageHeight
         if (pixelCount > MAX_PIXELS) {
             throw TactileTooLargeException(
-                "目标栅格 ${targetWidth} × ${targetHeight} = $pixelCount 像素，" +
+                "目标栅格 ${pageWidth} × ${pageHeight} = $pixelCount 像素，" +
                     "超过上限 $MAX_PIXELS（请缩小毫米尺寸或降低 dpi）"
             )
         }
 
-        // 先面积平均缩放到目标像素，再按模式抬升；缩小后的线稿不会被最近邻抽断。
-        val gray = resampleByArea(image, targetWidth, targetHeight)
+        // 等比贴合：两轴缩放比取较小者，内容不拉伸；居中后四周留白，留白恒为平坦。
+        val layout = fitContent(image, pageWidth, pageHeight)
+        // 先面积平均缩放到内容尺寸，再按模式抬升；缩小后的线稿不会被最近邻抽断。
+        val gray = resampleByArea(image, layout.contentWidth, layout.contentHeight)
 
-        val levels = ByteArray(targetWidth * targetHeight)
-        for (y in 0 until targetHeight) {
-            val rowStart = y * targetWidth
-            for (x in 0 until targetWidth) {
-                val index = rowStart + x
-                val luma = gray[index]
+        // 数组默认全 0：框内没被内容盖住的位置就是平坦留白，invert 也不翻这里。
+        val levels = ByteArray(pageWidth * pageHeight)
+        for (cy in 0 until layout.contentHeight) {
+            for (cx in 0 until layout.contentWidth) {
+                val luma = gray[cy * layout.contentWidth + cx]
                 var level = when (s.mode) {
                     TactileMode.THRESHOLD -> if (luma < s.threshold) RAISED else FLAT
                     TactileMode.GRAYSCALE -> RAISED - luma
-                    TactileMode.EDGE -> edgeLevel(gray, targetWidth, targetHeight, x, y, s.threshold)
+                    TactileMode.EDGE -> edgeLevel(
+                        gray, layout.contentWidth, layout.contentHeight, cx, cy, s.threshold
+                    )
                 }
-                // 整幅翻转只发生在这里；编码器不再翻第二次。
+                // 图形本身按需翻转；留白边在数组初始化时已是 0，不参与翻转。
                 if (s.invert) level = RAISED - level
-                levels[index] = level.toByte()
+                val px = (layout.offsetY + cy) * pageWidth + (layout.offsetX + cx)
+                levels[px] = level.toByte()
             }
         }
 
         return TactileRaster(
-            width = targetWidth,
-            height = targetHeight,
+            width = pageWidth,
+            height = pageHeight,
             levels = levels,
             dpi = profile.dpi,
-            pageWidthMm = widthMm,
-            pageHeightMm = heightMm,
+            pageWidthMm = boxWidthMm,
+            pageHeightMm = boxHeightMm,
         )
     }
 
@@ -105,6 +116,32 @@ object TactileRasterizer {
         // 只给了高：宽按原图宽高比推算。
         return s.heightMm * srcRatio to s.heightMm
     }
+
+    /**
+     * 把原图等比塞进页面框：两轴缩放比取较小者，内容不拉伸；居中放置，返回内容尺寸与左上角偏移。
+     * 单侧为 0 或双侧为 0 推出来的框本身就与原图同比例，此时内容铺满整框，偏移为 0。
+     */
+    private fun fitContent(image: GrayImage, pageWidth: Int, pageHeight: Int): ContentLayout {
+        val scaleX = pageWidth.toDouble() / image.width
+        val scaleY = pageHeight.toDouble() / image.height
+        val scale = minOf(scaleX, scaleY)
+        val contentWidth = (image.width * scale).roundToInt().coerceAtMost(pageWidth)
+        val contentHeight = (image.height * scale).roundToInt().coerceAtMost(pageHeight)
+        return ContentLayout(
+            contentWidth = contentWidth,
+            contentHeight = contentHeight,
+            offsetX = (pageWidth - contentWidth) / 2,
+            offsetY = (pageHeight - contentHeight) / 2,
+        )
+    }
+
+    /** 内容在页面框内的尺寸与居中偏移（像素）。 */
+    private data class ContentLayout(
+        val contentWidth: Int,
+        val contentHeight: Int,
+        val offsetX: Int,
+        val offsetY: Int,
+    )
 
     /** 面积平均重采样到目标尺寸。每个目标像素回映到原图一块矩形区域，按重叠面积加权平均。 */
     private fun resampleByArea(image: GrayImage, targetWidth: Int, targetHeight: Int): IntArray {

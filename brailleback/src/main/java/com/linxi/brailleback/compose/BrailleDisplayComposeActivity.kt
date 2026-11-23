@@ -31,11 +31,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import com.googlecode.eyesfree.utils.SettingsStore
 import com.googlecode.eyesfree.braille.translate.TableInfo
 import com.linxi.brailleback.R
 import com.linxi.brailleback.SettingsActivity
 import com.linxi.brailleback.TranslatorManager
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 /** 一次性收集好的中文文案，让 Screen 保持无 Context 依赖。 */
@@ -66,6 +70,8 @@ internal data class BrailleDisplayLabels(
     val autoFallback: String,
     val loadingLabel: String,
     val emptyLabel: String,
+    val failedTitle: String,
+    val failedSummary: String,
     val refreshHint: String,
     val currentCodeTitle: String,
     val currentCodeHint: String,
@@ -87,6 +93,16 @@ class BrailleDisplayComposeActivity : AppCompatActivity(),
     // 服务回调来自 Binder 线程，统一切回主线程再驱动重组。
     private var tables by mutableStateOf<List<BrailleTableCatalog.TableSeed>>(emptyList())
     private var autoLabel by mutableStateOf("")
+
+    // 表清单加载状态：Loading 含初始读取与自动重试；Failed 是跑满次数后的明确失败态。
+    private enum class TableLoadState { Loading, Failed }
+    private var tableLoadState by mutableStateOf(TableLoadState.Loading)
+    // 重试协程句柄：手动刷新 / 清单到达 / onDestroy 时取消挂起回调，避免泄漏与重复刷新。
+    private var retryJob: Job? = null
+    // 已完成的读取尝试次数（含 onCreate 那次），只喂给纯策略计数；复用同一个 manager。
+    private var retryAttempts = 0
+    // 清单「由空变有」的自动到达播报只念一次；再次变空后才允许下一轮播报。
+    private var arrivalAnnounced = false
     // 偏好类状态（当前方案、首选池、四个开关、当前方案对话框）全部由 ViewModel 持有；
     // 这里只留「表清单」和「派生文案」这两件不属于偏好、且依赖服务回调的展示状态。
     private val viewModel: BrailleDisplayViewModel by viewModels {
@@ -172,6 +188,8 @@ class BrailleDisplayComposeActivity : AppCompatActivity(),
                 autoFallback = getString(R.string.compose_table_group_auto),
                 loadingLabel = getString(R.string.compose_table_loading),
                 emptyLabel = getString(R.string.compose_table_empty),
+                failedTitle = getString(R.string.compose_table_failed_title),
+                failedSummary = getString(R.string.compose_table_failed_summary),
                 refreshHint = getString(R.string.compose_table_refresh_hint),
                 currentCodeTitle = getString(R.string.compose_code_current_title),
                 currentCodeHint = getString(R.string.compose_code_current_hint),
@@ -262,6 +280,7 @@ class BrailleDisplayComposeActivity : AppCompatActivity(),
                     currentTable, autoLabel, codeGroups, labels.loadingLabel
                 ),
                 currentTable = currentTable,
+                tablesLoadFailed = tableLoadState == TableLoadState.Failed,
                 wordWrap = settings.wordWrap,
                 cursorDots = settings.cursorDots,
                 contractedMode = settings.contractedMode,
@@ -273,7 +292,7 @@ class BrailleDisplayComposeActivity : AppCompatActivity(),
                     route = BrailleDisplayLogic.TableRoute.Tables(language)
                 },
                 onNavigateBack = { route = BrailleDisplayLogic.back(route) },
-                onRefreshTables = { refreshTables() },
+                onRefreshTables = { refreshTables(fromUserRefresh = true) },
                 onToggleCode = { id, checked ->
                     viewModel.toggleCode(id, checked, codeGroups, systemLanguage)
                 },
@@ -306,9 +325,20 @@ class BrailleDisplayComposeActivity : AppCompatActivity(),
         refreshTables()
     }
 
-    /** 服务初始化、收到刷新广播或用户手动刷新时重新读取表清单。 */
-    private fun refreshTables() {
+    /**
+     * 服务初始化、收到刷新广播、用户手动刷新或自动重试到时，重新读取表清单。
+     * [fromUserRefresh] 为 true 表示来自页面上的手动刷新：重置重试计数，且不触发
+     * 「由空变有」的到达播报。全程复用同一个 [translatorManager]，不每轮重建、不重复绑定。
+     */
+    private fun refreshTables(fromUserRefresh: Boolean = false) {
+        // 先撤掉挂起的重试：不让旧回调到点再刷一次造成重复刷新。
+        cancelRetry()
+        if (fromUserRefresh) {
+            retryAttempts = 0
+            arrivalAnnounced = false
+        }
         val manager = translatorManager ?: return
+        val hadTables = tables.isNotEmpty()
         val infos: List<TableInfo> = manager.getTranslatorClient().getTables().orEmpty()
         val defaultInfo = manager.findDefaultTableInfo(false)
         val seeds = infos.map { it.toSeed() }
@@ -326,15 +356,55 @@ class BrailleDisplayComposeActivity : AppCompatActivity(),
         }
         tables = seeds
         autoLabel = label
-        if (seeds.isEmpty()) {
+
+        if (seeds.isNotEmpty()) {
+            retryAttempts = 0
+            tableLoadState = TableLoadState.Loading
+            // 只在「自动到达、由空变有」那一次播报；手动刷新不念，之后每次刷新也不念。
+            if (!hadTables && !fromUserRefresh && !arrivalAnnounced) {
+                arrivalAnnounced = true
+                announceTablesLoaded(seeds.size)
+            }
+            // 表清单就绪才能把「方案池」和「当前方案」对账（逻辑与落盘都在 ViewModel 里，
+            // 这里只负责把分组算出来喂给它）。
+            val systemLanguage = Locale.getDefault().language
+            val tableGroups = BrailleTableCatalog.build(seeds, systemLanguage, tableLabels)
+            val codeGroups = BrailleCodeCatalog.build(tableGroups, seeds, tableLabels, codeLabels)
+            viewModel.reconcileCodes(codeGroups, systemLanguage)
             return
         }
-        // 表清单就绪才能把「方案池」和「当前方案」对账（逻辑与落盘都在 ViewModel 里，
-        // 这里只负责把分组算出来喂给它）。
-        val systemLanguage = Locale.getDefault().language
-        val tableGroups = BrailleTableCatalog.build(seeds, systemLanguage, tableLabels)
-        val codeGroups = BrailleCodeCatalog.build(tableGroups, seeds, tableLabels, codeLabels)
-        viewModel.reconcileCodes(codeGroups, systemLanguage)
+
+        // 清单仍为空：按纯策略决定是再等一轮，还是落明确失败态。
+        arrivalAnnounced = false
+        retryAttempts += 1
+        if (BrailleTableRetryPolicy.shouldRetry(retryAttempts, cancelled = false)) {
+            tableLoadState = TableLoadState.Loading
+            scheduleRetry()
+        } else {
+            tableLoadState = TableLoadState.Failed
+        }
+    }
+
+    /** 挂起下一次重试；延时走 lifecycleScope，Activity 销毁时随生命周期自动取消。 */
+    private fun scheduleRetry() {
+        retryJob = lifecycleScope.launch {
+            delay(BrailleTableRetryPolicy.delayMillis(retryAttempts))
+            retryJob = null
+            refreshTables()
+        }
+    }
+
+    /** 取消挂起中的重试回调：手动刷新、清单到达、onDestroy 都会调用。 */
+    private fun cancelRetry() {
+        retryJob?.cancel()
+        retryJob = null
+    }
+
+    /** 清单自动到达后的无障碍播报，路径与同目录 DeviceConnectionComposeActivity 一致。 */
+    private fun announceTablesLoaded(count: Int) {
+        window.decorView.announceForAccessibility(
+            getString(R.string.compose_table_loaded_count, count)
+        )
     }
 
     override fun onTablesChanged() {
@@ -369,6 +439,7 @@ class BrailleDisplayComposeActivity : AppCompatActivity(),
     }
 
     override fun onDestroy() {
+        cancelRetry()
         try {
             unregisterReceiver(refreshReceiver)
         } catch (e: IllegalArgumentException) {

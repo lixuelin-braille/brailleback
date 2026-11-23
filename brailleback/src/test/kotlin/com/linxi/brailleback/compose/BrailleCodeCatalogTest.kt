@@ -259,12 +259,15 @@ class BrailleCodeCatalogTest {
             )
         }
         val codes = groups(seeds).flatMap { it.codes }
-        assertEquals("122 张表一个都不能丢", 122, codes.size)
-        assertEquals("122 个方案 ID 必须互不重复", 122, codes.map { it.id }.toSet().size)
+        // 因 zhcn-cbs-full 在本版 liblouis 加载失败已从清单移除，总数 121
+        assertEquals("121 张表一个都不能丢", 121, codes.size)
+        // 因 zhcn-cbs-full 已从清单移除，方案 ID 总数 121
+        assertEquals("121 个方案 ID 必须互不重复", 121, codes.map { it.id }.toSet().size)
         assertEquals("实测 26 张八点表必须各自成为独立方案", 26, codes.count { it.eightDot })
         assertTrue(codes.filter { it.eightDot }.all { it.label.contains("八点计算机盲文") })
         assertFalse(codes.any { it.label.contains("（八点）") })
-        assertEquals("中文组 7 个方案（5 张六点 + 2 张八点）", 7,
+        // 因 zhcn-cbs-full 已从清单移除，中文组 6 个（4 张六点 + 2 张八点）
+        assertEquals("中文组 6 个方案（4 张六点 + 2 张八点）", 6,
             groups(seeds).single { it.language == "zh" }.codes.size)
     }
 }

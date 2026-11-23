@@ -499,13 +499,16 @@ class BrailleDisplayContractTest {
             )
             seed.copy(localeName = BrailleTableCatalog.compliantLocaleName(seed, labels))
         }.toList()
-        assertEquals("服务侧表清单应有 122 张表", 122, seeds.size)
+        // 因 zhcn-cbs-full 在本版 liblouis 加载失败已从清单移除，故总数 121 / 中文 6
+        assertEquals("服务侧表清单应有 121 张表", 121, seeds.size)
 
         val groups = BrailleTableCatalog.build(seeds, "zh", labels)
-        assertEquals("122 张表一张都不能丢", 122, groups.flatMap { it.choices }.size)
+        // 因 zhcn-cbs-full 已从清单移除，总数 121
+        assertEquals("121 张表一张都不能丢", 121, groups.flatMap { it.choices }.size)
         assertEquals("70 种语言 = 70 个第一级条目", 70, groups.size)
         assertEquals("系统语言（中文）组必须置顶", "zh", groups.first().language)
-        assertEquals("中文组实测 7 张表（通用 + 中国 + 中国台湾）", 7, groups.first().choices.size)
+        // 因 zhcn-cbs-full 已从清单移除，中文组 6 张（4 六点 + 2 八点）
+        assertEquals("中文组实测 6 张表（4 六点 + 2 八点）", 6, groups.first().choices.size)
         val chineseLabels = groups.first().choices.map { it.label }
         assertTrue(
             "中文组必须同时含中国与中国台湾的表：$chineseLabels",

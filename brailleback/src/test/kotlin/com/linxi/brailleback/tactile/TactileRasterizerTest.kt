@@ -9,6 +9,7 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.abs
 
 /**
  * 为什么需要它：栅格化内核是「图片 → 凸起栅格」的唯一翻译层，阈值边界、极性、尺寸换算、
@@ -20,6 +21,17 @@ class TactileRasterizerTest {
 
     // dpi = 254 时 pxPerMm 正好是 10.0，毫米→像素的期望值可以心算，不用被测代码反推。
     private fun profile(dpi: Int = 254) = TactileProfile(dpi = dpi)
+
+    /**
+     * 直读编码后 BMP 的像素字节（不经过任何图片工具）。BMP 底行在前：栅格行 y 对应文件第
+     * height-1-y 行；行按 4 字节对齐。平坦 level=0 → 字节 0xFF，凸起 level=255 → 字节 0x00。
+     */
+    private fun bmpByte(bmp: ByteArray, width: Int, height: Int, x: Int, y: Int): Int {
+        val rowSize = ((width + 3) / 4) * 4
+        val fileRow = height - 1 - y
+        val offset = TactileBmpEncoder.PIXEL_DATA_OFFSET + fileRow * rowSize + x
+        return bmp[offset].toInt() and 0xFF
+    }
 
     @Test
     fun blackImageIsFullyRaised() {
@@ -269,5 +281,172 @@ class TactileRasterizerTest {
             )
         }
         assertTrue(ex is IllegalArgumentException)
+    }
+
+    // ---------- 等比贴合页面 + 居中留白 ----------
+
+    @Test
+    fun portraitA4FitsLandscape4By3WithTopBottomMargins() {
+        // 4:3 横图贴 A4 竖版 210×297@300：框 2480×3508；按宽贴合，内容 2480×1860，
+        // 上下留白各 (3508-1860)/2 = 824 px，左右贴满。
+        val image = GrayImage.black(4, 3)
+        val raster = TactileRasterizer.rasterize(
+            image,
+            TactileSettings(widthMm = 210.0, heightMm = 297.0),
+            TactileProfile(dpi = 300),
+        )
+        assertEquals(2480, raster.width)
+        assertEquals(3508, raster.height)
+        // 上下留白平坦（首行留白 0，末行留白 3507；内容下边界 2683，2684 起又是留白）。
+        assertEquals(0, raster.level(0, 0))
+        assertEquals(0, raster.level(0, 3507))
+        assertEquals(0, raster.level(0, 2684))
+        // 内容区居中：首行内容 824，末行内容 2683，中心行 1754。
+        assertEquals(255, raster.level(0, 824))
+        assertEquals(255, raster.level(0, 2683))
+        assertEquals(255, raster.level(1240, 1754))
+        // 左右贴满，无侧白。
+        assertEquals(255, raster.level(0, 1754))
+        assertEquals(255, raster.level(2479, 1754))
+    }
+
+    @Test
+    fun landscapeA4Fits4By3WithSideMargins() {
+        // A4 横版 profile 297×210@300：框 3508×2480；按高贴合，内容 3307×2480，
+        // 左侧留白 (3508-3307)/2 = 100 px（右侧 101），上下贴满。
+        val image = GrayImage.black(4, 3)
+        val raster = TactileRasterizer.rasterize(
+            image,
+            TactileSettings(widthMm = 297.0, heightMm = 210.0),
+            TactileProfile(dpi = 300, pageWidthMm = 297.0, pageHeightMm = 210.0),
+        )
+        assertEquals(3508, raster.width)
+        assertEquals(2480, raster.height)
+        assertEquals(0, raster.level(0, 10))
+        assertEquals(255, raster.level(100, 10))
+        assertEquals(255, raster.level(1754, 10))
+        assertEquals(0, raster.level(3507, 10))
+        // 上下贴满，无上下白。
+        assertEquals(255, raster.level(1754, 0))
+        assertEquals(255, raster.level(1754, 2479))
+    }
+
+    @Test
+    fun squareSourceStaysSquareOnPortraitA4() {
+        // 20×20 正方形贴 A4 竖版：按宽贴合成 2480×2480，上下留白 514 px；
+        // 抬升区左右跨度与上下跨度必须相等（±1 px），不等就是被拉成椭圆。
+        val image = GrayImage.black(20, 20)
+        val raster = TactileRasterizer.rasterize(
+            image,
+            TactileSettings(widthMm = 210.0, heightMm = 297.0),
+            TactileProfile(dpi = 300),
+        )
+        val midY = raster.height / 2
+        var left = 0
+        while (raster.level(left, midY) == 0) left++
+        var right = raster.width - 1
+        while (raster.level(right, midY) == 0) right--
+        val midX = raster.width / 2
+        var top = 0
+        while (raster.level(midX, top) == 0) top++
+        var bottom = raster.height - 1
+        while (raster.level(midX, bottom) == 0) bottom--
+
+        val spanX = right - left + 1
+        val spanY = bottom - top + 1
+        assertEquals(2480, spanX)
+        assertEquals(2480, spanY)
+        assertTrue(abs(spanX - spanY) <= 1)
+    }
+
+    @Test
+    fun invertedRasterKeepsMarginsFlat() {
+        // 白底 4:3 + invert：图形本身翻成凸起，四周留白边仍必须是 level=0，不跟着翻。
+        val image = GrayImage.white(4, 3)
+        val raster = TactileRasterizer.rasterize(
+            image,
+            TactileSettings(invert = true, widthMm = 210.0, heightMm = 297.0),
+            TactileProfile(dpi = 300),
+        )
+        assertEquals(0, raster.level(0, 0))
+        assertEquals(0, raster.level(0, 2684))
+        assertEquals(255, raster.level(0, 824))
+    }
+
+    // ---------- BMP 字节级防回归：留白边框必须全 0xFF（直读编码字节，不查 levels） ----------
+
+    @Test
+    fun portraitA4BmpBorderBytesAreFlatOutsideContent() {
+        // 1600×1200 全黑，THRESHOLD 默认阈值；A4 竖版 210×297@300 → 2480×3508。
+        // scale = min(2480/1600, 3508/1200) = 1.55 → 内容 2480×1860，offsetY = 824，
+        // 内容行 824..2683，上留白 824 行、下留白 824 行。
+        val raster = TactileRasterizer.rasterize(
+            GrayImage.black(1600, 1200),
+            TactileSettings(widthMm = 210.0, heightMm = 297.0),
+            TactileProfile.A4,
+        )
+        assertEquals(2480, raster.width)
+        assertEquals(3508, raster.height)
+        val bmp = TactileBmpEncoder.encode(raster)
+
+        // 首行（栅格 y=0，BMP 文件最末像素行）与末行（栅格 y=3507，文件第一像素行）全平坦 0xFF。
+        for (x in 0 until raster.width) {
+            assertEquals(0xFF, bmpByte(bmp, 2480, 3508, x, 0))
+            assertEquals(0xFF, bmpByte(bmp, 2480, 3508, x, 3507))
+        }
+        // 首列、末列：上下留白行必须 0xFF。
+        for (y in 0 until 824) {
+            assertEquals(0xFF, bmpByte(bmp, 2480, 3508, 0, y))
+            assertEquals(0xFF, bmpByte(bmp, 2480, 3508, 2479, y))
+        }
+        for (y in 2684 until 3508) {
+            assertEquals(0xFF, bmpByte(bmp, 2480, 3508, 0, y))
+            assertEquals(0xFF, bmpByte(bmp, 2480, 3508, 2479, y))
+        }
+        // 内容带边界钉死：823 还是留白，824 首行内容；2683 末行内容，2684 起又是留白。
+        assertEquals(0xFF, bmpByte(bmp, 2480, 3508, 0, 823))
+        assertEquals(0x00, bmpByte(bmp, 2480, 3508, 0, 824))
+        assertEquals(0x00, bmpByte(bmp, 2480, 3508, 0, 2683))
+        assertEquals(0xFF, bmpByte(bmp, 2480, 3508, 0, 2684))
+    }
+
+    @Test
+    fun landscapeA4BmpSideMarginsAreFlatContentColumnsRaised() {
+        // 同一 4:3 全黑源，横版 profile 297×210@300 → 3508×2480。
+        // scale = min(3508/1600, 2480/1200) = 2.0667 → 内容 3307×2480，offsetX = 100，
+        // 内容列 100..3406，左留白 100 列、右留白 101 列；上下贴边，首末行本来就有内容。
+        val landscape = TactileProfile(dpi = 300, pageWidthMm = 297.0, pageHeightMm = 210.0)
+        val raster = TactileRasterizer.rasterize(
+            GrayImage.black(1600, 1200),
+            TactileSettings(widthMm = 297.0, heightMm = 210.0),
+            landscape,
+        )
+        assertEquals(3508, raster.width)
+        assertEquals(2480, raster.height)
+        val bmp = TactileBmpEncoder.encode(raster)
+
+        // 左右留白列：所有行都必须 0xFF。
+        for (y in 0 until 2480) {
+            for (x in 0 until 100) {
+                assertEquals(0xFF, bmpByte(bmp, 3508, 2480, x, y))
+            }
+            for (x in 3407 until 3508) {
+                assertEquals(0xFF, bmpByte(bmp, 3508, 2480, x, y))
+            }
+        }
+        // 首末行上下贴边：留白列 0xFF，内容列 0x00。
+        for (x in 0 until 100) {
+            assertEquals(0xFF, bmpByte(bmp, 3508, 2480, x, 0))
+            assertEquals(0xFF, bmpByte(bmp, 3508, 2480, x, 2479))
+        }
+        for (x in 100 until 3407) {
+            assertEquals(0x00, bmpByte(bmp, 3508, 2480, x, 0))
+            assertEquals(0x00, bmpByte(bmp, 3508, 2480, x, 2479))
+        }
+        // 内容左右边界：99 留白、100 首列内容；3406 末列内容、3407 留白。
+        assertEquals(0xFF, bmpByte(bmp, 3508, 2480, 99, 1240))
+        assertEquals(0x00, bmpByte(bmp, 3508, 2480, 100, 1240))
+        assertEquals(0x00, bmpByte(bmp, 3508, 2480, 3406, 1240))
+        assertEquals(0xFF, bmpByte(bmp, 3508, 2480, 3407, 1240))
     }
 }

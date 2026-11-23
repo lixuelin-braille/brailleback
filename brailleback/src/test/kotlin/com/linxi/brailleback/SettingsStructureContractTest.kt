@@ -196,22 +196,24 @@ class SettingsStructureContractTest {
 
     @Test
     fun everyScreenHasBoundedNodeCount() {
-        // 3 个分组标题 + 启用服务 + 6 个分类入口 + 3 个功能入口 = 13。
+        // 3 个分组标题 + 启用服务 + 6 个分类入口 + 2 个功能入口 = 12。
         val entries = catalogEntries()
         val sections = sectionOrder().size
         assertTrue(
-            "主屏朗读节点不得超过 13 个，超过会让线性浏览重新变拥挤",
-            sections + entries.size <= 13,
+            "主屏朗读节点不得超过 12 个，超过会让线性浏览重新变拥挤",
+            sections + entries.size <= 12,
         )
-        assertEquals("主屏入口应为十行", 10, entries.size)
+        assertEquals("主屏入口应为九行", 9, entries.size)
     }
 
     @Test
     fun allLegacyPreferenceKeysStillResolveAndStayInTheArchive() {
         // 旧子屏内容已归档（界面不再渲染），但偏好键是 SharedPreferences 的键：
         // 服务端与 Compose 两侧仍在读写，键名一旦丢失，老用户设置会被静默丢弃。
+        // 注：bookshelf 原是设置主屏的书架入口键，现已随九行改版移到阅读 Tab 内嵌；
+        // 书架存储走独立偏好文件（BookshelfController.PREFS_NAME），不在本表的设置偏好键口径内。
         val legacyKeys = listOf(
-            "setup_service", "bookshelf", "pref_braille_keyboard_key",
+            "setup_service", "pref_braille_keyboard_key",
             "connection_status", "key_bindings", "custom_key_map",
             "connection_protocol", "auto_connect",
             "braille_table", "braille_word_wrap", "cursor_dots",

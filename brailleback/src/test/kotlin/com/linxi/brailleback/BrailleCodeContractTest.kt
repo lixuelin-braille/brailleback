@@ -236,7 +236,8 @@ class BrailleCodeContractTest {
     }
 
     @Test
-    fun realTableListStillHasFiveChineseSixDotAndTwoEightDotTables() {
+    // 因 zhcn-cbs-full 在本版 liblouis 加载失败已从清单移除，中文组 6 张（4 六点 + 2 八点）
+    fun realTableListStillHasFourChineseSixDotAndTwoEightDotTables() {
         val xml = text("service/src/main/res/xml/tablelist.xml")
             .replace(Regex("""<!--[\s\S]*?-->"""), "")
         val rows = Regex("""<table\b([^>]*?)/>""").findAll(xml).toList()
@@ -245,12 +246,12 @@ class BrailleCodeContractTest {
         val chinese = rows.map { it.groupValues[1] }.filter {
             attr(it, "locale")?.startsWith("zh") == true
         }
-        assertEquals("中文表总数不能变", 7, chinese.size)
-        assertEquals("中文六点方案不能丢", 5, chinese.count { attr(it, "dots") == "6" })
+        assertEquals("中文表总数不能变", 6, chinese.size)
+        assertEquals("中文六点方案不能丢", 4, chinese.count { attr(it, "dots") == "6" })
         assertEquals("中文八点方案不能丢", 2, chinese.count { attr(it, "dots") == "8" })
         assertEquals(
-            "中文五张六点表靠 variant 区分，不能退化成一个布尔",
-            5,
+            "中文四张六点表靠 variant 区分，不能退化成一个布尔",
+            4,
             chinese.filter { attr(it, "dots") == "6" }
                 .mapNotNull { attr(it, "variant") }.toSet().size
         )

@@ -470,9 +470,9 @@
          locale="zh_TW"
          dots="8"
          fileName="zh-tw.ctb" />
-    <!-- Chinese (mainland, simplified). zhcn-cbs-full is a strict superset of
-         zhcn-cbs with identical values for every common character, so it is the
-         grade 0 default; the common-character table stays for explicit choice. -->
+    <!-- Chinese (mainland, simplified). 原 grade 0 全字符表 zhcn-cbs-full.ctb
+         在本版 liblouis 3.38.0 上加载失败（Table not found or invalid），已从清单
+         移除并从表包排除；默认回落 zhcn-cbs（国家通用盲文方案）。 -->
     <table
          id="zh-CN-cbs"
          locale="zh_CN"
@@ -480,13 +480,6 @@
          grade="1"
          variant="国家通用盲文方案"
          fileName="zhcn-cbs.ctb" />
-  <table
-  id="zh-CN-cbs-full"
-  locale="zh_CN"
-  dots="6"
-  grade="0"
-  variant="国家通用盲文方案（全字符）"
-fileName="zhcn-cbs-full.ctb" />
     <table
          id="zh-CN-current"
          locale="zh_CN"

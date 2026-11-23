@@ -82,7 +82,6 @@
     <string name="pref_setup_service_enabled">Service is enabled.</string>
     
     
-    <string name="pref_bookshelf_title">Bookshelf</string>
     <!-- 屏幕盲文键盘（移植自 TalkBack brailleime）入口 -->
     <string name="pref_braille_keyboard_title">On-screen braille keyboard</string>
     <string name="pref_braille_keyboard_summary">Type with six or eight dots on the touch screen</string>
@@ -490,8 +489,6 @@
 
     <string name="bookshelf_empty">Bookshelf is empty. Tap Import to add braille books</string>
 
-    <string name="pref_bookshelf_summary">Import and manage your braille books</string>
-
     <string name="bookshelf_import">Import</string>
 
     <string name="bookshelf_open">Open</string>
@@ -640,6 +637,9 @@
     <string name="compose_table_loading">Reading braille tables</string>
     <string name="compose_table_empty">No braille tables available yet</string>
     <string name="compose_table_refresh_hint">Double-tap to reload tables</string>
+    <string name="compose_table_failed_title">Cannot load the braille scheme list</string>
+    <string name="compose_table_failed_summary">Check that the braille service is connected, then double-tap to reload.</string>
+    <string name="compose_table_loaded_count">%1$d braille scheme(s) loaded</string>
     <string name="compose_code_eight_dot">%1$s 8-dot Computer Braille</string>
     <string name="compose_code_summary_six">6-dot literary braille</string>
     <string name="compose_code_summary_eight">8-dot computer braille</string>
@@ -726,7 +726,7 @@
     <string name="tactile_mode_threshold">Threshold line art</string>
     <string name="tactile_mode_threshold_desc">Marks darker than the threshold become raised lines; best for diagrams and text</string>
     <string name="tactile_mode_grayscale">Grayscale height</string>
-    <string name="tactile_mode_grayscale_desc">Ink depth becomes raised height; for printers that support height modulation</string>
+    <string name="tactile_mode_grayscale_desc">Ink depth directly corresponds to raised height, for finer shading</string>
     <string name="tactile_mode_edge">Outline edges</string>
     <string name="tactile_mode_edge_desc">Detects outlines of a photo as raised lines</string>
     <string name="tactile_export_threshold">Threshold</string>
@@ -736,14 +736,19 @@
     <string name="tactile_export_section_page">Page size</string>
     <string name="tactile_page_a4">A4 portrait, 210 x 297 mm</string>
     <string name="tactile_page_a4_landscape">A4 landscape, 297 x 210 mm</string>
-    <string name="tactile_export_action">Export BMP</string>
-    <string name="tactile_export_reading">Reading the selected image…</string>
+    <string name="tactile_export_action_download">Save to Downloads</string>
+    <string name="tactile_export_action_other">Save to another location</string>
+    <string name="tactile_export_action_share">Share file</string>
     <string name="tactile_export_exporting">Converting and saving, please wait…</string>
-    <string name="tactile_export_success">Saved: %1$s</string>
-    <string name="tactile_export_fail">Export failed: %1$s</string>
-    <string name="tactile_export_cancelled">Cancelled</string>
+    <string name="tactile_export_success_download">Saved to Downloads: %1$s, size %2$s</string>
+    <string name="tactile_export_success_other">Saved to another location: %1$s, size %2$s</string>
+    <string name="tactile_fail_source_large">Source image exceeds 32 MB; compress it before exporting</string>
+    <string name="tactile_fail_target_large">Target size exceeds 30 million pixels; shrink the page or lower the resolution</string>
+    <string name="tactile_fail_decode">Could not decode the image or the format is unsupported; try another image</string>
+    <string name="tactile_fail_permission">No write permission; check storage access or pick another location</string>
+    <string name="tactile_fail_unknown">Export failed: %1$s</string>
+    <string name="tactile_export_share_no_app">No app available to share with</string>
     <string name="tactile_export_need_image">Pick an image first</string>
-    <string name="tactile_export_read_error">Could not read the selected image</string>
     <string name="tactile_export_selected">Selected</string>
     <string name="tactile_export_unselected">Not selected</string>
 </resources>

@@ -2,13 +2,13 @@
  * Copyright (C) 2026 盲文服务 (Braille Service)
  *
  * 为什么需要它：
- * 触觉图流水线（选图 → 参数 → 栅格化 → 编码 → 落盘）需要一个盲人用户能靠 TalkBack
- * 全程操作的入口页。算法内核在同包的 Pipeline / Rasterizer / Encoder，本 Activity 只做
- * 界面接线：选图、收参数、后台线程转换、SAF 写出 .bmp，并把每一步结果播报成可读文本。
+ * 手机不连打印机，触觉页只负责「出一份能刻印的 BMP」，再把文件稳稳交到用户手里拿到电脑上。
+ * 算法内核在同包的 Pipeline / Rasterizer / Encoder，本 Activity 只做界面接线：选图、收参数、
+ * 后台线程转换、两条落盘通道（公共下载目录为主，SAF 另存为为辅）、可选分享，并把每一步结果
+ * 播报成可读文本。
  *
  * 入口现状（2026-11-24）：本页在 Manifest 注册为独立 launcher（应用列表图标直达）。
- * TactileExperiment 保留为「将来是否接进设置主屏」的标志，默认 false，不在本页做任何阻断：
- * 点图标进来即可选图、导出。后续接设置主屏时，可按 TactileExperiment.isEnabled 决定行是否出现。
+ * TactileExperiment 保留为「将来是否接进设置主屏」的标志，默认 false，不在本页做任何阻断。
  *
  * 无障碍是硬要求：每个可点控件都有文字标签 / 角色 / 状态描述；结果不只画在画面上，
  * 同时进 live region、announceForAccessibility 与 Toast 三条路径，保证读屏能朗读。
@@ -16,8 +16,11 @@
 
 package com.linxi.brailleback.tactile
 
+import android.content.ContentValues
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.widget.Toast
 import androidx.activity.compose.setContent
@@ -70,10 +73,33 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 
-/** 后台转换 / 写盘的两种结局，回主线程后再翻译成界面文案。 */
+/** 后台转换 / 落盘的结局，回主线程后再翻译成界面文案。 */
 private sealed interface ExportOutcome {
-    data class Success(val fileName: String) : ExportOutcome
-    data class Failure(val message: String) : ExportOutcome
+    data class Success(
+        val uri: Uri?,
+        val fileName: String,
+        val sizeBytes: Long,
+    ) : ExportOutcome
+
+    data class Failure(val kind: FailureKind, val detail: String?) : ExportOutcome
+}
+
+/** 失败原因分类：播报必须说清是哪一类，不能只说「失败」。 */
+private enum class FailureKind {
+    /** ① 源文件超过 32 MB。 */
+    SOURCE_TOO_LARGE,
+
+    /** ② 目标像素超过 3000 万（尺寸 / DPI 过大）。 */
+    TARGET_TOO_LARGE,
+
+    /** ③ 图片解码失败或格式不支持。 */
+    DECODE_FAILED,
+
+    /** ④ 没有写入权限（含写盘流为空）。 */
+    PERMISSION_DENIED,
+
+    /** 其余未归类错误。 */
+    UNKNOWN,
 }
 
 /** 一次性收集好的文案，界面不直接碰 Context，便于读屏线性朗读。 */
@@ -98,11 +124,18 @@ private data class TactileLabels(
     val sectionPage: String,
     val pageA4: String,
     val pageA4Landscape: String,
-    val exportAction: String,
+    val actionDownload: String,
+    val actionOther: String,
+    val actionShare: String,
     val exporting: String,
-    val success: String,
-    val fail: String,
-    val cancelled: String,
+    val successDownload: String,
+    val successOther: String,
+    val failSourceLarge: String,
+    val failTargetLarge: String,
+    val failDecode: String,
+    val failPermission: String,
+    val failUnknown: String,
+    val shareNoApp: String,
     val needImage: String,
     val selected: String,
     val unselected: String,
@@ -120,18 +153,23 @@ class TactileExportActivity : AppCompatActivity() {
     private var converting by mutableStateOf(false)
     private var status by mutableStateOf<String?>(null)
 
-    /** 进 SAF 选保存位置前把参数定死，后台线程只按这份参数编码。 */
+    /** 进落盘流程前把参数定死，后台线程只按这份设置编码。 */
     private var pendingSettings: TactileSettings? = null
     private var pendingProfile: TactileProfile? = null
 
-    /** 选图：系统文档选择器，只认图片。取消时回调为 null。 */
+    /** SAF 通道建议的文件名，成功播报时用。 */
+    private var pendingFileName: String? = null
+
+    /** 最近一次成功落盘的文件，供「分享」按钮直接取流。 */
+    private var lastExportUri: Uri? = null
+    private var lastExportName: String? = null
+
+    /** 选图：系统文档选择器，只认图片。取消时回调为 null，静默处理。 */
     private val pickImageLauncher = registerForActivityResult(
         ActivityResultContracts.GetContent()
-    ) { uri ->
-        if (uri != null) onImagePicked(uri) else showStatus(getString(R.string.tactile_export_cancelled))
-    }
+    ) { uri -> if (uri != null) onImagePicked(uri) }
 
-    /** 导出落盘：SAF 创建一份 BMP。取消时回调为 null。 */
+    /** 落盘辅通道：SAF 创建一份 BMP。取消时回调为 null，静默处理。 */
     private val createBmpLauncher = registerForActivityResult(
         ActivityResultContracts.CreateDocument("image/bmp")
     ) { uri -> onExportUri(uri) }
@@ -157,6 +195,7 @@ class TactileExportActivity : AppCompatActivity() {
                     landscape = landscape,
                     converting = converting,
                     status = status,
+                    canShare = lastExportUri != null,
                     onFirstShown = { announce(labels.firstHint) },
                     onPickImage = { pickImageLauncher.launch("image/*") },
                     onModeChange = { mode = it },
@@ -171,7 +210,9 @@ class TactileExportActivity : AppCompatActivity() {
                         )
                     },
                     onPageChange = { landscape = it },
-                    onExport = ::onExportClicked,
+                    onSaveDownloads = ::onSaveDownloadsClicked,
+                    onSaveOther = ::onSaveOtherClicked,
+                    onShare = ::onShareClicked,
                     onBack = { finish() },
                 )
             }
@@ -188,7 +229,6 @@ class TactileExportActivity : AppCompatActivity() {
     private fun onImagePicked(uri: Uri) {
         val name = displayNameOf(uri)
         converting = true
-        showStatus(getString(R.string.tactile_export_reading))
         lifecycleScope.launch(Dispatchers.IO) {
             val tmp = File(cacheDir, "tactile_source_${System.currentTimeMillis()}.tmp")
             val copied = try {
@@ -210,7 +250,7 @@ class TactileExportActivity : AppCompatActivity() {
                     )
                 } else {
                     tmp.delete()
-                    showStatus(getString(R.string.tactile_export_fail, readErrorLabel()))
+                    showStatus(getString(R.string.tactile_fail_decode))
                 }
             }
         }
@@ -228,61 +268,203 @@ class TactileExportActivity : AppCompatActivity() {
         }
     }
 
-    // ------------------------------------------------------------------ 导出
-
-    private fun onExportClicked() {
-        val src = sourceFile
-        if (src == null) {
-            showStatus(getString(R.string.tactile_export_need_image))
-            return
+    /**
+     * 落盘后回读真实显示名（`OpenableColumns.DISPLAY_NAME`）。重名时系统会自动追加
+     * ` (1)` 之类后缀，播报必须与磁盘文件一致。仅查这一列；cursor 空 / 抛异常 / 名为空白
+     * 一律返回 null——保存本身已成功，回读失败只影响播报退让，不阻断成功路径。
+     */
+    private fun queryDisplayName(uri: Uri): String? = try {
+        contentResolver.query(
+            uri,
+            arrayOf(OpenableColumns.DISPLAY_NAME),
+            null,
+            null,
+            null,
+        )?.use { cursor ->
+            val idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (idx >= 0 && cursor.moveToFirst()) {
+                cursor.getString(idx)?.takeIf { it.isNotBlank() }
+            } else {
+                null
+            }
         }
-        // 参数在主线程定死，后台线程只按这份设置编码，避免播报结果与落盘内容不一致。
-        pendingSettings = TactileSettings(mode = mode, threshold = threshold)
-        pendingProfile = if (landscape) landscapeProfile() else TactileProfile.A4
-        createBmpLauncher.launch("tactile_export.bmp")
+    } catch (e: Exception) {
+        null
     }
 
-    /** A4 横版：297 × 210 mm，dpi 与默认剖面一致。 */
-    private fun landscapeProfile(): TactileProfile =
-        TactileProfile(pageWidthMm = 297.0, pageHeightMm = 210.0)
+    // ------------------------------------------------------------------ 导出
 
-    private fun onExportUri(uri: Uri?) {
-        if (isFinishing) return
-        if (uri == null) {
-            showStatus(getString(R.string.tactile_export_cancelled))
-            return
-        }
-        val src = sourceFile
-        if (src == null) {
+    /** 主通道：写入公共下载目录（手机→电脑 USB 拷文件的主路径）。 */
+    private fun onSaveDownloadsClicked() {
+        val src = sourceFile ?: run {
             showStatus(getString(R.string.tactile_export_need_image))
             return
         }
-        val settings = pendingSettings ?: TactileSettings()
-        val profile = pendingProfile ?: TactileProfile.A4
+        prepareParams()
         converting = true
         showStatus(getString(R.string.tactile_export_exporting))
         lifecycleScope.launch(Dispatchers.IO) {
             val outcome = try {
-                val bytes = TactilePipeline.imageToBmp(src, settings, profile)
-                contentResolver.openOutputStream(uri)?.use { out -> out.write(bytes) }
-                    ?: throw IllegalStateException("openOutputStream returned null")
-                ExportOutcome.Success(uri.lastPathSegment ?: "")
+                val bytes = TactilePipeline.imageToBmp(
+                    src, pendingSettings ?: TactileSettings(), pendingProfile ?: TactileProfile.A4
+                )
+                val fileName = TactileExportNames.build(
+                    sourceName, TactileExportNames.timestamp(System.currentTimeMillis())
+                )
+                val uri = saveToDownloads(fileName, bytes)
+                // IS_PENDING 已在 saveToDownloads 内清 0 之后再查，避免拿到占位名；
+                // 重名时系统追加 ` (1)` 后缀，播报必须念磁盘真实名。
+                val realName = TactileExportNames.resolveDisplay(fileName, queryDisplayName(uri))
+                ExportOutcome.Success(uri, realName, bytes.size.toLong())
             } catch (e: Exception) {
-                ExportOutcome.Failure(e.message ?: readErrorLabel())
+                ExportOutcome.Failure(classify(e), e.message)
             }
             withContext(Dispatchers.Main) {
                 converting = false
-                when (outcome) {
-                    is ExportOutcome.Success ->
-                        showStatus(getString(R.string.tactile_export_success, outcome.fileName))
-                    is ExportOutcome.Failure ->
-                        showStatus(getString(R.string.tactile_export_fail, outcome.message))
-                }
+                renderOutcome(outcome, fromDownloads = true)
             }
         }
     }
 
-    private fun readErrorLabel(): String = getString(R.string.tactile_export_read_error)
+    /** 辅通道：SAF 另存到用户自选位置。 */
+    private fun onSaveOtherClicked() {
+        val src = sourceFile ?: run {
+            showStatus(getString(R.string.tactile_export_need_image))
+            return
+        }
+        prepareParams()
+        pendingFileName = TactileExportNames.build(
+            sourceName, TactileExportNames.timestamp(System.currentTimeMillis())
+        )
+        createBmpLauncher.launch(pendingFileName ?: "tactile_export.bmp")
+    }
+
+    private fun onExportUri(uri: Uri?) {
+        if (isFinishing) return
+        // 用户取消：静默，不报错音、不弹失败提示。
+        if (uri == null) return
+        val src = sourceFile ?: return
+        converting = true
+        showStatus(getString(R.string.tactile_export_exporting))
+        lifecycleScope.launch(Dispatchers.IO) {
+            val outcome = try {
+                val bytes = TactilePipeline.imageToBmp(
+                    src, pendingSettings ?: TactileSettings(), pendingProfile ?: TactileProfile.A4
+                )
+                contentResolver.openOutputStream(uri)?.use { out -> out.write(bytes) }
+                    ?: throw IllegalStateException("openOutputStream returned null")
+                // SAF 选「另存」时目标目录也可能已有同名文件，文档 Uri 同样可回读真实名；
+                // 个别 provider 不支持查询 DISPLAY_NAME 时回 null，退让本地拼的名字。
+                val localName = pendingFileName ?: uri.lastPathSegment.orEmpty()
+                val realName = TactileExportNames.resolveDisplay(localName, queryDisplayName(uri))
+                ExportOutcome.Success(uri, realName, bytes.size.toLong())
+            } catch (e: Exception) {
+                ExportOutcome.Failure(classify(e), e.message)
+            }
+            withContext(Dispatchers.Main) {
+                converting = false
+                renderOutcome(outcome, fromDownloads = false)
+            }
+        }
+    }
+
+    /** 分享最近一次导出的 BMP；content URI 临时授予读权限，不另建 FileProvider。 */
+    private fun onShareClicked() {
+        val uri = lastExportUri ?: return
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "image/bmp"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_SUBJECT, lastExportName)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        try {
+            startActivity(Intent.createChooser(intent, getString(R.string.tactile_export_action_share)))
+        } catch (e: Exception) {
+            showStatus(getString(R.string.tactile_export_share_no_app))
+        }
+    }
+
+    /** 横版只是把 A4 的宽高互换；毫米真源仍在 [TactileProfile.A4]，活动里不另写一份魔法数。 */
+    private fun landscapeProfile(): TactileProfile =
+        TactileProfile(
+            dpi = TactileProfile.A4.dpi,
+            pageWidthMm = TactileProfile.A4.pageHeightMm,
+            pageHeightMm = TactileProfile.A4.pageWidthMm,
+        )
+
+    private fun prepareParams() {
+        val profile = if (landscape) landscapeProfile() else TactileProfile.A4
+        pendingProfile = profile
+        // 页面毫米从 profile 读回 settings；宽高留 0 会被栅格化当成「自动推算」，
+        // 按长边 160 mm 兜底出图，与界面选的 A4 版面不一致。
+        pendingSettings = TactileSettings(
+            mode = mode,
+            threshold = threshold,
+            widthMm = profile.pageWidthMm,
+            heightMm = profile.pageHeightMm,
+        )
+    }
+
+    /** MediaStore.Downloads 标准 IS_PENDING 流程：占位 → 写入 → 落定；失败回滚删行。 */
+    private fun saveToDownloads(fileName: String, bytes: ByteArray): Uri {
+        val resolver = contentResolver
+        val values = ContentValues().apply {
+            put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+            put(MediaStore.Downloads.MIME_TYPE, "image/bmp")
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        }
+        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            ?: throw IllegalStateException("MediaStore insert returned null")
+        try {
+            resolver.openOutputStream(uri)?.use { out -> out.write(bytes) }
+                ?: throw IllegalStateException("openOutputStream returned null")
+            val settled = ContentValues().apply {
+                put(MediaStore.MediaColumns.IS_PENDING, 0)
+            }
+            resolver.update(uri, settled, null, null)
+        } catch (e: Exception) {
+            resolver.delete(uri, null, null)
+            throw e
+        }
+        return uri
+    }
+
+    /** 按异常类型 / 文案关键词分到四类失败；归类不出的落 UNKNOWN，带上原始细节。 */
+    private fun classify(e: Throwable): FailureKind = when {
+        e is TactileTooLargeException -> FailureKind.TARGET_TOO_LARGE
+        e.message?.contains("32 MB") == true -> FailureKind.SOURCE_TOO_LARGE
+        e is SecurityException -> FailureKind.PERMISSION_DENIED
+        e.message?.contains("openOutputStream") == true -> FailureKind.PERMISSION_DENIED
+        e.message?.let {
+            it.contains("无法识别") || it.contains("解码失败") || it.contains("内存不足")
+        } == true -> FailureKind.DECODE_FAILED
+        else -> FailureKind.UNKNOWN
+    }
+
+    private fun renderOutcome(outcome: ExportOutcome, fromDownloads: Boolean) {
+        when (outcome) {
+            is ExportOutcome.Success -> {
+                lastExportUri = outcome.uri
+                lastExportName = outcome.fileName
+                val size = TactileExportNames.formatSize(outcome.sizeBytes)
+                val msg = if (fromDownloads) {
+                    getString(R.string.tactile_export_success_download, outcome.fileName, size)
+                } else {
+                    getString(R.string.tactile_export_success_other, outcome.fileName, size)
+                }
+                showStatus(msg)
+            }
+            is ExportOutcome.Failure -> showStatus(failureMessage(outcome))
+        }
+    }
+
+    private fun failureMessage(failure: ExportOutcome.Failure): String = when (failure.kind) {
+        FailureKind.SOURCE_TOO_LARGE -> getString(R.string.tactile_fail_source_large)
+        FailureKind.TARGET_TOO_LARGE -> getString(R.string.tactile_fail_target_large)
+        FailureKind.DECODE_FAILED -> getString(R.string.tactile_fail_decode)
+        FailureKind.PERMISSION_DENIED -> getString(R.string.tactile_fail_permission)
+        FailureKind.UNKNOWN -> getString(R.string.tactile_fail_unknown, failure.detail.orEmpty())
+    }
 
     private fun showStatus(message: String) {
         status = message
@@ -319,11 +501,18 @@ class TactileExportActivity : AppCompatActivity() {
         sectionPage = getString(R.string.tactile_export_section_page),
         pageA4 = getString(R.string.tactile_page_a4),
         pageA4Landscape = getString(R.string.tactile_page_a4_landscape),
-        exportAction = getString(R.string.tactile_export_action),
+        actionDownload = getString(R.string.tactile_export_action_download),
+        actionOther = getString(R.string.tactile_export_action_other),
+        actionShare = getString(R.string.tactile_export_action_share),
         exporting = getString(R.string.tactile_export_exporting),
-        success = getString(R.string.tactile_export_success),
-        fail = getString(R.string.tactile_export_fail),
-        cancelled = getString(R.string.tactile_export_cancelled),
+        successDownload = getString(R.string.tactile_export_success_download),
+        successOther = getString(R.string.tactile_export_success_other),
+        failSourceLarge = getString(R.string.tactile_fail_source_large),
+        failTargetLarge = getString(R.string.tactile_fail_target_large),
+        failDecode = getString(R.string.tactile_fail_decode),
+        failPermission = getString(R.string.tactile_fail_permission),
+        failUnknown = getString(R.string.tactile_fail_unknown),
+        shareNoApp = getString(R.string.tactile_export_share_no_app),
         needImage = getString(R.string.tactile_export_need_image),
         selected = getString(R.string.tactile_export_selected),
         unselected = getString(R.string.tactile_export_unselected),
@@ -344,13 +533,16 @@ private fun TactileExportScreen(
     landscape: Boolean,
     converting: Boolean,
     status: String?,
+    canShare: Boolean,
     onFirstShown: () -> Unit,
     onPickImage: () -> Unit,
     onModeChange: (TactileMode) -> Unit,
     onThresholdDecrease: () -> Unit,
     onThresholdIncrease: () -> Unit,
     onPageChange: (Boolean) -> Unit,
-    onExport: () -> Unit,
+    onSaveDownloads: () -> Unit,
+    onSaveOther: () -> Unit,
+    onShare: () -> Unit,
     onBack: () -> Unit,
 ) {
     // 首屏只播报一次功能说明；LaunchedEffect(Unit) 在重组 / 状态变化时不会重跑，避免读屏被反复骚扰。
@@ -471,14 +663,8 @@ private fun TactileExportScreen(
                 onClick = { onPageChange(true) },
             )
 
-            Button(
-                onClick = onExport,
-                enabled = !converting && sourceName != null,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(labels.exportAction)
-            }
-
+            // 状态区放在操作按钮上方：成功 / 失败结果直接进首屏无障碍焦点序列，
+            // 盲人不用先滚到屏外才能听到播报；live region 保证状态变化时读屏也会主动朗读。
             status?.let { message ->
                 Text(
                     message,
@@ -487,6 +673,29 @@ private fun TactileExportScreen(
                         .fillMaxWidth()
                         .semantics { liveRegion = LiveRegionMode.Polite },
                 )
+            }
+
+            // 主通道：公共下载目录；辅通道：SAF 另存。两个按钮标签读屏可区分。
+            Button(
+                onClick = onSaveDownloads,
+                enabled = !converting && sourceName != null,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(labels.actionDownload)
+            }
+            TextButton(
+                onClick = onSaveOther,
+                enabled = !converting && sourceName != null,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(labels.actionOther)
+            }
+            TextButton(
+                onClick = onShare,
+                enabled = !converting && canShare,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(labels.actionShare)
             }
         }
     }

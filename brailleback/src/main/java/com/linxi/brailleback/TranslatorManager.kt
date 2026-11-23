@@ -55,6 +55,10 @@ class TranslatorManager(context: Context) :
     private val mLocalesToTables = HashMap<Locale, ArrayList<TableInfo>>()
     private var mLocale: Locale? = null
     private var mClientInitialized = false
+    /** 表清单首次就绪后是否已广播过一次清单变更；只广播一次，避免界面被重复刷新。 */
+    private var mTablesListNotified = false
+    /** 默认表选择记忆（翻译器与界面标签共用同一口径）；偏好/语言变化时失效。 */
+    private var mDefaultTableSelector: DefaultTableSelector<TableInfo>? = null
 
     init {
         mPrefBrailleTableKey = context.getString(R.string.pref_braille_table_key)
@@ -88,6 +92,8 @@ class TranslatorManager(context: Context) :
         mSharedPreferences.unregisterOnSharedPreferenceChangeListener(this)
         mTranslatorClient.destroy()
         mClientInitialized = false
+        mTablesListNotified = false
+        mDefaultTableSelector = null
         mTranslator = null
         mUncontractedTranslator = null
     }
@@ -132,11 +138,14 @@ class TranslatorManager(context: Context) :
         mLocale = newConfiguration.locale
         mTables = mTranslatorClient.getTables()
         updateLocalesToTables()
+        invalidateDefaultTableCache()
+        notifyTablesListReady()
         updateTranslators()
     }
 
     override fun onSharedPreferenceChanged(prefs: SharedPreferences?, key: String?) {
         if (mClientInitialized && key != null && isTablePreferenceKey(key)) {
+            invalidateDefaultTableCache()
             updateTranslators()
         }
     }
@@ -156,6 +165,9 @@ class TranslatorManager(context: Context) :
         if (newTranslator == null) {
             LogUtils.log(this, Log.ERROR,
                 "Couldn't find braille translator for %s", mLocale)
+            // 翻译器造不出不代表清单没就绪：表清单已拿到时仍要广播一次，
+            // 否则界面永远停在空清单；清单通知与翻译器可用性解耦。
+            notifyTablesListReady()
             return
         }
         // 无缩写（uncontracted）翻译器用于编辑/搜索的逐键反译，必须是 grade 最小的表：
@@ -195,22 +207,17 @@ class TranslatorManager(context: Context) :
     /**
      * Finds the default table, preferring a contracted (grade 2) table when
      * `preferContracted` is set, or an uncontracted (grade 1) table otherwise.
+     *
+     * 与翻译器走同一套候选构造、探测函数与选择记忆：返回第一张能加载的表；
+     * 全部候选都加载失败时，退回目录推断的 rank 最高表作为显示兜底（不代表
+     * 该表真能加载，翻译器仍可能为 null）。
      */
     fun findDefaultTableInfo(eightDot: Boolean, preferContracted: Boolean): TableInfo? {
         if (mTables == null) {
             LogUtils.log(this, Log.ERROR, "Couldn't get translation tables")
             return null
         }
-        var best: TableInfo? = null
-        mTables?.forEach { info ->
-            if (eightDot != info.isEightDot) {
-                return@forEach
-            }
-            if (betterTable(info, best, preferContracted)) {
-                best = info
-            }
-        }
-        return best
+        return selectDefaultTable(eightDot, preferContracted, includeFallback = true)
     }
 
     private fun getTranslatorFromPreferences(): BrailleTranslator? {
@@ -226,18 +233,115 @@ class TranslatorManager(context: Context) :
      * English if no match is found.
      */
     private fun findBrailleTranslator(fallback: Boolean): BrailleTranslator? {
-        var translator = getTranslatorFromPreferences()
-        if (translator != null) {
-            return translator
+        // 用户显式选过的表优先级最高；加载失败时再进入自动候选逐个探测。
+        getTranslatorFromPreferences()?.let { return it }
+        val info = selectDefaultTable(false, isContractedModeSelected(), fallback)
+            ?: return null
+        return mTranslatorClient.getTranslator(info.id ?: return null)
+    }
+
+    /**
+     * 翻译器与界面标签共用的默认表口径：同一份候选构造、同一个探测函数、同一份
+     * 选择记忆与探测上界，保证翻译器实际用的表和标签念的表一致，不会分裂成两张。
+     */
+    private fun selectDefaultTable(
+        eightDot: Boolean,
+        preferContracted: Boolean,
+        includeFallback: Boolean
+    ): TableInfo? {
+        val candidates = buildDefaultTableCandidates(eightDot, preferContracted, includeFallback)
+        if (candidates.isEmpty()) {
+            return null
         }
-        var info = findDefaultTableInfo(false)
-        if (info == null && fallback) {
-            info = findFallbackTableInfo()
+        val cacheKey = Triple(eightDot, preferContracted, mLocale?.toString())
+        val selector = defaultTableSelector()
+        val result = selector.select(
+            candidates = candidates,
+            key = cacheKey,
+            catalogFallback = {
+                val fallback = highestRankedCatalogTable(eightDot, preferContracted)
+                if (fallback != null) {
+                    LogUtils.log(this, Log.ERROR,
+                        "No braille table loadable; label falls back to catalog inference: id=%s",
+                        fallback.id)
+                }
+                fallback
+            }
+        )
+        selector.lastFailed.forEach { info ->
+            LogUtils.log(this, Log.WARN,
+                "Skipping braille table that failed to load: id=%s, variant=%s",
+                info.id, info.variant)
         }
-        if (info != null) {
-            translator = mTranslatorClient.getTranslator(info.id ?: return null)
+        return result
+    }
+
+    private fun defaultTableSelector(): DefaultTableSelector<TableInfo> {
+        mDefaultTableSelector?.let { return it }
+        val selector = DefaultTableSelector<TableInfo>(
+            probe = { info ->
+                val id = info.id
+                id != null && mTranslatorClient.getTranslator(id) != null
+            }
+        )
+        mDefaultTableSelector = selector
+        return selector
+    }
+
+    /**
+     * 清空默认表选择记忆。触发时机：
+     * - 用户改了盲文表偏好或缩写模式（[onSharedPreferenceChanged]）；
+     * - 系统语言 / 配置变化（[onConfigurationChanged]）；
+     * - 调用方需要强制重算时直接调用本方法。
+     */
+    private fun invalidateDefaultTableCache() {
+        mDefaultTableSelector?.invalidate()
+    }
+
+    /**
+     * 按优先级排出自动模式下要逐个探测的候选表（去重后保持顺序）：
+     * 当前语言、指定点数的表按匹配度与缩写模式对应 grade 排序；允许兜底时再
+     * 追加英文（US）表。用户显式选择的表已在 [findBrailleTranslator] 最前面
+     * 单独试过，这里不再重复。
+     */
+    private fun buildDefaultTableCandidates(
+        eightDot: Boolean,
+        preferContracted: Boolean,
+        includeFallback: Boolean
+    ): List<TableInfo> {
+        val tables = mTables ?: return emptyList()
+        val gradeComparator = if (preferContracted) {
+            compareByDescending<TableInfo> { it.grade }
+        } else {
+            compareBy { it.grade }
         }
-        return translator
+        val comparator = compareByDescending<TableInfo> { matchRank(it.locale, mLocale) }
+            .then(gradeComparator)
+        val localeTables = tables
+            .filter { it.isEightDot == eightDot && it.locale.language == mLocale?.language }
+            .sortedWith(comparator)
+        val ordered = ArrayList<TableInfo>(localeTables)
+        if (includeFallback) {
+            findFallbackTableInfo()?.let { ordered.add(it) }
+        }
+        return ordered.distinctBy { it.id }
+    }
+
+    /** 目录推断的 rank 最高表（不做加载校验）；仅用于全部候选都加载失败时的显示兜底。 */
+    private fun highestRankedCatalogTable(
+        eightDot: Boolean,
+        preferContracted: Boolean
+    ): TableInfo? {
+        var best: TableInfo? = null
+        mTables?.forEach { info ->
+            if (eightDot != info.isEightDot) {
+                return@forEach
+            }
+            if (betterTable(info, best, preferContracted)) {
+                best = info
+            }
+        }
+        return best
     }
 
     private fun findFallbackTableInfo(): TableInfo? {
@@ -277,6 +381,21 @@ class TranslatorManager(context: Context) :
             }
         }
         return ret
+    }
+
+    /**
+     * 表清单首次非空时无条件广播一次。清单能不能列出，取决于服务有没有把
+     * 目录返回给我们，与当前能否造出翻译器是两件事；旧逻辑在翻译器失败时
+     * 直接 return，吞掉了这次通知，界面就再也收不到清单。
+     *
+     * 线程沿用既有回调通道：本方法直接同步遍历监听器，由各监听器自行投递到
+     * 主线程（界面监听器内部已 runOnUiThread），这里不另开第二条 Handler。
+     */
+    private fun notifyTablesListReady() {
+        if (mTablesListNotified) return
+        if (mTables.isNullOrEmpty()) return
+        mTablesListNotified = true
+        callOnTablesChangedListeners()
     }
 
     private fun callOnTablesChangedListeners() {

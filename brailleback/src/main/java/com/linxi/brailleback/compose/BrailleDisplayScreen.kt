@@ -31,6 +31,7 @@ internal fun BrailleDisplayScreen(
     enabledCodes: Set<String>,
     currentCodeOptions: List<BrailleCodeCatalog.Code>,
     currentCodeLabel: String,
+    tablesLoadFailed: Boolean,
     showCurrentDialog: Boolean,
     title: String,
     autoLabel: String,
@@ -170,8 +171,16 @@ internal fun BrailleDisplayScreen(
                 if (languageRows.isEmpty()) {
                     item(key = "table:empty") {
                         SettingsActionRow(
-                            title = labels.emptyLabel,
-                            summary = labels.loadingLabel,
+                            title = if (tablesLoadFailed) {
+                                labels.failedTitle
+                            } else {
+                                labels.emptyLabel
+                            },
+                            summary = if (tablesLoadFailed) {
+                                labels.failedSummary
+                            } else {
+                                labels.loadingLabel
+                            },
                             clickLabel = labels.refreshHint,
                             onClick = onRefreshTables,
                         )

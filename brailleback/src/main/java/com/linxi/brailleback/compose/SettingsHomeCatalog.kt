@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2026 盲文服务 (Braille Service)
  *
- * 设置主屏的目录数据：三个语义分组、十行入口。
+ * 设置主屏的目录数据：三个语义分组、九行入口。
  *
  * 为什么单独抽成数据而不是写在界面里：
  * - 读屏用户是线性浏览的，分组层级与一屏节点数直接决定能不能找到设置，
@@ -56,7 +56,7 @@ internal data class HomeEntry(
 
 /**
  * 主屏全部入口，列表顺序就是读屏的浏览顺序：先「怎么开始用」，再「设置分类」，
- * 最后「功能与内容」。三组共十行，加上三个分组标题，一屏 13 个可聚焦节点。
+ * 最后「功能与内容」。三组共九行，加上三个分组标题，一屏 12 个可聚焦节点。
  */
 internal object SettingsHomeCatalog {
 
@@ -112,13 +112,6 @@ internal object SettingsHomeCatalog {
             summaryRes = R.string.pref_category_stability_summary,
             section = HomeSection.SETTINGS,
             action = HomeAction.Screen(R.string.pref_category_stability_key),
-        ),
-        HomeEntry(
-            key = "bookshelf",
-            titleRes = R.string.pref_bookshelf_title,
-            summaryRes = R.string.pref_bookshelf_summary,
-            section = HomeSection.FEATURES,
-            action = HomeAction.Bookshelf,
         ),
         HomeEntry(
             key = "pref_braille_keyboard_key",
