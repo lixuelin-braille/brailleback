@@ -43,6 +43,7 @@ enum class BrailleExportFormat(val extension: String, val mime: String) {
     BRF("brf", "application/octet-stream"),
     BRL("brl", "text/plain"),
     UNICODE_TXT("txt", "text/plain"),
+    JSON("json", "application/json"),
 }
 
 /** 导出结果：编码后的文本与两类计数。 */
@@ -70,12 +71,29 @@ object BrailleExporter {
         stream: String,
         format: BrailleExportFormat,
         geometry: PageGeometry = PageGeometry.Default,
+        title: String = "book",
     ): BrailleExportResult {
         return when (format) {
             BrailleExportFormat.BRF -> exportBrf(stream, geometry)
             BrailleExportFormat.BRL -> exportBrl(stream, geometry)
             BrailleExportFormat.UNICODE_TXT -> exportUnicodeTxt(stream)
+            BrailleExportFormat.JSON -> exportJson(stream, geometry, title)
         }
+    }
+
+    /** 点位 JSON：逐格 dots/mask/line/column/role/source_span/source_text + 文档元信息。 */
+    private fun exportJson(
+        stream: String,
+        geometry: PageGeometry,
+        title: String,
+    ): BrailleExportResult {
+        var dropped = 0
+        for (c in stream) {
+            if (c == '\n' || c == '\r') continue
+            if (c.code !in 0x2800..0x28FF) dropped++
+        }
+        val document = ExportDocument.build(stream, title, geometry)
+        return BrailleExportResult(document.toJson(), 0, dropped)
     }
 
     /** BRF：Unicode 盲文回写 NABCC ASCII，按几何折行、CRLF、每 [linesPerPage] 行一个 FF。 */

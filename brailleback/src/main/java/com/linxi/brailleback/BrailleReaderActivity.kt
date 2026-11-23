@@ -177,6 +177,10 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         ActivityResultContracts.CreateDocument("text/plain")) { uri ->
         onExportUri(uri)
     }
+    private val jsonExportLauncher = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        onExportUri(uri)
+    }
 
     private fun showExportMenu() {
         if (mStream.isEmpty()) {
@@ -189,6 +193,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             getString(R.string.braille_reader_export_fmt_brf),
             getString(R.string.braille_reader_export_fmt_brl),
             getString(R.string.braille_reader_export_fmt_utf),
+            getString(R.string.braille_reader_export_fmt_json),
         )
         readerDialog = ReaderDialog.ExportFormat(
             getString(R.string.braille_reader_export_title), labels)
@@ -268,6 +273,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             BrailleExportFormat.BRF -> brfExportLauncher.launch(initialName)
             BrailleExportFormat.BRL,
             BrailleExportFormat.UNICODE_TXT -> textExportLauncher.launch(initialName)
+            BrailleExportFormat.JSON -> jsonExportLauncher.launch(initialName)
         }
     }
 
@@ -286,7 +292,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         val format = pendingFormat ?: BrailleExportFormat.BRF
         Thread {
             val result = try {
-                BrailleExporter.export(mStream, format, loadGeometry())
+                BrailleExporter.export(mStream, format, loadGeometry(), currentBookName())
             } catch (e: Exception) {
                 Log.w(LOG_TAG, "导出编码失败: ${e.message}")
                 null

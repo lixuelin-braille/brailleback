@@ -146,6 +146,7 @@
     <string name="braille_reader_export_fmt_brf">BRF (ASCII braille)</string>
     <string name="braille_reader_export_fmt_brl">BRL (Unicode braille)</string>
     <string name="braille_reader_export_fmt_utf">Text (Unicode braille)</string>
+    <string name="braille_reader_export_fmt_json">JSON (cell points)</string>
     <string name="braille_reader_export_preparing">Preparing to export…</string>
     <string name="braille_reader_export_done">Exported: %1$s</string>
     <string name="braille_reader_export_fail">Export failed: cannot write to the selected location, try another folder</string>

@@ -118,6 +118,7 @@
     <string name="braille_reader_export_fmt_brf">"BRF（ASCII 盲文）"</string>
     <string name="braille_reader_export_fmt_brl">"BRL（Unicode 盲文）"</string>
     <string name="braille_reader_export_fmt_utf">"文本（Unicode 盲文）"</string>
+    <string name="braille_reader_export_fmt_json">"点位 JSON（逐格）"</string>
     <string name="braille_reader_export_preparing">"正在导出，请稍候…"</string>
     <string name="braille_reader_export_done">"已导出：%1$s"</string>
     <string name="braille_reader_export_fail">"导出失败：无法写入所选位置，换一个文件夹再试"</string>
