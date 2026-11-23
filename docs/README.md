@@ -76,6 +76,7 @@
 | **[63-包名与应用身份独立化](./63-包名与应用身份独立化.md)** | `applicationId`/`namespace`/主模块 Java 包名换为 `com.linxi.brailleback`，与 Google 原版解耦；列出必须保持原样的契约层（AIDL 包名、2 个权限、3 个 action、service 的 JNI 包名）；顺带修掉 `DisplayClient`/`TranslatorClient` 取 `resolveInfo[0]` 绑到别家服务的崩溃；模拟器并存安装与 1554 例测试记录 | 再动包名、应用身份或排查「绑错盲文服务」时必读 |
 | **[64-连接方式三项化与提示收敛](./64-连接方式三项化与提示收敛.md)** | 设置页「连接方式」6 项（HID/串口等通道名）合并为 Auto / Bluetooth / Wired USB 三项，直接读写 `connection_protocol` 并把 `connection_transport` 复位为 `auto`；`HidTransportRouting` 补「蓝牙协议插线也走蓝牙」「蓝牙协议不响应 USB 插入」；两处播报点改为「成功念一句已连接、失败整串静音」；补文中英三选项文案并缩短「自动」长标签；1554 例失败 0，模拟器中英双语实测三项 | 改连接选项、连接页播报或排查「一打开就一串提示」时必读 |
 | **[65-产品团队与下一步功能脑暴](./65-产品团队与下一步功能脑暴.md)** | 6 个智能体角色的分工与四条红线；liblouis / MOMO / braillify / BrailleBlaster 各自「可借鉴/不照搬」；把「图片转盲文点」拆成点字画·OCR·触觉图形三类并给出纸面几何换算（A4 = 30 方 × 25 行）；13 项新功能与判据、失败即退 | **规划下一步前必读** |
+| **[66-外部参考-BrailixStudio与brailix内核](./66-外部参考-BrailixStudio与brailix内核.md)** | 已装桌面软件的身份与安装位置隐患；开源内核 `brailix`（Apache-2.0）的触觉图形参数与极性约定；与我们 N1/N3/N5/N10 逐条对位；「Brailix 出 BMP → 彗光转点图 → 刻印」可跑通的三档复用方案与许可证边界 | 做图片转触觉图形、打印链路或对外部工具取证时必读 |
 
 ---
 
