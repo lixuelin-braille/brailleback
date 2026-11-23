@@ -77,6 +77,8 @@ internal sealed interface ReaderDialog {
     ) : ReaderDialog
     data class Goto(val title: String, val hint: String) : ReaderDialog
     data class ExportFormat(val title: String, val labels: List<String>) : ReaderDialog
+    data class ExportGeometry(val title: String, val labels: List<String>) : ReaderDialog
+    data class ExportCustomGeometry(val title: String) : ReaderDialog
 }
 
 @Composable
@@ -101,6 +103,8 @@ internal fun BrailleReaderScreen(
     onDeletePick: (Int) -> Unit,
     onGotoConfirm: (Int) -> Unit,
     onExportPick: (Int) -> Unit,
+    onGeometryPick: (Int) -> Unit,
+    onCustomGeometryConfirm: (Int, Int) -> Unit,
     onDismissDialog: () -> Unit,
 ) {
     Column(
@@ -220,6 +224,11 @@ internal fun BrailleReaderScreen(
             is ReaderDialog.ExportFormat -> ListDialog(
                 current.title, current.labels, labels.cancel,
                 onPick = onExportPick, onDismiss = onDismissDialog)
+            is ReaderDialog.ExportGeometry -> ListDialog(
+                current.title, current.labels, labels.cancel,
+                onPick = onGeometryPick, onDismiss = onDismissDialog)
+            is ReaderDialog.ExportCustomGeometry -> CustomGeometryDialog(
+                current, labels, onCustomGeometryConfirm, onDismissDialog)
         }
     }
 }
@@ -285,6 +294,47 @@ private fun BookmarksDialog(
                 OutlinedButton(onClick = onDelete) { Text(labels.delete) }
                 OutlinedButton(onClick = onClear) { Text(labels.clearAll) }
             }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = onDismiss) { Text(labels.cancel) }
+        },
+    )
+}
+
+@Composable
+private fun CustomGeometryDialog(
+    dialog: ReaderDialog.ExportCustomGeometry,
+    labels: ReaderLabels,
+    onConfirm: (columns: Int, lines: Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var columns by remember { mutableStateOf("") }
+    var lines by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(dialog.title) },
+        text = {
+            Column {
+                TextField(
+                    value = columns,
+                    onValueChange = { columns = it },
+                    placeholder = { Text("20–40") },
+                    singleLine = true,
+                )
+                TextField(
+                    value = lines,
+                    onValueChange = { lines = it },
+                    placeholder = { Text("20–28") },
+                    singleLine = true,
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                val c = columns.toIntOrNull()
+                val l = lines.toIntOrNull()
+                if (c != null && l != null) onConfirm(c, l)
+            }) { Text(labels.ok) }
         },
         dismissButton = {
             OutlinedButton(onClick = onDismiss) { Text(labels.cancel) }

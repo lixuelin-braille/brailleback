@@ -11,10 +11,24 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.nio.charset.StandardCharsets
 
 class BrailleExporterTest {
 
     private fun cell(dots: Int): Char = (0x2800 + dots).toChar()
+
+    /** 与基线捕获时一致的固定样本：60 点1 + 空方全点位 + 26 行点2 + 明眼字。 */
+    private fun baselineSample(): String {
+        val sb = StringBuilder()
+        repeat(60) { sb.append(cell(1)) }
+        sb.append('\n')
+        sb.append(cell(0))
+        (0..63).forEach { sb.append(cell(it)) }
+        sb.append('\n')
+        repeat(26) { sb.append(cell(2)); sb.append('\n') }
+        sb.append('中')
+        return sb.toString()
+    }
 
     // -------------------------------------------------------------- 折行
 
@@ -139,5 +153,81 @@ class BrailleExporterTest {
     fun sanitizeFileNameFallsBackWhenBlank() {
         assertEquals("braille_export", BrailleExporter.sanitizeFileName("   "))
         assertEquals("braille_export", BrailleExporter.sanitizeFileName("///"))
+    }
+
+    // -------------------------------------------------------------- F1 版面几何
+
+    @Test
+    fun defaultGeometryMatchesBaselineByteForByte() {
+        val stream = baselineSample()
+        val brf = BrailleExporter.export(stream, BrailleExportFormat.BRF)
+        val brl = BrailleExporter.export(stream, BrailleExportFormat.BRL)
+        val txt = BrailleExporter.export(stream, BrailleExportFormat.UNICODE_TXT)
+
+        assertBytesEquals(readBaselineBytes("sample.brf"),
+            brf.content.toByteArray(StandardCharsets.US_ASCII))
+        assertEquals(String(readBaselineBytes("sample.brl"), StandardCharsets.UTF_8), brl.content)
+        assertEquals(String(readBaselineBytes("sample.txt"), StandardCharsets.UTF_8), txt.content)
+    }
+
+    @Test
+    fun geometryMatrixSixGroupsWrapAndPage() {
+        val columnsChoices = listOf(20, 30, 40)
+        val linesChoices = listOf(20, 25)
+        // 50 行单点：用于按 linesPerPage 核算 FF 数量。
+        val fiftyLines = (1..50).joinToString("\n") { cell(2).toString() }
+        val hundredCells = (1..100).joinToString("") { cell(1).toString() }
+
+        for (columns in columnsChoices) {
+            for (linesPerPage in linesChoices) {
+                val geometry = PageGeometry(columns, linesPerPage)
+
+                val brf = BrailleExporter.export(fiftyLines, BrailleExportFormat.BRF, geometry)
+                val brfLines = brf.content.split("\r\n")
+                assertTrue("BRF 每行 ≤ $columns 方", brfLines.all { it.length <= columns })
+                val expectedFf = (50 - 1) / linesPerPage
+                assertEquals("FF 数量应为 $expectedFf（$columns×$linesPerPage）",
+                    expectedFf, brf.content.count { it == '\u000C' })
+
+                val brl = BrailleExporter.export(hundredCells, BrailleExportFormat.BRL, geometry)
+                val brlLines = brl.content.split("\r\n")
+                assertTrue("BRL 每行 ≤ $columns 方", brlLines.all { it.length <= columns })
+                assertEquals("BRL 不插 FF", 0, brl.content.count { it == '\u000C' })
+            }
+        }
+    }
+
+    @Test
+    fun geometryRejectsNonPositiveDimensions() {
+        try {
+            PageGeometry(0, 25)
+            assertTrue("columns=0 应抛异常", false)
+        } catch (e: IllegalArgumentException) { }
+        try {
+            PageGeometry(40, 0)
+            assertTrue("linesPerPage=0 应抛异常", false)
+        } catch (e: IllegalArgumentException) { }
+    }
+
+    @Test
+    fun presetColumnsAndLinesAreExposed() {
+        assertEquals(listOf(20, 30, 32, 40), PageGeometry.PRESET_COLUMNS)
+        assertEquals(listOf(20, 25, 28), PageGeometry.PRESET_LINES)
+        assertEquals(40, PageGeometry.Default.columns)
+        assertEquals(25, PageGeometry.Default.linesPerPage)
+    }
+
+    private fun readBaselineBytes(name: String): ByteArray {
+        val stream = javaClass.getResourceAsStream("/export_baseline/$name")
+            ?: throw AssertionError("基线缺失: $name")
+        return stream.use { it.readBytes() }
+    }
+
+    private fun readBaseline(name: String): String =
+        String(readBaselineBytes(name), StandardCharsets.US_ASCII)
+
+    private fun assertBytesEquals(expected: ByteArray, actual: ByteArray) {
+        assertTrue("字节长度不一致: ${expected.size} vs ${actual.size}",
+            expected.contentEquals(actual))
     }
 }

@@ -3,7 +3,7 @@
  *
  * 「导出为盲文」纯 JVM 编码层：折行、分页、点位回写、文件名清洗与两类计数
  * 全部在这里，不依赖 Android，便于单测直接打。Activity 侧只留薄封装：
- * 弹格式菜单、起 SAF 文档、后台线程编码写盘、主线程弹窗/播报。
+ * 弹格式/版面菜单、起 SAF 文档、后台线程编码写盘、主线程弹窗/播报。
  *
  * 导出源就是阅读器的全书 Unicode 盲文阅读流（mStream），不重跑翻译、不做分词。
  */
@@ -11,13 +11,34 @@
 package com.linxi.brailleback
 
 /**
- * 盲文导出格式。
+ * 导出版面几何：每行方数、每页数行数，可选页边距。
  *
- * - [BRF]：BRF ASCII 盲文，40 方折行、CRLF 换行、每满 25 行插一个换页符 `\u000C`，
- *   写盘按 US-ASCII 编码。
- * - [BRL]：保持 U+2800–U+28FF 不退化 ASCII，40 方折行、CRLF，不插换页符。
- * - [UNICODE_TXT]：Unicode 盲文纯文本，不折行，保留原有段落换行。
+ * 默认 [Default] 40 方 / 25 行，与参数化之前的逐字节输出一致；
+ * BRF 换页位置与 BRL 折行宽度都从这里取，导出层不再写死 40/25。
  */
+data class PageGeometry(
+    val columns: Int,
+    val linesPerPage: Int,
+    val margin: Int? = null,
+) {
+    init {
+        require(columns > 0) { "columns must be > 0" }
+        require(linesPerPage > 0) { "linesPerPage must be > 0" }
+    }
+
+    companion object {
+        /** 默认版面：40 方 × 25 行（改造前基线口径）。 */
+        val Default = PageGeometry(40, 25)
+
+        /** 可选每行方数预设。 */
+        val PRESET_COLUMNS = listOf(20, 30, 32, 40)
+
+        /** 可选每页数行预设。 */
+        val PRESET_LINES = listOf(20, 25, 28)
+    }
+}
+
+/** 盲文导出格式。 */
 enum class BrailleExportFormat(val extension: String, val mime: String) {
     BRF("brf", "application/octet-stream"),
     BRL("brl", "text/plain"),
@@ -33,34 +54,32 @@ data class BrailleExportResult(
 
 object BrailleExporter {
 
-    /** 每行方数（BRF / BRL 折行宽度）。 */
-    const val CELLS_PER_LINE = 40
-
-    /** 每满多少行插一个换页符（仅 BRF）。 */
-    private const val LINES_PER_PAGE = 25
-
     private const val FORM_FEED = '\u000C'
     private const val CRLF = "\r\n"
     private const val BLANK = '\u2800'
 
     /**
-     * 把阅读流 [stream] 按 [format] 编码。
+     * 把阅读流 [stream] 按 [format] 编码，版面取 [geometry]。
      *
      * 计数口径：
      * - unmappableCells：八点（点位 ≥64）或 NABCC 表外的盲方；BRF 回写成 `?`，
      *   BRL / 文本格式保留原字符但仍计数。
      * - droppedChars：混入的明眼字符（非盲文、非结构符），导出时丢弃并计数。
      */
-    fun export(stream: String, format: BrailleExportFormat): BrailleExportResult {
+    fun export(
+        stream: String,
+        format: BrailleExportFormat,
+        geometry: PageGeometry = PageGeometry.Default,
+    ): BrailleExportResult {
         return when (format) {
-            BrailleExportFormat.BRF -> exportBrf(stream)
-            BrailleExportFormat.BRL -> exportBrl(stream)
+            BrailleExportFormat.BRF -> exportBrf(stream, geometry)
+            BrailleExportFormat.BRL -> exportBrl(stream, geometry)
             BrailleExportFormat.UNICODE_TXT -> exportUnicodeTxt(stream)
         }
     }
 
-    /** BRF：Unicode 盲文回写 NABCC ASCII，40 方折行、CRLF、每 25 行一个 FF。 */
-    private fun exportBrf(stream: String): BrailleExportResult {
+    /** BRF：Unicode 盲文回写 NABCC ASCII，按几何折行、CRLF、每 [linesPerPage] 行一个 FF。 */
+    private fun exportBrf(stream: String, geometry: PageGeometry): BrailleExportResult {
         val lines = ArrayList<String>()
         var unmappable = 0
         var dropped = 0
@@ -98,8 +117,8 @@ object BrailleExporter {
         for (raw in lines) {
             var i = 0
             while (i < raw.length) {
-                wrapped.add(raw.substring(i, minOf(i + CELLS_PER_LINE, raw.length)))
-                i += CELLS_PER_LINE
+                wrapped.add(raw.substring(i, minOf(i + geometry.columns, raw.length)))
+                i += geometry.columns
             }
         }
 
@@ -107,16 +126,16 @@ object BrailleExporter {
         wrapped.forEachIndexed { idx, l ->
             if (idx > 0) sb.append(CRLF)
             sb.append(l)
-            // 末页不挂尾 FF；满 25 行且后面还有内容才插换页符。
-            if ((idx + 1) % LINES_PER_PAGE == 0 && idx != wrapped.lastIndex) {
+            // 末页不挂尾 FF；满 linesPerPage 行且后面还有内容才插换页符。
+            if ((idx + 1) % geometry.linesPerPage == 0 && idx != wrapped.lastIndex) {
                 sb.append(FORM_FEED)
             }
         }
         return BrailleExportResult(sb.toString(), unmappable, dropped)
     }
 
-    /** BRL：保留 Unicode 盲文不退化 ASCII，40 方折行、CRLF，不插 FF。 */
-    private fun exportBrl(stream: String): BrailleExportResult {
+    /** BRL：保留 Unicode 盲文不退化 ASCII，按几何折行、CRLF，不插 FF。 */
+    private fun exportBrl(stream: String, geometry: PageGeometry): BrailleExportResult {
         val lines = ArrayList<String>()
         var unmappable = 0
         var dropped = 0
@@ -145,8 +164,8 @@ object BrailleExporter {
         for (raw in lines) {
             var i = 0
             while (i < raw.length) {
-                wrapped.add(raw.substring(i, minOf(i + CELLS_PER_LINE, raw.length)))
-                i += CELLS_PER_LINE
+                wrapped.add(raw.substring(i, minOf(i + geometry.columns, raw.length)))
+                i += geometry.columns
             }
         }
         return BrailleExportResult(wrapped.joinToString(CRLF), unmappable, dropped)
@@ -168,6 +187,20 @@ object BrailleExporter {
             }
         }
         return BrailleExportResult(sb.toString(), unmappable, dropped)
+    }
+
+    /**
+     * 预估导出版面总页数：按几何折行后统计物理行数，再按 [PageGeometry.linesPerPage]
+     * 切页。供导出前预览播报「每行 N 方、每页 M 行、共 K 页」，不写盘、不改流。
+     */
+    fun pageCount(stream: String, geometry: PageGeometry): Int {
+        var lines = 0
+        for (raw in stream.split('\n')) {
+            val len = raw.trimEnd('\r').length
+            lines += if (len == 0) 1 else (len + geometry.columns - 1) / geometry.columns
+        }
+        if (lines == 0) lines = 1
+        return (lines + geometry.linesPerPage - 1) / geometry.linesPerPage
     }
 
     /**
