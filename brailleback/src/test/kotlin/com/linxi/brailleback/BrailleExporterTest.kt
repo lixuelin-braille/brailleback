@@ -35,7 +35,9 @@ class BrailleExporterTest {
     @Test
     fun brfWrapsAtFortyCells() {
         val stream = (1..80).joinToString("") { cell(1).toString() }
-        val result = BrailleExporter.export(stream, BrailleExportFormat.BRF)
+        // 默认版面已是 30 方，这里显式要 40 方，锁住 40 方档的折行。
+        val result = BrailleExporter.export(
+            stream, BrailleExportFormat.BRF, PageGeometry(40, 25))
         val lines = result.content.split("\r\n")
         assertEquals("80 方应折成 2 行", 2, lines.size)
         assertTrue("每行不超过 40 方", lines.all { it.length <= 40 })
@@ -179,16 +181,29 @@ class BrailleExporterTest {
     // -------------------------------------------------------------- F1 版面几何
 
     @Test
-    fun defaultGeometryMatchesBaselineByteForByte() {
+    fun fortyByTwentyFiveMatchesBaselineByteForByte() {
+        // 默认版面已改成 30 方（见 defaultGeometryIsThirtyColumns），
+        // 这条基线仍在显式 40 方 × 25 行下锁死编码层没有漂移。
         val stream = baselineSample()
-        val brf = BrailleExporter.export(stream, BrailleExportFormat.BRF)
-        val brl = BrailleExporter.export(stream, BrailleExportFormat.BRL)
+        val geometry = PageGeometry(40, 25)
+        val brf = BrailleExporter.export(stream, BrailleExportFormat.BRF, geometry)
+        val brl = BrailleExporter.export(stream, BrailleExportFormat.BRL, geometry)
         val txt = BrailleExporter.export(stream, BrailleExportFormat.UNICODE_TXT)
 
         assertBytesEquals(readBaselineBytes("sample.brf"),
             brf.content.toByteArray(StandardCharsets.US_ASCII))
         assertEquals(String(readBaselineBytes("sample.brl"), StandardCharsets.UTF_8), brl.content)
         assertEquals(String(readBaselineBytes("sample.txt"), StandardCharsets.UTF_8), txt.content)
+    }
+
+    @Test
+    fun defaultGeometryIsThirtyColumns() {
+        val stream = (1..90).joinToString("") { cell(1).toString() }
+        val lines = BrailleExporter.export(stream, BrailleExportFormat.BRF)
+            .content.split("\r\n")
+        assertEquals("默认行宽应为 30 方", listOf(30, 30, 30), lines.map { it.length })
+        assertEquals(30, PageGeometry.Default.columns)
+        assertEquals(25, PageGeometry.Default.linesPerPage)
     }
 
     @Test
@@ -234,7 +249,7 @@ class BrailleExporterTest {
     fun presetColumnsAndLinesAreExposed() {
         assertEquals(listOf(20, 30, 32, 40), PageGeometry.PRESET_COLUMNS)
         assertEquals(listOf(20, 25, 28), PageGeometry.PRESET_LINES)
-        assertEquals(40, PageGeometry.Default.columns)
+        assertEquals("打印默认行宽已改为 30 方", 30, PageGeometry.Default.columns)
         assertEquals(25, PageGeometry.Default.linesPerPage)
     }
 

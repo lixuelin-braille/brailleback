@@ -13,8 +13,9 @@ package com.linxi.brailleback
 /**
  * 导出版面几何：每行方数、每页数行数，可选页边距。
  *
- * 默认 [Default] 40 方 / 25 行，与参数化之前的逐字节输出一致；
- * BRF 换页位置与 BRL 折行宽度都从这里取，导出层不再写死 40/25。
+ * 默认 [Default] 30 方 / 25 行：按用户要求把打印默认行宽从 40 方改成 30 方。
+ * 40 方 × 25 行仍作为刻印机常用版面保留在预设里，并继续用旧基线
+ * （`export_baseline/sample.*`）按显式几何逐字节校验编码层没有漂移。
  */
 data class PageGeometry(
     val columns: Int,
@@ -27,8 +28,8 @@ data class PageGeometry(
     }
 
     companion object {
-        /** 默认版面：40 方 × 25 行（改造前基线口径）。 */
-        val Default = PageGeometry(40, 25)
+        /** 默认版面：30 方 × 25 行（打印默认；40 方见 [PRESET_COLUMNS]）。 */
+        val Default = PageGeometry(30, 25)
 
         /** 可选每行方数预设。 */
         val PRESET_COLUMNS = listOf(20, 30, 32, 40)

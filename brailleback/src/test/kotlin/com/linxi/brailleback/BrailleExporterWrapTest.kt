@@ -21,8 +21,9 @@ class BrailleExporterWrapTest {
             (1..30).joinToString("") { cell(2).toString() }
 
     @Test
-    fun brfDefaultsToWordWrap() {
-        val result = BrailleExporter.export(spacedStream(), BrailleExportFormat.BRF)
+    fun brfWordWrapAtFortyColumns() {
+        val result = BrailleExporter.export(
+            spacedStream(), BrailleExportFormat.BRF, PageGeometry(40, 25))
         val lines = result.content.split("\r\n")
         assertEquals(2, lines.size)
         assertEquals("BRF 应在空方处断行（30 实方 + 1 空格）", 31, lines[0].length)
@@ -31,8 +32,9 @@ class BrailleExporterWrapTest {
     }
 
     @Test
-    fun brlDefaultsToWordWrapAtBlankCell() {
-        val result = BrailleExporter.export(spacedStream(), BrailleExportFormat.BRL)
+    fun brlWordWrapAtFortyColumns() {
+        val result = BrailleExporter.export(
+            spacedStream(), BrailleExportFormat.BRL, PageGeometry(40, 25))
         val lines = result.content.split("\r\n")
         assertEquals(2, lines.size)
         assertEquals(31, lines[0].length)
@@ -40,9 +42,22 @@ class BrailleExporterWrapTest {
     }
 
     @Test
+    fun defaultThirtyColumnsAlsoWrapAtWordGaps() {
+        // 默认 30 方：20 实方 + 空方 + 20 实方，应在空方处断成 21 方 + 20 方。
+        val stream = (1..20).joinToString("") { cell(1).toString() } + blank +
+            (1..20).joinToString("") { cell(2).toString() }
+        val lines = BrailleExporter.export(stream, BrailleExportFormat.BRF)
+            .content.split("\r\n")
+        assertEquals(2, lines.size)
+        assertEquals("默认行宽 30 方下在空方处断行", 21, lines[0].length)
+        assertTrue("每行不超过默认 30 方", lines.all { it.length <= 30 })
+    }
+
+    @Test
     fun cellModeStaysAtLegacyFixedColumns() {
         val result = BrailleExporter.export(
-            spacedStream(), BrailleExportFormat.BRF, wrapMode = BrailleWrapMode.CELL)
+            spacedStream(), BrailleExportFormat.BRF, PageGeometry(40, 25),
+            wrapMode = BrailleWrapMode.CELL)
         val lines = result.content.split("\r\n")
         assertEquals("硬切应填满 40 方", 40, lines[0].length)
         assertEquals(2, lines.size)
@@ -51,22 +66,25 @@ class BrailleExporterWrapTest {
     @Test
     fun explicitWordModeEqualsDefault() {
         val stream = spacedStream()
+        val geometry = PageGeometry(40, 25)
         assertEquals(
-            BrailleExporter.export(stream, BrailleExportFormat.BRF, wrapMode = BrailleWrapMode.WORD)
+            BrailleExporter.export(
+                stream, BrailleExportFormat.BRF, geometry, wrapMode = BrailleWrapMode.WORD)
                 .content,
-            BrailleExporter.export(stream, BrailleExportFormat.BRF).content)
+            BrailleExporter.export(stream, BrailleExportFormat.BRF, geometry).content)
     }
 
     @Test
     fun wrapModesKeepAllCellsExceptLineBreaks() {
         // 内容不丢：把折行后的行拼回去，应与原文一致（空格/空方都保留）。
         val stream = spacedStream()
-        val word = BrailleExporter.export(stream, BrailleExportFormat.BRF)
+        val geometry = PageGeometry(40, 25)
+        val word = BrailleExporter.export(stream, BrailleExportFormat.BRF, geometry)
             .content.split("\r\n").joinToString("")
         assertEquals(60 + 1, word.length)
                 // 空方回写为 ASCII 空格，所以拼回来是 61 个字符，其中 1 个是空格
         val cellMode = BrailleExporter.export(
-            stream, BrailleExportFormat.BRF, wrapMode = BrailleWrapMode.CELL)
+            stream, BrailleExportFormat.BRF, geometry, wrapMode = BrailleWrapMode.CELL)
             .content.split("\r\n").joinToString("")
         assertEquals(word, cellMode)
     }
@@ -80,10 +98,11 @@ class BrailleExporterWrapTest {
         sb.append('\n')
         sb.append(cell(0)).append(cell(0))
         (1..63).forEach { sb.append(cell(it)) }
-        val word = BrailleExporter.export(sb.toString(), BrailleExportFormat.BRF)
+        val geometry = PageGeometry(40, 25)
+        val word = BrailleExporter.export(sb.toString(), BrailleExportFormat.BRF, geometry)
             .content.split("\r\n")
         val cellMode = BrailleExporter.export(
-            sb.toString(), BrailleExportFormat.BRF, wrapMode = BrailleWrapMode.CELL)
+            sb.toString(), BrailleExportFormat.BRF, geometry, wrapMode = BrailleWrapMode.CELL)
             .content.split("\r\n")
         assertEquals("行数与硬切一致", cellMode.size, word.size)
         assertEquals("缩进段不得被切成空白短行",
@@ -93,12 +112,13 @@ class BrailleExporterWrapTest {
 
     @Test
     fun longRunWithoutBlankStillFillsFullLines() {
-        // 整段没有空方（超长词/英文串）：两种模式都必须按 40 方填满。
+        // 整段没有空方（超长词/英文串）：两种模式都按显式 40 方填满。
         val stream = (1..90).joinToString("") { cell(3).toString() }
-        val word = BrailleExporter.export(stream, BrailleExportFormat.BRF)
+        val geometry = PageGeometry(40, 25)
+        val word = BrailleExporter.export(stream, BrailleExportFormat.BRF, geometry)
             .content.split("\r\n").map { it.length }
         val cellMode = BrailleExporter.export(
-            stream, BrailleExportFormat.BRF, wrapMode = BrailleWrapMode.CELL)
+            stream, BrailleExportFormat.BRF, geometry, wrapMode = BrailleWrapMode.CELL)
             .content.split("\r\n").map { it.length }
         assertEquals(listOf(40, 40, 10), word)
         assertEquals(listOf(40, 40, 10), cellMode)
