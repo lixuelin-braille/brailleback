@@ -37,7 +37,6 @@ import androidx.compose.ui.unit.dp
 internal data class ReaderLabels(
     val prev: String,
     val next: String,
-    val send: String,
     val toc: String,
     val bookmark: String,
     val goto: String,
@@ -60,7 +59,6 @@ internal data class ReaderUiState(
     val hasContent: Boolean = false,
     val prevEnabled: Boolean = false,
     val nextEnabled: Boolean = false,
-    val sendEnabled: Boolean = false,
     val tocEnabled: Boolean = false,
     val bookmarkEnabled: Boolean = false,
     val gotoEnabled: Boolean = false,
@@ -107,7 +105,6 @@ internal fun BrailleReaderScreen(
     onPrevLine: () -> Unit,
     onNext: () -> Unit,
     onNextLine: () -> Unit,
-    onSend: () -> Unit,
     onToc: () -> Unit,
     onBookmark: () -> Unit,
     onGoto: () -> Unit,
@@ -157,7 +154,8 @@ internal fun BrailleReaderScreen(
             )
         }
 
-        // 第一行：上一页 / 下一页 / 发送点显
+        // 第一行：上一页 / 下一页（「发送点显」已按用户要求去掉：
+        // 连上点显器后翻页与进页会自动推屏，不需要一个常年停用的按钮）
         if (uiState.hasContent) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -180,13 +178,6 @@ internal fun BrailleReaderScreen(
                         .combinedClickable(onClick = onNext, onLongClick = onNextLine),
                 ) {
                     Text(labels.next)
-                }
-                OutlinedButton(
-                    onClick = onSend,
-                    enabled = uiState.sendEnabled,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(labels.send)
                 }
             }
 

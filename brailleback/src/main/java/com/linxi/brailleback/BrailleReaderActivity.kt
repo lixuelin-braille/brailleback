@@ -505,7 +505,6 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
                 labels = ReaderLabels(
                     prev = getString(R.string.braille_reader_prev),
                     next = getString(R.string.braille_reader_next),
-                    send = getString(R.string.braille_reader_send),
                     toc = getString(R.string.braille_reader_toc),
                     bookmark = getString(R.string.braille_reader_bookmark),
                     goto = getString(R.string.braille_reader_goto),
@@ -522,7 +521,6 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
                 onPrevLine = { moveLine(-1) },
                 onNext = { advance(1) },
                 onNextLine = { moveLine(1) },
-                onSend = ::sendToDisplay,
                 onToc = ::showToc,
                 onBookmark = ::showBookmarks,
                 onGoto = ::showGotoDialog,
@@ -1106,7 +1104,6 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             hasContent = hasContent,
             prevEnabled = hasContent && mOffset > 0,
             nextEnabled = hasContent && mOffset + unit <= maxOffset(),
-            sendEnabled = hasContent && mConnected,
             tocEnabled = hasContent,
             bookmarkEnabled = hasContent,
             gotoEnabled = hasContent,

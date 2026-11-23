@@ -65,6 +65,17 @@ class ReaderScreenUxContractTest {
     }
 
     @Test
+    fun `阅读界面没有发送点显按钮`() {
+        val screen = source("compose/BrailleReaderScreen.kt")
+        assertTrue("发送点显按钮又回来了", !screen.contains("labels.send"))
+        assertTrue("onSend 回调没清掉", !screen.contains("onSend"))
+        assertTrue("sendEnabled 状态没清掉", !screen.contains("sendEnabled"))
+        // 去掉按钮不等于去掉推屏：连上点显器/翻页仍要自动发当前屏。
+        val activity = source("BrailleReaderActivity.kt")
+        assertTrue("自动推屏被误删", activity.contains("sendToDisplay()"))
+    }
+
+    @Test
     fun `翻译没完成时导出被拦下并说明原因`() {
         val activity = source("BrailleReaderActivity.kt")
         val exportBlock = activity.substringAfter("private fun showExportMenu() {")

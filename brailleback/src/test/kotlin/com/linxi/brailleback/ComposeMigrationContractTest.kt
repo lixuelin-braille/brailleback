@@ -451,20 +451,21 @@ class ComposeMigrationContractTest {
 
     @Test
     fun bookshelfKeepsLongPressMenuAndConfirmations() {
-        // 长按菜单与两次确认是防误删的最后一道闸：长按菜单丢了，用户就只能在列表上乱点。
+        // 长按菜单与删除确认是防误删的最后一道闸：长按菜单丢了，用户就只能在列表上乱点。
         val controller = text(bookshelfControllerPath)
         assertTrue("长按菜单丢了", controller.contains("BookshelfDialog.Menu("))
         assertTrue("删除确认丢了", controller.contains("BookshelfDialog.DeleteConfirm("))
-        assertTrue("清空确认丢了", controller.contains("BookshelfDialog.ClearConfirm("))
         assertTrue("重命名入口丢了", controller.contains("BookshelfDialog.Rename("))
         assertTrue(
             "删除确认文案必须带上书名",
             controller.contains("R.string.bookshelf_delete_confirm, entry.name"),
         )
-        assertTrue(
-            "清空确认必须带上本数",
-            controller.contains("R.string.bookshelf_clear_confirm, mBooks.size"),
-        )
+        // 「清空书架」已按用户要求去掉：一次抹掉全部记录不可逆，只保留逐本删除。
+        assertTrue("清空入口又回来了",
+            !controller.contains("BookshelfDialog.ClearConfirm("))
+        val screen = compose("BookshelfScreen.kt")
+        assertTrue("书架顶栏不该再有清空按钮",
+            !screen.contains("actions::onClear"))
     }
 
     @Test

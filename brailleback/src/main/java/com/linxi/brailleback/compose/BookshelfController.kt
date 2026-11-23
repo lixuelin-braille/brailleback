@@ -87,7 +87,6 @@ internal class BookshelfController(private val activity: ComponentActivity) {
         title = activity.getString(R.string.bookshelf_title),
         importBook = activity.getString(R.string.bookshelf_import),
         empty = activity.getString(R.string.bookshelf_empty),
-        clear = activity.getString(R.string.bookshelf_clear),
         open = activity.getString(R.string.bookshelf_open),
         rename = activity.getString(R.string.bookshelf_rename),
         delete = activity.getString(R.string.bookshelf_delete),
@@ -118,10 +117,6 @@ internal class BookshelfController(private val activity: ComponentActivity) {
 
         override fun onLongPress(entry: BookshelfEntry) {
             dialog = BookshelfDialog.Menu(entry, entry.name)
-        }
-
-        override fun onClear() {
-            requestClear()
         }
 
         override fun onDismissDialog() {
@@ -160,11 +155,6 @@ internal class BookshelfController(private val activity: ComponentActivity) {
                 renameBook(pending.uri, name)
             }
         }
-
-        override fun onConfirmClear() {
-            dialog = null
-            clearBooks()
-        }
     }
 
     // ------------------------------------------------------------------
@@ -192,18 +182,6 @@ internal class BookshelfController(private val activity: ComponentActivity) {
     // ------------------------------------------------------------------
     // 查：列表
     // ------------------------------------------------------------------
-
-    private fun requestClear() {
-        if (mBooks.isEmpty()) {
-            Toast.makeText(activity, R.string.bookshelf_empty, Toast.LENGTH_SHORT).show()
-            return
-        }
-        // 清空一次最多丢 200 本书的记录，必须二次确认。
-        dialog = BookshelfDialog.ClearConfirm(
-            title = activity.getString(R.string.bookshelf_clear),
-            message = activity.getString(R.string.bookshelf_clear_confirm, mBooks.size),
-        )
-    }
 
     // ------------------------------------------------------------------
     // 存储（SharedPreferences：uri\u0001name 集合）
@@ -245,12 +223,6 @@ internal class BookshelfController(private val activity: ComponentActivity) {
         }
         saveBooks(books)
         refreshList()
-    }
-
-    private fun clearBooks() {
-        saveBooks(emptyList())
-        refreshList()
-        Toast.makeText(activity, R.string.bookshelf_cleared, Toast.LENGTH_SHORT).show()
     }
 
     /** 带 URI 跳转阅读器。 */

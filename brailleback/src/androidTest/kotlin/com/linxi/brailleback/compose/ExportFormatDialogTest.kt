@@ -51,7 +51,6 @@ class ExportFormatDialogTest {
     private val readerLabels = ReaderLabels(
         prev = "上一页",
         next = "下一页",
-        send = "发送点显",
         toc = "目录",
         bookmark = "书签",
         goto = "跳页",
@@ -76,7 +75,7 @@ class ExportFormatDialogTest {
                 hint = hint,
             ),
             onPrev = {}, onPrevLine = {}, onNext = {}, onNextLine = {},
-            onSend = {}, onToc = {}, onBookmark = {}, onGoto = {}, onExport = {}, onFont = {},
+            onToc = {}, onBookmark = {}, onGoto = {}, onExport = {}, onFont = {},
             onFontSizePick = {}, onTocPick = {}, onBookmarkPick = {},
             onBookmarkDelete = {}, onBookmarkClear = {}, onDeletePick = {},
             onGotoConfirm = {}, onExportPick = { picked += it },
