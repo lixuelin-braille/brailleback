@@ -34,6 +34,8 @@ import com.googlecode.eyesfree.braille.translate.BrailleTranslator
 import com.googlecode.eyesfree.utils.SettingsStore
 import com.linxi.brailleback.compose.BrailleReaderScreen
 import com.linxi.brailleback.compose.ExportFormatCatalog
+import com.linxi.brailleback.compose.ExportGeometryCatalog
+import com.linxi.brailleback.compose.GeometryChoice
 import com.linxi.brailleback.compose.ReaderDialog
 import com.linxi.brailleback.compose.ReaderLabels
 import com.linxi.brailleback.compose.ReaderUiState
@@ -177,6 +179,13 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     private var mExporting = false
     private var pendingFormat: BrailleExportFormat? = null
 
+    /**
+     * 点显器上报的原始方数（未连接或上报异常时为 null）。
+     * 和 [mDisplayCells] 的区别：mDisplayCells 会在异常时兜底成默认值，
+     * 导出排版不能把「兜底的 40」当成设备真方数，所以这里单独留一份可空的原值。
+     */
+    private var mReportedCells: Int? = null
+
     /** 版面预设：4 档方数 × 3 档行数，顺序与版面菜单项一致。 */
     private val geometryPresets: List<PageGeometry> =
         PageGeometry.PRESET_COLUMNS.flatMap { columns ->
@@ -233,23 +242,55 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         showGeometryDialog()
     }
 
+    /** 当前可用作排版的版面项：连接点显器时第一项是「按点显器方数」。 */
+    private fun geometryChoices(): List<GeometryChoice> = ExportGeometryCatalog.choices(
+        reportedCells = mReportedCells,
+        fixedColumns = PageGeometry.PRESET_COLUMNS,
+        fixedLines = PageGeometry.PRESET_LINES,
+        linesForFollow = loadGeometry().linesPerPage,
+    )
+
     private fun showGeometryDialog() {
-        val labels = geometryPresets.map { geometry ->
-            getString(R.string.braille_reader_export_geometry_item,
-                geometry.columns, geometry.linesPerPage)
-        } + getString(R.string.braille_reader_export_geometry_custom)
+        val choices = geometryChoices()
+        val labels = choices.map { choice ->
+            when (choice) {
+                is GeometryChoice.FollowDisplay -> getString(
+                    R.string.braille_reader_export_geometry_follow,
+                    choice.cells, choice.lines)
+                is GeometryChoice.Fixed -> getString(
+                    R.string.braille_reader_export_geometry_item,
+                    choice.columns, choice.lines)
+                GeometryChoice.Custom ->
+                    getString(R.string.braille_reader_export_geometry_custom)
+            }
+        }
+        val reported = ExportGeometryCatalog.followCells(mReportedCells)
+        val hint = if (reported != null) {
+            getString(R.string.braille_reader_export_geometry_hint_connected, reported)
+        } else {
+            getString(R.string.braille_reader_export_geometry_hint_offline)
+        }
         readerDialog = ReaderDialog.ExportGeometry(
-            getString(R.string.braille_reader_export_geometry_title), labels)
+            getString(R.string.braille_reader_export_geometry_title), labels, hint)
     }
 
     private fun onGeometryPicked(which: Int) {
         readerDialog = null
-        if (which < geometryPresets.size) {
-            saveGeometry(geometryPresets[which])
-            startExport(pendingFormat ?: BrailleExportFormat.BRF)
-        } else {
-            readerDialog = ReaderDialog.ExportCustomGeometry(
-                getString(R.string.braille_reader_export_geometry_title))
+        when (val choice = geometryChoices().getOrNull(which)) {
+            is GeometryChoice.FollowDisplay -> {
+                saveFollowDisplay(true)
+                startExport(pendingFormat ?: BrailleExportFormat.BRF)
+            }
+            is GeometryChoice.Fixed -> {
+                saveFollowDisplay(false)
+                saveGeometry(PageGeometry(choice.columns, choice.lines))
+                startExport(pendingFormat ?: BrailleExportFormat.BRF)
+            }
+            GeometryChoice.Custom, null -> {
+                saveFollowDisplay(false)
+                readerDialog = ReaderDialog.ExportCustomGeometry(
+                    getString(R.string.braille_reader_export_geometry_title))
+            }
         }
     }
 
@@ -259,6 +300,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             lines.coerceIn(EXPORT_MIN_LINES, EXPORT_MAX_LINES),
         )
         saveGeometry(geometry)
+        saveFollowDisplay(false)
         readerDialog = null
         startExport(pendingFormat ?: BrailleExportFormat.BRF)
     }
@@ -280,11 +322,28 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             .apply()
     }
 
+    /** 导出排版是否跟随点显器方数；默认开启，但只在有可用设备方数时才生效。 */
+    private fun followDisplayEnabled(): Boolean =
+        SettingsStore.get(this).getBoolean(KEY_EXPORT_FOLLOW_DISPLAY, true)
+
+    private fun saveFollowDisplay(enabled: Boolean) {
+        SettingsStore.get(this).edit()
+            .putBoolean(KEY_EXPORT_FOLLOW_DISPLAY, enabled)
+            .apply()
+    }
+
+    /** 真正用于导出/播报的版面：跟随开启且有设备方数时按设备方数折行。 */
+    private fun resolvedGeometry(): PageGeometry = ExportGeometryCatalog.resolve(
+        stored = loadGeometry(),
+        followEnabled = followDisplayEnabled(),
+        reportedCells = mReportedCells,
+    )
+
     private fun startExport(format: BrailleExportFormat) {
         if (mExporting || isFinishing) return
         mExporting = true
         pendingFormat = format
-        val geometry = loadGeometry()
+        val geometry = resolvedGeometry()
         val pages = BrailleExporter.pageCount(mStream, geometry)
         announce(getString(R.string.braille_reader_export_geometry_preview,
             geometry.columns, geometry.linesPerPage, pages))
@@ -316,9 +375,12 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             return
         }
         val format = pendingFormat ?: BrailleExportFormat.BRF
+        // 后台线程不碰 Activity 状态：先把版面定死再进线程，
+        // 保证「播报的页数」和「写进文件的行列」是同一个版面。
+        val geometry = resolvedGeometry()
         Thread {
             val result = try {
-                BrailleExporter.export(mStream, format, loadGeometry(),
+                BrailleExporter.export(mStream, format, geometry,
                     currentBookName(), mCellSpans)
             } catch (e: Exception) {
                 Log.w(LOG_TAG, "导出编码失败: ${e.message}")
@@ -512,6 +574,10 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
                 }
                 else -> cells
             }
+            // 只有驱动真正上报的有效方数才留给导出排版（兜底出来的默认值不算设备方数）。
+            mReportedCells = cells.takeIf { it in 1..MAX_DISPLAY_CELLS }
+        } else {
+            mReportedCells = null
         }
         // 阅读单元随连接状态/方数变化：连接后按点显器一屏步进、断开后回屏幕一屏。
         // 页表步进单位变了必须重建，但只换「翻页的格子」，不移动当前阅读位置。
@@ -1265,6 +1331,8 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         private const val KEY_BM_PREFIX = "bm_"
         private const val KEY_EXPORT_COLUMNS = "export_columns"
         private const val KEY_EXPORT_LINES = "export_lines_per_page"
+        /** 导出排版是否跟随点显器上报的方数；默认开启。 */
+        private const val KEY_EXPORT_FOLLOW_DISPLAY = "export_follow_display"
         private const val EXPORT_MIN_COLUMNS = 20
         private const val EXPORT_MAX_COLUMNS = 40
         private const val EXPORT_MIN_LINES = 20

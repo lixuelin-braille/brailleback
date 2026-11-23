@@ -138,6 +138,9 @@
     <string name="braille_reader_export_warn_dropped">"明眼字符已丢弃：%1$d"</string>
     <string name="braille_reader_export_warn_eightdot">"跳过 %1$d 个含 7/8 点的格子"</string>
     <string name="braille_reader_export_geometry_title">"选择版面（每行方数 × 每页数行）"</string>
+    <string name="braille_reader_export_geometry_follow">"按点显器：%1$d 方 × %2$d 行（跟随设备）"</string>
+    <string name="braille_reader_export_geometry_hint_connected">"已连接点显器，设备上报 %1$d 方，可以按它排版"</string>
+    <string name="braille_reader_export_geometry_hint_offline">"未连接点显器，只能选固定版面；连上点显器就能按设备方数排版"</string>
     <string name="braille_reader_export_geometry_item">"%1$d 方 × %2$d 行"</string>
     <string name="braille_reader_export_geometry_custom">"自定义…"</string>
     <string name="braille_reader_export_geometry_preview">"每行 %1$d 方、每页 %2$d 行、共 %3$d 页"</string>

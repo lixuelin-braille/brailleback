@@ -87,7 +87,12 @@ internal sealed interface ReaderDialog {
         val descriptions: List<String>,
         val hint: String,
     ) : ReaderDialog
-    data class ExportGeometry(val title: String, val labels: List<String>) : ReaderDialog
+    /** 导出排版：标题、每档说明、以及弹窗顶部一句「有没有读到点显器方数」。 */
+    data class ExportGeometry(
+        val title: String,
+        val labels: List<String>,
+        val hint: String = "",
+    ) : ReaderDialog
     data class ExportCustomGeometry(val title: String) : ReaderDialog
     data class FontSize(val title: String, val labels: List<String>) : ReaderDialog
 }
@@ -254,7 +259,8 @@ internal fun BrailleReaderScreen(
                 descriptions = current.descriptions, hint = current.hint)
             is ReaderDialog.ExportGeometry -> ListDialog(
                 current.title, current.labels, labels.cancel,
-                onPick = onGeometryPick, onDismiss = onDismissDialog)
+                onPick = onGeometryPick, onDismiss = onDismissDialog,
+                hint = current.hint)
             is ReaderDialog.ExportCustomGeometry -> CustomGeometryDialog(
                 current, labels, onCustomGeometryConfirm, onDismissDialog)
             is ReaderDialog.FontSize -> ListDialog(

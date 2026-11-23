@@ -166,6 +166,9 @@
     <string name="braille_reader_export_warn_dropped">Dropped print characters: %1$d</string>
     <string name="braille_reader_export_warn_eightdot">Skipped %1$d cells with dots 7/8</string>
     <string name="braille_reader_export_geometry_title">Choose page layout</string>
+    <string name="braille_reader_export_geometry_follow">Use the braille display: %1$d cells × %2$d lines (follows the device)</string>
+    <string name="braille_reader_export_geometry_hint_connected">Braille display connected: the device reports %1$d cells, so layouts can follow it.</string>
+    <string name="braille_reader_export_geometry_hint_offline">No braille display connected: only fixed layouts are offered. Connect the display to lay out by its cell count.</string>
     <string name="braille_reader_export_geometry_item">%1$d cells × %2$d lines</string>
     <string name="braille_reader_export_geometry_custom">Custom…</string>
     <string name="braille_reader_export_geometry_preview">%1$d cells per line, %2$d lines per page, %3$d pages</string>
