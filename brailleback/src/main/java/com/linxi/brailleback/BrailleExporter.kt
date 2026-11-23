@@ -46,6 +46,59 @@ enum class BrailleExportFormat(val extension: String, val mime: String) {
     JSON("json", "application/json"),
 }
 
+/**
+ * 折行方式。
+ *
+ * - [WORD]（默认）：只在空方处断行，行尾保留该空方；整行没有空方才按方数硬切。
+ *   中文经分词后每两个词之间有一个空方，因此不会把词或音节劈开。
+ * - [CELL]：改造前的纯方数硬切，每满列数一刀；保留它只为与旧基线逐字节对照。
+ */
+enum class BrailleWrapMode {
+    WORD,
+    CELL,
+}
+
+/**
+ * 折行内核：把一段不含换行的盲文串切成不超过 [columns] 方的行。
+ *
+ * 纯逻辑、无依赖，BRF（空方已回写成空格）与 BRL（空方仍是 U+2800）共用，
+ * 只把「哪个字符算空方」通过 [blank] 传进来。
+ */
+internal object BrailleLineWrap {
+
+    /** 兼容旧行为的空格判定不在这里，调用方给 [blank]。 */
+    fun wrap(raw: String, columns: Int, mode: BrailleWrapMode, blank: Char): List<String> {
+        require(columns > 0) { "columns must be > 0" }
+        val out = ArrayList<String>()
+        var start = 0
+        while (start < raw.length) {
+            val limit = minOf(start + columns, raw.length)
+            if (limit >= raw.length) {
+                out.add(raw.substring(start))
+                break
+            }
+            var cut = limit
+            if (mode == BrailleWrapMode.WORD) {
+                // 行首连续的空方（缩进）不算断点，否则会切出一行几乎空白的行。
+                var firstReal = start
+                while (firstReal < limit && raw[firstReal] == blank) firstReal++
+                // 从窗口末端往回找最近的空方；找不到（整窗都是实方）就硬切。
+                var blankAt = limit - 1
+                while (blankAt > firstReal && raw[blankAt] != blank) blankAt--
+                if (blankAt > firstReal && raw[blankAt] == blank) {
+                    // 断点后连着几个空方就一起收进本行，下一行从实字符开始；
+                    // 但不越过窗口右边界，保证每行不超过 columns 方。
+                    cut = blankAt + 1
+                    while (cut < limit && raw[cut] == blank) cut++
+                }
+            }
+            out.add(raw.substring(start, cut))
+            start = cut
+        }
+        return out
+    }
+}
+
 /** 导出结果：编码后的文本与三类计数。 */
 data class BrailleExportResult(
     val content: String,
@@ -63,6 +116,10 @@ object BrailleExporter {
     /**
      * 把阅读流 [stream] 按 [format] 编码，版面取 [geometry]。
      *
+     * 折行方式 [wrapMode] 默认按词断：逐行在空方处断，行尾留一个空方；
+     * 整行找不到空方（超长词、长英文数字串）才按方数硬切。
+     * 传 [BrailleWrapMode.CELL] 可回到改造前的纯方数硬切，用于字节基线对照。
+     *
      * 计数口径：
      * - unmappableCells：八点（点位 ≥64）或 NABCC 表外的盲方；BRF 回写成 `?`，
      *   BRL / 文本格式保留原字符但仍计数。
@@ -74,10 +131,11 @@ object BrailleExporter {
         geometry: PageGeometry = PageGeometry.Default,
         title: String = "book",
         cellSources: List<CellSource>? = null,
+        wrapMode: BrailleWrapMode = BrailleWrapMode.WORD,
     ): BrailleExportResult {
         return when (format) {
-            BrailleExportFormat.BRF -> exportBrf(stream, geometry)
-            BrailleExportFormat.BRL -> exportBrl(stream, geometry)
+            BrailleExportFormat.BRF -> exportBrf(stream, geometry, wrapMode)
+            BrailleExportFormat.BRL -> exportBrl(stream, geometry, wrapMode)
             BrailleExportFormat.UNICODE_TXT -> exportUnicodeTxt(stream)
             BrailleExportFormat.JSON -> exportJson(stream, geometry, title, cellSources)
         }
@@ -105,7 +163,11 @@ object BrailleExporter {
     }
 
     /** BRF：Unicode 盲文回写 NABCC ASCII，按几何折行、CRLF、每 [linesPerPage] 行一个 FF。 */
-    private fun exportBrf(stream: String, geometry: PageGeometry): BrailleExportResult {
+    private fun exportBrf(
+        stream: String,
+        geometry: PageGeometry,
+        wrapMode: BrailleWrapMode,
+    ): BrailleExportResult {
         val lines = ArrayList<String>()
         var unmappable = 0
         var dropped = 0
@@ -144,11 +206,8 @@ object BrailleExporter {
 
         val wrapped = ArrayList<String>()
         for (raw in lines) {
-            var i = 0
-            while (i < raw.length) {
-                wrapped.add(raw.substring(i, minOf(i + geometry.columns, raw.length)))
-                i += geometry.columns
-            }
+            // NABCC 侧空方已经回写成 ASCII 空格，按词断就以空格为断点。
+            wrapped += BrailleLineWrap.wrap(raw, geometry.columns, wrapMode, ' ')
         }
 
         val sb = StringBuilder()
@@ -164,7 +223,11 @@ object BrailleExporter {
     }
 
     /** BRL：保留 Unicode 盲文不退化 ASCII，按几何折行、CRLF，不插 FF。 */
-    private fun exportBrl(stream: String, geometry: PageGeometry): BrailleExportResult {
+    private fun exportBrl(
+        stream: String,
+        geometry: PageGeometry,
+        wrapMode: BrailleWrapMode,
+    ): BrailleExportResult {
         val lines = ArrayList<String>()
         var dropped = 0
         var eightDot = 0
@@ -190,11 +253,8 @@ object BrailleExporter {
 
         val wrapped = ArrayList<String>()
         for (raw in lines) {
-            var i = 0
-            while (i < raw.length) {
-                wrapped.add(raw.substring(i, minOf(i + geometry.columns, raw.length)))
-                i += geometry.columns
-            }
+            // BRL 保留原字符，空方仍是 U+2800，按词断就以它作断点。
+            wrapped += BrailleLineWrap.wrap(raw, geometry.columns, wrapMode, BLANK)
         }
         return BrailleExportResult(wrapped.joinToString(CRLF), 0, dropped, eightDot)
     }

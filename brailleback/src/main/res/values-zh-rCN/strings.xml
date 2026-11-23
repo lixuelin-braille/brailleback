@@ -141,6 +141,10 @@
     <string name="braille_reader_export_geometry_follow">"按点显器：%1$d 方 × %2$d 行（跟随设备）"</string>
     <string name="braille_reader_export_geometry_hint_connected">"已连接点显器，设备上报 %1$d 方，可以按它排版"</string>
     <string name="braille_reader_export_geometry_hint_offline">"未连接点显器，只能选固定版面；连上点显器就能按设备方数排版"</string>
+    <string name="braille_reader_export_wrap_word">"折行方式：按词断（当前），点按改为按方数硬切"</string>
+    <string name="braille_reader_export_wrap_cell">"折行方式：按方数硬切（当前），点按改为按词断"</string>
+    <string name="braille_reader_export_wrap_word_announce">"已改成按词断：行尾停在词与词之间的空方，词不会被劈开"</string>
+    <string name="braille_reader_export_wrap_cell_announce">"已改成按方数硬切：每行填满，行尾可能劈开词或音节"</string>
     <string name="braille_reader_export_geometry_item">"%1$d 方 × %2$d 行"</string>
     <string name="braille_reader_export_geometry_custom">"自定义…"</string>
     <string name="braille_reader_export_geometry_preview">"每行 %1$d 方、每页 %2$d 行、共 %3$d 页"</string>

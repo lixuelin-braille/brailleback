@@ -248,6 +248,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         fixedColumns = PageGeometry.PRESET_COLUMNS,
         fixedLines = PageGeometry.PRESET_LINES,
         linesForFollow = loadGeometry().linesPerPage,
+        wordWrap = wordWrapEnabled(),
     )
 
     private fun showGeometryDialog() {
@@ -262,6 +263,9 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
                     choice.columns, choice.lines)
                 GeometryChoice.Custom ->
                     getString(R.string.braille_reader_export_geometry_custom)
+                is GeometryChoice.WrapToggle -> getString(
+                    if (choice.wordWrap) R.string.braille_reader_export_wrap_word
+                    else R.string.braille_reader_export_wrap_cell)
             }
         }
         val reported = ExportGeometryCatalog.followCells(mReportedCells)
@@ -275,13 +279,14 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     }
 
     private fun onGeometryPicked(which: Int) {
-        readerDialog = null
         when (val choice = geometryChoices().getOrNull(which)) {
             is GeometryChoice.FollowDisplay -> {
+                readerDialog = null
                 saveFollowDisplay(true)
                 startExport(pendingFormat ?: BrailleExportFormat.BRF)
             }
             is GeometryChoice.Fixed -> {
+                readerDialog = null
                 saveFollowDisplay(false)
                 saveGeometry(PageGeometry(choice.columns, choice.lines))
                 startExport(pendingFormat ?: BrailleExportFormat.BRF)
@@ -290,6 +295,16 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
                 saveFollowDisplay(false)
                 readerDialog = ReaderDialog.ExportCustomGeometry(
                     getString(R.string.braille_reader_export_geometry_title))
+            }
+            is GeometryChoice.WrapToggle -> {
+                // 折行开关不导出、不关弹窗：切完立刻把弹窗按新状态重建，
+                // 让用户马上听到「现在是按词断/按方数」，再决定选哪一档版面。
+                val next = !choice.wordWrap
+                saveWordWrap(next)
+                announce(getString(
+                    if (next) R.string.braille_reader_export_wrap_word_announce
+                    else R.string.braille_reader_export_wrap_cell_announce))
+                showGeometryDialog()
             }
         }
     }
@@ -329,6 +344,16 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     private fun saveFollowDisplay(enabled: Boolean) {
         SettingsStore.get(this).edit()
             .putBoolean(KEY_EXPORT_FOLLOW_DISPLAY, enabled)
+            .apply()
+    }
+
+    /** 导出折行是否按词断；默认开启，关掉就是改造前的纯方数硬切。 */
+    private fun wordWrapEnabled(): Boolean =
+        SettingsStore.get(this).getBoolean(KEY_EXPORT_WORD_WRAP, true)
+
+    private fun saveWordWrap(enabled: Boolean) {
+        SettingsStore.get(this).edit()
+            .putBoolean(KEY_EXPORT_WORD_WRAP, enabled)
             .apply()
     }
 
@@ -378,10 +403,12 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         // 后台线程不碰 Activity 状态：先把版面定死再进线程，
         // 保证「播报的页数」和「写进文件的行列」是同一个版面。
         val geometry = resolvedGeometry()
+        // 折行方式同样在主线程定死，后台线程只按参数编码。
+        val wrapMode = if (wordWrapEnabled()) BrailleWrapMode.WORD else BrailleWrapMode.CELL
         Thread {
             val result = try {
                 BrailleExporter.export(mStream, format, geometry,
-                    currentBookName(), mCellSpans)
+                    currentBookName(), mCellSpans, wrapMode)
             } catch (e: Exception) {
                 Log.w(LOG_TAG, "导出编码失败: ${e.message}")
                 null
@@ -1333,6 +1360,8 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         private const val KEY_EXPORT_LINES = "export_lines_per_page"
         /** 导出排版是否跟随点显器上报的方数；默认开启。 */
         private const val KEY_EXPORT_FOLLOW_DISPLAY = "export_follow_display"
+        /** 导出折行是否按词断（空方处断行）；默认开启。 */
+        private const val KEY_EXPORT_WORD_WRAP = "export_word_wrap"
         private const val EXPORT_MIN_COLUMNS = 20
         private const val EXPORT_MAX_COLUMNS = 40
         private const val EXPORT_MIN_LINES = 20

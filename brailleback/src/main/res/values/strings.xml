@@ -169,6 +169,10 @@
     <string name="braille_reader_export_geometry_follow">Use the braille display: %1$d cells × %2$d lines (follows the device)</string>
     <string name="braille_reader_export_geometry_hint_connected">Braille display connected: the device reports %1$d cells, so layouts can follow it.</string>
     <string name="braille_reader_export_geometry_hint_offline">No braille display connected: only fixed layouts are offered. Connect the display to lay out by its cell count.</string>
+    <string name="braille_reader_export_wrap_word">Line breaks: at word gaps (current). Tap to break by cell count</string>
+    <string name="braille_reader_export_wrap_cell">Line breaks: by cell count (current). Tap to break at word gaps</string>
+    <string name="braille_reader_export_wrap_word_announce">Lines now break at word gaps, so words are not split</string>
+    <string name="braille_reader_export_wrap_cell_announce">Lines now break by cell count, filling every line completely</string>
     <string name="braille_reader_export_geometry_item">%1$d cells × %2$d lines</string>
     <string name="braille_reader_export_geometry_custom">Custom…</string>
     <string name="braille_reader_export_geometry_preview">%1$d cells per line, %2$d lines per page, %3$d pages</string>

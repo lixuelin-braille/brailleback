@@ -30,6 +30,7 @@ class ExportGeometryDialogTest {
     private val followLabel = "按点显器：32 方 × 25 行（跟随设备）"
     private val fixedLabel = "30 方 × 25 行"
     private val customLabel = "自定义…"
+    private val wrapLabel = "折行方式：按词断（当前），点按改为按方数硬切"
     private val hint = "已连接点显器，设备上报 32 方，可以按它排版"
 
     private val readerLabels = ReaderLabels(
@@ -46,7 +47,7 @@ class ExportGeometryDialogTest {
             labels = readerLabels,
             dialog = ReaderDialog.ExportGeometry(
                 title = "选择版面",
-                labels = listOf(followLabel, fixedLabel, customLabel),
+                labels = listOf(followLabel, fixedLabel, customLabel, wrapLabel),
                 hint = hint,
             ),
             onOpen = {}, onPrev = {}, onPrevLine = {}, onNext = {}, onNextLine = {},
@@ -65,6 +66,7 @@ class ExportGeometryDialogTest {
         composeRule.onNodeWithText(hint, substring = true).assertIsDisplayed()
         composeRule.onNodeWithText(followLabel, substring = true).assertIsDisplayed()
         composeRule.onNodeWithText(customLabel).assertIsDisplayed()
+        composeRule.onNodeWithText(wrapLabel, substring = true).assertIsDisplayed()
     }
 
     @Test
@@ -73,6 +75,7 @@ class ExportGeometryDialogTest {
         composeRule.setContent { MaterialTheme { Dialog(picked) } }
         composeRule.onNodeWithText(followLabel, substring = true).performClick()
         composeRule.onNodeWithText(fixedLabel, substring = true).performClick()
-        assertEquals(listOf(0, 1), picked)
+        composeRule.onNodeWithText(wrapLabel, substring = true).performClick()
+        assertEquals(listOf(0, 1, 3), picked)
     }
 }

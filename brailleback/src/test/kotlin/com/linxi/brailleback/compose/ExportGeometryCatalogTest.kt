@@ -18,9 +18,10 @@ class ExportGeometryCatalogTest {
     fun noDisplayMeansNoFollowItem() {
         val choices = ExportGeometryCatalog.choices(null, columns, lines, 25)
         assertEquals(GeometryChoice.Fixed(20, 20), choices.first())
-        assertEquals(GeometryChoice.Custom, choices.last())
-        // 4 档方数 × 3 档行数 + 自定义
-        assertEquals(13, choices.size)
+        assertEquals(GeometryChoice.Custom, choices[choices.lastIndex - 1])
+        // 4 档方数 × 3 档行数 + 自定义 + 折行开关
+        assertEquals(14, choices.size)
+        assertEquals(GeometryChoice.WrapToggle(true), choices.last())
     }
 
     @Test
@@ -28,8 +29,16 @@ class ExportGeometryCatalogTest {
         val choices = ExportGeometryCatalog.choices(32, columns, lines, 25)
         assertEquals(GeometryChoice.FollowDisplay(32, 25), choices[0])
         assertEquals(GeometryChoice.Fixed(20, 20), choices[1])
-        assertEquals(14, choices.size)
-        assertEquals(GeometryChoice.Custom, choices.last())
+        assertEquals(15, choices.size)
+        assertEquals(GeometryChoice.WrapToggle(true), choices.last())
+    }
+
+    @Test
+    fun wrapToggleReflectsCurrentMode() {
+        val wordOn = ExportGeometryCatalog.choices(null, columns, lines, 25, wordWrap = true)
+        assertEquals(GeometryChoice.WrapToggle(true), wordOn.last())
+        val wordOff = ExportGeometryCatalog.choices(null, columns, lines, 25, wordWrap = false)
+        assertEquals(GeometryChoice.WrapToggle(false), wordOff.last())
     }
 
     @Test

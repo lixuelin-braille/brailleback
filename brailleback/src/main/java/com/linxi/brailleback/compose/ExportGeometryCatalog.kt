@@ -25,6 +25,9 @@ internal sealed interface GeometryChoice {
 
     /** 自定义方数 × 行数。 */
     data object Custom : GeometryChoice
+
+    /** 折行方式开关：点一下切到另一种折行，不立即导出。 */
+    data class WrapToggle(val wordWrap: Boolean) : GeometryChoice
 }
 
 internal object ExportGeometryCatalog {
@@ -41,13 +44,14 @@ internal object ExportGeometryCatalog {
 
     /**
      * 版面菜单项：能跟随时第一项是 [GeometryChoice.FollowDisplay]，
-     * 其后按固定方数 × 固定行数铺开，最后一项自定义。
+     * 其后按固定方数 × 固定行数铺开，再是自定义，最后是折行方式开关。
      */
     fun choices(
         reportedCells: Int?,
         fixedColumns: List<Int>,
         fixedLines: List<Int>,
         linesForFollow: Int,
+        wordWrap: Boolean = true,
     ): List<GeometryChoice> {
         val cells = followCells(reportedCells)
         return buildList {
@@ -58,6 +62,7 @@ internal object ExportGeometryCatalog {
                 }
             }
             add(GeometryChoice.Custom)
+            add(GeometryChoice.WrapToggle(wordWrap))
         }
     }
 
