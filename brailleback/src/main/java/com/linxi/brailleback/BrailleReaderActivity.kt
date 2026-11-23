@@ -33,6 +33,7 @@ import com.googlecode.eyesfree.braille.display.DisplayClient
 import com.googlecode.eyesfree.braille.translate.BrailleTranslator
 import com.googlecode.eyesfree.utils.SettingsStore
 import com.linxi.brailleback.compose.BrailleReaderScreen
+import com.linxi.brailleback.compose.ExportFormatCatalog
 import com.linxi.brailleback.compose.ReaderDialog
 import com.linxi.brailleback.compose.ReaderLabels
 import com.linxi.brailleback.compose.ReaderUiState
@@ -203,20 +204,31 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
                 Toast.LENGTH_SHORT).show()
             return
         }
-        val labels = listOf(
-            getString(R.string.braille_reader_export_fmt_brf),
-            getString(R.string.braille_reader_export_fmt_brl),
-            getString(R.string.braille_reader_export_fmt_utf),
-            getString(R.string.braille_reader_export_fmt_json),
-        )
+        // 标题与说明都按 ExportFormatCatalog.formats 的顺序生成，序号永远与格式对齐。
+        val formats = ExportFormatCatalog.formats
+        val labels = formats.map { getString(exportFormatLabelRes(it)) }
+        val descriptions = formats.map { getString(exportFormatDescRes(it)) }
         readerDialog = ReaderDialog.ExportFormat(
-            getString(R.string.braille_reader_export_title), labels)
+            getString(R.string.braille_reader_export_title), labels, descriptions,
+            getString(R.string.braille_reader_export_hint))
+    }
+
+    private fun exportFormatLabelRes(format: BrailleExportFormat): Int = when (format) {
+        BrailleExportFormat.BRF -> R.string.braille_reader_export_fmt_brf
+        BrailleExportFormat.BRL -> R.string.braille_reader_export_fmt_brl
+        BrailleExportFormat.UNICODE_TXT -> R.string.braille_reader_export_fmt_utf
+        BrailleExportFormat.JSON -> R.string.braille_reader_export_fmt_json
+    }
+
+    private fun exportFormatDescRes(format: BrailleExportFormat): Int = when (format) {
+        BrailleExportFormat.BRF -> R.string.braille_reader_export_fmt_brf_desc
+        BrailleExportFormat.BRL -> R.string.braille_reader_export_fmt_brl_desc
+        BrailleExportFormat.UNICODE_TXT -> R.string.braille_reader_export_fmt_utf_desc
+        BrailleExportFormat.JSON -> R.string.braille_reader_export_fmt_json_desc
     }
 
     private fun onExportPicked(index: Int) {
-        val format = BrailleExportFormat.entries.getOrElse(index) {
-            BrailleExportFormat.BRF
-        }
+        val format = ExportFormatCatalog.formatAt(index)
         pendingFormat = format
         showGeometryDialog()
     }

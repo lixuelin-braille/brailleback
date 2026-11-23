@@ -80,7 +80,13 @@ internal sealed interface ReaderDialog {
         val offsets: List<Int>,
     ) : ReaderDialog
     data class Goto(val title: String, val hint: String) : ReaderDialog
-    data class ExportFormat(val title: String, val labels: List<String>) : ReaderDialog
+    /** 导出格式：标题、每种格式一句用途说明、以及弹窗顶部的一句选择建议。 */
+    data class ExportFormat(
+        val title: String,
+        val labels: List<String>,
+        val descriptions: List<String>,
+        val hint: String,
+    ) : ReaderDialog
     data class ExportGeometry(val title: String, val labels: List<String>) : ReaderDialog
     data class ExportCustomGeometry(val title: String) : ReaderDialog
     data class FontSize(val title: String, val labels: List<String>) : ReaderDialog
@@ -244,7 +250,8 @@ internal fun BrailleReaderScreen(
                 current, labels, onGotoConfirm, onDismissDialog)
             is ReaderDialog.ExportFormat -> ListDialog(
                 current.title, current.labels, labels.cancel,
-                onPick = onExportPick, onDismiss = onDismissDialog)
+                onPick = onExportPick, onDismiss = onDismissDialog,
+                descriptions = current.descriptions, hint = current.hint)
             is ReaderDialog.ExportGeometry -> ListDialog(
                 current.title, current.labels, labels.cancel,
                 onPick = onGeometryPick, onDismiss = onDismissDialog)
@@ -264,20 +271,44 @@ private fun ListDialog(
     cancelLabel: String,
     onPick: (Int) -> Unit,
     onDismiss: () -> Unit,
+    descriptions: List<String> = emptyList(),
+    hint: String = "",
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
             Column {
-                labels.forEachIndexed { index, label ->
+                // 顶部建议：说清“想刻印或上点显器该选哪个”，不让人盲猜。
+                if (hint.isNotEmpty()) {
                     Text(
-                        text = label,
+                        text = hint,
+                        style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier
                             .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                    )
+                }
+                labels.forEachIndexed { index, label ->
+                    val description = descriptions.getOrNull(index).orEmpty()
+                    // 整行合并成一个焦点：TalkBack 一次读出“格式名 + 用途”，
+                    // 不拆成两个焦点，避免用户要滑两次才知道这条是干什么的。
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .semantics(mergeDescendants = true) {}
                             .combinedClickable(onClick = { onPick(index) })
                             .padding(vertical = 12.dp),
-                    )
+                    ) {
+                        Text(text = label, style = MaterialTheme.typography.bodyLarge)
+                        if (description.isNotEmpty()) {
+                            Text(
+                                text = description,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                 }
             }
         },
