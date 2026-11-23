@@ -101,12 +101,33 @@ class BrailleExporterTest {
     // -------------------------------------------------------------- 计数
 
     @Test
-    fun eightDotIsQuestionMarkAndCounted() {
-        // U+2840 = 点位 64（八点），BRF 回写 ? 并计入 unmappable。
+    fun eightDotStripsDots7And8AndCounts() {
+        // U+2840 = 点位 64（仅 dot7）：剥到六点掩码 0 → 空格，计入 eightDot，不写 ?。
         val result = BrailleExporter.export(cell(64).toString(), BrailleExportFormat.BRF)
-        assertEquals("八点写成 ?", "?", result.content)
-        assertEquals("八点计入 unmappableCells", 1, result.unmappableCells)
+        assertEquals("剥 7/8 后六点为空 → 空格", " ", result.content)
+        assertEquals("八点计入 eightDotCells", 1, result.eightDotCells)
+        assertEquals("不再计入 unmappable", 0, result.unmappableCells)
+        assertEquals("BRF 不出现 ?", false, result.content.contains('?'))
         assertEquals("明眼字符计数为 0", 0, result.droppedChars)
+    }
+
+    @Test
+    fun eightDotKeepsSixDotRemainderInBrf() {
+        // 点位 65 = dot1 + dot7；剥 dot7 后掩码 1 → NABCC "A"。
+        val result = BrailleExporter.export(cell(65).toString(), BrailleExportFormat.BRF)
+        assertEquals("保留六点剩余点位", "A", result.content)
+        assertEquals(1, result.eightDotCells)
+    }
+
+    @Test
+    fun eightDotPreservedInBrlAndTxt() {
+        val brl = BrailleExporter.export(cell(64).toString(), BrailleExportFormat.BRL)
+        assertEquals("BRL 保留 U+2840", cell(64), brl.content[0])
+        assertEquals(1, brl.eightDotCells)
+
+        val txt = BrailleExporter.export(cell(64).toString(), BrailleExportFormat.UNICODE_TXT)
+        assertEquals("文本保留 U+2840", cell(64), txt.content[0])
+        assertEquals(1, txt.eightDotCells)
     }
 
     @Test

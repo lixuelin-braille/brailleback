@@ -154,6 +154,7 @@
     <string name="braille_reader_export_empty">Nothing to export</string>
     <string name="braille_reader_export_warn_unmappable">Unmappable cells: %1$d</string>
     <string name="braille_reader_export_warn_dropped">Dropped print characters: %1$d</string>
+    <string name="braille_reader_export_warn_eightdot">Skipped %1$d cells with dots 7/8</string>
     <string name="braille_reader_export_geometry_title">Choose page layout</string>
     <string name="braille_reader_export_geometry_item">%1$d cells × %2$d lines</string>
     <string name="braille_reader_export_geometry_custom">Custom…</string>

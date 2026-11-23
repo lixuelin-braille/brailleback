@@ -329,6 +329,10 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
                 add(getString(R.string.braille_reader_export_warn_dropped,
                     result.droppedChars))
             }
+            if (result.eightDotCells > 0) {
+                add(getString(R.string.braille_reader_export_warn_eightdot,
+                    result.eightDotCells))
+            }
         }
         val fileName = uri.lastPathSegment ?: ""
         val message = buildString {

@@ -46,11 +46,12 @@ enum class BrailleExportFormat(val extension: String, val mime: String) {
     JSON("json", "application/json"),
 }
 
-/** 导出结果：编码后的文本与两类计数。 */
+/** 导出结果：编码后的文本与三类计数。 */
 data class BrailleExportResult(
     val content: String,
     val unmappableCells: Int,
     val droppedChars: Int,
+    val eightDotCells: Int = 0,
 )
 
 object BrailleExporter {
@@ -88,12 +89,17 @@ object BrailleExporter {
         title: String,
     ): BrailleExportResult {
         var dropped = 0
+        var eightDot = 0
         for (c in stream) {
             if (c == '\n' || c == '\r') continue
-            if (c.code !in 0x2800..0x28FF) dropped++
+            if (c.code in 0x2800..0x28FF) {
+                if (c.code - 0x2800 >= 64) eightDot++
+            } else {
+                dropped++
+            }
         }
         val document = ExportDocument.build(stream, title, geometry)
-        return BrailleExportResult(document.toJson(), 0, dropped)
+        return BrailleExportResult(document.toJson(), 0, dropped, eightDot)
     }
 
     /** BRF：Unicode 盲文回写 NABCC ASCII，按几何折行、CRLF、每 [linesPerPage] 行一个 FF。 */
@@ -101,6 +107,7 @@ object BrailleExporter {
         val lines = ArrayList<String>()
         var unmappable = 0
         var dropped = 0
+        var eightDot = 0
         val line = StringBuilder()
 
         fun flushLine() {
@@ -114,10 +121,12 @@ object BrailleExporter {
                 c == '\r' -> Unit
                 c.code in 0x2800..0x28FF -> {
                     val dots = c.code - 0x2800
-                    if (c == BLANK) {
+                    if (dots >= 64) eightDot++
+                    val mask6 = dots and 0x3F
+                    if (c == BLANK || mask6 == 0) {
                         line.append(' ')
                     } else {
-                        val ascii = BrailleFileDecoder.dotsToAscii(dots)
+                        val ascii = BrailleFileDecoder.dotsToAscii(mask6)
                         if (ascii == null) {
                             unmappable++
                             line.append('?')
@@ -149,14 +158,14 @@ object BrailleExporter {
                 sb.append(FORM_FEED)
             }
         }
-        return BrailleExportResult(sb.toString(), unmappable, dropped)
+        return BrailleExportResult(sb.toString(), unmappable, dropped, eightDot)
     }
 
     /** BRL：保留 Unicode 盲文不退化 ASCII，按几何折行、CRLF，不插 FF。 */
     private fun exportBrl(stream: String, geometry: PageGeometry): BrailleExportResult {
         val lines = ArrayList<String>()
-        var unmappable = 0
         var dropped = 0
+        var eightDot = 0
         val line = StringBuilder()
 
         fun flushLine() {
@@ -169,8 +178,7 @@ object BrailleExporter {
                 c == '\n' -> flushLine()
                 c == '\r' -> Unit
                 c.code in 0x2800..0x28FF -> {
-                    val dots = c.code - 0x2800
-                    if (dots >= 64) unmappable++
+                    if (c.code - 0x2800 >= 64) eightDot++
                     line.append(c)
                 }
                 else -> dropped++
@@ -186,25 +194,25 @@ object BrailleExporter {
                 i += geometry.columns
             }
         }
-        return BrailleExportResult(wrapped.joinToString(CRLF), unmappable, dropped)
+        return BrailleExportResult(wrapped.joinToString(CRLF), 0, dropped, eightDot)
     }
 
     /** Unicode 文本：不折行，保留原有段落换行；明眼字符丢弃、八点计数。 */
     private fun exportUnicodeTxt(stream: String): BrailleExportResult {
-        var unmappable = 0
         var dropped = 0
+        var eightDot = 0
         val sb = StringBuilder()
         for (c in stream) {
             when {
                 c == '\n' || c == '\r' -> sb.append(c)
                 c.code in 0x2800..0x28FF -> {
-                    if (c.code - 0x2800 >= 64) unmappable++
+                    if (c.code - 0x2800 >= 64) eightDot++
                     sb.append(c)
                 }
                 else -> dropped++
             }
         }
-        return BrailleExportResult(sb.toString(), unmappable, dropped)
+        return BrailleExportResult(sb.toString(), 0, dropped, eightDot)
     }
 
     /**
