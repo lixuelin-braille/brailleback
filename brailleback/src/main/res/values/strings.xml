@@ -102,6 +102,9 @@
     
     <string name="braille_reader_hint">Pick a book from the bookshelf to start reading. ASCII braille is shown as Unicode braille.</string>
     <string name="braille_reader_translator_pending">Translation service is not ready yet — showing the original text for now. It switches to braille automatically once the service is up.</string>
+    <string name="braille_reader_translator_unavailable">The translation service did not start. You can keep reading the original text; reopen the book to retry braille.</string>
+    <string name="braille_reader_export_wait_translate">Translation is still running — the export dialog will open as soon as it finishes.</string>
+    <string name="braille_reader_export_need_translate">Export needs braille, but the translation service is not ready. Reading the original text for now; try exporting again once translation is available.</string>
     <string name="braille_reader_open">Open</string>
     <string name="braille_reader_prev">Prev</string>
     <string name="braille_reader_next">Next</string>

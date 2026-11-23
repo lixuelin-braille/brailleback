@@ -63,4 +63,29 @@ class ReaderScreenUxContractTest {
         assertTrue("未就绪时没有给出提示", waitingBlock.contains(
             "braille_reader_translator_pending"))
     }
+
+    @Test
+    fun `翻译没完成时导出被拦下并说明原因`() {
+        val activity = source("BrailleReaderActivity.kt")
+        val exportBlock = activity.substringAfter("private fun showExportMenu() {")
+            .substringBefore("// 标题与说明都按")
+        assertTrue("导出没有拦未翻译的原文流",
+            exportBlock.contains("mSourceKind == ReaderSourceKind.TEXT && !mIsTranslated"))
+        assertTrue("没说明「正在翻译」", exportBlock.contains(
+            "braille_reader_export_wait_translate"))
+        assertTrue("没说明「翻译没就绪」", exportBlock.contains(
+            "braille_reader_export_need_translate"))
+        assertTrue("翻译完没接着打开导出（mPendingExport 未落地）",
+            activity.contains("if (mPendingExport)"))
+    }
+
+    @Test
+    fun `翻译服务久不就绪会说一次不可用`() {
+        val activity = source("BrailleReaderActivity.kt")
+        assertTrue("没有翻译不可用提示",
+            activity.contains("braille_reader_translator_unavailable"))
+        assertTrue("延时没走 lifecycleScope（裸 Handler 会在销毁后回调）",
+            activity.contains("lifecycleScope.launch {") &&
+                activity.contains("TRANSLATOR_WARN_DELAY_MS"))
+    }
 }

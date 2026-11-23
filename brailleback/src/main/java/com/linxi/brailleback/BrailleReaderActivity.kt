@@ -28,6 +28,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.lifecycleScope
 import com.googlecode.eyesfree.braille.display.Display
 import com.googlecode.eyesfree.braille.display.DisplayClient
 import com.googlecode.eyesfree.braille.translate.BrailleTranslator
@@ -47,6 +48,8 @@ import java.util.Date
 import java.util.Locale
 import java.nio.charset.StandardCharsets
 import kotlin.math.min
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChangeListener {
 
@@ -68,6 +71,12 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
 
     /** 正在翻译标志，防止重复触发。 */
     private var mTranslating = false
+
+    /** 用户在翻译未完成时点了导出：翻完自动把导出弹窗接着打开。 */
+    private var mPendingExport = false
+
+    /** 翻译服务超时未就绪只播报一次，避免每本书都重复吵。 */
+    private var mWarnedTranslatorUnavailable = false
 
     /** 当前流是否来自明眼 txt 翻译。翻译流与屏幕尺寸无关，重排时无需重翻。 */
     private var mIsTranslated = false
@@ -200,6 +209,21 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             announce(getString(R.string.braille_reader_export_empty))
             Toast.makeText(this, R.string.braille_reader_export_empty,
                 Toast.LENGTH_SHORT).show()
+            return
+        }
+        // 翻译没完成时导出的会把明眼汉字当盲文丢光，全是问号。
+        // 要么等这一刻的翻译，要么明确告诉用户为什么现在不能导。
+        if (mSourceKind == ReaderSourceKind.TEXT && !mIsTranslated) {
+            if (mTranslating) {
+                mPendingExport = true
+                announce(getString(R.string.braille_reader_export_wait_translate))
+                Toast.makeText(this, R.string.braille_reader_export_wait_translate,
+                    Toast.LENGTH_SHORT).show()
+            } else {
+                announce(getString(R.string.braille_reader_export_need_translate))
+                Toast.makeText(this, R.string.braille_reader_export_need_translate,
+                    Toast.LENGTH_LONG).show()
+            }
             return
         }
         // 标题与说明都按 ExportFormatCatalog.formats 的顺序生成，序号永远与格式对齐。
@@ -794,6 +818,19 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             Toast.makeText(this,
                 getString(R.string.braille_reader_translator_pending),
                 Toast.LENGTH_LONG).show()
+            // 8 秒还拿不到翻译器就说明这条链路真的起不来（多包冲突、服务崩溃等），
+            // 明确说一句“先按原文读”，别让用户以为翻译成了只是没声。
+            // 延时不走裸 Handler：Activity 销毁时 lifecycleScope 自动取消。
+            lifecycleScope.launch {
+                delay(TRANSLATOR_WARN_DELAY_MS)
+                if (!mIsTranslated && mSourceKind == ReaderSourceKind.TEXT
+                        && !mWarnedTranslatorUnavailable) {
+                    mWarnedTranslatorUnavailable = true
+                    val msg = getString(R.string.braille_reader_translator_unavailable)
+                    announce(msg)
+                    Toast.makeText(this@BrailleReaderActivity, msg, Toast.LENGTH_LONG).show()
+                }
+            }
             return
         }
         mTranslating = true
@@ -818,6 +855,12 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
                         if (keepPlace) false else resetPosition,
                         if (keepPlace) null else targetOffset,
                         isTranslated = true, cellSpans = result.second)
+                    // 用户是在“翻译没完”的时候点的导出，这里接着把导出弹窗打开，
+                    // 不用他再摸一遍按钮。
+                    if (mPendingExport) {
+                        mPendingExport = false
+                        showExportMenu()
+                    }
                 } else {
                     // 翻译失败：屏幕仍可看原文，点显器暂为空方，给出明确提示
                     setBrailleStream(text, name, uri,
@@ -1326,6 +1369,9 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
 
         private const val DEFAULT_CELLS = 40
         private const val LINES_PER_PAGE = 20
+
+        /** 翻译服务超过这个时长仍未就绪，就播报一次“先按原文读”。 */
+        private const val TRANSLATOR_WARN_DELAY_MS = 8000L
         /**
          * 点显器方数上限，仅用于兜住驱动误报。
          * 常见单行点显器为 12–80 方，多行显示器最多数百方；

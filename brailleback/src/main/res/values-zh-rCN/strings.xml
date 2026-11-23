@@ -74,6 +74,9 @@
     
     <string name="braille_reader_hint">"从书架选一本书开始阅读。ASCII 盲文会显示为 Unicode 盲文。"</string>
     <string name="braille_reader_translator_pending">"翻译服务还没就绪，先显示原文，服务起来后会自动换成盲文。"</string>
+    <string name="braille_reader_translator_unavailable">"翻译服务没有启动，先按原文阅读；需要盲文请重新打开这本书重试。"</string>
+    <string name="braille_reader_export_wait_translate">"正在翻译，翻完就自动打开导出。"</string>
+    <string name="braille_reader_export_need_translate">"导出需要盲文，但翻译服务还没就绪。现在按原文显示，等翻译可用后再导出。"</string>
     <string name="braille_reader_open">"打开"</string>
     <string name="braille_reader_prev">"上一页"</string>
     <string name="braille_reader_next">"下一页"</string>
