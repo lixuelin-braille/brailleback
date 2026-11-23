@@ -65,8 +65,8 @@ class LegacyResultApiContractTest {
     @Test
     fun `六个界面各自注册了 launcher`() {
         val files = listOf(
-            "BrailleReaderActivity.kt",
             // 书架 launcher 随控制器迁到 BookshelfController（Activity 是薄壳）。
+            // 阅读器不再自带「打开书籍」入口，只能从书架/最近打开进，故不注册 launcher。
             "compose/BookshelfController.kt",
             "IMESetupWizardActivity.kt",
             // 主屏宿主已迁到 HomeContainerActivity；SettingsActivity 是转跳别名。
@@ -80,11 +80,9 @@ class LegacyResultApiContractTest {
 
     @Test
     fun `文件选择走 OpenDocument 且保留持久化权限`() {
-        // 书架侧的文件选择在 BookshelfController；阅读器仍在 BrailleReaderActivity。
-        listOf(
-            "BrailleReaderActivity.kt",
-            "compose/BookshelfController.kt",
-        ).forEach { name ->
+        // 只保留书架侧的选择器：阅读器已按用户要求去掉「打开书籍」按钮，
+        // 入口统一为书架，避免同一功能两套入口两套权限处理。
+        listOf("compose/BookshelfController.kt").forEach { name ->
             val text = source(name)
             assertTrue("$name 未使用 OpenDocument 契约",
                 text.contains("ActivityResultContracts.OpenDocument()"))
@@ -95,6 +93,12 @@ class LegacyResultApiContractTest {
             assertTrue("$name 丢失了持久化读权限",
                 text.contains("takePersistableUriPermission"))
         }
+        val reader = source("BrailleReaderActivity.kt")
+        assertTrue("阅读器不该再自带文件选择器",
+            !reader.contains("ActivityResultContracts.OpenDocument()"))
+        val readerScreen = source("compose/BrailleReaderScreen.kt")
+        assertTrue("阅读界面不该再有「打开」按钮",
+            !readerScreen.contains("labels.open"))
     }
 
     @Test

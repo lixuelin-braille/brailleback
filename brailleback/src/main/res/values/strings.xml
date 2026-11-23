@@ -100,7 +100,8 @@
     
     
     
-    <string name="braille_reader_hint">Open a BRF or text file to start reading. ASCII braille is shown as Unicode braille.</string>
+    <string name="braille_reader_hint">Pick a book from the bookshelf to start reading. ASCII braille is shown as Unicode braille.</string>
+    <string name="braille_reader_translator_pending">Translation service is not ready yet — showing the original text for now. It switches to braille automatically once the service is up.</string>
     <string name="braille_reader_open">Open</string>
     <string name="braille_reader_prev">Prev</string>
     <string name="braille_reader_next">Next</string>

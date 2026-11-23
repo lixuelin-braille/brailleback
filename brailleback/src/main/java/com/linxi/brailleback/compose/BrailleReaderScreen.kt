@@ -35,7 +35,6 @@ import androidx.compose.ui.unit.dp
 
 /** 阅读器界面静态文案（取自资源，Screen 不碰 Context）。 */
 internal data class ReaderLabels(
-    val open: String,
     val prev: String,
     val next: String,
     val send: String,
@@ -57,6 +56,8 @@ internal data class ReaderUiState(
     val focusSegments: List<String> = emptyList(),
     val fontSizeSp: Int = 18,
     val pageInfo: String = "",
+    /** 有没有可读内容。没有时不摆一排停用按钮，只留提示与字号。 */
+    val hasContent: Boolean = false,
     val prevEnabled: Boolean = false,
     val nextEnabled: Boolean = false,
     val sendEnabled: Boolean = false,
@@ -102,7 +103,6 @@ internal fun BrailleReaderScreen(
     uiState: ReaderUiState,
     labels: ReaderLabels,
     dialog: ReaderDialog?,
-    onOpen: () -> Unit,
     onPrev: () -> Unit,
     onPrevLine: () -> Unit,
     onNext: () -> Unit,
@@ -128,8 +128,7 @@ internal fun BrailleReaderScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
-            .semantics(mergeDescendants = true) {},
+            .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         // 文本区：按行/段拆成多个可聚焦节点，不整页合并为一个焦点。
@@ -158,79 +157,85 @@ internal fun BrailleReaderScreen(
             )
         }
 
-        // 第一行：打开 / 上一页 / 下一页 / 发送点显
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            OutlinedButton(onClick = onOpen, modifier = Modifier.weight(1f)) {
-                Text(labels.open)
-            }
-            OutlinedButton(
-                onClick = onPrev,
-                enabled = uiState.prevEnabled,
-                modifier = Modifier
-                    .weight(1f)
-                    .combinedClickable(onClick = onPrev, onLongClick = onPrevLine),
+        // 第一行：上一页 / 下一页 / 发送点显
+        if (uiState.hasContent) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(labels.prev)
+                OutlinedButton(
+                    onClick = onPrev,
+                    enabled = uiState.prevEnabled,
+                    modifier = Modifier
+                        .weight(1f)
+                        .combinedClickable(onClick = onPrev, onLongClick = onPrevLine),
+                ) {
+                    Text(labels.prev)
+                }
+                OutlinedButton(
+                    onClick = onNext,
+                    enabled = uiState.nextEnabled,
+                    modifier = Modifier
+                        .weight(1f)
+                        .combinedClickable(onClick = onNext, onLongClick = onNextLine),
+                ) {
+                    Text(labels.next)
+                }
+                OutlinedButton(
+                    onClick = onSend,
+                    enabled = uiState.sendEnabled,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(labels.send)
+                }
             }
-            OutlinedButton(
-                onClick = onNext,
-                enabled = uiState.nextEnabled,
-                modifier = Modifier
-                    .weight(1f)
-                    .combinedClickable(onClick = onNext, onLongClick = onNextLine),
-            ) {
-                Text(labels.next)
-            }
-            OutlinedButton(
-                onClick = onSend,
-                enabled = uiState.sendEnabled,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(labels.send)
-            }
-        }
 
-        // 第二行：目录 / 书签 / 跳页 / 导出为盲文
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            OutlinedButton(
-                onClick = onToc,
-                enabled = uiState.tocEnabled,
-                modifier = Modifier.weight(1f),
+            // 第二行：目录 / 书签 / 跳页
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(labels.toc)
+                OutlinedButton(
+                    onClick = onToc,
+                    enabled = uiState.tocEnabled,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(labels.toc)
+                }
+                OutlinedButton(
+                    onClick = onBookmark,
+                    enabled = uiState.bookmarkEnabled,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(labels.bookmark)
+                }
+                OutlinedButton(
+                    onClick = onGoto,
+                    enabled = uiState.gotoEnabled,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(labels.goto)
+                }
             }
-            OutlinedButton(
-                onClick = onBookmark,
-                enabled = uiState.bookmarkEnabled,
-                modifier = Modifier.weight(1f),
+
+            // 第三行：字号 / 导出为盲文
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(labels.bookmark)
-            }
-            OutlinedButton(
-                onClick = onGoto,
-                enabled = uiState.gotoEnabled,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(labels.goto)
-            }
-            OutlinedButton(
-                onClick = onFont,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(labels.fontSize)
-            }
-            Button(
-                onClick = onExport,
-                enabled = uiState.exportEnabled,
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(labels.export)
+                OutlinedButton(
+                    onClick = onFont,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(labels.fontSize)
+                }
+                Button(
+                    onClick = onExport,
+                    enabled = uiState.exportEnabled,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(labels.export)
+                }
             }
         }
 

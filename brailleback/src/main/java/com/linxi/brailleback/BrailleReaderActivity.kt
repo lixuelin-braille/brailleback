@@ -63,17 +63,6 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     private var uiState by mutableStateOf(ReaderUiState())
     private var readerDialog by mutableStateOf<ReaderDialog?>(null)
 
-    /**
-     * 文件选择结果。OpenDocument 契约内部就是 ACTION_OPEN_DOCUMENT + CATEGORY_OPENABLE，
-     * 与原手写 Intent 等价；用户取消时回调为 null。
-     */
-    private val openFileLauncher = registerForActivityResult(
-        ActivityResultContracts.OpenDocument()) { uri: Uri? ->
-        if (uri != null) {
-            onDocumentSelected(uri)
-        }
-    }
-
     /** 翻译服务（明眼 txt 电子书 → 盲文）。懒初始化：绑定 service 模块的翻译服务。 */
     private val mTranslatorManager by lazy { TranslatorManager(this) }
 
@@ -490,7 +479,6 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             BrailleReaderScreen(
                 uiState = uiState,
                 labels = ReaderLabels(
-                    open = getString(R.string.braille_reader_open),
                     prev = getString(R.string.braille_reader_prev),
                     next = getString(R.string.braille_reader_next),
                     send = getString(R.string.braille_reader_send),
@@ -506,7 +494,6 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
                     clearAll = getString(R.string.braille_reader_bm_clear_all),
                 ),
                 dialog = readerDialog,
-                onOpen = ::openFile,
                 onPrev = { advance(-1) },
                 onPrevLine = { moveLine(-1) },
                 onNext = { advance(1) },
@@ -624,24 +611,6 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     // ------------------------------------------------------------------
     // 文件选择 / 读取
     // ------------------------------------------------------------------
-
-    private fun openFile() {
-        // 不限定 MIME：.bdo/.bdoc/.brf 无标准 MIME 类型，
-        // 用 */* 才能在各家文件管理器中选中它们。格式校验放在读取时做。
-        openFileLauncher.launch(arrayOf("*/*"))
-    }
-
-    private fun onDocumentSelected(uri: Uri) {
-        // 持久化读权限，使下次启动仍能直接续读
-        try {
-            contentResolver.takePersistableUriPermission(uri,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        } catch (e: Exception) {
-            // 部分选择器不支持持久化，忽略（本次仍可正常读取）
-        }
-        mFileUri = uri
-        loadFile(uri)
-    }
 
     private fun loadFile(uri: Uri, targetOffset: Int? = null) {
         try {
@@ -818,8 +787,13 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         if (translator == null) {
             mPendingTranslation = PendingTranslation(text, name, uri, resetPosition, targetOffset)
             mTranslatorManager.addOnTablesChangedListener(mTranslationReadyListener)
-            uiState = uiState.copy(
-                readerText = getString(R.string.braille_reader_translator_waiting))
+            // 翻译服务没就绪也不能让用户对着空屏干等：先把原文铺进阅读流，
+            // 至少能听到正文、能翻页、能进目录；服务就绪后自动切成盲文流。
+            setBrailleStream(text, name, uri, resetPosition, targetOffset,
+                isTranslated = false)
+            Toast.makeText(this,
+                getString(R.string.braille_reader_translator_pending),
+                Toast.LENGTH_LONG).show()
             return
         }
         mTranslating = true
@@ -835,12 +809,20 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             }
             runOnUiThread {
                 mTranslating = false
+                // 若此刻屏幕上正读着兜底原文，切盲文流时按位置比例接手，
+                // 不把用户已经在读的位置拽回第 1 页。
+                val keepPlace = mSourceKind == ReaderSourceKind.TEXT &&
+                    !mIsTranslated && mStream.isNotEmpty()
                 if (result != null) {
-                    setBrailleStream(result.first, name, uri, resetPosition, targetOffset,
+                    setBrailleStream(result.first, name, uri,
+                        if (keepPlace) false else resetPosition,
+                        if (keepPlace) null else targetOffset,
                         isTranslated = true, cellSpans = result.second)
                 } else {
                     // 翻译失败：屏幕仍可看原文，点显器暂为空方，给出明确提示
-                    setBrailleStream(text, name, uri, resetPosition, targetOffset)
+                    setBrailleStream(text, name, uri,
+                        if (keepPlace) false else resetPosition,
+                        if (keepPlace) null else targetOffset)
                     Toast.makeText(this,
                         getString(R.string.braille_reader_translate_fail),
                         Toast.LENGTH_LONG).show()
@@ -1078,6 +1060,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         uiState = uiState.copy(
             pageInfo = pageInfo,
             fontSizeSp = fontSp,
+            hasContent = hasContent,
             prevEnabled = hasContent && mOffset > 0,
             nextEnabled = hasContent && mOffset + unit <= maxOffset(),
             sendEnabled = hasContent && mConnected,
@@ -1280,6 +1263,8 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     private fun sendToDisplay() {
         val display = mDisplay ?: return
         if (mStream.isEmpty()) return
+        // 明眼原文（翻译尚未就绪时的兜底流）不是点位，发过去只会是乱码。
+        if (mSourceKind == ReaderSourceKind.TEXT && !mIsTranslated) return
         val cells = BrailleFileDecoder.cellsAt(mStream, mOffset, mDisplayCells)
         if (cells.isEmpty()) return
         val len = cells.length

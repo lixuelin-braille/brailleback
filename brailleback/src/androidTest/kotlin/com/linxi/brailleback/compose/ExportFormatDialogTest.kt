@@ -49,7 +49,6 @@ class ExportFormatDialogTest {
     private val hint = "想刻印或上点显器，先选 BRF"
 
     private val readerLabels = ReaderLabels(
-        open = "打开",
         prev = "上一页",
         next = "下一页",
         send = "发送点显",
@@ -76,7 +75,7 @@ class ExportFormatDialogTest {
                 descriptions = descriptions,
                 hint = hint,
             ),
-            onOpen = {}, onPrev = {}, onPrevLine = {}, onNext = {}, onNextLine = {},
+            onPrev = {}, onPrevLine = {}, onNext = {}, onNextLine = {},
             onSend = {}, onToc = {}, onBookmark = {}, onGoto = {}, onExport = {}, onFont = {},
             onFontSizePick = {}, onTocPick = {}, onBookmarkPick = {},
             onBookmarkDelete = {}, onBookmarkClear = {}, onDeletePick = {},
