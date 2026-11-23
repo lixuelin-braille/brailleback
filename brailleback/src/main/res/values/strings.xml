@@ -141,6 +141,18 @@
     <string name="braille_reader_bm_deleted">Bookmark deleted</string>
     <string name="braille_reader_goto_title">Go to page</string>
     <string name="braille_reader_goto_hint">1 - %1$d</string>
+    <string name="braille_reader_export">Export as braille</string>
+    <string name="braille_reader_export_title">Choose export format</string>
+    <string name="braille_reader_export_fmt_brf">BRF (ASCII braille)</string>
+    <string name="braille_reader_export_fmt_brl">BRL (Unicode braille)</string>
+    <string name="braille_reader_export_fmt_utf">Text (Unicode braille)</string>
+    <string name="braille_reader_export_preparing">Preparing to export…</string>
+    <string name="braille_reader_export_done">Exported: %1$s</string>
+    <string name="braille_reader_export_fail">Export failed: cannot write to the selected location, try another folder</string>
+    <string name="braille_reader_export_cancelled">Export cancelled</string>
+    <string name="braille_reader_export_empty">Nothing to export</string>
+    <string name="braille_reader_export_warn_unmappable">Unmappable cells: %1$d</string>
+    <string name="braille_reader_export_warn_dropped">Dropped print characters: %1$d</string>
     <string name="pref_chinese_segmentation_title">Chinese word segmentation</string>
     <string name="pref_chinese_segmentation_summary">Split Chinese text into words before translating to braille (recommended)</string>
     <string name="pref_connection_protocol_default" translatable="false">bluetooth</string>

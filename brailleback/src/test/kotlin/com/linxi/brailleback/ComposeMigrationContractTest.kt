@@ -332,7 +332,14 @@ class ComposeMigrationContractTest {
             "compose_settings_log_preview_hint",
             "compose_settings_overlay_tutorial_disabled",
             "home_tab_reading_title", "home_tab_settings_title",
-            "home_tab_switched_announce"
+            "home_tab_switched_announce",
+            "braille_reader_export", "braille_reader_export_title",
+            "braille_reader_export_fmt_brf", "braille_reader_export_fmt_brl",
+            "braille_reader_export_fmt_utf", "braille_reader_export_preparing",
+            "braille_reader_export_done", "braille_reader_export_fail",
+            "braille_reader_export_cancelled", "braille_reader_export_empty",
+            "braille_reader_export_warn_unmappable",
+            "braille_reader_export_warn_dropped"
         ).forEach { name ->
             val pattern = """<string name="$name">""".toRegex()
             assertTrue("英文缺少 $name", pattern.containsMatchIn(english))
@@ -472,6 +479,40 @@ class ComposeMigrationContractTest {
             "DateUtils.getRelativeTimeSpanString(",
         ).forEach { fragment ->
             assertTrue("朗读文案装配缺：$fragment", controller.contains(fragment))
+        }
+    }
+
+    // ------------------------------------------------ 阅读器 Compose 化 + 导出
+
+    private val readerActivityPath =
+        base + "src/main/java/com/linxi/brailleback/BrailleReaderActivity.kt"
+
+    @Test
+    fun readerIsComposeAndXmlLayoutIsGone() {
+        val activity = text(readerActivityPath)
+        assertTrue("阅读器必须用 setContent 承载界面", activity.contains("setContent {"))
+        assertTrue("界面交给 BrailleReaderScreen", activity.contains("BrailleReaderScreen("))
+        assertFalse("不该再 setContentView", activity.contains("setContentView"))
+        assertFalse("不该再 findViewById", activity.contains("findViewById"))
+
+        val layout = listOf(
+            File(base + "src/main/res/layout/braille_reader.xml"),
+            File("..", base + "src/main/res/layout/braille_reader.xml"),
+            File("../..", base + "src/main/res/layout/braille_reader.xml"),
+        )
+        assertFalse("braille_reader.xml 应已删除", layout.any { it.exists() })
+    }
+
+    @Test
+    fun readerKeepsStorageKeysAndOpenUriContract() {
+        val activity = text(readerActivityPath)
+        listOf(
+            "const val EXTRA_URI = \"com.linxi.brailleback.extra.OPEN_URI\"",
+            "PREFS_NAME = \"braille_reader\"",
+            "KEY_URI = \"last_uri\"",
+            "KEY_OFFSET = \"last_offset\"",
+        ).forEach { fragment ->
+            assertTrue("阅读器存储契约被改动：$fragment", activity.contains(fragment))
         }
     }
 }
