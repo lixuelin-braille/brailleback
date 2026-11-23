@@ -19,7 +19,7 @@
      (appVersionCode / appVersionName). Do not declare it here again. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    package="com.googlecode.eyesfree.brailleback">
+    package="com.linxi.brailleback">
 
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Foreground service keeps the braille display connection alive when
@@ -98,7 +98,7 @@
 
         <service android:name=".BrailleBackService"
                  android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
-                 android:settingsActivity=".SettingsActivity"
+                 android:settingsActivity=".HomeContainerActivity"
                  android:foregroundServiceType="connectedDevice"
                  android:exported="false">
             <intent-filter>
@@ -160,9 +160,9 @@
             </intent-filter>
         </service>
 
-        <!-- 设置页（androidx.preference 全量迁移）：桌面 + 无障碍服务设置入口。 -->
+        <!-- 主屏容器：底部导航（书籍阅读管理 / 设置）。桌面入口 + 无障碍服务设置入口。 -->
         <activity
-            android:name=".SettingsActivity"
+            android:name=".HomeContainerActivity"
             android:label="@string/brailleback_setup_title"
             android:icon="@drawable/ic_brailleback"
             android:theme="@style/BraillebackSettingsTheme"
@@ -177,6 +177,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- 兼容别名：保留类名供子屏返回与旧链接使用，进入后转跳 HomeContainerActivity。 -->
+        <activity
+            android:name=".SettingsActivity"
+            android:label="@string/brailleback_setup_title"
+            android:icon="@drawable/ic_brailleback"
+            android:theme="@style/BraillebackSettingsTheme"
+            android:launchMode="singleTop"
+            android:exported="true" />
 
         <activity
             android:name=".BrailleReaderActivity"

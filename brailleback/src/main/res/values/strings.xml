@@ -89,16 +89,14 @@
     <string name="pref_braille_keyboard_need_service">Turn on the BrailleBack accessibility service first</string>
     
     <string name="bookshelf_title">Bookshelf</string>
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+
+    <string name="home_tab_reading_title">Reading &amp; books</string>
+    <string name="home_tab_settings_title">Settings</string>
+    <string name="home_tab_switched_announce">Switched to %1$s</string>
+
+
+
+
     
     
     
@@ -146,9 +144,11 @@
     <string name="pref_chinese_segmentation_title">Chinese word segmentation</string>
     <string name="pref_chinese_segmentation_summary">Split Chinese text into words before translating to braille (recommended)</string>
     <string name="pref_connection_protocol_default" translatable="false">bluetooth</string>
-    <string name="pref_connection_protocol_auto_label">Auto (USB when a display is plugged in, otherwise Bluetooth)</string>
+    <string name="pref_connection_protocol_auto_label">Auto</string>
     <string name="pref_connection_protocol_hid_label">HID (new protocol)</string>
     <string name="pref_connection_protocol_rfcomm_label">Bluetooth serial (old protocol)</string>
+    <string name="pref_connection_protocol_bluetooth_label">Bluetooth</string>
+    <string name="pref_connection_protocol_usb_label">Wired USB</string>
     <!-- Label for the status preference. [CHAR_LIMIT=45] -->
     <string name="pref_connection_status_title">Status</string>
     <!-- Label for the Key Bindings preference. Displays an activity that shows the user key bindings for their device. [CHAR_LIMIT=45] -->
@@ -575,6 +575,10 @@
     <string name="compose_settings_transport_summary_hid_usb">Wired USB HID only, no Bluetooth; plug the cable in and allow the USB prompt</string>
     <string name="compose_settings_transport_summary_usb_serial">Wired USB serial only; plug the cable in and allow the USB prompt</string>
     <string name="compose_settings_transport_summary_hid_classic">Classic Bluetooth HID is owned by the system input stack; this app cannot write to the display and only receives keys, so pick classic serial for two-way use</string>
+    <!-- 连接方式收敛成三项后的说明：自动 / 蓝牙 / 有线 USB。 -->
+    <string name="compose_settings_protocol_summary_auto">Uses the cable when a display is plugged in, otherwise Bluetooth</string>
+    <string name="compose_settings_protocol_summary_bluetooth">Bluetooth only; a plugged-in cable is ignored</string>
+    <string name="compose_settings_protocol_summary_usb">Wired USB only; plug the cable in and allow the USB prompt</string>
     <string name="compose_settings_transport_summary_serial">Classic serial only; keys are parsed by the brltty driver</string>
 
     <!-- 第二批：按键与手势子屏。

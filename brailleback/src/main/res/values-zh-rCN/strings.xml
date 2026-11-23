@@ -33,9 +33,14 @@
     <string name="pref_category_device_summary">"连接状态、连接方式与自动重连"</string>
     <string name="pref_connection_status_title" msgid="8350285056432214602">"状态"</string>
     <string name="pref_connection_protocol_title">"连接方式"</string>
-    <string name="pref_connection_protocol_auto_label">"自动（插着点显器走 USB，没插走蓝牙）"</string>
+    <string name="pref_connection_protocol_auto_label">"自动"</string>
     <string name="pref_connection_protocol_hid_label">"HID（新协议）"</string>
     <string name="pref_connection_protocol_rfcomm_label">"蓝牙串口（旧协议）"</string>
+    <string name="pref_connection_protocol_bluetooth_label">"蓝牙"</string>
+    <string name="pref_connection_protocol_usb_label">"有线 USB"</string>
+    <string name="compose_settings_protocol_summary_auto">"插着点显器就走 USB，没插就走蓝牙"</string>
+    <string name="compose_settings_protocol_summary_bluetooth">"只走蓝牙，插着线也不改用 USB"</string>
+    <string name="compose_settings_protocol_summary_usb">"只走有线 USB，插线后要允许系统弹的 USB 授权"</string>
     <string name="pref_key_bindings_title" msgid="1228004448435300774">"键盘帮助"</string>
     <string name="pref_auto_connect_title">"自动连接盲文显示器"</string>
     <string name="pref_auto_connect_summary">"启动、屏幕亮起、蓝牙开启或发现已配对点显器时自动连接；断线后短暂重试并等待设备回连"</string>
@@ -51,8 +56,11 @@
     <string name="pref_braille_keyboard_need_service">请先开启盲文读屏服务</string>
     
     <string name="bookshelf_title">"书架"</string>
-    
-    
+    <string name="home_tab_reading_title">书籍阅读管理</string>
+    <string name="home_tab_settings_title">设置</string>
+    <string name="home_tab_switched_announce">已切换到%1$s</string>
+
+
     
     
     
