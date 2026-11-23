@@ -32,7 +32,7 @@ class AppLaunchSmokeTest {
         // 设置主屏已迁到 HomeContainerActivity 的设置 Tab；它起不来，所有子屏都无从进入。
         val intent = android.content.Intent(target, HomeContainerActivity::class.java)
             .putExtra(HomeContainerActivity.EXTRA_TAB, HomeContainerActivity.TAB_SETTINGS)
-        ActivityScenario.launch(intent).use { scenario ->
+        ActivityScenario.launch<HomeContainerActivity>(intent).use { scenario ->
             assertEquals(
                 "设置主屏没有走到 RESUMED：多半是主题或 Preference 解析失败",
                 Lifecycle.State.RESUMED,

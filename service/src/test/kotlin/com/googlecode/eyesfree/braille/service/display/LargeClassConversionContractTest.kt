@@ -36,7 +36,7 @@ class LargeClassConversionContractTest {
     private fun text(path: String) = projectFile(path).readText()
 
     private val display = "service/src/main/java/com/googlecode/eyesfree/braille/service/display/"
-    private val ime = "brailleback/src/main/java/com/googlecode/eyesfree/brailleback/ime/"
+    private val ime = "brailleback/src/main/java/com/linxi/brailleback/ime/"
 
     private val converted = listOf(
         display + "DeviceFinder.kt",

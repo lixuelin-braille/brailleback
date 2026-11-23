@@ -213,7 +213,7 @@ class SelfBrailleClient(context: Context, private val mAllowDebugService: Boolea
         private const val LOG_TAG = "SelfBrailleClient"
         private const val ACTION_SELF_BRAILLE_SERVICE =
             "com.googlecode.eyesfree.braille.service.ACTION_SELF_BRAILLE_SERVICE"
-        private const val BRAILLE_BACK_PACKAGE = "com.googlecode.eyesfree.brailleback"
+        private const val BRAILLE_BACK_PACKAGE = "com.linxi.brailleback"
         private val mServiceIntent = Intent(ACTION_SELF_BRAILLE_SERVICE)
             .setPackage(BRAILLE_BACK_PACKAGE)
 

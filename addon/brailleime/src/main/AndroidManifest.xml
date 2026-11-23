@@ -7,15 +7,15 @@
   <!-- 接收本应用未导出广播。androidx.core 在 API < 33 上会用
        <applicationId>.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION 做权限校验，
        必须与宿主 applicationId 一致，否则 ContextCompat.registerReceiver(..., RECEIVER_NOT_EXPORTED)
-       会抛 SecurityException。宿主为 com.googlecode.eyesfree.brailleback。 -->
+       会抛 SecurityException。宿主为 com.linxi.brailleback。 -->
   <uses-permission
-      android:name="com.googlecode.eyesfree.brailleback.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+      android:name="com.linxi.brailleback.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
       tools:node="merge" />
 
   <application>
     <!--
       单注册合并：触屏盲文键盘不再单独注册为系统输入法。
-      BrailleIme 类保留，由唯一注册的 com.googlecode.eyesfree.brailleback.BrailleIME
+      BrailleIme 类保留，由唯一注册的 com.linxi.brailleback.BrailleIME
       继承复用（见 BrailleIME.onCreateInputView / resolveTouchKeyboardMode）。
       这里只保留设置页与手势教学 Activity、以及包替换广播接收器。
       组件开关常量 BRAILLE_KEYBOARD 也已改指向 BrailleIME，

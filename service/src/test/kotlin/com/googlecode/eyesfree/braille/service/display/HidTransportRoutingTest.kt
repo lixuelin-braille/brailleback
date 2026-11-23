@@ -88,6 +88,11 @@ class HidTransportRoutingTest {
             LinkRoute.BLUETOOTH,
             resolve(ConnectionProtocolPolicy.BLUETOOTH, ConnectionTransportPolicy.AUTO, attached = false)
         )
+        // 三项收敛后「蓝牙」是点名的链路：插着线也不许被拽去 USB。
+        assertEquals(
+            LinkRoute.BLUETOOTH,
+            resolve(ConnectionProtocolPolicy.BLUETOOTH, ConnectionTransportPolicy.AUTO, attached = true)
+        )
         // 存了坏值：按自动走，不能凭空变成别的链路。
         assertEquals(LinkRoute.BLUETOOTH, resolve("garbage", "garbage", attached = false))
     }
@@ -107,6 +112,12 @@ class HidTransportRoutingTest {
         assertTrue(
             HidTransportRouting.shouldReactToUsbAttach(
                 ConnectionProtocolPolicy.AUTO, ConnectionTransportPolicy.AUTO
+            )
+        )
+        // 点名「蓝牙」时不响应插线，否则一根数据线就把用户的选择改掉。
+        assertFalse(
+            HidTransportRouting.shouldReactToUsbAttach(
+                ConnectionProtocolPolicy.BLUETOOTH, ConnectionTransportPolicy.AUTO
             )
         )
         assertTrue(

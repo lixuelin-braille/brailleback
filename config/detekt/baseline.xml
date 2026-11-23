@@ -105,8 +105,8 @@
     <ID>MayBeConst:WujieGattConnection.kt$WujieGattConnection.Companion$private val REQUESTED_MTU = 500</ID>
     <ID>MayBeConst:WujieGattConnection.kt$WujieGattConnection.Companion$private val SETUP_TIMEOUT_MS = 4000L</ID>
     <ID>NestedBlockDepth:TranslatorClient.kt$TranslatorClient$fun getTranslator(tableId: String): BrailleTranslator?</ID>
-    <ID>NewLineAtEndOfFile:DisplayManager.kt$com.googlecode.eyesfree.brailleback.DisplayManager.kt</ID>
-    <ID>NewLineAtEndOfFile:LogFileWriter.kt$com.googlecode.eyesfree.brailleback.utils.LogFileWriter.kt</ID>
+    <ID>NewLineAtEndOfFile:DisplayManager.kt$com.linxi.brailleback.DisplayManager.kt</ID>
+    <ID>NewLineAtEndOfFile:LogFileWriter.kt$com.linxi.brailleback.utils.LogFileWriter.kt</ID>
     <ID>NewLineAtEndOfFile:RollingFileLog.kt$com.googlecode.eyesfree.utils.RollingFileLog.kt</ID>
     <ID>ProtectedMemberInFinalClass:FeedbackController.kt$FeedbackController$/** * @return The parent context. */ protected val context: Context get() = mContext</ID>
     <ID>ReturnCount:AccessibilityEventUtils.kt$AccessibilityEventUtils$@JvmStatic fun eventEquals(first: AccessibilityEvent?, second: AccessibilityEvent?): Boolean</ID>

@@ -12,7 +12,7 @@ android {
         buildConfigField "String", "IS_SYSTEM_PRELOAD", "\"False\""
         // 宿主 applicationId。盲文键盘的 IME 组件名依赖它，
         // 与 brailleback/build.gradle 的 applicationId 必须一致。
-        buildConfigField "String", "HOST_APPLICATION_ID", "\"com.googlecode.eyesfree.brailleback\""
+        buildConfigField "String", "HOST_APPLICATION_ID", "\"com.linxi.brailleback\""
     }
 
     buildFeatures {

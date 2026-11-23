@@ -50,7 +50,7 @@ class SettingsCategoryNavigationTest {
         // 设置主屏已迁到 HomeContainerActivity 的设置 Tab。
         val intent = android.content.Intent(context, HomeContainerActivity::class.java)
             .putExtra(HomeContainerActivity.EXTRA_TAB, HomeContainerActivity.TAB_SETTINGS)
-        ActivityScenario.launch(intent).use { scenario ->
+        ActivityScenario.launch<HomeContainerActivity>(intent).use { scenario ->
             assertTrue(
                 "设置主屏没有到 RESUMED",
                 scenario.state == Lifecycle.State.RESUMED,

@@ -55,7 +55,7 @@ class UsbDisplayConnection : DriverThread.OnInitListener {
     companion object {
         private const val LOG_TAG = "UsbDisplayConnection"
         private const val ACTION_USB_PERMISSION =
-            "com.googlecode.eyesfree.brailleback.USB_PERMISSION"
+            "com.linxi.brailleback.USB_PERMISSION"
 
         /** brltty has no Java-side input callback on USB, so poll the driver. */
         private const val INPUT_POLL_MILLIS = 50L

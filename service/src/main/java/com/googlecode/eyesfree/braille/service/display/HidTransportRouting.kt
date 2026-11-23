@@ -50,6 +50,8 @@ object HidTransportRouting {
                 }
             else -> when {
                 protocolValue == ConnectionProtocolPolicy.USB -> LinkRoute.USB_SERIAL
+                // 用户点名「蓝牙」：插着线也不许拽到 USB，否则三项里的「蓝牙」形同虚设。
+                protocolValue == ConnectionProtocolPolicy.BLUETOOTH -> LinkRoute.BLUETOOTH
                 usbAttached -> LinkRoute.USB_SERIAL
                 else -> LinkRoute.BLUETOOTH
             }
@@ -72,7 +74,8 @@ object HidTransportRouting {
             ConnectionTransportPolicy.HID_BLE,
             ConnectionTransportPolicy.HID_CLASSIC -> false
             ConnectionTransportPolicy.SERIAL -> protocolValue == ConnectionProtocolPolicy.USB
-            else -> true
+            // 点名「蓝牙」时不响应插线；其余（含自动）保持原有「插线就切」的行为。
+            else -> protocolValue != ConnectionProtocolPolicy.BLUETOOTH
         }
     }
 

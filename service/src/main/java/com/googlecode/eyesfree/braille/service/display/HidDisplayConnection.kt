@@ -69,7 +69,7 @@ class HidDisplayConnection : DriverThread.OnInitListener {
     private const val USB_PERMISSION_TIMEOUT_MS = 15000L
     private const val FAILURE_NONE = Int.MIN_VALUE
     private const val ACTION_USB_HID_PERMISSION =
-        "com.googlecode.eyesfree.brailleback.action.USB_HID_PERMISSION"
+        "com.linxi.brailleback.action.USB_HID_PERMISSION"
 
     private fun toHex(bytes: ByteArray): String {
       val sb = StringBuilder(bytes.size * 2)

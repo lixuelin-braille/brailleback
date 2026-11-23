@@ -1,0 +1,43 @@
+###############################################################################
+# 试验用 Seika Note Taker 键位表（去掉了 chord 上下文与 superimpose meta）
+# 目的：验证 16 方设备上"DOTn + meta"和 routing 变 KEY_FUNCTION 是否来自
+#       Space 被当成长按修饰键。若本表生效后点位变干净，则问题在表，
+#       不在 native 驱动。
+###############################################################################
+
+title Seika Note Takers (test)
+
+####################
+# Default Bindings #
+####################
+
+bind LeftJoystickPress HELP
+bind RightJoystickPress LEARN
+
+bind LeftButton+RightButton HOME
+bind LeftButton FWINLT
+bind RightButton FWINRT
+
+bind LeftJoystickUp top
+bind LeftJoystickDown BOT
+bind LeftJoystickLeft LNBEG
+bind LeftJoystickRight LNEND
+
+bind RightJoystickUp LNUP
+bind RightJoystickDown LNDN
+bind RightJoystickLeft CHRLT
+bind RightJoystickRight CHRRT
+
+bind RoutingKey ROUTE
+
+# 点位与空格：不做 chord 修饰，按下即出 PASSDOTS
+map Dot1 DOT1
+map Dot2 DOT2
+map Dot3 DOT3
+map Dot4 DOT4
+map Dot5 DOT5
+map Dot6 DOT6
+map Dot7 DOT7
+map Dot8 DOT8
+map Space SPACE
+map Backspace SPACE

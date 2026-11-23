@@ -5,7 +5,7 @@
  *   2. isAccessibilityServiceEnabled —— 判断本应用的无障碍服务是否开启
  *
  * 关键差异：宿主不再是林夕读屏（com.linxi.screenreader），而是 BrailleBack
- * （com.googlecode.eyesfree.brailleback）。包名通过 BuildConfig.HOST_APPLICATION_ID
+ * （com.linxi.brailleback）。包名通过 BuildConfig.HOST_APPLICATION_ID
  * 注入，见 tbcompat/build.gradle；若宿主 applicationId 变更，必须同步那里。
  */
 
@@ -38,7 +38,7 @@ class AccessibilityServiceCompatUtils private constructor() {
        * android.view.InputMethod 服务保持一致。
        */
       @JvmField
-      val BRAILLE_IME_CLASS_NAME = "com.googlecode.eyesfree.brailleback.BrailleIME"
+      val BRAILLE_IME_CLASS_NAME = "com.linxi.brailleback.BrailleIME"
 
       /** 盲文键盘 IME 组件。 */
       @JvmField
@@ -55,12 +55,12 @@ class AccessibilityServiceCompatUtils private constructor() {
       /** 读屏设置页组件（原版指向 TalkBack 设置；移植后指向 BrailleBack 设置页）。 */
       @JvmField
       val SETTINGS_ACTIVITY =
-        ComponentName(HOST_PACKAGE_NAME, "com.googlecode.eyesfree.brailleback.SettingsActivity")
+        ComponentName(HOST_PACKAGE_NAME, "com.linxi.brailleback.SettingsActivity")
 
       /** 盲文点显器设置页组件（BrailleBack 自有实现）。 */
       @JvmField
       val BRAILLE_DISPLAY_SETTINGS =
-        ComponentName(HOST_PACKAGE_NAME, "com.googlecode.eyesfree.brailleback.SettingsActivity")
+        ComponentName(HOST_PACKAGE_NAME, "com.linxi.brailleback.SettingsActivity")
 
       /** 短信应用包名（盲文键盘对它的输入框有特殊处理）。 */
       @JvmField
@@ -80,7 +80,7 @@ class AccessibilityServiceCompatUtils private constructor() {
       val TALKBACK_SERVICE =
         ComponentName(
           HOST_PACKAGE_NAME,
-          "com.googlecode.eyesfree.brailleback.BrailleBackService",
+          "com.linxi.brailleback.BrailleBackService",
         )
     }
   }

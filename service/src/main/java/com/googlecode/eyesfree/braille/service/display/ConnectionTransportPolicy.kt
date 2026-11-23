@@ -28,7 +28,7 @@ import com.googlecode.eyesfree.utils.SettingsStore
  * <p>这是「蓝牙 / USB / 自动」协议偏好内部的细分，两层结构，因此单独一个键，
  * 不塞进 `connection_protocol`。注意：六条取值已经覆盖了协议维度的全部组合，
  * 所以设置页只保留这一行，协议偏好改成由它推导后回写（见
- * [com.googlecode.eyesfree.brailleback.compose.DeviceConnectionLogic.protocolForTransport]），
+ * [com.linxi.brailleback.compose.DeviceConnectionLogic.protocolForTransport]），
  * 避免同一件事在两行设置里各存一份、改一处另一处不变。
  */
 object ConnectionTransportPolicy {

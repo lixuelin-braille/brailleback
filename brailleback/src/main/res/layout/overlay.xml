@@ -21,7 +21,7 @@
         android:src="@drawable/ic_prev"
         android:contentDescription="@string/overlay_pan_left_button" />
 
-    <com.googlecode.eyesfree.brailleback.BrailleView
+    <com.linxi.brailleback.BrailleView
         android:id="@+id/braille_view"
         android:layout_width="match_parent"
         android:layout_height="0dp"

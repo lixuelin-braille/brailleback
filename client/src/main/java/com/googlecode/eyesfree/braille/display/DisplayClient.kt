@@ -244,7 +244,12 @@ class DisplayClient(context: Context) : Display {
             Log.e(LOG_TAG, "Unable to create serviceIntent")
             return
         }
-        val serviceInfo = resolveInfo[0]
+        // 同机可能同时装着声明同一 action 的其它盲文实现（如 Google 原版 BrailleBack），
+        // 直接取 [0] 会绑到别人的服务并抛出 SecurityException。本应用自己声明了这个
+        // action 时优先绑自己；否则（读屏等外部宿主）退回原来的解析顺序。
+        val serviceInfo = resolveInfo.firstOrNull {
+            it.serviceInfo.packageName == mContext.packageName
+        } ?: resolveInfo[0]
         val packageName = serviceInfo.serviceInfo.packageName
         val className = serviceInfo.serviceInfo.name
         val component = ComponentName(packageName, className)

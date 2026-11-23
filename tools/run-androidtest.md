@@ -17,7 +17,7 @@ powershell -File .\tools\run-androidtest.ps1
 powershell -File .\tools\run-androidtest.ps1 -Serial '10.121.61.209:5555'
 
 # 只跑某个类
-powershell -File .\tools\run-androidtest.ps1 -Class 'com.googlecode.eyesfree.brailleback.AppLaunchSmokeTest'
+powershell -File .\tools\run-androidtest.ps1 -Class 'com.linxi.brailleback.AppLaunchSmokeTest'
 ```
 
 ## 跑之前

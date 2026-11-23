@@ -42,7 +42,7 @@ if ($LASTEXITCODE -ne 0) { throw "安装被测 APK 失败（exit $LASTEXITCODE�
 & $Adb -s $Serial install -r -t $testApk
 if ($LASTEXITCODE -ne 0) { throw "安装测试 APK 失败（exit $LASTEXITCODE）" }
 
-$runner = 'com.googlecode.eyesfree.brailleback.test/androidx.test.runner.AndroidJUnitRunner'
+$runner = 'com.linxi.brailleback.test/androidx.test.runner.AndroidJUnitRunner'
 $arg = if ($Class) { "-e class $Class" } else { '' }
 
 Write-Host "[2/3] 运行 $runner"

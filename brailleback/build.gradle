@@ -33,10 +33,10 @@ android {
         buildConfig = true
         compose = true
     }
-    namespace = 'com.googlecode.eyesfree.brailleback'
+    namespace = 'com.linxi.brailleback'
 
     defaultConfig {
-        applicationId = "com.googlecode.eyesfree.brailleback"
+        applicationId = "com.linxi.brailleback"
         versionCode = appVersionCode
         versionName = appVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

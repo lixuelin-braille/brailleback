@@ -30,6 +30,12 @@
 | `libraries/utils` | 通用工具（无障碍节点工具、标签管理、MIDI） |
 | `libraries/compatutils` | Android 各版本兼容封装 |
 
+**应用身份**：`applicationId = com.linxi.brailleback`（主模块 Java 包名同为 `com.linxi.brailleback`）。
+已与 Google 原版 `com.googlecode.eyesfree.brailleback` 解耦，可同机并存安装。
+AIDL 包名、2 个自定义权限名、3 个服务 action 名，连同 `service`/`addon` 的 JNI 包名，
+属于对外契约层，**故意保持原样**，改动规则与原因见
+[63-包名与应用身份独立化](./docs/63-包名与应用身份独立化.md)。
+
 ## 工程布局
 
 2026-11-20 起统一为 AGP 标准目录，**11 个模块都不再有 `sourceSets` 覆写**：
