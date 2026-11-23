@@ -255,6 +255,20 @@
         android:theme="@style/BraillebackSettingsTheme"
         android:exported="false" />
 
+        <!-- 实验功能：触觉图导出。独立 launcher 入口（应用列表图标直达），
+             图标沿用应用默认图标。TactileExperiment 仅作为将来是否接进设置主屏的标志，
+             不阻断本页流程。 -->
+        <activity
+            android:name=".tactile.TactileExportActivity"
+            android:label="@string/tactile_export_title"
+            android:theme="@style/BraillebackSettingsTheme"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
         <activity
              android:name=".IMESetupWizardActivity"
              android:label="@string/ime_setup_wizard_name"

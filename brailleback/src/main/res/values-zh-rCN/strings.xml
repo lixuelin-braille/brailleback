@@ -518,4 +518,37 @@
         <item>i管家 → 应用管理 → 自启动，打开开关</item>
         <item>设置 → 电池 → 后台使用限制，把本应用加入「从不休眠的应用」</item>
         <item>设备保护里允许本应用后台活动</item>
-    </string-array></resources>
+    </string-array>
+
+    <!-- 实验功能：触觉图导出（默认关闭，见 TactileExperiment）。 -->
+    <string name="tactile_export_title">触觉图导出</string>
+    <string name="tactile_export_back">返回</string>
+    <string name="tactile_export_first_hint">实验功能：把图片导出成可触摸的凸起图。</string>
+    <string name="tactile_export_pick_image">选择图片</string>
+    <string name="tactile_export_no_image">还没有选择图片</string>
+    <string name="tactile_export_image_picked">已选择：%1$s</string>
+    <string name="tactile_export_section_mode">抬升方式</string>
+    <string name="tactile_mode_threshold">阈值线稿</string>
+    <string name="tactile_mode_threshold_desc">比阈值更深的墨色变成凸起线条，适合示意图和带字图片</string>
+    <string name="tactile_mode_grayscale">灰度层次</string>
+    <string name="tactile_mode_grayscale_desc">墨色深浅对应凸起高度，喂给支持高度调制的打印机</string>
+    <string name="tactile_mode_edge">轮廓边缘</string>
+    <string name="tactile_mode_edge_desc">把照片的轮廓检测成凸线</string>
+    <string name="tactile_export_threshold">阈值</string>
+    <string name="tactile_export_threshold_value">阈值：%1$d</string>
+    <string name="tactile_export_decrease">减 1</string>
+    <string name="tactile_export_increase">加 1</string>
+    <string name="tactile_export_section_page">页面尺寸</string>
+    <string name="tactile_page_a4">A4 竖版，210 × 297 毫米</string>
+    <string name="tactile_page_a4_landscape">A4 横版，297 × 210 毫米</string>
+    <string name="tactile_export_action">导出 BMP</string>
+    <string name="tactile_export_reading">正在读取所选图片…</string>
+    <string name="tactile_export_exporting">正在转换并保存，请稍候…</string>
+    <string name="tactile_export_success">已保存：%1$s</string>
+    <string name="tactile_export_fail">导出失败：%1$s</string>
+    <string name="tactile_export_cancelled">已取消</string>
+    <string name="tactile_export_need_image">请先选择一张图片</string>
+    <string name="tactile_export_read_error">无法读取所选图片</string>
+    <string name="tactile_export_selected">已选中</string>
+    <string name="tactile_export_unselected">未选中</string>
+</resources>
