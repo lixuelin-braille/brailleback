@@ -49,10 +49,16 @@ data class ExportDocument(
         const val ROLE_INK = "ink"
 
         /** 从阅读流按几何排版构建文档；不改流、不碰偏移。 */
-        fun build(stream: String, title: String, geometry: PageGeometry): ExportDocument {
+        fun build(
+            stream: String,
+            title: String,
+            geometry: PageGeometry,
+            cellSources: List<CellSource>? = null,
+        ): ExportDocument {
             val cells = ArrayList<ExportCell>()
             var line = 1
             var column = 1
+            var cellIndex = 0
             for (rawLine in stream.split('\n')) {
                 val lineText = rawLine.trimEnd('\r')
                 for (ch in lineText) {
@@ -60,9 +66,15 @@ data class ExportDocument(
                     val mask6 = sixBitMask(ch)
                     val dots = (1..6).filter { mask6 and (1 shl (it - 1)) != 0 }
                     val role = if (mask6 == 0) ROLE_SPACE else ROLE_INK
+                    val source = cellSources?.getOrNull(cellIndex)
                     cells.add(
-                        ExportCell(dots, mask6, line, column, role, null, null)
+                        ExportCell(
+                            dots, mask6, line, column, role,
+                            source?.span?.let { listOf(it.start, it.end) },
+                            source?.sourceText,
+                        )
                     )
+                    cellIndex++
                     column++
                     if (column > geometry.columns) {
                         column = 1

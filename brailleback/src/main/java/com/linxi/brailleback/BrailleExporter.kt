@@ -73,12 +73,13 @@ object BrailleExporter {
         format: BrailleExportFormat,
         geometry: PageGeometry = PageGeometry.Default,
         title: String = "book",
+        cellSources: List<CellSource>? = null,
     ): BrailleExportResult {
         return when (format) {
             BrailleExportFormat.BRF -> exportBrf(stream, geometry)
             BrailleExportFormat.BRL -> exportBrl(stream, geometry)
             BrailleExportFormat.UNICODE_TXT -> exportUnicodeTxt(stream)
-            BrailleExportFormat.JSON -> exportJson(stream, geometry, title)
+            BrailleExportFormat.JSON -> exportJson(stream, geometry, title, cellSources)
         }
     }
 
@@ -87,6 +88,7 @@ object BrailleExporter {
         stream: String,
         geometry: PageGeometry,
         title: String,
+        cellSources: List<CellSource>?,
     ): BrailleExportResult {
         var dropped = 0
         var eightDot = 0
@@ -98,7 +100,7 @@ object BrailleExporter {
                 dropped++
             }
         }
-        val document = ExportDocument.build(stream, title, geometry)
+        val document = ExportDocument.build(stream, title, geometry, cellSources)
         return BrailleExportResult(document.toJson(), 0, dropped, eightDot)
     }
 

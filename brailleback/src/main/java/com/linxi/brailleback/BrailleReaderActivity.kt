@@ -80,6 +80,9 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     /** 当前流是否来自明眼 txt 翻译。翻译流与屏幕尺寸无关，重排时无需重翻。 */
     private var mIsTranslated = false
 
+    /** 逐格源区间（仅翻译流有）；点位 JSON 导出与屏幕取字共用。 */
+    private var mCellSpans: List<CellSource>? = null
+
     /** 翻译服务未就绪时挂起的翻译请求。 */
     private var mPendingTranslation: PendingTranslation? = null
 
@@ -292,7 +295,8 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         val format = pendingFormat ?: BrailleExportFormat.BRF
         Thread {
             val result = try {
-                BrailleExporter.export(mStream, format, loadGeometry(), currentBookName())
+                BrailleExporter.export(mStream, format, loadGeometry(),
+                    currentBookName(), mCellSpans)
             } catch (e: Exception) {
                 Log.w(LOG_TAG, "导出编码失败: ${e.message}")
                 null
@@ -639,11 +643,13 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         uri: Uri,
         resetPosition: Boolean,
         targetOffset: Int? = null,
-        isTranslated: Boolean = false
+        isTranslated: Boolean = false,
+        cellSpans: List<CellSource>? = null,
     ) {
         val oldLength = mStream.length
         mStream = BrailleFileDecoder.toReadingStream(brailleText)
         mIsTranslated = isTranslated
+        mCellSpans = cellSpans
         // 记录最近打开（书架「最近」列表数据源），解码/翻译成功才算真正打开
         BookshelfActivity.recordRecent(this, uri.toString(),
             name ?: uri.lastPathSegment ?: "file")
@@ -700,8 +706,8 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             runOnUiThread {
                 mTranslating = false
                 if (result != null) {
-                    setBrailleStream(result, name, uri, resetPosition, targetOffset,
-                        isTranslated = true)
+                    setBrailleStream(result.first, name, uri, resetPosition, targetOffset,
+                        isTranslated = true, cellSpans = result.second)
                 } else {
                     // 翻译失败：屏幕仍可看原文，点显器暂为空方，给出明确提示
                     setBrailleStream(text, name, uri, resetPosition, targetOffset)
@@ -735,11 +741,16 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      * （阅读流里段落边界仍在，点显器上体现为段间空方）。逐段调用
      * 而非整本一次，避免一次跨进程 AIDL 传输/翻译超大文本。
      */
+    /**
+     * 逐段翻译，同时按翻译结果的 brailleToTextPositions 生成逐格源区间。
+     * 返回盲文阅读流与格级跨度列表；任一整段翻译失败返回 null。
+     */
     private fun translateParagraphs(
         text: String,
         translator: BrailleTranslator
-    ): String? {
+    ): Pair<String, List<CellSource>>? {
         val sb = StringBuilder(text.length)
+        val spans = ArrayList<CellSource>()
         for (paragraph in text.split('\n')) {
             if (paragraph.isBlank()) {
                 sb.append('\n')
@@ -747,8 +758,10 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             }
             val res = translator.translate(paragraph, -1, false) ?: return null
             sb.append(BrailleFileDecoder.cellsToUnicodeText(res.cells)).append('\n')
+            spans += SourceSpanMapper.buildParagraphSpans(
+                paragraph, res.brailleToTextPositions)
         }
-        return sb.toString()
+        return sb.toString() to spans
     }
 
     /**
