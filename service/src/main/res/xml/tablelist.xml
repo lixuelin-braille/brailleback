@@ -471,8 +471,9 @@
          dots="8"
          fileName="zh-tw.ctb" />
     <!-- Chinese (mainland, simplified). 原 grade 0 全字符表 zhcn-cbs-full.ctb
-         在本版 liblouis 3.38.0 上加载失败（Table not found or invalid），已从清单
-         移除并从表包排除；默认回落 zhcn-cbs（国家通用盲文方案）。 -->
+         属本地派生表（非上游 3.38.0 自带），已从清单移除并从表包排除；
+         实测它在本版 liblouis 能编译（2026-11-24 探针验证），排除属产品取舍，
+         不是兼容性问题。默认表为 zhcn-cbs（国家通用盲文方案）。 -->
     <table
          id="zh-CN-cbs"
          locale="zh_CN"
