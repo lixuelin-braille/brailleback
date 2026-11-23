@@ -87,9 +87,9 @@ dependencies {
     // 显示 androidx.core:core:1.9.0 -> 1.13.1，是 Compose 迁移带进来的
     // activity-compose:1.9.3 传递抬上去的。真要降回 1.9.0 得同时处理 Compose 运行时。
     implementation libs.androidx.core
-    // 设置页框架迁移（step 1）：androidx.preference + appcompat
+    // 设置页框架迁移：appcompat 保留给 AppCompat DayNight 主题；
+    // androidx.preference 已随自定义键位页 Compose 化摘除（本模块不再有 Preference UI）。
     implementation libs.androidx.appcompat
-    implementation libs.androidx.preference.ktx
     // Jetpack Compose：不引 BOM，逐个写死（见 libs.versions.toml）。
     implementation libs.androidx.activity.compose
     implementation libs.compose.ui
