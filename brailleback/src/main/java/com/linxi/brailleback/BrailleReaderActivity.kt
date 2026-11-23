@@ -83,6 +83,17 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     /** 逐格源区间（仅翻译流有）；点位 JSON 导出与屏幕取字共用。 */
     private var mCellSpans: List<CellSource>? = null
 
+    /** TEXT 源原始明文；盲文源为空。屏幕回显原文用，不参与点显/导出。 */
+    private var mSourceText = ""
+    /** 当前屏显来源类型：TEXT 回显原文，其余回显点字。 */
+    private var mSourceKind = ReaderSourceKind.BRAILLE
+
+    /** 最近一屏视图模型结果，供页码行与无障碍播报取用。 */
+    private var mLastView: ReaderPageView? = null
+
+    /** 已播报过的屏序号，避免逐行移动重复播报。 */
+    private var mAnnouncedUnit = -1
+
     /** 翻译服务未就绪时挂起的翻译请求。 */
     private var mPendingTranslation: PendingTranslation? = null
 
@@ -386,6 +397,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
                     bookmark = getString(R.string.braille_reader_bookmark),
                     goto = getString(R.string.braille_reader_goto),
                     export = getString(R.string.braille_reader_export),
+                    fontSize = getString(R.string.braille_reader_font_size),
                     navHint = getString(R.string.braille_reader_nav_hint),
                     ok = getString(android.R.string.ok),
                     cancel = getString(android.R.string.cancel),
@@ -403,6 +415,8 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
                 onBookmark = ::showBookmarks,
                 onGoto = ::showGotoDialog,
                 onExport = ::showExportMenu,
+                onFont = ::showFontSizeDialog,
+                onFontSizePick = ::onFontSizePicked,
                 onTocPick = ::onTocPicked,
                 onBookmarkPick = ::onBookmarkPicked,
                 onBookmarkDelete = ::onBookmarkDeleteRequested,
@@ -588,10 +602,21 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             val name = decoded.second
             runOnUiThread {
                 when (BrailleFileDecoder.detectKind(text)) {
-                    BrailleFileDecoder.ContentKind.TEXT ->
+                    BrailleFileDecoder.ContentKind.TEXT -> {
+                        mSourceText = text
+                        mSourceKind = ReaderSourceKind.TEXT
                         startTranslation(text, name, uri, resetPosition, targetOffset)
-                    else ->
+                    }
+                    BrailleFileDecoder.ContentKind.ASCII -> {
+                        mSourceText = ""
+                        mSourceKind = ReaderSourceKind.ASCII
                         setBrailleStream(text, name, uri, resetPosition, targetOffset)
+                    }
+                    BrailleFileDecoder.ContentKind.BRAILLE -> {
+                        mSourceText = ""
+                        mSourceKind = ReaderSourceKind.BRAILLE
+                        setBrailleStream(text, name, uri, resetPosition, targetOffset)
+                    }
                 }
             }
         }.start()
@@ -880,23 +905,46 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     }
 
     private fun showPage() {
-        val text = if (mStream.isEmpty()) {
+        val brailleText = if (mStream.isEmpty()) {
             getString(R.string.braille_reader_hint)
         } else {
             BrailleFileDecoder.screenAt(
                 mStream, mOffset, mCellsPerLine, mLinesPerPage)
         }
-        uiState = uiState.copy(readerText = text)
+        val count = mCellsPerLine * mLinesPerPage
+        val view = ReaderSourceModel.build(
+            kind = mSourceKind,
+            sourceText = mSourceText,
+            brailleScreenText = brailleText,
+            spans = mCellSpans,
+            offset = mOffset,
+            count = count,
+            currentUnit = currentUnit(),
+            totalUnits = totalUnits(),
+        )
+        mLastView = view
+        uiState = uiState.copy(
+            readerText = view.displayText,
+            focusSegments = view.focusSegments,
+        )
         // 翻页后自动同步点显器，省去盲文用户每次手动点「发送点显」
         if (mConnected) {
             sendToDisplay()
         }
         updateUiState()
+        val unit = currentUnit()
+        if (unit != mAnnouncedUnit) {
+            mAnnouncedUnit = unit
+            val firstLine = mLastView?.focusSegments?.firstOrNull().orEmpty()
+            announce(listOf(uiState.pageInfo, firstLine)
+                .filter { it.isNotEmpty() }.joinToString("，"))
+        }
     }
 
     private fun updateUiState() {
         val hasContent = mStream.isNotEmpty()
         val unit = readingUnit()
+        val view = mLastView
         val pageInfo = if (!hasContent) {
             ""
         } else if (mConnected) {
@@ -905,10 +953,26 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             getString(R.string.braille_reader_page_cells,
                 currentUnit() + 1, totalUnits(), mDisplayCells)
         } else {
-            getString(R.string.braille_reader_page, currentUnit() + 1, totalUnits())
+            val base = getString(R.string.braille_reader_page,
+                currentUnit() + 1, totalUnits())
+            val percent = view?.let {
+                getString(R.string.braille_reader_page_percent, it.percent)
+            }.orEmpty()
+            val sourcePos = if (mSourceKind == ReaderSourceKind.TEXT &&
+                view != null && view.paragraphCount > 0
+            ) {
+                getString(R.string.braille_reader_source_position,
+                    view.paragraphIndex + 1, view.paragraphCount)
+            } else ""
+            listOf(base, percent, sourcePos).filter { it.isNotEmpty() }
+                .joinToString(" · ")
         }
+        val rawFont = SettingsStore.get(this)
+            .getInt(KEY_READER_FONT_SP, DEFAULT_READER_FONT_SP)
+        val fontSp = FONT_SIZES.firstOrNull { it == rawFont } ?: DEFAULT_READER_FONT_SP
         uiState = uiState.copy(
             pageInfo = pageInfo,
+            fontSizeSp = fontSp,
             prevEnabled = hasContent && mOffset > 0,
             nextEnabled = hasContent && mOffset + unit <= maxOffset(),
             sendEnabled = hasContent && mConnected,
@@ -1060,6 +1124,23 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         }
     }
 
+    private fun showFontSizeDialog() {
+        val labels = FONT_SIZES.map {
+            getString(R.string.braille_reader_font_size_item, it)
+        }
+        readerDialog = ReaderDialog.FontSize(
+            getString(R.string.braille_reader_font_size_title), labels)
+    }
+
+    private fun onFontSizePicked(index: Int) {
+        readerDialog = null
+        val size = FONT_SIZES.getOrElse(index) { DEFAULT_READER_FONT_SP }
+        SettingsStore.get(this).edit()
+            .putInt(KEY_READER_FONT_SP, size)
+            .apply()
+        updateUiState()
+    }
+
     private fun toastNoContent() {
         Toast.makeText(this, R.string.braille_reader_no_content, Toast.LENGTH_SHORT).show()
     }
@@ -1176,6 +1257,9 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         private const val EXPORT_MAX_COLUMNS = 40
         private const val EXPORT_MIN_LINES = 20
         private const val EXPORT_MAX_LINES = 28
+        private const val KEY_READER_FONT_SP = "reader_font_sp"
+        private const val DEFAULT_READER_FONT_SP = 18
+        private val FONT_SIZES = listOf(18, 22, 26)
         /** 目录每 N 页一条。 */
         private const val TOC_PAGE_STEP = 10
         /** 目录/书签列表里预览用到的方数。 */

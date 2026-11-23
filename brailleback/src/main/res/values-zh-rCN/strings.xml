@@ -113,6 +113,11 @@
     <string name="braille_reader_bm_deleted">"书签已删除"</string>
     <string name="braille_reader_goto_title">"跳到指定页"</string>
     <string name="braille_reader_goto_hint">"1 - %1$d"</string>
+    <string name="braille_reader_page_percent">"%1$d%%"</string>
+    <string name="braille_reader_font_size">"字号"</string>
+    <string name="braille_reader_font_size_title">"选择字号"</string>
+    <string name="braille_reader_font_size_item">"%1$d sp"</string>
+    <string name="braille_reader_source_position">"第 %1$d 段 / 共 %2$d 段"</string>
     <string name="braille_reader_export">"导出为盲文"</string>
     <string name="braille_reader_export_title">"选择导出格式"</string>
     <string name="braille_reader_export_fmt_brf">"BRF（ASCII 盲文）"</string>

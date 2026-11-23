@@ -28,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -42,6 +43,7 @@ internal data class ReaderLabels(
     val bookmark: String,
     val goto: String,
     val export: String,
+    val fontSize: String,
     val navHint: String,
     val ok: String,
     val cancel: String,
@@ -52,6 +54,8 @@ internal data class ReaderLabels(
 /** 阅读器界面状态：使能位与文本都由 Activity 的 updateUiState 汇总后喂进来。 */
 internal data class ReaderUiState(
     val readerText: String = "",
+    val focusSegments: List<String> = emptyList(),
+    val fontSizeSp: Int = 18,
     val pageInfo: String = "",
     val prevEnabled: Boolean = false,
     val nextEnabled: Boolean = false,
@@ -79,6 +83,7 @@ internal sealed interface ReaderDialog {
     data class ExportFormat(val title: String, val labels: List<String>) : ReaderDialog
     data class ExportGeometry(val title: String, val labels: List<String>) : ReaderDialog
     data class ExportCustomGeometry(val title: String) : ReaderDialog
+    data class FontSize(val title: String, val labels: List<String>) : ReaderDialog
 }
 
 @Composable
@@ -96,6 +101,8 @@ internal fun BrailleReaderScreen(
     onBookmark: () -> Unit,
     onGoto: () -> Unit,
     onExport: () -> Unit,
+    onFont: () -> Unit,
+    onFontSizePick: (Int) -> Unit,
     onTocPick: (Int) -> Unit,
     onBookmarkPick: (Int) -> Unit,
     onBookmarkDelete: () -> Unit,
@@ -114,15 +121,23 @@ internal fun BrailleReaderScreen(
             .semantics(mergeDescendants = true) {},
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // 文本区（第一焦点）
-        Text(
-            text = uiState.readerText,
-            style = MaterialTheme.typography.bodyLarge,
+        // 文本区：按行/段拆成多个可聚焦节点，不整页合并为一个焦点。
+        Column(
             modifier = Modifier
                 .weight(1f)
-                .fillMaxWidth()
-                .semantics(mergeDescendants = true) {},
-        )
+                .fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            val segments = uiState.focusSegments.ifEmpty { listOf(uiState.readerText) }
+            segments.forEach { segment ->
+                Text(
+                    text = segment,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontSize = uiState.fontSizeSp.sp,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
 
         // 页码行
         if (uiState.pageInfo.isNotEmpty()) {
@@ -193,6 +208,12 @@ internal fun BrailleReaderScreen(
             ) {
                 Text(labels.goto)
             }
+            OutlinedButton(
+                onClick = onFont,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(labels.fontSize)
+            }
             Button(
                 onClick = onExport,
                 enabled = uiState.exportEnabled,
@@ -229,6 +250,9 @@ internal fun BrailleReaderScreen(
                 onPick = onGeometryPick, onDismiss = onDismissDialog)
             is ReaderDialog.ExportCustomGeometry -> CustomGeometryDialog(
                 current, labels, onCustomGeometryConfirm, onDismissDialog)
+            is ReaderDialog.FontSize -> ListDialog(
+                current.title, current.labels, labels.cancel,
+                onPick = onFontSizePick, onDismiss = onDismissDialog)
         }
     }
 }

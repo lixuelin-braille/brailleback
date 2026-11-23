@@ -141,6 +141,11 @@
     <string name="braille_reader_bm_deleted">Bookmark deleted</string>
     <string name="braille_reader_goto_title">Go to page</string>
     <string name="braille_reader_goto_hint">1 - %1$d</string>
+    <string name="braille_reader_page_percent">%1$d%%</string>
+    <string name="braille_reader_font_size">Font</string>
+    <string name="braille_reader_font_size_title">Text size</string>
+    <string name="braille_reader_font_size_item">%1$d sp</string>
+    <string name="braille_reader_source_position">Paragraph %1$d of %2$d</string>
     <string name="braille_reader_export">Export as braille</string>
     <string name="braille_reader_export_title">Choose export format</string>
     <string name="braille_reader_export_fmt_brf">BRF (ASCII braille)</string>
