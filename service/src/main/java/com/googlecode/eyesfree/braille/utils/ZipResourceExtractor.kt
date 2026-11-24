@@ -38,11 +38,24 @@ open class ZipResourceExtractor(
 
         private const val TAG = "ZipResourceExtractor"
 
+        /**
+         * 解压完成标记：记录「哪一版 APK 解压过」。内容为
+         * `versionCode:lastUpdateTime`；与当前 APK 一致且目标文件尺寸与原条目尺寸相等时，
+         * 跳过重写。
+         *
+         * 没有这个标记时，每次 :service 进程冷启动都会把整套翻译表（实测 486 个文件、
+         * 20 MB）重写一遍；模拟器高负载下一步能拖到一分钟以上，`TranslatorService.onInit`
+         * 因此迟到，任何等它的调用方（触觉图封面 / 封底翻译）都会超时。表内容随 APK 版本
+         * 固定，按版本跳过不改变输出字节。
+         */
+        private const val MARKER_NAME = ".extract-marker"
+
         /** 主线程回调；协程在 IO 线程跑完后切回来。 */
         private val mScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     }
 
     private val mResources: Resources = context.applicationContext.resources
+    private val mContext: Context = context.applicationContext
     private val mExtractedFiles = LinkedList<File>()
 
     /** 只做标记用：解压循环读它来决定是否提前收手并回滚。 */
@@ -57,8 +70,10 @@ open class ZipResourceExtractor(
      */
     fun execute() {
         check(mJob == null) { "ZipResourceExtractor 只能执行一次" }
+        Log.i(TAG, "解压任务提交 rawResId=$mRawResId out=$mOutput")
         mJob = mScope.launch {
             val result = withContext(Dispatchers.IO) { extractAllOrRollback() }
+            Log.i(TAG, "解压任务完成 result=$result")
             onPostExecute(result)
         }
     }
@@ -77,12 +92,17 @@ open class ZipResourceExtractor(
     protected open fun onPostExecute(result: Int?) {}
 
     private fun extractAllOrRollback(): Int {
+        val marker = File(mOutput, MARKER_NAME)
+        val signature = currentSignature()
+        val reuseExisting = signature.isNotEmpty() && marker.isFile &&
+            runCatching { marker.readText().trim() }.getOrNull() == signature
         val stream: InputStream = mResources.openRawResource(mRawResId)
         val zipStream = ZipInputStream(BufferedInputStream(stream))
         var successful = false
         try {
-            extractEntries(zipStream)
+            extractEntries(zipStream, reuseExisting)
             successful = true
+            Log.i(TAG, "解压完成 reuseExisting=$reuseExisting 重写文件=${mExtractedFiles.size}")
         } catch (e: Exception) {
             Log.e(TAG, "解压资源失败: rawResId=$mRawResId", e)
         } finally {
@@ -96,21 +116,46 @@ open class ZipResourceExtractor(
             removeExtractedFiles()
             return RESULT_ERROR
         }
+        if (signature.isNotEmpty()) {
+            runCatching { marker.writeText(signature) }
+                .onFailure { Log.w(TAG, "写解压标记失败", it) }
+        }
         return RESULT_OK
     }
 
-    private fun extractEntries(zipStream: ZipInputStream) {
+    /** 当前 APK 的版本指纹；读不到返回空串，调用方按全量解压处理。 */
+    private fun currentSignature(): String = try {
+        val info = mContext.packageManager.getPackageInfo(mContext.packageName, 0)
+        "${info.longVersionCode}:${info.lastUpdateTime}"
+    } catch (e: Exception) {
+        Log.w(TAG, "读取 APK 版本失败，按全量解压处理", e)
+        ""
+    }
+
+    /**
+     * @param reuseExisting 同一 APK 版本已解压过时置 true：目标文件存在且尺寸与原条目
+     *   一致就不重写，只走 zip 迭代。任何尺寸不符或缺失的条目仍按原样写出。
+     */
+    private fun extractEntries(zipStream: ZipInputStream, reuseExisting: Boolean) {
         val buffer = ByteArray(10240)
         var bytesRead: Int
         while (!mCancelled) {
             val entry = zipStream.nextEntry ?: break
             val outputFile = File(mOutput, entry.name)
-            mExtractedFiles.add(outputFile)
             if (entry.isDirectory) {
                 outputFile.mkdirs()
                 makeReadable(outputFile)
                 continue
             }
+            if (reuseExisting) {
+                val intact = outputFile.isFile && entry.size >= 0 &&
+                    outputFile.length() == entry.size
+                if (intact) {
+                    zipStream.closeEntry()
+                    continue
+                }
+            }
+            mExtractedFiles.add(outputFile)
             outputFile.parentFile?.mkdirs()
             FileOutputStream(outputFile).use { outputStream ->
                 while (!mCancelled) {

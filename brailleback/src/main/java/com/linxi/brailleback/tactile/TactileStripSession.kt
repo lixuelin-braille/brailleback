@@ -13,7 +13,8 @@ import com.linxi.brailleback.BuildConfig
  * 禁止先写死带数。封面 / 封底各占整屏，排在图形带之前 / 之后，不复用图形行。
  *
  * 线程：本方法会绑翻译服务并做同步翻译，必须在后台线程调用（IO 线程）；
- * 任何环节失败都抛 [IllegalStateException] 并在消息里说明原因，不返回空书。
+ * 读图、解码、切片失败抛 [IllegalStateException] 并在消息里说明原因，不返回空书。
+ * 封面 / 封底翻译失败不抛：降级为空封面 / 封底，图形带照常成书（2026-11-24 修 P2-2）。
  */
 object TactileStripSession {
 
@@ -68,28 +69,40 @@ object TactileStripSession {
         return try {
             if (BuildConfig.DEBUG) Log.d("TactileStrip", "stage=cover session bands=${slice.totalBands}")
             val coverMaxLines = if (g1) 1 else spec.linesPerScreen
-            val coverScreens = wrapIntoScreens(
-                TactileStripCoverText.coverLines(
-                    widthCells = spec.cellsPerLine,
-                    bandHeightDots = slice.bandRows,
-                    totalBands = slice.totalBands,
-                    dotsPerCell = spec.dotsPerCell,
-                    rotated = rotated,
-                    maxLines = coverMaxLines,
-                ),
-                bridge,
-                spec,
-            )
-            val backScreens = wrapIntoScreens(
-                TactileStripCoverText.backLines(
-                    widthCells = spec.cellsPerLine,
-                    totalBands = slice.totalBands,
-                    dotsPerCell = spec.dotsPerCell,
-                    maxLines = spec.linesPerScreen,
-                ),
-                bridge,
-                spec,
-            )
+            // 封面 / 封底只是方位提示，翻译服务不可用时不能连带丢掉图形本身：
+            // 失败就降级为「封面 / 封底为空」，图形带照常成书，界面状态另报带号。
+            val coverScreens = try {
+                wrapIntoScreens(
+                    TactileStripCoverText.coverLines(
+                        widthCells = spec.cellsPerLine,
+                        bandHeightDots = slice.bandRows,
+                        totalBands = slice.totalBands,
+                        dotsPerCell = spec.dotsPerCell,
+                        rotated = rotated,
+                        maxLines = coverMaxLines,
+                    ),
+                    bridge,
+                    spec,
+                )
+            } catch (e: Exception) {
+                Log.w("TactileStrip", "封面文字未翻译，降级为空封面：${e.message}", e)
+                emptyList()
+            }
+            val backScreens = try {
+                wrapIntoScreens(
+                    TactileStripCoverText.backLines(
+                        widthCells = spec.cellsPerLine,
+                        totalBands = slice.totalBands,
+                        dotsPerCell = spec.dotsPerCell,
+                        maxLines = spec.linesPerScreen,
+                    ),
+                    bridge,
+                    spec,
+                )
+            } catch (e: Exception) {
+                Log.w("TactileStrip", "封底文字未翻译，降级为空封底：${e.message}", e)
+                emptyList()
+            }
             if (BuildConfig.DEBUG) Log.d("TactileStrip", "stage=book session")
             TactileStripBookBuilder.build(slice, spec, coverScreens, backScreens, g1 = g1)
         } finally {

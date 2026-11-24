@@ -429,8 +429,10 @@ public class TranslatorService extends Service {
         protected void onPostExecute(Integer result) {
             TranslatorService service = mService.get();
             if (service == null) {
+                Log.w(LOG_TAG, "onPostExecute: service already gone, result=" + result);
                 return;
             }
+            Log.i(LOG_TAG, "onPostExecute: extractor result=" + result);
             synchronized (service) {
                 if (result == RESULT_OK) {
                     service.mDataFileState = FILES_EXTRACTED;
@@ -465,9 +467,12 @@ public class TranslatorService extends Service {
             dataFileState = mDataFileState;
             if (dataFileState == FILES_NOT_EXTRACTED) {
                 mPendingCallbacks.add(callback);
+                Log.i(LOG_TAG, "setCallback: pending, extraction in flight (pending="
+                        + mPendingCallbacks.size() + ")");
                 return;
             }
         }
+        Log.i(LOG_TAG, "setCallback: immediate onInit, state=" + dataFileState);
         callOnInit(callback, dataFileState);
     }
 
@@ -480,6 +485,8 @@ public class TranslatorService extends Service {
             dataFileState = mDataFileState;
             mPendingCallbacks.clear();
         }
+        Log.i(LOG_TAG, "callPendingOnInits: pending=" + pendingCallbacks.size()
+                + " state=" + dataFileState);
 
         for (ITranslatorServiceCallback callback : pendingCallbacks) {
             callOnInit(callback, dataFileState);
