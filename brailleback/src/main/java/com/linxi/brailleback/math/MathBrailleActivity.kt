@@ -62,7 +62,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.lifecycleScope
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import com.googlecode.eyesfree.braille.display.Display
 import com.googlecode.eyesfree.braille.display.DisplayClient
 import com.linxi.brailleback.BuildConfig
@@ -373,7 +373,6 @@ private val FORMULA_MIMES = arrayOf("text/*", "application/xml", "application/xh
  */
 @Composable
 private fun TemplateRow(onInsert: (String) -> Unit) {
-    val context = LocalContext.current
     val templates = listOf(
         R.string.math_bs_fraction to
             "<math><mfrac><mi>a</mi><mi>b</mi></mfrac></math>",
@@ -394,7 +393,9 @@ private fun TemplateRow(onInsert: (String) -> Unit) {
     )
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
-            text = context.getString(R.string.math_bs_templates_label),
+            // stringResource 随 Configuration 变化重取；LocalContext.current.getString 不跟，
+            // 横竖屏 / 系统语言切换后会读到旧文案（lint LocalContextGetResourceValueCall）。
+            text = stringResource(R.string.math_bs_templates_label),
             style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
         )
         Row(
@@ -403,7 +404,7 @@ private fun TemplateRow(onInsert: (String) -> Unit) {
         ) {
             templates.forEach { (labelRes, skeleton) ->
                 TextButton(onClick = { onInsert(skeleton) }) {
-                    Text(context.getString(labelRes))
+                    Text(stringResource(labelRes))
                 }
             }
         }
@@ -420,11 +421,10 @@ private fun DotRadioRow(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    val context = LocalContext.current
     val stateDesc = MathAccessibility.dotStateDescription(
         selected,
-        context.getString(R.string.math_bs_selected),
-        context.getString(R.string.math_bs_unselected),
+        stringResource(R.string.math_bs_selected),
+        stringResource(R.string.math_bs_unselected),
     )
     Row(
         modifier = Modifier
