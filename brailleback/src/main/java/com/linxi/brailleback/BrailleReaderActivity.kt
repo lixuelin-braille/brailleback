@@ -1049,6 +1049,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             count = count,
             currentUnit = currentUnit(),
             totalUnits = totalUnits(),
+            stream = mCellSpans?.let { mStream },
         )
         mLastView = view
         uiState = uiState.copy(

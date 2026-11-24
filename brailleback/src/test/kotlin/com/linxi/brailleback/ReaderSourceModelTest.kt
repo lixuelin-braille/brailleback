@@ -100,6 +100,63 @@ class ReaderSourceModelTest {
         assertEquals(listOf("第一句。", "第二句！", "第三句；", "第四句?"), clauses)
     }
 
+    /**
+     * P1-2 回归：一个汉字占多格时只回显一次；段间落换行；
+     * 流内偏移（含换行）换算成格序号后，第二段开头不带出上一段的字。
+     */
+    @Test
+    fun multiCellCharacterEchoesOnce() {
+        val source = "国家\n春天"
+        // 每字 3 格：这些格的「格→文位置」全指向该字
+        val spans = SourceSpanMapper.concatenate(
+            listOf(
+                SourceSpanMapper.buildParagraphSpans("国家", intArrayOf(0, 0, 0, 1, 1, 1)),
+                SourceSpanMapper.buildParagraphSpans("春天", intArrayOf(0, 0, 0, 1, 1, 1)),
+            )
+        )
+        val stream = cell(0).toString().repeat(6) + "\n" + cell(0).toString().repeat(6)
+
+        val whole = ReaderSourceModel.build(
+            ReaderSourceKind.TEXT, source, "", spans,
+            offset = 0, count = 20, currentUnit = 0, totalUnits = 1, stream = stream,
+        )
+        assertEquals("国家\n春天", whole.displayText)
+        assertEquals(listOf("国家", "春天"), whole.focusSegments)
+
+        // 偏移 7 = 6 格 + 1 个换行，正是第二段第一格
+        val second = ReaderSourceModel.build(
+            ReaderSourceKind.TEXT, source, "", spans,
+            offset = 7, count = 20, currentUnit = 1, totalUnits = 2, stream = stream,
+        )
+        assertEquals("春天", second.displayText)
+
+        // 屏幕起点落在「国」的第 2 格、只给 4 格宽度（跨过段间换行）：
+        // 被切在中间的字仍整字回显一次，且不带上起点之前的「国」之前的任何内容
+        val partial = ReaderSourceModel.build(
+            ReaderSourceKind.TEXT, source, "", spans,
+            offset = 1, count = 4, currentUnit = 0, totalUnits = 2, stream = stream,
+        )
+        assertEquals("国家", partial.displayText)
+
+        // 起点 4：「家」的第 1 格之后第 2 格开始，到「春」的 2 格为止
+        val mid = ReaderSourceModel.build(
+            ReaderSourceKind.TEXT, source, "", spans,
+            offset = 4, count = 5, currentUnit = 1, totalUnits = 2, stream = stream,
+        )
+        assertEquals("家\n春", mid.displayText)
+    }
+
+    /** 没有阅读流可对照时，同一源片段的连续格仍只取一次。 */
+    @Test
+    fun repeatedSpanEchoesOnceWithoutStream() {
+        val spans = SourceSpanMapper.buildParagraphSpans("国家", intArrayOf(0, 0, 0, 1, 1, 1))
+        val view = ReaderSourceModel.build(
+            ReaderSourceKind.TEXT, "国家", "", spans,
+            offset = 0, count = 6, currentUnit = 0, totalUnits = 1,
+        )
+        assertEquals("国家", view.displayText)
+    }
+
     /** 构造逐字对齐的格级跨度（测试桩）。 */
     private fun spansFor(source: String): List<CellSource> {
         return source.mapIndexed { i, ch ->

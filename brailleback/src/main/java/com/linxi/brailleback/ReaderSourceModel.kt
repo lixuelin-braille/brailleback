@@ -33,7 +33,10 @@ object ReaderSourceModel {
      * @param kind 源类型
      * @param sourceText TEXT 源的原始明文（翻译前文本）；盲文源可为空
      * @param brailleScreenText 现有盲文屏显文本（screenAt 输出），盲文源与退回点字时用
-     * @param spans 逐格源区间（翻译流）；无则 null
+     * @param spans 逐格源区间（翻译流）；无则 null。按**盲文格序号**索引，
+     *   不含段间换行格（与点位 JSON 导出共用同一份，口径不能改）
+     * @param stream 当前阅读流；给出时把 [offset]（流内字符位置）换算成盲文格序号，
+     *   并在段间落换行，屏显才与点显器读到的那一格对得上。无则按 [offset] 直接当格序号
      * @param offset 当前屏起点在阅读流的偏移
      * @param count 当前屏可见格数
      * @param currentUnit 0 基当前屏序号
@@ -48,9 +51,10 @@ object ReaderSourceModel {
         count: Int,
         currentUnit: Int,
         totalUnits: Int,
+        stream: String? = null,
     ): ReaderPageView {
         val displayText = when (kind) {
-            ReaderSourceKind.TEXT -> reconstructSource(spans, offset, count)
+            ReaderSourceKind.TEXT -> reconstructSource(spans, offset, count, stream)
                 ?: proportionalSlice(sourceText, offset, count)
                 .ifEmpty { brailleScreenText }
             ReaderSourceKind.BRAILLE,
@@ -77,19 +81,92 @@ object ReaderSourceModel {
         )
     }
 
-    /** 由逐格跨度还原当前屏可见的原文；无跨度或还原为空返回 null。 */
+    /**
+     * 由逐格跨度还原当前屏可见的原文；无跨度或还原为空返回 null。
+     *
+     * 一个汉字通常占多格（声母、韵母、调号各一格），这些格的跨度指向同一个源字。
+     * 早先逐格 `append`，一个字被重复它占用的格数那么多次（“国国国国国国”）；
+     * 这里改为**同一个源片段只在连续格的第一格出现一次**。
+     */
     private fun reconstructSource(
         spans: List<CellSource>?,
         offset: Int,
         count: Int,
+        stream: String?,
     ): String? {
-        if (spans == null || offset >= spans.size) return null
-        val end = min(offset + count, spans.size)
+        if (spans == null) return null
+        if (stream != null && countBrailleCells(stream) == spans.size) {
+            return reconstructFromStream(spans, offset, count, stream)
+        }
+        return reconstructByCellIndex(spans, offset, count)
+    }
+
+    /**
+     * 跨度与阅读流逐格对齐（全流盲文格数 == 跨度数）时，沿阅读流走 [count] 格：
+     * 段间换行落成屏显换行（正文才逐段可读），其余每格取对应跨度的源片段。
+     */
+    private fun reconstructFromStream(
+        spans: List<CellSource>,
+        offset: Int,
+        count: Int,
+        stream: String,
+    ): String? {
+        var index = 0
+        for (i in 0 until offset.coerceIn(0, stream.length)) {
+            if (isBrailleCell(stream[i])) index++
+        }
+        if (index >= spans.size) return null
         val sb = StringBuilder()
-        for (i in offset until end) {
-            spans[i].sourceText?.let(sb::append)
+        var remaining = count
+        var pos = offset
+        var previous: SourceSpan? = null
+        while (remaining > 0 && pos < stream.length && index < spans.size) {
+            val c = stream[pos]
+            if (c == '\n') {
+                if (sb.isNotEmpty() && !sb.endsWith('\n')) sb.append('\n')
+                previous = null
+            } else {
+                val cell = spans[index]
+                val text = cell.sourceText
+                if (text != null && (previous == null || cell.span != previous)) {
+                    sb.append(text)
+                    previous = cell.span
+                }
+                remaining--
+                index++
+            }
+            pos++
         }
         return sb.toString().ifEmpty { null }
+    }
+
+    /** 跨度与阅读流对不上时的兜底：按格序号直接取，连续同一源片段只取一次。 */
+    private fun reconstructByCellIndex(
+        spans: List<CellSource>,
+        offset: Int,
+        count: Int,
+    ): String? {
+        if (offset >= spans.size) return null
+        val end = min(offset + count, spans.size)
+        val sb = StringBuilder()
+        var previous: Any? = null
+        for (i in offset until end) {
+            val cell = spans[i]
+            val text = cell.sourceText ?: continue
+            val key = cell.span ?: text
+            if (sb.isNotEmpty() && key == previous) continue
+            sb.append(text)
+            previous = key
+        }
+        return sb.toString().ifEmpty { null }
+    }
+
+    private fun isBrailleCell(c: Char): Boolean = c.code in 0x2800..0x28FF
+
+    private fun countBrailleCells(stream: String): Int {
+        var n = 0
+        for (c in stream) if (isBrailleCell(c)) n++
+        return n
     }
 
     /** 跨度不可用时按偏移比例从原文取一段兜底。 */
