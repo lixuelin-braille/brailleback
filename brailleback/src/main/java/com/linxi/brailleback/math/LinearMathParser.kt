@@ -24,19 +24,25 @@ import javax.xml.parsers.DocumentBuilderFactory
 
 /**
  * 全角 / Unicode 变体符号归一（线性与 MathML 两条通道共用）。
- * 覆盖 ／ ＋ － ＝ （ ） ［ ］ ｛ ｝ ， ． ＜ ＞ 及 Unicode 减号 U+2212。
+ *
+ * 全角 ASCII（U+FF01–FF5E：数字、字母、括号、＋－＝／ 等）整段减 0xFEE0 归半角；
+ * 之前只列了标点，全角**数字与字母**漏在外面，中文输入法全角模式下打出的
+ * `１／２` 里的 `１２` 会原样进编码器。另收两种同形变体：∕（U+2215）、−（U+2212）。
  */
 internal object MathFullwidth {
-    val replacements = mapOf(
-        '／' to '/', '∕' to '/',
-        '＋' to '+', '－' to '-', '−' to '-',
-        '＝' to '=',
-        '（' to '(', '）' to ')',
-        '［' to '[', '］' to ']',
-        '｛' to '{', '｝' to '}',
-        '，' to ',', '．' to '.',
-        '＜' to '<', '＞' to '>',
-    )
+    private const val FULLWIDTH_ASCII_START = '\uFF01'
+    private const val FULLWIDTH_ASCII_END = '\uFF5E'
+    private const val FULLWIDTH_TO_ASCII_OFFSET = 0xFEE0
+
+    /** 全角 ASCII 之外、中文输入法常见的同形变体。 */
+    private val variants = mapOf('∕' to '/', '−' to '-')
+
+    val replacements: Map<Char, Char> = buildMap {
+        for (c in FULLWIDTH_ASCII_START..FULLWIDTH_ASCII_END) {
+            put(c, c - FULLWIDTH_TO_ASCII_OFFSET)
+        }
+        putAll(variants)
+    }
 
     fun normalize(text: String): String =
         buildString(text.length) {
@@ -51,6 +57,8 @@ internal object LinearMathParser {
         val tokens = tokenize(input)
         val parser = Parser(tokens, doc)
         val row = parser.parseRow()
+        // 之前不看剩余记号：`(x))` 多打的右括号、`1/2)` 这类会被悄悄丢掉。
+        parser.ensureConsumed()
         val math = doc.createElement("math")
         math.appendChild(row)
         return math
@@ -121,6 +129,12 @@ internal object LinearMathParser {
         private fun next(): Tok = tokens[pos++]
 
         fun parseRow(): Element = parseRow(stopOnComma = false)
+
+        /** 整条表达式读完后再有剩余记号，就是多打了东西，不能悄悄丢掉。 */
+        fun ensureConsumed() {
+            val left = peek() ?: return
+            throw IllegalArgumentException("公式到这里已经完整，后面多出了${describe(left)}")
+        }
 
         /**
          * 解析一行表达式；[stopOnComma] 为 true 时在逗号处断停（函数实参列表用），
@@ -205,7 +219,35 @@ internal object LinearMathParser {
                     else -> leaf("mi", t.text)
                 }
             }
-            else -> throw IllegalArgumentException("线性写法在此处无法解析：${t ?: "结尾"}")
+            // 说人话：读屏用户听到「Op(text=-)」无从判断怎么改。
+            else -> throw IllegalArgumentException(unexpectedFactor(t))
+        }
+
+        /**
+         * 此处本该是数字、字母、括号或根号，却遇到了别的（或什么都没有）。
+         * 常见于连续两个运算符（`1+-`）、`=` 后面直接结束、括号没配对。
+         */
+        private fun unexpectedFactor(t: Tok?): String {
+            if (t == null) return "公式不完整：结尾缺少数字或字母"
+            if (t is Tok.Op) return "运算符“${t.text}”前后缺少操作数"
+            return "此处不该出现${describe(t)}，请检查是否多打了符号或括号没配对"
+        }
+
+        /** 记号的人话名称，用于错误播报。 */
+        private fun describe(t: Tok): String = when (t) {
+            is Tok.Op -> "运算符“${t.text}”"
+            is Tok.LParen -> "左括号“(”"
+            is Tok.RParen -> "右括号“)”"
+            is Tok.LBracket -> "左方括号“[”"
+            is Tok.RBracket -> "右方括号“]”"
+            is Tok.LBrace -> "左花括号“{”"
+            is Tok.RBrace -> "右花括号“}”"
+            is Tok.Ident -> "字母“${t.text}”"
+            is Tok.Number -> "数字“${t.text}”"
+            Tok.Sqrt -> "根号"
+            Tok.Caret -> "上标符号“^”"
+            Tok.Underscore -> "下标符号“_”"
+            Tok.Slash -> "除号“/”"
         }
 
         /**

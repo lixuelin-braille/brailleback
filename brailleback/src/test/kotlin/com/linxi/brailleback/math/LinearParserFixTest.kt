@@ -81,6 +81,36 @@ class LinearParserFixTest {
         assertTrue(result.cells.isNotEmpty())
     }
 
+    // ------------------------------------------------------------- L15 全角混合串
+
+    @Test
+    fun `全角数字与字母归一后等价半角`() {
+        assertEquals(encode("1/2").unicode, encode("１／２").unicode)
+        assertEquals(encode("(a+b)/2=c").unicode, encode("（ａ＋ｂ）／２＝ｃ").unicode)
+        assertEquals(encode("1/2-1").unicode, encode("１／２－１").unicode)
+    }
+
+    @Test
+    fun `L15 全角混合串连续运算符报可读错误不暴露内部记号`() {
+        // `１／２＋－＝（）` 归一后是 `1/2+-=()`：本身不是合法公式（＋ 后紧跟 －）。
+        // 之前报「线性写法在此处无法解析：Op(text=-)」，读屏用户听不懂。
+        val e = assertThrows(IllegalArgumentException::class.java) { encode("１／２＋－＝（）") }
+        assertTrue(e.message!!, e.message!!.contains("缺少操作数"))
+        assertFalse(e.message!!, e.message!!.contains("Op("))
+    }
+
+    @Test
+    fun `公式在运算符后直接结束报可读错误`() {
+        val e = assertThrows(IllegalArgumentException::class.java) { encode("x+") }
+        assertTrue(e.message!!.contains("公式不完整"))
+    }
+
+    @Test
+    fun `右括号多打一个报可读错误`() {
+        val e = assertThrows(IllegalArgumentException::class.java) { encode("(x))") }
+        assertTrue(e.message!!, e.message!!.contains("右括号"))
+    }
+
     // ------------------------------------------------------------- P2-3 选中态映射
 
     @Test

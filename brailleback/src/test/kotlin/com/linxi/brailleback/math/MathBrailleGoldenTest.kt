@@ -217,6 +217,21 @@ class MathBrailleGoldenTest {
         }
     }
 
+    /**
+     * 希腊 omicron（ο / Ο）在 Brailix 参考表里没有条目，本表由脚本离线生成、不许手改，
+     * 所以不补表项；行为锁成「报出字符的可读错误」，绝不静默出错盲文。
+     */
+    @Test
+    fun `希腊 omicron 无表项时报出字符的可读错误不静默`() {
+        for (omicron in listOf('ο', 'Ο')) {
+            val e = assertThrows(IllegalArgumentException::class.java) {
+                MathBraille.encode("<math><mi>$omicron</mi></math>")
+            }
+            assertTrue(e.message!!, e.message!!.contains("无表项"))
+            assertTrue(e.message!!, e.message!!.contains(omicron.toString()))
+        }
+    }
+
     @Test
     fun `mtext 中文走可注入提供者`() {
         val provider = ChineseBrailleProvider { "⠓⠑⠇⠇⠕" }
