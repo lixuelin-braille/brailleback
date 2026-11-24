@@ -49,6 +49,17 @@ object KeysGesturesLogic {
     fun initialValue(stored: String?, default: String): String =
         if (stored.isNullOrEmpty()) default else stored
 
+    /**
+     * 服务侧读到的「该槽位实际生效的动作」。
+     *
+     * 界面只把 [defaultValueFor] 当**显示**默认，从不写盘；此前服务侧读不到偏好的时候
+     * 一律退回 `none`，于是全新安装（偏好文件还没生成）时三个槽位全是 none，
+     * `hasVolumeGestures()` 判为关，音量键不被接管——长按音量上键暂停点显因此「装上就失灵」。
+     * 这里让服务与界面共用同一份出厂默认。
+     */
+    fun effectiveValue(stored: String?, key: String, none: String, pause: String, grade: String): String =
+        initialValue(stored, defaultValueFor(key, none, pause, grade))
+
     /** 当前动作值对应的可读标签；值不在表中时退回第一项，不朗读空白。 */
     fun labelForValue(values: List<String>, entries: List<String>, value: String?): String {
         val index = values.indexOf(value)

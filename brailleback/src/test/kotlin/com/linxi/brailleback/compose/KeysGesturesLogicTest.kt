@@ -72,6 +72,43 @@ class KeysGesturesLogicTest {
     }
 
     @Test
+    fun effectiveValueTreatsUnwrittenPrefsAsUiDefaults() {
+        // 回归：偏好文件刚生成（全新安装）时服务侧读到 null，以前一律当 none，
+        // 三个槽位全空 → hasVolumeGestures() 为假 → 音量键不被接管 → 长按暂停点显失灵。
+        assertEquals(
+            pause,
+            KeysGesturesLogic.effectiveValue(
+                null, KeysGesturesLogic.KEY_LONG_PRESS_UP, none, pause, grade
+            )
+        )
+        assertEquals(
+            grade,
+            KeysGesturesLogic.effectiveValue(
+                null, KeysGesturesLogic.KEY_DOUBLE_PRESS, none, pause, grade
+            )
+        )
+        assertEquals(
+            none,
+            KeysGesturesLogic.effectiveValue(
+                null, KeysGesturesLogic.KEY_LONG_PRESS_DOWN, none, pause, grade
+            )
+        )
+        // 用户显式选过「关闭」要尊重，不能被默认盖回去。
+        assertEquals(
+            none,
+            KeysGesturesLogic.effectiveValue(
+                none, KeysGesturesLogic.KEY_LONG_PRESS_UP, none, pause, grade
+            )
+        )
+        assertEquals(
+            bluetooth,
+            KeysGesturesLogic.effectiveValue(
+                bluetooth, KeysGesturesLogic.KEY_LONG_PRESS_UP, none, pause, grade
+            )
+        )
+    }
+
+    @Test
     fun persistedKeysAreExactlyFourAndExcludeNavigationEntries() {
         assertEquals(
             listOf(

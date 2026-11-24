@@ -43,6 +43,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.googlecode.eyesfree.braille.display.BrailleInputEvent
 import com.googlecode.eyesfree.braille.display.Display
+import com.linxi.brailleback.compose.KeysGesturesLogic
 import com.googlecode.eyesfree.braille.service.display.ConnectionProtocolPolicy
 import com.googlecode.eyesfree.braille.service.display.HidBridge
 import com.linxi.brailleback.rule.BrailleRuleRepository
@@ -316,6 +317,11 @@ class BrailleBackService : AccessibilityService(),
                 && feedbackManager != null
         val consume =
                 VolumeKeyGesturePolicy.shouldConsumeVolumeKeyEvent(gesturesEnabled)
+        if (BuildConfig.DEBUG) {
+            Log.d("BrailleBack", "onKeyEvent $keyCode action=${event.action} " +
+                    "gestures=$gesturesEnabled consume=$consume " +
+                    "longUp=${readVolumeAction(GESTURE_LONG_UP)}")
+        }
         if (consume) {
             when (event.action) {
                 KeyEvent.ACTION_DOWN -> {
@@ -484,9 +490,14 @@ class BrailleBackService : AccessibilityService(),
                 return getString(R.string.pref_volume_action_none_value)
             }
         }
-        return SettingsStore.get(this)
-                .getString(key, getString(R.string.pref_volume_action_none_value))
-                ?: getString(R.string.pref_volume_action_none_value)
+        // 偏好没写过时按界面同一份出厂默认算，而不是一律 none——否则全新安装的三个槽位
+        // 都是 none，音量键不再被接管，长按暂停直接失灵。
+        return KeysGesturesLogic.effectiveValue(
+                SettingsStore.get(this).getString(key, null),
+                key,
+                getString(R.string.pref_volume_action_none_value),
+                getString(R.string.pref_volume_action_pause_value),
+                getString(R.string.pref_volume_action_grade_value))
     }
 
     private fun isNoneVolumeAction(action: String): Boolean {
@@ -497,6 +508,9 @@ class BrailleBackService : AccessibilityService(),
         // 两个依赖各取一次：三个分支都要用，逐处断言会留下中间被清空的窗口。
         val dm = displayManager ?: return
         val feedback = feedbackManager ?: return
+        if (BuildConfig.DEBUG) {
+            Log.d("BrailleBack", "volume action: $action")
+        }
         if (getString(R.string.pref_volume_action_pause_value).equals(action)) {
             val paused = dm.toggleFrozen()
             feedback.emitFeedback(
