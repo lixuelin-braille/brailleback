@@ -77,6 +77,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
+import com.googlecode.eyesfree.braille.display.BrailleInputEvent
 import com.googlecode.eyesfree.braille.display.Display
 import com.googlecode.eyesfree.braille.display.DisplayClient
 import com.linxi.brailleback.BuildConfig
@@ -142,6 +143,8 @@ private data class StripLabels(
     val vpPanRight: String,
     val vpPanUp: String,
     val vpPanDown: String,
+    /** 点显器按键说明；只在连上点显器的视口态显示。 */
+    val vpKeysHint: String,
     val normSection: String,
     val normDesc: String,
     val normAuto: String,
@@ -194,6 +197,17 @@ class TactileStripActivity : AppCompatActivity(),
     /** 当前是否停在独立图例屏；图例不占图形页。 */
     private var vpLegend by mutableStateOf(false)
 
+    /**
+     * 点显器自带按键监听：视口态下这四个方向 / 图例优先由设备按键触发，屏幕按钮仍保留作备用。
+     * 屏蔽表见 [TactileDisplayKey]；未映射的命令原样放过。
+     */
+    private val displayKeyListener = object : Display.OnInputEventListener {
+        override fun onInputEvent(inputEvent: BrailleInputEvent) {
+            // 回调发生在客户端 handler 线程；UI 状态一律回主线程改。
+            runOnUiThread { onDisplayKey(inputEvent.command) }
+        }
+    }
+
     /** 图例屏的盲文行（IO 线程翻译好，主线程只读）；空列表出空图例。 */
     private var legendBrailleLines: List<String> = emptyList()
 
@@ -210,7 +224,9 @@ class TactileStripActivity : AppCompatActivity(),
         // 标题栏交给 Compose 的 TopAppBar，避免两个标题栏叠加、读屏重复朗读。
         supportActionBar?.hide()
 
-        display = TactileStripDisplay(this)
+        display = TactileStripDisplay(this).also {
+            it.setOnInputEventListener(displayKeyListener)
+        }
         vibrator = getSystemService(VIBRATOR_SERVICE) as? Vibrator
         observeClient = DisplayClient(this).apply {
             setOnConnectionStateChangeListener(this@TactileStripActivity)
@@ -263,6 +279,7 @@ class TactileStripActivity : AppCompatActivity(),
                     canPrev = pager?.canPrev() == true,
                     canNext = pager?.canNext() == true,
                     viewportActive = viewport != null,
+                    displayConnected = displayConnected,
                     vpIsOverview = viewport?.isOverview == true,
                     vpIsLegend = vpLegend,
                     onFirstShown = { announce(labels.firstHint) },
@@ -296,6 +313,7 @@ class TactileStripActivity : AppCompatActivity(),
 
     override fun onDestroy() {
         // 点显客户端解绑；观察客户端只听状态，一并释放。
+        display?.setOnInputEventListener(null)
         display?.close()
         display = null
         observeClient?.shutdown()
@@ -620,6 +638,28 @@ class TactileStripActivity : AppCompatActivity(),
         TactileLegendPage.build(legendBrailleLines, vp.spec)
 
     /**
+     * 点显器按键分发：只在视口态生效，映射见 [TactileDisplayKey]。
+     *
+     * 图例屏是个「临时挡住图形」的独立屏：此时按到任何已映射的键都先退回图形页，
+     * 不让人困在图例里摸方向键却毫无反应。
+     */
+    private fun onDisplayKey(command: Int) {
+        if (viewport == null) return
+        val action = TactileDisplayKey.actionFor(command) ?: return
+        if (vpLegend) {
+            vpCloseLegend()
+            return
+        }
+        when (action) {
+            TactileDisplayKey.Action.Legend -> vpOpenLegend()
+            TactileDisplayKey.Action.Up -> vpNavigate(0, -1)
+            TactileDisplayKey.Action.Down -> vpNavigate(0, 1)
+            TactileDisplayKey.Action.Left -> vpNavigate(-1, 0)
+            TactileDisplayKey.Action.Right -> vpNavigate(1, 0)
+        }
+    }
+
+    /**
      * 视口导航统一入口：总览态移动选择框（横向按方、纵向按块）；细节态横向平移，纵向先翻
      * 块内屏，到块首 / 块末再换相邻块。成功刷新当前屏，受阻时短震并播报边界，状态不变。
      */
@@ -791,6 +831,7 @@ class TactileStripActivity : AppCompatActivity(),
         vpPanRight = getString(R.string.tactile_vp_pan_right),
         vpPanUp = getString(R.string.tactile_vp_pan_up),
         vpPanDown = getString(R.string.tactile_vp_pan_down),
+        vpKeysHint = getString(R.string.tactile_vp_keys_hint),
         normSection = getString(R.string.tactile_vp_norm_section),
         normDesc = getString(R.string.tactile_vp_norm_desc),
         normAuto = getString(R.string.tactile_vp_norm_auto),
@@ -823,6 +864,7 @@ private fun StripScreen(
     canPrev: Boolean,
     canNext: Boolean,
     viewportActive: Boolean,
+    displayConnected: Boolean,
     vpIsOverview: Boolean,
     vpIsLegend: Boolean,
     onFirstShown: () -> Unit,
@@ -1039,6 +1081,14 @@ private fun StripScreen(
 
             // 视口模式：平移、进细节 / 回总览、独立图例屏；按钮均可聚焦点击，不靠视觉。
             if (viewportActive) {
+                // 连上点显器时先说明硬件按键：视口优先用设备自己的键，屏幕按钮退成备用。
+                if (displayConnected) {
+                    Text(
+                        labels.vpKeysHint,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
                 if (vpIsLegend) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),

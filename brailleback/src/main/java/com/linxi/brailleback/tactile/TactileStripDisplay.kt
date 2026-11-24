@@ -2,6 +2,7 @@ package com.linxi.brailleback.tactile
 
 import android.content.Context
 import android.util.Log
+import com.googlecode.eyesfree.braille.display.Display
 import com.googlecode.eyesfree.braille.display.DisplayClient
 
 /**
@@ -36,6 +37,16 @@ class TactileStripDisplay(context: Context) {
             )
         }
         client.displayDots(page, label, null)
+    }
+
+    /**
+     * 挂上点显器按键监听：设备自己的平移键 / 上下行键 / 回车键。
+     *
+     * 事件由 DisplayService 广播给所有客户端，所以这里挂监听不影响服务侧原有分发；
+     * 传 null 解除监听（Activity 销毁前调用，避免回调打到已解绑的界面）。
+     */
+    fun setOnInputEventListener(listener: Display.OnInputEventListener?) {
+        client.setOnInputEventListener(listener)
     }
 
     /** 解绑服务、释放连接；之后不要再调用 [show]。 */
