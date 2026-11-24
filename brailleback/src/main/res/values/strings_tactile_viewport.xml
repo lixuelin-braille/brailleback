@@ -33,4 +33,8 @@
     <string name="tactile_vp_norm_force">Force (debug)</string>
     <string name="tactile_vp_g1_split">Multi-line: cover on first line</string>
     <string name="tactile_vp_g1_desc">Graphic bands start on line 2; only available on multi-line devices.</string>
+    <!-- 设置简化：方数默认跟随点显器，其余项收进「高级设置」。 -->
+    <string name="tactile_vp_cells_follow">Cells per line: follows the display (%1$d cells)</string>
+    <string name="tactile_vp_advanced">Advanced settings</string>
+    <string name="tactile_vp_advanced_hint">Usually leave these alone: cells per line follow the display unless you pick one here, and the rest only matter for multi-line devices.</string>
 </resources>

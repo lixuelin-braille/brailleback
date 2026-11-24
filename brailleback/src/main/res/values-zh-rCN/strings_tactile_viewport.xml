@@ -30,4 +30,8 @@
     <string name="tactile_vp_norm_force">强制（调试）</string>
     <string name="tactile_vp_g1_split">多行：封面占首行</string>
     <string name="tactile_vp_g1_desc">图形带从第 2 行起；仅多行设备可用。</string>
+    <!-- 设置简化：方数默认跟随点显器，其余项收进「高级设置」。 -->
+    <string name="tactile_vp_cells_follow">方数：跟随点显器（%1$d 方）</string>
+    <string name="tactile_vp_advanced">高级设置</string>
+    <string name="tactile_vp_advanced_hint">一般不用动：方数默认跟着点显器走，这里手动选了就不再跟随；其余两项只对多行设备有意义。</string>
 </resources>

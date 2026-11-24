@@ -66,6 +66,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -107,6 +108,10 @@ private data class StripLabels(
     val sectionCells: String,
     val cellsDesc: String,
     val cellsChoice: List<String>,
+    /** 方数跟随点显器的只读说明（带当前方数），默认展示在主界面。 */
+    val cellsFollow: String,
+    val advanced: String,
+    val advancedHint: String,
     val sectionLines: String,
     val linesValue: String,
     val decrease: String,
@@ -162,6 +167,12 @@ class TactileStripActivity : AppCompatActivity(),
     private var sourceSummary: String? by mutableStateOf(null)
 
     private var cellsPerLine by mutableStateOf(40)
+
+    /**
+     * 方数是否跟随点显器。默认跟随：连上后按设备上报的文本格数换行，用户不必先猜自己机器几方；
+     * 只有手动点了「高级 → 方数档位」才关闭跟随（[onCellsChange]）。
+     */
+    private var cellsFollowDisplay by mutableStateOf(true)
     private var linesPerScreen by mutableStateOf(1)
     private var dotsPerCell by mutableStateOf(8)
 
@@ -240,6 +251,7 @@ class TactileStripActivity : AppCompatActivity(),
                     labels = labels,
                     sourceSummary = sourceSummary,
                     cellsPerLine = cellsPerLine,
+                    cellsFollowDisplay = cellsFollowDisplay,
                     linesPerScreen = linesPerScreen,
                     dotsPerCell = dotsPerCell,
                     normalizerMode = normalizerMode,
@@ -256,6 +268,7 @@ class TactileStripActivity : AppCompatActivity(),
                     onFirstShown = { announce(labels.firstHint) },
                     onPickImage = { pickImageLauncher.launch(arrayOf("image/*")) },
                     onCellsChange = ::onCellsChange,
+                    onCellsFollowChange = ::onCellsFollow,
                     onLinesDecrease = { onLinesChange(-1) },
                     onLinesIncrease = { onLinesChange(1) },
                     onDotsChange = ::onDotsChange,
@@ -444,7 +457,11 @@ class TactileStripActivity : AppCompatActivity(),
 
     /** DEBUG 专用：把解析出的合法档位写进既有参数状态模型；未选图时不触发 rebuild。 */
     private fun applyDebugParams(params: TactileDebugParams) {
-        params.cellsPerLine?.let { cellsPerLine = it }
+        params.cellsPerLine?.let {
+            // debug 注入的档位等同于手动指定，关掉跟随，避免被设备值覆盖。
+            cellsFollowDisplay = false
+            cellsPerLine = it
+        }
         params.linesPerScreen?.let { linesPerScreen = it }
         params.dots?.let { dotsPerCell = it }
         params.normalizer?.let { normalizerMode = it }
@@ -459,10 +476,32 @@ class TactileStripActivity : AppCompatActivity(),
     }
 
     private fun onCellsChange(value: Int) {
+        // 手动点档位即退出「跟随点显器」，否则下次连接又被设备值覆盖掉。
+        cellsFollowDisplay = false
         if (cellsPerLine == value) return
         cellsPerLine = value
         // 图片已选的前提下重转并回到封面；未选图只记参数，等选图后生效。
         if (sourceUri != null) rebuild()
+    }
+
+    /** 高级里的「跟随点显器」：切回自动，并按当前设备值立即重算一次。 */
+    private fun onCellsFollow() {
+        if (cellsFollowDisplay) return
+        cellsFollowDisplay = true
+        applyDisplayCells()?.let { if (sourceUri != null) rebuild() }
+    }
+
+    /**
+     * 按点显器上报的文本格数更新方数；返回是否真的改了值（未连接 / 值相同返回 false）。
+     * 行数不在这里跟随：客户端 API（[com.googlecode.eyesfree.braille.display.BrailleDisplayProperties]）
+     * 只暴露文本格数，行数没有任何设备上报到这一层，所以行数仍由「减 1 / 加 1」决定。
+     */
+    private fun applyDisplayCells(): Boolean? {
+        if (!cellsFollowDisplay) return null
+        val cells = observeClient?.displayProperties?.numTextCells ?: 0
+        if (cells <= 0 || cells == cellsPerLine) return null
+        cellsPerLine = cells
+        return true
     }
 
     private fun onLinesChange(delta: Int) {
@@ -662,6 +701,8 @@ class TactileStripActivity : AppCompatActivity(),
     /** 点显连接状态回调：只刷新状态行文案，不重复下发点位。 */
     override fun onConnectionStateChanged(state: Int) {
         displayConnected = state == Display.STATE_CONNECTED
+        // 连上就按设备的方数换行（跟随模式），再把当前屏重画一遍。
+        if (applyDisplayCells() == true && sourceUri != null) rebuild()
         if (pager != null) renderCurrent(announce = false)
     }
 
@@ -717,6 +758,9 @@ class TactileStripActivity : AppCompatActivity(),
         cellsChoice = CELL_CHOICES.map {
             getString(R.string.tactile_strip_cells_choice, it)
         },
+        cellsFollow = getString(R.string.tactile_vp_cells_follow),
+        advanced = getString(R.string.tactile_vp_advanced),
+        advancedHint = getString(R.string.tactile_vp_advanced_hint),
         sectionLines = getString(R.string.tactile_strip_section_lines),
         linesValue = getString(R.string.tactile_strip_lines_value),
         decrease = getString(R.string.tactile_strip_decrease),
@@ -767,6 +811,7 @@ private fun StripScreen(
     labels: StripLabels,
     sourceSummary: String?,
     cellsPerLine: Int,
+    cellsFollowDisplay: Boolean,
     linesPerScreen: Int,
     dotsPerCell: Int,
     normalizerMode: StockNormalizerMode,
@@ -783,6 +828,7 @@ private fun StripScreen(
     onFirstShown: () -> Unit,
     onPickImage: () -> Unit,
     onCellsChange: (Int) -> Unit,
+    onCellsFollowChange: () -> Unit,
     onLinesDecrease: () -> Unit,
     onLinesIncrease: () -> Unit,
     onDotsChange: (Int) -> Unit,
@@ -806,6 +852,9 @@ private fun StripScreen(
 ) {
     // 首屏只播报一次功能说明；LaunchedEffect(Unit) 在重组 / 状态变化时不会重跑。
     LaunchedEffect(Unit) { onFirstShown() }
+
+    // 高级项默认收起，减少首屏可扫读的内容；展开状态只活在本次界面里。
+    var advancedOpen by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -844,20 +893,10 @@ private fun StripScreen(
             )
 
             Text(
-                labels.sectionCells,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary,
+                // 方数默认跟随点显器：连上就按它的方数换行，用户不必先猜自己的机器有几方。
+                labels.cellsFollow.format(cellsPerLine),
+                style = MaterialTheme.typography.bodyMedium,
             )
-            CELL_CHOICES.forEachIndexed { index, choice ->
-                StripRadioRow(
-                    title = labels.cellsChoice[index],
-                    description = labels.cellsDesc,
-                    selected = cellsPerLine == choice,
-                    selectedLabel = labels.selected,
-                    unselectedLabel = labels.unselected,
-                    onClick = { onCellsChange(choice) },
-                )
-            }
 
             // 行数：滑杆对读屏不一定好用，给「减 1 / 加 1」纯点击按钮作等价路径。
             Row(
@@ -907,47 +946,84 @@ private fun StripScreen(
                 onClick = { onDotsChange(8) },
             )
 
-            // 线条归一三态：自动（默认）/ 关 / 强制（调试）。
-            Text(
-                labels.normSection,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            StripRadioRow(
-                title = labels.normAuto,
-                description = labels.normDesc,
-                selected = normalizerMode == StockNormalizerMode.AUTO,
-                selectedLabel = labels.selected,
-                unselectedLabel = labels.unselected,
-                onClick = { onNormalizerChange(StockNormalizerMode.AUTO) },
-            )
-            StripRadioRow(
-                title = labels.normOff,
-                description = "",
-                selected = normalizerMode == StockNormalizerMode.OFF,
-                selectedLabel = labels.selected,
-                unselectedLabel = labels.unselected,
-                onClick = { onNormalizerChange(StockNormalizerMode.OFF) },
-            )
-            StripRadioRow(
-                title = labels.normForce,
-                description = "",
-                selected = normalizerMode == StockNormalizerMode.FORCE,
-                selectedLabel = labels.selected,
-                unselectedLabel = labels.unselected,
-                onClick = { onNormalizerChange(StockNormalizerMode.FORCE) },
-            )
+            // 高级项默认收起：方数手动档、线条归一、G1 封面分层。平时不用碰，
+            // 展开后仍是原来的单选行，读屏可逐项读。
+            TextButton(onClick = { advancedOpen = !advancedOpen }) {
+                Text(labels.advanced)
+            }
+            if (advancedOpen) {
+                Text(
+                    labels.advancedHint,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
 
-            // G1 封面分层：仅多行设备可用；单行设备置灰不可点。
-            StripRadioRow(
-                title = labels.g1Split,
-                description = labels.g1Desc,
-                selected = g1SplitCover,
-                selectedLabel = labels.selected,
-                unselectedLabel = labels.unselected,
-                enabled = linesPerScreen >= 2,
-                onClick = { onG1Change(!g1SplitCover) },
-            )
+                Text(
+                    labels.sectionCells,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                StripRadioRow(
+                    title = labels.cellsFollow.format(cellsPerLine),
+                    description = labels.cellsDesc,
+                    selected = cellsFollowDisplay,
+                    selectedLabel = labels.selected,
+                    unselectedLabel = labels.unselected,
+                    onClick = onCellsFollowChange,
+                )
+                CELL_CHOICES.forEachIndexed { index, choice ->
+                    StripRadioRow(
+                        title = labels.cellsChoice[index],
+                        description = "",
+                        selected = !cellsFollowDisplay && cellsPerLine == choice,
+                        selectedLabel = labels.selected,
+                        unselectedLabel = labels.unselected,
+                        onClick = { onCellsChange(choice) },
+                    )
+                }
+
+                // 线条归一三态：自动（默认）/ 关 / 强制（调试）。
+                Text(
+                    labels.normSection,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                StripRadioRow(
+                    title = labels.normAuto,
+                    description = labels.normDesc,
+                    selected = normalizerMode == StockNormalizerMode.AUTO,
+                    selectedLabel = labels.selected,
+                    unselectedLabel = labels.unselected,
+                    onClick = { onNormalizerChange(StockNormalizerMode.AUTO) },
+                )
+                StripRadioRow(
+                    title = labels.normOff,
+                    description = "",
+                    selected = normalizerMode == StockNormalizerMode.OFF,
+                    selectedLabel = labels.selected,
+                    unselectedLabel = labels.unselected,
+                    onClick = { onNormalizerChange(StockNormalizerMode.OFF) },
+                )
+                StripRadioRow(
+                    title = labels.normForce,
+                    description = "",
+                    selected = normalizerMode == StockNormalizerMode.FORCE,
+                    selectedLabel = labels.selected,
+                    unselectedLabel = labels.unselected,
+                    onClick = { onNormalizerChange(StockNormalizerMode.FORCE) },
+                )
+
+                // G1 封面分层：仅多行设备可用；单行设备置灰不可点。
+                StripRadioRow(
+                    title = labels.g1Split,
+                    description = labels.g1Desc,
+                    selected = g1SplitCover,
+                    selectedLabel = labels.selected,
+                    unselectedLabel = labels.unselected,
+                    enabled = linesPerScreen >= 2,
+                    onClick = { onG1Change(!g1SplitCover) },
+                )
+            }
 
             // 状态区放在翻页按钮上方：连接 / 解码 / 页签结果直接进首屏无障碍焦点序列，
             // live region 保证状态变化时读屏也会主动朗读。
