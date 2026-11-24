@@ -22,6 +22,8 @@
     package="com.linxi.brailleback">
 
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- 视口平移到边界时的短震反馈；无震动马达 / 权限被拒时静默降级，不影响浏览。 -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Foreground service keeps the braille display connection alive when
          the accessibility service would otherwise be idle-processed away.
          connectedDevice matches our use case (external braille displays). -->
@@ -268,6 +270,20 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- 点显图片：选入图片后分页直送连着的盲文点显器；书架页内进入，不对外导出。 -->
+        <activity
+            android:name=".tactile.TactileStripActivity"
+            android:label="@string/tactile_strip_title"
+            android:theme="@style/BraillebackSettingsTheme"
+            android:exported="false" />
+
+        <!-- 数学公式转盲文：书架页内进入；只接 MathML / 受控线性文本，不做公式 OCR。 -->
+        <activity
+            android:name=".math.MathBrailleActivity"
+            android:label="@string/math_title"
+            android:theme="@style/BraillebackSettingsTheme"
+            android:exported="false" />
 
         <activity
              android:name=".IMESetupWizardActivity"

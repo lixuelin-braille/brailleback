@@ -62,6 +62,9 @@ $null
 # 所以这里只点名本地驱动资料包，不能用 *.zip 通配。
 .tmp-*
 日志五-*.txt
+# 验收轮落在 docs 下的测试日志（同样只忽略，不移动）
+docs/.acceptance-*.log
+docs/.verify-*.log
 /清华点显器驱动.zip
 /driver_cp210x/
 service/jni/brlttywrapper/third_party/brltty_backup_*/

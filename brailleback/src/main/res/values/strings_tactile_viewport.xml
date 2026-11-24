@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  单行视口模式文案（P0 扩展）。
+  独立于 strings.xml，键前缀 tactile_vp_，避免与既有三段式文案及并行工作流互相覆盖。
+-->
+<resources>
+    <string name="tactile_vp_overview">Overview</string>
+    <string name="tactile_vp_block_page">Block %1$d/%2$d, screen %3$d/%4$d</string>
+    <string name="tactile_vp_block_start">First screen of block</string>
+    <string name="tactile_vp_block_end">Last screen of block</string>
+    <string name="tactile_vp_first_block">First block reached</string>
+    <string name="tactile_vp_last_block">Last block reached</string>
+    <string name="tactile_vp_left_end">Left edge reached</string>
+    <string name="tactile_vp_right_end">Right edge reached</string>
+    <string name="tactile_vp_top_end">Top edge reached</string>
+    <string name="tactile_vp_bottom_end">Bottom edge reached</string>
+    <string name="tactile_vp_enter_detail">Open detail</string>
+    <string name="tactile_vp_back_overview">Back to overview</string>
+    <string name="tactile_vp_legend">Legend</string>
+    <string name="tactile_vp_legend_back">Back to image</string>
+    <string name="tactile_vp_pan_left">Move left</string>
+    <string name="tactile_vp_pan_right">Move right</string>
+    <string name="tactile_vp_pan_up">Move up</string>
+    <string name="tactile_vp_pan_down">Move down</string>
+    <string name="tactile_vp_hint">Overview: move the selection, open detail, pan around, or return to the overview.</string>
+    <string name="tactile_vp_status_overview">Overview · %1$s</string>
+    <string name="tactile_vp_status_detail">%1$s · %2$s</string>
+    <string name="tactile_vp_status_legend">Legend · %1$s</string>
+    <string name="tactile_vp_norm_section">Stroke normalization</string>
+    <string name="tactile_vp_norm_desc">Only reinforce fragmented line art; intact outlines stay unchanged.</string>
+    <string name="tactile_vp_norm_auto">Automatic</string>
+    <string name="tactile_vp_norm_off">Off</string>
+    <string name="tactile_vp_norm_force">Force (debug)</string>
+    <string name="tactile_vp_g1_split">Multi-line: cover on first line</string>
+    <string name="tactile_vp_g1_desc">Graphic bands start on line 2; only available on multi-line devices.</string>
+</resources>

@@ -556,4 +556,57 @@
     <string name="tactile_export_need_image">请先选择一张图片</string>
     <string name="tactile_export_selected">已选中</string>
     <string name="tactile_export_unselected">未选中</string>
+
+    <!-- 点显图片：图片 → 分页点位直送盲文点显器。 -->
+    <string name="tactile_strip_title">图片转点显</string>
+    <string name="tactile_strip_back">返回</string>
+    <string name="tactile_strip_first_hint">实验功能：选择一张图片，分页送到点显器上触摸浏览。</string>
+    <string name="tactile_strip_pick_image">选择图片</string>
+    <string name="tactile_strip_no_image">还没有选择图片</string>
+    <string name="tactile_strip_image_picked">已选择：%1$s</string>
+    <string name="tactile_strip_image_picked_size">已选择：%1$s，大小 %2$s</string>
+    <string name="tactile_strip_section_cells">一行方数</string>
+    <string name="tactile_strip_cells_desc">一行多少方</string>
+    <string name="tactile_strip_cells_choice">%1$d 方一行</string>
+    <string name="tactile_strip_section_lines">点显屏行数</string>
+    <string name="tactile_strip_lines_value">行数：%1$d</string>
+    <string name="tactile_strip_decrease">减 1</string>
+    <string name="tactile_strip_increase">加 1</string>
+    <string name="tactile_strip_section_dots">点数</string>
+    <string name="tactile_strip_dots_6">6 点</string>
+    <string name="tactile_strip_dots_8">8 点</string>
+    <string name="tactile_strip_prev">上一页</string>
+    <string name="tactile_strip_next">下一页</string>
+    <string name="tactile_strip_first">首页</string>
+    <string name="tactile_strip_last">末页</string>
+    <string name="tactile_strip_converting">正在转换，请稍候…</string>
+    <string name="tactile_strip_cover_hint">封面，按下一页开始查看图形</string>
+    <string name="tactile_strip_status_cover">封面 · %1$s</string>
+    <string name="tactile_strip_status_graphic">%1$s · %2$s</string>
+    <string name="tactile_strip_status_back">封底 · %1$s</string>
+    <string name="tactile_strip_not_connected">点显未连接，仅显示页码</string>
+    <string name="tactile_strip_connected">点显已连接</string>
+    <string name="tactile_strip_fail_decode">图片解码失败或格式不支持，请换一张图片</string>
+    <string name="tactile_strip_need_image">请先选择一张图片</string>
+    <string name="tactile_strip_selected">已选中</string>
+    <string name="tactile_strip_unselected">未选中</string>
+    <string name="tactile_strip_action_repick">换一张图</string>
+    <string name="tactile_strip_entry">图片转点显</string>
+
+    <!-- 数学公式转盲文（工作流 A） -->
+    <string name="math_title">数学公式转盲文</string>
+    <string name="math_entry">数学公式转盲文</string>
+    <string name="math_input_hint">MathML 或受控线性公式</string>
+    <string name="math_input_example">示例：a^2+b^2=c^2，或粘贴 &lt;math&gt;…&lt;/math&gt;</string>
+    <string name="math_convert">转换</string>
+    <string name="math_push">推到点显</string>
+    <string name="math_copy">复制盲文</string>
+    <string name="math_converting">转换中…</string>
+    <string name="math_converted">转换完成</string>
+    <string name="math_push_done">已推送到点显器：%1$s</string>
+    <string name="math_copied">盲文已复制到剪贴板</string>
+    <string name="math_connected">点显已连接</string>
+    <string name="math_not_connected">点显未连接</string>
+    <string name="math_need_input">请先输入公式</string>
+    <string name="math_error">转换失败：%1$s</string>
 </resources>

@@ -751,4 +751,57 @@
     <string name="tactile_export_need_image">Pick an image first</string>
     <string name="tactile_export_selected">Selected</string>
     <string name="tactile_export_unselected">Not selected</string>
+
+    <!-- 点显图片：图片 → 分页点位直送盲文点显器。文案供 TalkBack 朗读。 -->
+    <string name="tactile_strip_title">Image to braille display</string>
+    <string name="tactile_strip_back">Back</string>
+    <string name="tactile_strip_first_hint">Experimental feature: pick an image and read it page by page on the braille display.</string>
+    <string name="tactile_strip_pick_image">Choose an image</string>
+    <string name="tactile_strip_no_image">No image picked yet</string>
+    <string name="tactile_strip_image_picked">Picked: %1$s</string>
+    <string name="tactile_strip_image_picked_size">Picked: %1$s, size %2$s</string>
+    <string name="tactile_strip_section_cells">Cells per line</string>
+    <string name="tactile_strip_cells_desc">How many braille cells fit on one line</string>
+    <string name="tactile_strip_cells_choice">%1$d cells per line</string>
+    <string name="tactile_strip_section_lines">Display lines</string>
+    <string name="tactile_strip_lines_value">Lines: %1$d</string>
+    <string name="tactile_strip_decrease">Minus 1</string>
+    <string name="tactile_strip_increase">Plus 1</string>
+    <string name="tactile_strip_section_dots">Dots per cell</string>
+    <string name="tactile_strip_dots_6">6-dot</string>
+    <string name="tactile_strip_dots_8">8-dot</string>
+    <string name="tactile_strip_prev">Previous page</string>
+    <string name="tactile_strip_next">Next page</string>
+    <string name="tactile_strip_first">First page</string>
+    <string name="tactile_strip_last">Last page</string>
+    <string name="tactile_strip_converting">Converting, please wait…</string>
+    <string name="tactile_strip_cover_hint">Cover. Press next to browse the graphics.</string>
+    <string name="tactile_strip_status_cover">Cover · %1$s</string>
+    <string name="tactile_strip_status_graphic">%1$s · %2$s</string>
+    <string name="tactile_strip_status_back">Back cover · %1$s</string>
+    <string name="tactile_strip_not_connected">Braille display not connected; page numbers only</string>
+    <string name="tactile_strip_connected">Braille display connected</string>
+    <string name="tactile_strip_fail_decode">Could not decode the image or the format is unsupported; try another image</string>
+    <string name="tactile_strip_need_image">Pick an image first</string>
+    <string name="tactile_strip_selected">Selected</string>
+    <string name="tactile_strip_unselected">Not selected</string>
+    <string name="tactile_strip_action_repick">Choose another image</string>
+    <string name="tactile_strip_entry">Image to braille display</string>
+
+    <!-- 数学公式转盲文（工作流 A） -->
+    <string name="math_title">Math formula to braille</string>
+    <string name="math_entry">Math formula to braille</string>
+    <string name="math_input_hint">MathML or controlled linear formula</string>
+    <string name="math_input_example">e.g. a^2+b^2=c^2, or paste &lt;math&gt;…&lt;/math&gt;</string>
+    <string name="math_convert">Convert</string>
+    <string name="math_push">Push to display</string>
+    <string name="math_copy">Copy braille</string>
+    <string name="math_converting">Converting…</string>
+    <string name="math_converted">Converted</string>
+    <string name="math_push_done">Pushed to display: %1$s</string>
+    <string name="math_copied">Braille copied to clipboard</string>
+    <string name="math_connected">display connected</string>
+    <string name="math_not_connected">display not connected</string>
+    <string name="math_need_input">Enter a formula first</string>
+    <string name="math_error">Conversion failed: %1$s</string>
 </resources>

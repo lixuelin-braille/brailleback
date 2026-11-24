@@ -1,0 +1,64 @@
+{
+  "schema": "brailix.math.structures.v1",
+  "name": "cn_current_math_structures",
+  "cell": "six_dot",
+  "reference": "Chinese Braille (《中国盲文》)",
+  "_note": "Structural markers, nested by topic: fraction.{open,bar,close} / script.{sup,sub,close,big_op_prefix} / sqrt.{...} / letter_prefix.{...} / font.{bold} / indicator.{symbol,operation,negation} / cases.{first,middle,last}. indicator.* are the math-symbol category markers the BACKEND prefixes onto a symbol/function (declared per entry, never baked into cells): ⠫ symbol (function names + quantifiers ∀∃∇ + shapes), ⠰ operation (set/logic ∪∩∧∨∖), ⠈ negation (≠≯≮ … = c_4 + the negated base). font.bold (⠻ 12456) is the upright-bold font sign the backend emits between a letter's case/class prefix and its bare cell for an upright-bold letter (a Mathematical Bold code point like 𝐆, or mathvariant=\"bold\") — e.g. a bold group letter G → ⠠⠻ + G. cases.* are the segments of the multi-line equation-system brace, prefixed per row: ⠎ first row, ⠇ each middle row, ⠣ last row, each followed by one blank cell (marks, not brackets), no row-end marker. matrix.op_prefix (⠐ 5) replaces an operator's space_before blank INSIDE a matrix / determinant cell so a polynomial element (a+b) binds instead of splitting into the row's blank-separated elements (a, +b); cases rows keep ordinary spacing.",
+  "structures": {
+    "fraction": {
+      "open":  ["c_23"],
+      "bar":   ["c_1256"],
+      "close": ["c_56"]
+    },
+    "script": {
+      "sup":           ["c_34"],
+      "sub":           ["c_16"],
+      "close":         ["c_156"],
+      "big_op_prefix": ["c_46"]
+    },
+    "sqrt": {
+      "open":      ["c_146"],
+      "indicator": ["c_156"],
+      "close":     ["c_1456"]
+    },
+    "letter_prefix": {
+      "latin_lower": ["c_56"],
+      "latin_upper": ["c_6"],
+      "greek_lower": ["c_46"],
+      "greek_upper": ["c_456"]
+    },
+    "font": {
+      "bold": ["c_12456"]
+    },
+    "indicator": {
+      "symbol":    ["c_1246"],
+      "operation": ["c_56"],
+      "negation":  ["c_4"]
+    },
+    "cases": {
+      "first":  ["c_234"],
+      "middle": ["c_123"],
+      "last":   ["c_126"]
+    },
+    "matrix": {
+      "op_prefix": ["c_5"]
+    },
+    "accent": {
+      "over":  ["c_45"],
+      "under": ["c_56"],
+      "mark": {
+        "arrow": { "single": ["c_25", "c_2"], "double": ["c_25", "c_23"] },
+        "bar":   { "single": ["c_25"],         "double": ["c_25", "c_25"] }
+      }
+    },
+    "chem": {
+      "indicator": ["c_456"],
+      "heat": ["c_45", "c_456", "c_256"],
+      "charge": ["c_46"],
+      "charge_plus_guard": ["c_6"],
+      "bond_double": ["c_2356"],
+      "bond_triple": ["c_123456"],
+      "arrow_reverse": ["c_6", "c_2356", "c_2"]
+    }
+  }
+}

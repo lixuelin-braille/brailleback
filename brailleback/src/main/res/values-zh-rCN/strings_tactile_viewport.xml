@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 单行视口模式文案（中文），键前缀 tactile_vp_，见 values/strings_tactile_viewport.xml。 -->
+<resources>
+    <string name="tactile_vp_overview">总览</string>
+    <string name="tactile_vp_block_page">第 %1$d/%2$d 块，第 %3$d/%4$d 屏</string>
+    <string name="tactile_vp_block_start">块首</string>
+    <string name="tactile_vp_block_end">块末</string>
+    <string name="tactile_vp_first_block">已到第一块</string>
+    <string name="tactile_vp_last_block">已到最后一块</string>
+    <string name="tactile_vp_left_end">左边到头</string>
+    <string name="tactile_vp_right_end">右边到头</string>
+    <string name="tactile_vp_top_end">上边到头</string>
+    <string name="tactile_vp_bottom_end">下边到头</string>
+    <string name="tactile_vp_enter_detail">进入细节</string>
+    <string name="tactile_vp_back_overview">返回总览</string>
+    <string name="tactile_vp_legend">图例</string>
+    <string name="tactile_vp_legend_back">返回图形</string>
+    <string name="tactile_vp_pan_left">左移</string>
+    <string name="tactile_vp_pan_right">右移</string>
+    <string name="tactile_vp_pan_up">上移</string>
+    <string name="tactile_vp_pan_down">下移</string>
+    <string name="tactile_vp_hint">总览：移动选择框，进入细节后平移浏览，可随时返回总览。</string>
+    <string name="tactile_vp_status_overview">总览 · %1$s</string>
+    <string name="tactile_vp_status_detail">%1$s · %2$s</string>
+    <string name="tactile_vp_status_legend">图例 · %1$s</string>
+    <string name="tactile_vp_norm_section">线条归一</string>
+    <string name="tactile_vp_norm_desc">仅加固有断裂的线稿，完整轮廓保持不变。</string>
+    <string name="tactile_vp_norm_auto">自动</string>
+    <string name="tactile_vp_norm_off">关</string>
+    <string name="tactile_vp_norm_force">强制（调试）</string>
+    <string name="tactile_vp_g1_split">多行：封面占首行</string>
+    <string name="tactile_vp_g1_desc">图形带从第 2 行起；仅多行设备可用。</string>
+</resources>

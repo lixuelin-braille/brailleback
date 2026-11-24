@@ -86,6 +86,8 @@ internal class BookshelfController(private val activity: ComponentActivity) {
     internal fun labels(): BookshelfLabels = BookshelfLabels(
         title = activity.getString(R.string.bookshelf_title),
         importBook = activity.getString(R.string.bookshelf_import),
+        stripEntry = activity.getString(R.string.tactile_strip_entry),
+        mathEntry = activity.getString(R.string.math_entry),
         empty = activity.getString(R.string.bookshelf_empty),
         open = activity.getString(R.string.bookshelf_open),
         rename = activity.getString(R.string.bookshelf_rename),
@@ -109,6 +111,14 @@ internal class BookshelfController(private val activity: ComponentActivity) {
     internal fun actions(): BookshelfActions = object : BookshelfActions {
         override fun onImport() {
             importBook()
+        }
+
+        override fun onOpenStrip() {
+            openStrip()
+        }
+
+        override fun onOpenMath() {
+            openMath()
         }
 
         override fun onOpen(entry: BookshelfEntry) {
@@ -232,6 +242,20 @@ internal class BookshelfController(private val activity: ComponentActivity) {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         activity.startActivity(intent)
+    }
+
+    /** 跳转「图片转点显」页：图片分页直送点显器的独立入口。 */
+    private fun openStrip() {
+        activity.startActivity(
+            Intent(activity, com.linxi.brailleback.tactile.TactileStripActivity::class.java)
+        )
+    }
+
+    /** 跳转「数学公式转盲文」页：MathML / 受控线性公式编码独立入口。 */
+    private fun openMath() {
+        activity.startActivity(
+            Intent(activity, com.linxi.brailleback.math.MathBrailleActivity::class.java)
+        )
     }
 
     private fun encode(books: List<Book>): Set<String> =

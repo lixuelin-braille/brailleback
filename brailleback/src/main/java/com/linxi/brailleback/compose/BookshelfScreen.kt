@@ -50,6 +50,8 @@ internal data class BookshelfEntry(
 internal data class BookshelfLabels(
     val title: String,
     val importBook: String,
+    val stripEntry: String,
+    val mathEntry: String,
     val empty: String,
     val open: String,
     val rename: String,
@@ -72,6 +74,10 @@ internal sealed interface BookshelfDialog {
  *  而且这些动作都作用在同一份书架状态上，本来就是一组的。 */
 internal interface BookshelfActions {
     fun onImport()
+    /** 图片转点显：跳到图片分页送点显器的独立页。 */
+    fun onOpenStrip()
+    /** 数学公式转盲文：跳到数学公式编码独立页。 */
+    fun onOpenMath()
     fun onOpen(entry: BookshelfEntry)
     fun onLongPress(entry: BookshelfEntry)
     fun onDismissDialog()
@@ -120,6 +126,26 @@ internal fun BookshelfScreen(
                         .padding(horizontal = 16.dp, vertical = 8.dp),
                 ) {
                     Text(labels.importBook)
+                }
+            }
+            item(key = "strip_entry") {
+                TextButton(
+                    onClick = actions::onOpenStrip,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                ) {
+                    Text(labels.stripEntry)
+                }
+            }
+            item(key = "math_entry") {
+                TextButton(
+                    onClick = actions::onOpenMath,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                ) {
+                    Text(labels.mathEntry)
                 }
             }
             // key 里带下标：同一本书可能被导入两次（同一 URI 出现两行），

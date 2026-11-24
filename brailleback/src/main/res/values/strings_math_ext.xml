@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  数学通道模板按钮文案（工作流 A 扩展）。
+  独立于 strings.xml，键前缀 math_bs_，避免与 tactile 侧并行改动互相覆盖。
+-->
+<resources>
+    <string name="math_bs_templates_label">Templates</string>
+    <string name="math_bs_fraction">Fraction</string>
+    <string name="math_bs_root">Square root</string>
+    <string name="math_bs_script">Sub/superscript</string>
+    <string name="math_bs_matrix">Matrix 2×2</string>
+    <string name="math_bs_cases">Equation system</string>
+    <string name="math_bs_inserted">Template inserted</string>
+    <string name="math_bs_selected">Selected</string>
+    <string name="math_bs_unselected">Not selected</string>
+    <string name="math_bs_import_file">Import formula from file</string>
+    <string name="math_bs_file_empty">The file is empty</string>
+    <string name="math_bs_file_too_large">File too large (limit 256 KB), not read</string>
+    <string name="math_bs_file_failed">Failed to read file: %1$s</string>
+    <string name="math_bs_file_loaded">Formula loaded from file</string>
+</resources>
