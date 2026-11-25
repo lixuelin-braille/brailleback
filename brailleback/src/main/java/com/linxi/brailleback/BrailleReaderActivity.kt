@@ -156,6 +156,13 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     private var mLinesPerPage = LINES_PER_PAGE
     /** 点显器每行方数，连接后由 getDisplayProperties() 更新；未连接用默认值。 */
     private var mDisplayCells = DEFAULT_CELLS
+    /**
+     * 回到本页（onResume / 重新连上点显器）时，先把屏清成空方再铺本页。
+     *
+     * 从别的界面切回来时，点显器上常常还留着那边的字（服务/输入法的文字输出），
+     * 不先清一次就会和这一页的点位混在一起，摸到的既不像书也不像刚离开的界面。
+     */
+    private var mClearDisplayOnEnter = true
     /** 当前页内每一行的起点偏移，行进度条与「跳到第 N 行」都按它走。 */
     private var mPageLineStarts: IntArray = intArrayOf(0)
     /** 上次读到、但因后台翻译还没翻到而暂时落不了地的位置。 */
@@ -613,6 +620,8 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         mDisplay = display
         display.setOnConnectionStateChangeListener(this)
         display.setOnInputEventListener(displayKeyListener)
+        // 每次回到本页都先清屏：屏上可能还是刚才那个界面的字。
+        mClearDisplayOnEnter = true
         onConnectionStateChanged(Display.STATE_NOT_CONNECTED)
         // 首次进入且尚无内容时，尝试恢复上次阅读进度。
         // mFileUri != null 说明本次是书架/最近打开明确指定的书（onCreate 已同步
@@ -676,7 +685,13 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         }
         runOnUiThread {
             updateUiState()
-            // 连上点显器立即推送当前屏
+            // 刚回到本页：先把屏清空，再把本页点位铺上去，
+            // 免得上一处界面留下的字和这一页混在一起。
+            if (mConnected && mClearDisplayOnEnter) {
+                mClearDisplayOnEnter = false
+                clearDisplay()
+            }
+            // 连上点显器/回到本页立即推送当前屏
             if (mConnected && mStream.isNotEmpty()) {
                 sendToDisplay()
             }
@@ -1775,6 +1790,20 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             map[i] = i
         }
         display.displayDots(patterns, cells, map)
+    }
+
+    /**
+     * 把点显器整屏清成空方（不释放独占，随后照常由 [sendToDisplay] 铺本页）。
+     *
+     * 与 `DisplayManager` 清屏同一做法：全 0 点位 + 空文本。
+     * 先冻服务再清，避免服务那边的文字输出紧接着又盖回来。
+     */
+    private fun clearDisplay() {
+        val display = mDisplay ?: return
+        val cells = mDisplayCells.coerceIn(1, MAX_DISPLAY_CELLS)
+        holdDisplay()
+        display.displayDots(ByteArray(cells), "", null)
+        Log.d(LOG_TAG, "display cleared: cells=$cells")
     }
 
     /**
