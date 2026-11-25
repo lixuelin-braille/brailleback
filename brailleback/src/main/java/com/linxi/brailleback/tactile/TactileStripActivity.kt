@@ -320,12 +320,12 @@ class TactileStripActivity : AppCompatActivity(),
      * 退到后台就交还点显器：否则服务一直冻着，用户切到别的应用摸到的还是上一屏点位。
      */
     override fun onStop() {
-        releaseDisplayFromDetail()
+        releaseDisplay()
         super.onStop()
     }
 
     override fun onDestroy() {
-        releaseDisplayFromDetail()
+        releaseDisplay()
         // 点显客户端解绑；观察客户端只听状态，一并释放。
         display?.setOnInputEventListener(null)
         display?.close()
@@ -582,6 +582,8 @@ class TactileStripActivity : AppCompatActivity(),
 
     /** 把当前屏字节下发到点显器，并刷新状态行；announce 控制是否语音播报。 */
     private fun renderCurrent(announce: Boolean) {
+        // 图形页（视口 / 三段式）在屏时，点显器归本页独占，先挡住服务侧文字。
+        syncDisplayHold()
         if (viewport != null) {
             renderViewport(announce)
             return
@@ -615,6 +617,7 @@ class TactileStripActivity : AppCompatActivity(),
 
     /** 渲染当前视口屏：总览 / 细节 / 图例三态；页签走 TTS，不写进点位字节。 */
     private fun renderViewport(announce: Boolean) {
+        syncDisplayHold()
         val vp = viewport ?: return
         val note = if (displayConnected) {
             getString(R.string.tactile_strip_connected)
@@ -716,30 +719,34 @@ class TactileStripActivity : AppCompatActivity(),
     }
 
     private fun vpEnterDetail() {
-        holdDisplayForDetail()
         viewport?.enterDetail()
         vpLegend = false
         renderViewport(announce = true)
     }
 
     private fun vpBackOverview() {
-        releaseDisplayFromDetail()
         viewport?.backToOverview()
         vpLegend = false
         renderViewport(announce = true)
     }
 
     /**
-     * 细节态独占点显器：服务侧文字输出冻结，屏上只剩我们自己下发的点位。
-     * 服务没起来、点显器没连上都按「没冻上」处理，不报错，行为回落到普通模式。
+     * 图形页在屏时独占点显器：视口三态（总览 / 细节 / 图例）和三段式的图形页都是我们自己
+     * 下发的点位，服务侧文字一翻上来就会盖住。只要图形页还在，就冻结服务输出；
+     * 回到没有图形页的状态（或没连点显器）就交还。
      */
-    private fun holdDisplayForDetail() {
+    private fun syncDisplayHold() {
+        if ((viewport != null || pager != null) && displayConnected) holdDisplay() else releaseDisplay()
+    }
+
+    /** 申请独占；服务没起 / 点显器没连时按「没冻上」处理，不报错。 */
+    private fun holdDisplay() {
         if (holdingDisplay) return
         holdingDisplay = BrailleBackService.holdDisplayForApp()
     }
 
     /** 交还点显器；重复调用无副作用，未持有过也不打扰服务。 */
-    private fun releaseDisplayFromDetail() {
+    private fun releaseDisplay() {
         if (!holdingDisplay) return
         holdingDisplay = false
         BrailleBackService.releaseDisplayForApp()
@@ -773,14 +780,11 @@ class TactileStripActivity : AppCompatActivity(),
     /** 点显连接状态回调：只刷新状态行文案，不重复下发点位。 */
     override fun onConnectionStateChanged(state: Int) {
         displayConnected = state == Display.STATE_CONNECTED
-        // 断线时把独占标记清掉；重新连上而人还停在细节态，就重新申请一次，
-        // 否则这中间服务又会把文字翻上来盖住点位。
-        if (displayConnected) {
+        // 断线后冻结没意义，清标记；重连而图形页还在时由 syncDisplayHold 重新申请。
+        if (!displayConnected) {
             holdingDisplay = false
-            if (viewport?.isOverview == false) holdDisplayForDetail()
-        } else {
-            releaseDisplayFromDetail()
         }
+        syncDisplayHold()
         // 连上就按设备的方数换行（跟随模式），再把当前屏重画一遍。
         if (applyDisplayCells() == true && sourceUri != null) rebuild()
         if (pager != null) renderCurrent(announce = false)
