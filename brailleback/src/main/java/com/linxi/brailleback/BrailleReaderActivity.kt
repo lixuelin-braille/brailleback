@@ -1064,6 +1064,21 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     }
 
     /**
+     * 点显器按键的逐行移动：到文首 / 文末时 [moveLine] 会原地钳住，不播报的话用户会以为
+     * 按键失灵（两键设备尤其明显，因为它只有这一个前进方向）。
+     */
+    private fun moveLineFromKey(delta: Int) {
+        if (mStream.isEmpty()) return
+        val before = mOffset
+        moveLine(delta)
+        if (mOffset == before) {
+            announce(getString(
+                if (delta > 0) R.string.braille_reader_at_end
+                else R.string.braille_reader_at_start))
+        }
+    }
+
+    /**
      * 点显器按键落在正文页时的处理（映射见 [ReaderDisplayKey]）。
      *
      * 平移键逐行、上下行键整屏翻、顶/底键跳文首文末、回车播报当前页位置。
@@ -1073,8 +1088,8 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         if (action == ReaderDisplayAction.NONE) return
         if (mStream.isEmpty()) return
         when (action) {
-            ReaderDisplayAction.PREV_LINE -> moveLine(-1)
-            ReaderDisplayAction.NEXT_LINE -> moveLine(1)
+            ReaderDisplayAction.PREV_LINE -> moveLineFromKey(-1)
+            ReaderDisplayAction.NEXT_LINE -> moveLineFromKey(1)
             ReaderDisplayAction.PREV_PAGE -> advance(-1)
             ReaderDisplayAction.NEXT_PAGE -> advance(1)
             ReaderDisplayAction.FIRST_PAGE -> gotoUnit(0)

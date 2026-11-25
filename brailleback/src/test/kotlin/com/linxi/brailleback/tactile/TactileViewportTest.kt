@@ -299,4 +299,84 @@ class TactileViewportTest {
         while (pager.canNext()) assertTrue(pager.next())
         assertEquals(StripPageKind.BACK, pager.current.kind)
     }
+
+    // ------------------------------------------------------- 两键设备的阅读顺序换行
+
+    /**
+     * 只有平移键的设备：横向到边不该停住，应按阅读顺序换到下一屏，并且一屏不漏。
+     * 80×80 / 40 方单行 8 点 → 5 块 × 4 屏 = 20 屏，纯靠 wrapRight 应正好走 19 次到末屏。
+     */
+    @Test
+    fun wrapRightWalksEveryScreenInReadingOrder() {
+        val spec = ImageStripEncoder.Spec.forDisplay(40, 1, 8)
+        val vp = TactileViewport(inkArray(80, 80) { _, _ -> true }, 80, 80, spec)
+        vp.enterDetail()
+
+        var steps = 0
+        while (true) {
+            val r = vp.wrapRight()
+            if (!r.moved) {
+                assertEquals(Boundary.LAST_BLOCK, r.boundary)
+                break
+            }
+            steps++
+            assertTrue("无限循环：$steps", steps <= 40)
+        }
+        assertEquals("20 屏应有 19 次换行", 19, steps)
+    }
+
+    /** 反方向：从末屏一路 wrapLeft 回到首屏，步数相同，再往前报 FIRST_BLOCK。 */
+    @Test
+    fun wrapLeftReturnsToFirstScreen() {
+        val spec = ImageStripEncoder.Spec.forDisplay(40, 1, 8)
+        val vp = TactileViewport(inkArray(80, 80) { _, _ -> true }, 80, 80, spec)
+        vp.enterDetail()
+        while (vp.wrapRight().moved) {
+            // 先走到末屏
+        }
+        var steps = 0
+        while (true) {
+            val r = vp.wrapLeft()
+            if (!r.moved) {
+                assertEquals(Boundary.FIRST_BLOCK, r.boundary)
+                break
+            }
+            steps++
+            assertTrue("无限循环：$steps", steps <= 40)
+        }
+        assertEquals(19, steps)
+        assertEquals(0, vp.blockIndex)
+        assertEquals(0, vp.blockPageIndex)
+    }
+
+    /** 图只有一屏宽（横向只有一个窗）时，平移键也必须能纵向走。 */
+    @Test
+    fun singleHorizontalWindowStillScrollsDown() {
+        val spec = ImageStripEncoder.Spec.forDisplay(20, 1, 8)
+        // 点阵宽 20 点 = 一个横向窗，高 20 行 = 5 屏。
+        val vp = TactileViewport(inkArray(20, 20) { _, _ -> true }, 20, 20, spec)
+        vp.enterDetail()
+
+        assertFalse(vp.panRight().moved)
+        assertEquals(Boundary.RIGHT, vp.panRight().boundary)
+        assertTrue("到头仍应换行", vp.wrapRight().moved)
+        assertEquals(1, vp.blockPageIndex)
+        assertEquals(0, vp.colWindow)
+    }
+
+    /** 总览态的选择框同样按两键可用：横向到边换到下一块。 */
+    @Test
+    fun overviewWrapMovesBoxToNextBand() {
+        val spec = ImageStripEncoder.Spec.forDisplay(20, 1, 8)
+        val vp = TactileViewport(inkArray(60, 60) { _, _ -> true }, 60, 60, spec)
+        // 总览：选择框横到右端。
+        while (vp.moveBox(1, 0).moved) {
+            // 推到右端
+        }
+        assertFalse(vp.moveBox(1, 0).moved)
+        val wrapped = vp.wrapRight()
+        assertTrue("总览到右端应换到下一带", wrapped.moved)
+        assertEquals(0, vp.boxCol)
+        assertTrue(vp.boxRow > 0)
+    }
 }

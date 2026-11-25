@@ -112,6 +112,9 @@ class TactileViewport(
 
     private var colIndex: Int = 0
 
+    /** 当前横向窗序号（0 基）：两键换行会把它复位到最左 / 最右窗，单测与播报可读。 */
+    val colWindow: Int get() = colIndex
+
     private val colInk: BooleanArray = BooleanArray(cols) { c ->
         var any = false
         for (r in 0 until rows) if (ink[r * cols + c]) { any = true; break }
@@ -318,6 +321,56 @@ class TactileViewport(
         boxCol = originCol.coerceIn(0, maxCol())
         boxRow = blocks[blockIndex].y0.coerceIn(0, maxRow())
         mode = ViewportMode.OVERVIEW
+    }
+
+    // ------------------------------------------------------------------ 两键设备的阅读顺序换行
+
+    /**
+     * 右平移到头时按阅读顺序换到**下一屏**：块内下移一屏（横向回到最左窗），块末换下一块；
+     * 整图末屏返回 false。
+     *
+     * 只有两个按键的点显器（按键只上报 `CMD_NAV_PAN_LEFT/RIGHT`）原本在两头上反复听到
+     * 「左到头 / 右到头」，纵向根本走不动。把「到头」换成换行，两个键就能翻完整张图。
+     */
+    fun wrapRight(): MoveResult {
+        if (mode == ViewportMode.OVERVIEW) {
+            val box = moveBox(0, 1)
+            if (!box.moved) return box
+            boxCol = 0
+            return box
+        }
+        val page = nextPage()
+        if (page.moved) {
+            colIndex = 0
+            syncOrigin()
+            return page
+        }
+        // nextBlock 成功时已把块内屏与横向窗都归零。
+        return nextBlock()
+    }
+
+    /** 左平移到头时换到**上一屏**（横向回到最右窗）；整图首屏返回 false。对称于 [wrapRight]。 */
+    fun wrapLeft(): MoveResult {
+        if (mode == ViewportMode.OVERVIEW) {
+            val box = moveBox(0, -1)
+            if (!box.moved) return box
+            boxCol = maxCol()
+            return box
+        }
+        val page = prevPage()
+        if (page.moved) {
+            colIndex = colStarts.size - 1
+            syncOrigin()
+            return page
+        }
+        val block = prevBlock()
+        if (block.moved) {
+            // 反向换块要落在上一块的**末屏**，不能停在它的第 1 屏，否则中间的屏被跳过。
+            blockPageIndex = blockPageCount() - 1
+            colIndex = colStarts.size - 1
+            syncOrigin()
+        }
+        return block
     }
 
     // ------------------------------------------------------------------ 点位打包

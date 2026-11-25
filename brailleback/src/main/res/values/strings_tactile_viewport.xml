@@ -45,5 +45,5 @@
     <string name="tactile_vp_advanced">Advanced settings</string>
     <string name="tactile_vp_advanced_hint">Usually leave these alone: cells per line follow the display unless you pick one here, and the rest only matter for multi-line devices.</string>
     <!-- 视口优先走点显器自身按键，这条提示只在连接后出现。 -->
-    <string name="tactile_vp_keys_hint">Use the display keys first: pan left/right keys move left/right, previous/next line keys move up/down, and the enter key opens or closes the legend. The buttons below are a backup.</string>
+    <string name="tactile_vp_keys_hint">Use the display keys first: pan left/right keys move left/right, previous/next line keys move up/down, and the enter key opens or closes the legend. Pressing past the left or right edge continues on the previous or next line, so a display with only two keys can walk the whole picture. The buttons below are a backup.</string>
 </resources>

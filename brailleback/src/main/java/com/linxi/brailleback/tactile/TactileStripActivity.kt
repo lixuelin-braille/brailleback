@@ -729,6 +729,10 @@ class TactileStripActivity : AppCompatActivity(),
     /**
      * 视口导航统一入口：总览态移动选择框（横向按方、纵向按块）；细节态横向平移，纵向先翻
      * 块内屏，到块首 / 块末再换相邻块。成功刷新当前屏，受阻时短震并播报边界，状态不变。
+     *
+     * 横向到边改成「换行」而不是「到头」：两键点显器的按键只上报平移键，
+     * 到边后按阅读顺序继续纵向走（见 [TactileViewport.wrapRight]/[TactileViewport.wrapLeft]），
+     * 只有整图首 / 末屏才真的播报边界。
      */
     private fun vpNavigate(dxCells: Int, dyBands: Int) {
         val vp = viewport ?: run {
@@ -736,10 +740,25 @@ class TactileStripActivity : AppCompatActivity(),
             return
         }
         if (vpLegend) return
+        val horizontal = dxCells != 0
         val result: MoveResult = when {
-            vp.isOverview -> vp.moveBox(dxCells, dyBands)
-            dxCells < 0 -> vp.panLeft()
-            dxCells > 0 -> vp.panRight()
+            vp.isOverview -> {
+                val box = vp.moveBox(dxCells, dyBands)
+                when {
+                    box.moved -> box
+                    horizontal && box.boundary == Boundary.LEFT -> vp.wrapLeft()
+                    horizontal && box.boundary == Boundary.RIGHT -> vp.wrapRight()
+                    else -> box
+                }
+            }
+            dxCells < 0 -> {
+                val r = vp.panLeft()
+                if (!r.moved && r.boundary == Boundary.LEFT) vp.wrapLeft() else r
+            }
+            dxCells > 0 -> {
+                val r = vp.panRight()
+                if (!r.moved && r.boundary == Boundary.RIGHT) vp.wrapRight() else r
+            }
             dyBands < 0 -> {
                 val r = vp.prevPage()
                 if (!r.moved && r.boundary == Boundary.BLOCK_START) vp.prevBlock() else r

@@ -42,5 +42,5 @@
     <string name="tactile_vp_advanced">高级设置</string>
     <string name="tactile_vp_advanced_hint">一般不用动：方数默认跟着点显器走，这里手动选了就不再跟随；其余两项只对多行设备有意义。</string>
     <!-- 视口优先走点显器自身按键，这条提示只在连接后出现。 -->
-    <string name="tactile_vp_keys_hint">优先用点显器按键：平移键左、右是左移、右移，上一行、下一行键是上移、下移，回车键开合图例。下面这些按钮只是备用。</string>
+    <string name="tactile_vp_keys_hint">优先用点显器按键：平移键左、右是左移、右移，上一行、下一行键是上移、下移，回车键开合图例。左移、右移到头后会接着翻到上一行、下一行，所以只有两个键的点显器也能走完整张图。下面这些按钮只是备用。</string>
 </resources>
