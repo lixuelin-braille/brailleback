@@ -25,12 +25,8 @@
 package com.linxi.brailleback.tactile
 
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
-import android.os.VibrationEffect
 import android.os.Vibrator
-import android.provider.OpenableColumns
-import android.util.Log
 import android.view.KeyEvent
 import android.widget.Toast
 import androidx.activity.compose.setContent
@@ -43,17 +39,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.lifecycleScope
 import com.googlecode.eyesfree.braille.display.BrailleInputEvent
 import com.googlecode.eyesfree.braille.display.Display
 import com.googlecode.eyesfree.braille.display.DisplayClient
 import com.linxi.brailleback.BuildConfig
-import com.linxi.brailleback.BrailleBackService
-import com.linxi.brailleback.R
 import java.io.File
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 /** DEBUG 阶段日志统一 TAG；release 下所有打点分支不可达，不产生日志。 */
 internal const val DEBUG_TAG = "TactileStrip"
@@ -245,232 +235,6 @@ class TactileStripActivity : AppCompatActivity(),
         vibrator = null
         super.onDestroy()
     }
-
-    // ------------------------------------------------------------------ 选图与转换
-
-    private fun onImagePicked(uri: Uri) {
-        sourceSummary = describeUri(uri)
-        sourceUri = uri
-        rebuild()
-    }
-
-    /** 查询文件名与大小摘要；provider 不支持查询时回落到 URI 末段，不阻断选图。 */
-    private fun describeUri(uri: Uri): String {
-        var name: String? = null
-        var sizeBytes: Long = -1
-        try {
-            contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                val nameIdx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                val sizeIdx = cursor.getColumnIndex(OpenableColumns.SIZE)
-                if (cursor.moveToFirst()) {
-                    if (nameIdx >= 0) name = cursor.getString(nameIdx)
-                    if (sizeIdx >= 0) sizeBytes = cursor.getLong(sizeIdx)
-                }
-            }
-        } catch (e: Exception) {
-            // 查询失败按无名处理，摘要退让到 URI 末段。
-        }
-        val fallback = uri.lastPathSegment ?: ""
-        val label = name?.takeIf { it.isNotBlank() } ?: fallback
-        return if (sizeBytes >= 0) {
-            getString(R.string.tactile_strip_image_picked_size, label, formatSize(sizeBytes))
-        } else {
-            getString(R.string.tactile_strip_image_picked, label)
-        }
-    }
-
-    private fun formatSize(bytes: Long): String {
-        val kb = bytes / 1024.0
-        return if (kb >= 1024) String.format("%.1f MB", kb / 1024.0) else "${kb.toInt()} KB"
-    }
-
-    /** 后台解码 + 排版；单行设备进视口模式，多行设备保留三段式 Book。失败不刷新上一版。 */
-    private fun rebuild() {
-        val uri = sourceUri ?: return
-        converting = true
-        showStatus(getString(R.string.tactile_strip_converting))
-        lifecycleScope.launch(Dispatchers.IO) {
-            if (BuildConfig.DEBUG) {
-                Log.d(
-                    DEBUG_TAG,
-                    "rebuild start: uri=${uri.lastPathSegment} cells=$cellsPerLine " +
-                        "lines=$linesPerScreen dots=$dotsPerCell norm=$normalizerMode g1=$g1SplitCover",
-                )
-            }
-            val spec = ImageStripEncoder.Spec.forDisplay(cellsPerLine, linesPerScreen, dotsPerCell)
-            val outcome: Any? = try {
-                if (spec.linesPerScreen == 1) {
-                    if (BuildConfig.DEBUG) Log.d(DEBUG_TAG, "route=viewport")
-                    buildViewport(uri, spec)
-                } else {
-                    if (BuildConfig.DEBUG) Log.d(DEBUG_TAG, "route=session")
-                    TactileStripSession.build(
-                        this@TactileStripActivity, uri, spec,
-                        g1SplitCover = g1SplitCover,
-                        normalizerMode = normalizerMode,
-                    )
-                }
-            } catch (e: Exception) {
-                // DEBUG 下记录异常类型 / message / stacktrace；最后一条 stage 打点即失败阶段。
-                if (BuildConfig.DEBUG) {
-                    Log.e(
-                        DEBUG_TAG,
-                        "rebuild failed: type=${e.javaClass.name} msg=${e.message}",
-                        e,
-                    )
-                }
-                null
-            }
-            withContext(Dispatchers.Main) {
-                converting = false
-                when (outcome) {
-                    is StripBook -> {
-                        if (BuildConfig.DEBUG) Log.d(DEBUG_TAG, "bind=book pages=${outcome.pages.size}")
-                        book = outcome
-                        pager = TactileStripPager(outcome)
-                        viewport = null
-                        vpLegend = false
-                        legendBrailleLines = emptyList()
-                        renderCurrent(announce = true)
-                    }
-                    is TactileViewport -> {
-                        if (BuildConfig.DEBUG) Log.d(DEBUG_TAG, "bind=viewport")
-                        viewport = outcome
-                        book = null
-                        pager = null
-                        vpLegend = false
-                        renderCurrent(announce = true)
-                    }
-                    else -> showStatus(getString(R.string.tactile_strip_fail_decode))
-                }
-            }
-        }
-    }
-
-    /** 单行视口链路：读图 → 全局点阵 → 视口；不切三段式封面 / 封底。 */
-    private fun buildViewport(
-        uri: Uri,
-        spec: ImageStripEncoder.Spec,
-    ): TactileViewport {
-        if (BuildConfig.DEBUG) Log.d(DEBUG_TAG, "stage=load viewport")
-        val gray = TactileStripSource.loadGrayImage(this, uri)
-        if (BuildConfig.DEBUG) {
-            Log.d(DEBUG_TAG, "stage=decode viewport gray=${gray.width}x${gray.height}")
-        }
-        val cols = spec.dotColumns
-        val rows = maxOf(
-            1,
-            Math.round(cols.toFloat() * gray.height.toFloat() / gray.width).toInt(),
-        )
-        val ink = ImageStripEncoder.dotGrid(gray, cols, rows, spec.threshold)
-        val vp = TactileViewport(ink, cols, rows, spec)
-        // 图例为辅助屏：检测 / 翻译失败不阻塞图形视口，图例回退空屏。
-        try {
-            prepareLegend(vp)
-        } catch (e: Exception) {
-            legendBrailleLines = emptyList()
-        }
-        return vp
-    }
-
-    /** 检测图内标注候选位置，合成源行并经翻译桥翻成盲文；只报位置，不识别文字内容。 */
-    private fun prepareLegend(vp: TactileViewport) {
-        val boxes = TactileLabelDetector.detect(
-            vp.ink, vp.cols, vp.rows,
-            TactileLabelDetector.Config(enabled = true),
-        )
-        val source = TactileLegendPage.labelSourceLines(
-            boxes, vp.bandRows, vp.spec.cellsPerLine,
-        )
-        val bridge = TactileStripCaptionBridge(this)
-        try {
-            legendBrailleLines = source.map { bridge.toBraille(it) }
-        } finally {
-            bridge.close()
-        }
-    }
-
-    // ------------------------------------------------------------------ 参数变更
-
-    /** DEBUG 专用：兼容 `--es` 字符串与 `--ei` 整型两种注入方式，归一为文本交解析器。 */
-    private fun extraText(key: String): String? =
-        intent.getStringExtra(key)
-            ?: intent.getIntExtra(key, -1).takeIf { it >= 0 }?.toString()
-
-    /** DEBUG 专用：把解析出的合法档位写进既有参数状态模型；未选图时不触发 rebuild。 */
-    private fun applyDebugParams(params: TactileDebugParams) {
-        params.cellsPerLine?.let {
-            // debug 注入的档位等同于手动指定，关掉跟随，避免被设备值覆盖。
-            cellsFollowDisplay = false
-            cellsPerLine = it
-        }
-        params.linesPerScreen?.let { linesPerScreen = it }
-        params.dots?.let { dotsPerCell = it }
-        params.normalizer?.let { normalizerMode = it }
-        params.g1SplitCover?.let { g1SplitCover = it }
-        if (BuildConfig.DEBUG) {
-            Log.d(
-                DEBUG_TAG,
-                "debug params applied: cells=$cellsPerLine lines=$linesPerScreen " +
-                    "dots=$dotsPerCell normalizer=$normalizerMode g1=$g1SplitCover",
-            )
-        }
-    }
-
-    private fun onCellsChange(value: Int) {
-        // 手动点档位即退出「跟随点显器」，否则下次连接又被设备值覆盖掉。
-        cellsFollowDisplay = false
-        if (cellsPerLine == value) return
-        cellsPerLine = value
-        // 图片已选的前提下重转并回到封面；未选图只记参数，等选图后生效。
-        if (sourceUri != null) rebuild()
-    }
-
-    /** 高级里的「跟随点显器」：切回自动，并按当前设备值立即重算一次。 */
-    private fun onCellsFollow() {
-        if (cellsFollowDisplay) return
-        cellsFollowDisplay = true
-        applyDisplayCells()?.let { if (sourceUri != null) rebuild() }
-    }
-
-    /**
-     * 按点显器上报的文本格数更新方数；返回是否真的改了值（未连接 / 值相同返回 false）。
-     * 行数不在这里跟随：客户端 API（[com.googlecode.eyesfree.braille.display.BrailleDisplayProperties]）
-     * 只暴露文本格数，行数没有任何设备上报到这一层，所以行数仍由「减 1 / 加 1」决定。
-     */
-    private fun applyDisplayCells(): Boolean? {
-        if (!cellsFollowDisplay) return null
-        val cells = observeClient?.displayProperties?.numTextCells ?: 0
-        if (cells <= 0 || cells == cellsPerLine) return null
-        cellsPerLine = cells
-        return true
-    }
-
-    private fun onLinesChange(delta: Int) {
-        val next = (linesPerScreen + delta).coerceIn(MIN_LINES, MAX_LINES)
-        if (next == linesPerScreen) return
-        linesPerScreen = next
-        if (sourceUri != null) rebuild()
-    }
-
-    private fun onDotsChange(value: Int) {
-        if (dotsPerCell == value) return
-        dotsPerCell = value
-        if (sourceUri != null) rebuild()
-    }
-
-    private fun onNormalizerChange(mode: StockNormalizerMode) {
-        if (normalizerMode == mode) return
-        normalizerMode = mode
-        if (sourceUri != null) rebuild()
-    }
-
-    private fun onG1Change(enabled: Boolean) {
-        if (g1SplitCover == enabled) return
-        g1SplitCover = enabled
-        if (sourceUri != null) rebuild()
-    }
-
 
     /** 点显连接状态回调：只刷新状态行文案，不重复下发点位。 */
     override fun onConnectionStateChanged(state: Int) {
