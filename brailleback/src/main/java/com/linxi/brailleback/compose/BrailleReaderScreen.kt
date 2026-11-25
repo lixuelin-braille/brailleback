@@ -78,8 +78,12 @@ internal data class ReaderLabels(
     val cancel: String,
     val delete: String,
     val clearAll: String,
-    /** 本页行进度文案（当前行, 总行数）。 */
+    /** 行进度文案（当前行, 总行数）：滑块改成页码后，只留给「跳到本页第 N 行」这类入口用。 */
     val pageLine: (Int, Int) -> String,
+    /** 页码滑块文案（当前页, 总页数），照系统桌面翻页提示：「第 N 页 共 M 页」。 */
+    val pageScrubber: (Int, Int) -> String,
+    /** 页码滑块的双击动作文案（也是 TalkBack 的动作名）。 */
+    val pageScrubberAction: String,
     /** 行进度条的双击动作文案（也是 TalkBack 的动作名）。 */
     val pageLineAction: String,
 )
@@ -101,6 +105,9 @@ internal data class ReaderUiState(
     /** 本页行进度：当前第几行（0 基）、本页共几行，供进度条与「跳到第 N 行」使用。 */
     val lineIndex: Int = 0,
     val lineCount: Int = 1,
+    /** 当前第几页（0 基）与全书共几页：滑块按「第 N 页 共 M 页」朗读，照系统桌面翻页提示的样子。 */
+    val pageIndex: Int = 0,
+    val pageCount: Int = 1,
 )
 
 /** 阅读器弹窗：目录 / 书签 / 删书签 / 跳页 / 导出格式。 */
@@ -161,10 +168,10 @@ internal fun BrailleReaderScreen(
     onGeometryPick: (Int) -> Unit,
     onCustomGeometryConfirm: (Int, Int) -> Unit,
     onDismissDialog: () -> Unit,
-    /** 拖动行进度条：按行号（0 基）定位。 */
-    onLineSeek: (Int) -> Unit = {},
-    /** 点行号文字：弹数字输入「跳到本页第 N 行」。 */
-    onLineEdit: () -> Unit = {},
+    /** 拖动页码滑块：按页号（0 基）定位。 */
+    onPageSeek: (Int) -> Unit = {},
+    /** 点页码文字：弹数字输入「跳到第几页」。 */
+    onPageEdit: () -> Unit = {},
     /** 数字输入确认（行号从 1 开始）。 */
     onLineConfirm: (Int) -> Unit = {},
     /** 实测正文区一行能排几个等宽字符、能排几行（换字号/横竖屏都要重报）。 */
@@ -220,26 +227,25 @@ internal fun BrailleReaderScreen(
             }
         }
 
-        // 本页行进度条：自绘的一个部件，**只占一个无障碍节点**。
+        // 页码滑块：自绘的一个部件，**只占一个无障碍节点**，照系统桌面底部那排翻页提示。
         //
-        // 这一段前后踩过两个坑：把行信息文字与 Slider 并排，是三个焦点（页码、行号、滑块）；
+        // 这一段前后踩过两个坑：把文字与 Slider 并排，是三个焦点（页码、行号、滑块）；
         // 用 mergeDescendants 把整块并起来，TalkBack 仍然读到「滑块」两次——
-        // 因为 M3 Slider 自带 RangeInfo 语义，它和外面声明的描术会各自成节点。
+        // 因为 M3 Slider 自带 RangeInfo 语义，它和外面声明的描述会各自成节点。
         // 所以这里不用 Slider：自己画一条滑轨，语义只声明一次
-        // （contentDescription = 第几行 / 共几行，progressBarRangeInfo/setProgress = 上下滑一格一行，
-        // onClick = 双击弹数字输入），绘制走 Canvas，不产生任何子节点。
-        // 页码只画在屏上给眼睛看，不进朗读内容（用户要求滑块里不要页码）。
+        // （contentDescription = 第 N 页 共 M 页，progressBarRangeInfo/setProgress = 上下滑一格一页，
+        // onClick = 双击弹页码输入），绘制走 Canvas，不产生任何子节点。
+        // 上方的段号小字只给眼睛看，不进朗读内容。
         if (uiState.hasContent) {
-            val lineText = labels.pageLine(uiState.lineIndex + 1, uiState.lineCount)
-            LineScrubber(
-                description = lineText,
+            PageScrubber(
+                description = labels.pageScrubber(uiState.pageIndex + 1, uiState.pageCount),
                 pageInfo = uiState.pageInfo,
-                lineIndex = uiState.lineIndex,
-                lineCount = uiState.lineCount,
-                actionLabel = labels.pageLineAction,
+                pageIndex = uiState.pageIndex,
+                pageCount = uiState.pageCount,
+                actionLabel = labels.pageScrubberAction,
                 fontSizeSp = uiState.fontSizeSp,
-                onSeek = onLineSeek,
-                onEdit = onLineEdit,
+                onSeek = onPageSeek,
+                onEdit = onPageEdit,
             )
         } else if (uiState.pageInfo.isNotEmpty()) {
             Text(
@@ -528,25 +534,24 @@ private fun GotoDialog(
 }
 
 /**
- * 本页行进度条：一个部件、一个无障碍节点。
+ * 页码滑块：一个部件、一个无障碍节点，照系统桌面底部那排翻页提示的样子。
  *
  * 为什么不用 M3 `Slider`：它自带 `progressBarRangeInfo` 语义，与我们在外层声明的
- * 描述会各自变成一个 AccessibilityNode，读屏就停在「滑块」和「第几行」两处。
+ * 描述会各自变成一个 AccessibilityNode，读屏就停在「滑块」和「页码」两处。
  * 这里自己画：Canvas 只负责像素，语义整块声明在同一个 Box 上，子节点为零。
  *
- * - 读屏：只念「第几行 / 共几行」；上下滑一格走一行（RangeInfo + setProgress）；
- * - 读屏：这一块是「滑块」语义，调它时会先念百分比、再念「第几行 / 共几行」；
- *   双击走 onClick，弹「跳到本页第 N 行」的数字输入。
- * - 版式按用户要求：行数在左，**滑块在行数后面**（右侧），像普通滑块那样摆着。
- * - 页码只画在屏上（顶部小字），**不进朗读内容**：用户要求滑块里不要页码。
- * - 触摸：按在滑轨上就跳到对应行，横向拖动则一行一行地跟手。
+ * - 读屏：念「第 N 页 共 M 页」+「滑块」，一格一页（RangeInfo + setProgress）；
+ *   双击走 onClick，弹「跳到第几页」的数字输入。
+ * - 版式按用户要求：文字在左，**滑轨接在文字后面**（右侧），像普通滑块那样摆着。
+ * - 上面的小字（段号）只画给眼睛看，**不进朗读内容**。
+ * - 触摸：按在滑轨上就跳到对应页，横向拖动则一页一页地跟手。
  */
 @Composable
-private fun LineScrubber(
+private fun PageScrubber(
     description: String,
     pageInfo: String,
-    lineIndex: Int,
-    lineCount: Int,
+    pageIndex: Int,
+    pageCount: Int,
     actionLabel: String,
     fontSizeSp: Int,
     onSeek: (Int) -> Unit,
@@ -568,11 +573,11 @@ private fun LineScrubber(
         ),
     )
     val pageHeightDp = pageText?.let { with(density) { it.size.height.toDp() } } ?: 0.dp
-    // 行数与滑轨同一行、滑轨在行数右侧；这一行的高度取「文字高度」与「滑轨高度」的较大者。
+    // 页码文字与滑轨同一行、滑轨在文字右侧；这一行的高度取「文字高度」与「滑轨高度」的较大者。
     val textHeightDp = with(density) { text.size.height.toDp() }
     val rowHeight = maxOf(textHeightDp, 26.dp)
     val barHeight = pageHeightDp + rowHeight + 4.dp
-    val maxIndex = (lineCount - 1).coerceAtLeast(1)
+    val maxIndex = (pageCount - 1).coerceAtLeast(1)
     val thumbColor = MaterialTheme.colorScheme.primary
     val trackColor = MaterialTheme.colorScheme.outlineVariant
     // drawText 不会沿用 layout 里 style 的颜色，必须显式传，否则默认画成黑色
@@ -589,10 +594,10 @@ private fun LineScrubber(
         modifier = Modifier
             .fillMaxWidth()
             .height(barHeight)
-            // 触摸：按下即跳到该行，拖动时一行一行跟手。
-            // 只有一行时不必响应（拖不出任何东西）。
-            .pointerInput(lineCount, maxIndex, trackStartPx) {
-                if (lineCount < 2) return@pointerInput
+            // 触摸：按下即跳到该页，拖动时一页一页跟手。
+            // 只有一页时不必响应（拖不出任何东西）。
+            .pointerInput(pageCount, maxIndex, trackStartPx) {
+                if (pageCount < 2) return@pointerInput
                 awaitEachGesture {
                     val down = awaitFirstDown()
                     val span = (size.width - trackStartPx).coerceAtLeast(1f)
@@ -613,15 +618,14 @@ private fun LineScrubber(
             }
             .semantics {
                 contentDescription = description
-                // 恢复「滑块」语义（用户要求）：读屏调它时会先念百分比、再念
-                // 「第 N 行 / 共 M 行」。stateDescription 保证行号那句用的是我们的文案，
-                // 不会被换成别的说法。
+                // 滑块语义（用户要求保留「滑块」这个词，像桌面那排翻页提示）：
+                // 读屏念「第 N 页 共 M 页」+「滑块」，一格一页。
                 stateDescription = description
-                if (lineCount >= 2) {
+                if (pageCount >= 2) {
                     progressBarRangeInfo = ProgressBarRangeInfo(
-                        lineIndex.toFloat(),
+                        pageIndex.toFloat(),
                         0f..maxIndex.toFloat(),
-                        (lineCount - 2).coerceAtLeast(0),
+                        (pageCount - 2).coerceAtLeast(0),
                     )
                     setProgress { target ->
                         onSeek(target.roundToInt().coerceIn(0, maxIndex))
@@ -639,11 +643,11 @@ private fun LineScrubber(
             pageText?.let { drawText(it, color = pageColor, topLeft = Offset(0f, 0f)) }
             val rowTop = pageHeightPx
             val rowHeightPx = rowHeight.toPx()
-            // 行数在左、垂直居中；滑轨接在它后面（右侧），同一行里摆开。
+            // 页码在左、垂直居中；滑轨接在它后面（右侧），同一行里摆开。
             val textTop = rowTop + (rowHeightPx - text.size.height) / 2
             drawText(text, color = lineColor, topLeft = Offset(0f, textTop))
             val cy = rowTop + rowHeightPx / 2
-            if (lineCount >= 2 && trackStartPx + radiusPx < size.width) {
+            if (pageCount >= 2 && trackStartPx + radiusPx < size.width) {
                 drawLine(
                     color = trackColor,
                     start = Offset(trackStartPx, cy),
@@ -652,7 +656,7 @@ private fun LineScrubber(
                     cap = StrokeCap.Round,
                 )
                 val span = (size.width - trackStartPx - radiusPx).coerceAtLeast(1f)
-                val fraction = lineIndex.toFloat() / maxIndex
+                val fraction = pageIndex.toFloat() / maxIndex
                 drawCircle(
                     color = thumbColor,
                     radius = radiusPx,

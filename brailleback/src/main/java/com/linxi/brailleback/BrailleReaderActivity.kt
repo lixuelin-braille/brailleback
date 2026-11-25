@@ -563,6 +563,10 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
                     pageLine = { line, total ->
                         getString(R.string.braille_reader_page_line, line, total)
                     },
+                    pageScrubber = { page, total ->
+                        getString(R.string.braille_reader_page_scrubber, page, total)
+                    },
+                    pageScrubberAction = getString(R.string.braille_reader_page_scrubber_action),
                     pageLineAction = getString(R.string.braille_reader_page_line_action),
                 ),
                 dialog = readerDialog,
@@ -586,8 +590,8 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
                 onGeometryPick = ::onGeometryPicked,
                 onCustomGeometryConfirm = ::onCustomGeometryConfirmed,
                 onDismissDialog = { readerDialog = null },
-                onLineSeek = ::moveToPageLine,
-                onLineEdit = ::showPageLineDialog,
+                onPageSeek = ::gotoUnit,
+                onPageEdit = ::showGotoDialog,
                 onLineConfirm = ::onPageLineConfirmed,
                 onTextMetrics = ::onScreenTextMetrics,
             )
@@ -1433,19 +1437,15 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             getString(R.string.braille_reader_page_cells,
                 currentUnit() + 1, totalUnits(), mDisplayCells)
         } else {
-            val base = getString(R.string.braille_reader_page,
-                currentUnit() + 1, totalUnits())
-            val percent = view?.let {
-                getString(R.string.braille_reader_page_percent, it.percent)
-            }.orEmpty()
+            // 页码已交给滑块（照桌面读法「第 N 页 共 M 页」），这里只留段号，
+            // 百分比随页码一起去掉——它是页内行的比例，滑块管页之后没有意义。
             val sourcePos = if (mSourceKind == ReaderSourceKind.TEXT &&
                 view != null && view.paragraphCount > 0
             ) {
                 getString(R.string.braille_reader_source_position,
                     view.paragraphIndex + 1, view.paragraphCount)
             } else ""
-            listOf(base, percent, sourcePos).filter { it.isNotEmpty() }
-                .joinToString(" · ")
+            sourcePos
         }
         val rawFont = SettingsStore.get(this)
             .getInt(KEY_READER_FONT_SP, DEFAULT_READER_FONT_SP)
@@ -1454,6 +1454,8 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             pageInfo = pageInfo,
             fontSizeSp = fontSp,
             hasContent = hasContent,
+            pageIndex = currentUnit(),
+            pageCount = totalUnits(),
             prevEnabled = hasContent && mOffset > 0,
             nextEnabled = hasContent && mOffset + unit <= maxOffset(),
             tocEnabled = hasContent,

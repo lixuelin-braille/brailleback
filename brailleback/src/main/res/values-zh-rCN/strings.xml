@@ -127,6 +127,9 @@
     <string name="braille_reader_page_line_title">"跳到本页指定行"</string>
     <string name="braille_reader_page_line_action">"输入行号"</string>
     <string name="braille_reader_page_line_hint">"1 - %1$d"</string>
+    <!-- 页码滑块：照系统桌面底部翻页提示的读法「第 1 页 共 7 页 滑块」 -->
+    <string name="braille_reader_page_scrubber">"第 %1$d 页 共 %2$d 页"</string>
+    <string name="braille_reader_page_scrubber_action">"输入页码"</string>
     <string name="braille_reader_page_percent">"%1$d%%"</string>
     <string name="braille_reader_font_size">"字号"</string>
     <string name="braille_reader_font_size_title">"选择字号"</string>

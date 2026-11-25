@@ -155,6 +155,9 @@
     <string name="braille_reader_page_line_title">Go to line on this page</string>
     <string name="braille_reader_page_line_action">Enter line number</string>
     <string name="braille_reader_page_line_hint">1 - %1$d</string>
+    <!-- 页码滑块：照系统桌面底部翻页提示的读法 -->
+    <string name="braille_reader_page_scrubber">Page %1$d of %2$d</string>
+    <string name="braille_reader_page_scrubber_action">Enter page number</string>
     <string name="braille_reader_page_percent">%1$d%%</string>
     <string name="braille_reader_font_size">Font</string>
     <string name="braille_reader_font_size_title">Text size</string>
