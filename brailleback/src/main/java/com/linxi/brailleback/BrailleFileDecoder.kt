@@ -593,6 +593,43 @@ object BrailleFileDecoder {
         return s.substring(0, wrapEnd(s, 0, limit))
     }
 
+    /**
+     * 屏幕折行后每一行的起点偏移（不越过 [endLimit]）。
+     *
+     * 与 [screenAt] 用同一套折行规则（段内按 [cellsPerLine] 折、回行缩进、
+     * 段边界提前换行、行尾回退到词边界），所以「第几行」与屏幕上看到的行严格一致，
+     * 供页内行导航（进度条 / 跳到第 N 行）使用。
+     */
+    fun lineStarts(
+        stream: String,
+        offset: Int,
+        cellsPerLine: Int,
+        maxLines: Int,
+        endLimit: Int = stream.length,
+    ): IntArray {
+        if (offset < 0 || cellsPerLine <= 0 || maxLines <= 0 || offset >= stream.length) {
+            return intArrayOf(offset)
+        }
+        val out = ArrayList<Int>()
+        var pos = offset
+        var remaining = maxLines
+        val limitEnd = min(endLimit, stream.length)
+        while (remaining > 0 && pos < limitEnd) {
+            out.add(pos)
+            var newLine = stream.indexOf('\n', pos)
+            if (newLine < 0 || newLine > limitEnd) newLine = limitEnd
+            val paraStart = if (pos == 0) 0 else stream.lastIndexOf('\n', pos - 1) + 1
+            val hang = if (pos == paraStart) 0
+            else hangingIndent(leadingBlanks(stream.substring(paraStart, newLine)))
+            val width = max(1, cellsPerLine - hang)
+            val limit = min(pos + width, newLine)
+            val end = wrapEnd(stream, pos, limit)
+            pos = if (end >= newLine) newLine + 1 else end
+            remaining--
+        }
+        return out.toIntArray()
+    }
+
     /** 按阅读单元 [unit]（点显器方数或屏幕一屏）换算的总页数。 */
     fun unitCount(streamLength: Int, unit: Int): Int {
         if (streamLength <= 0 || unit <= 0) return 1

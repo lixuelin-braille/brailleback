@@ -156,6 +156,8 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     private var mLinesPerPage = LINES_PER_PAGE
     /** 点显器每行方数，连接后由 getDisplayProperties() 更新；未连接用默认值。 */
     private var mDisplayCells = DEFAULT_CELLS
+    /** 当前页内每一行的起点偏移，行进度条与「跳到第 N 行」都按它走。 */
+    private var mPageLineStarts: IntArray = intArrayOf(0)
     /** 上次读到、但因后台翻译还没翻到而暂时落不了地的位置。 */
     private var mPendingRestoreOffset: Int? = null
 
@@ -551,6 +553,10 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
                     cancel = getString(android.R.string.cancel),
                     delete = getString(R.string.braille_reader_bm_delete),
                     clearAll = getString(R.string.braille_reader_bm_clear_all),
+                    pageLine = { line, total ->
+                        getString(R.string.braille_reader_page_line, line, total)
+                    },
+                    pageLineAction = getString(R.string.braille_reader_page_line_action),
                 ),
                 dialog = readerDialog,
                 onPrev = { advance(-1) },
@@ -573,6 +579,9 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
                 onGeometryPick = ::onGeometryPicked,
                 onCustomGeometryConfirm = ::onCustomGeometryConfirmed,
                 onDismissDialog = { readerDialog = null },
+                onLineSeek = ::moveToPageLine,
+                onLineEdit = ::showPageLineDialog,
+                onLineConfirm = ::onPageLineConfirmed,
                 onTextMetrics = ::onScreenTextMetrics,
             )
         }
@@ -1352,6 +1361,11 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         val end = if (mStream.isEmpty()) pageStart
         else BrailleFileDecoder.nextOffset(mStream, pageStart, unit)
         val count = (end - pageStart).coerceIn(1, unit)
+        // 本页每一行的起点（与屏幕折行同规则），供行进度条与「跳到第 N 行」。
+        mPageLineStarts = if (mStream.isEmpty()) intArrayOf(0)
+        else BrailleFileDecoder.lineStarts(
+            mStream, pageStart, mCellsPerLine, mLinesPerPage, end)
+        val lineIndex = mPageLineStarts.indexOfLast { it <= mOffset }.coerceAtLeast(0)
         val view = ReaderSourceModel.build(
             kind = mSourceKind,
             sourceText = mSourceText,
@@ -1367,6 +1381,8 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         uiState = uiState.copy(
             readerText = view.displayText,
             focusSegments = view.focusSegments,
+            lineIndex = lineIndex,
+            lineCount = mPageLineStarts.size.coerceAtLeast(1),
         )
         // 翻页后自动同步点显器，省去盲文用户每次手动点「发送点显」
         if (mConnected) {
@@ -1641,6 +1657,44 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         readerDialog = null
         if (n in 1..totalUnits()) {
             gotoUnit(n - 1)
+        }
+    }
+
+    /**
+     * 跳到本页第 [index] 行（0 基）。只在本页范围内动，不跨页：
+     * 行进度条说的是「这一页有几行」，拖到底就是本页最后一行。
+     */
+    private fun moveToPageLine(index: Int) {
+        if (mStream.isEmpty() || mPageLineStarts.isEmpty()) return
+        val i = index.coerceIn(0, mPageLineStarts.size - 1)
+        val target = mPageLineStarts[i]
+        if (target == mOffset) return
+        Log.i(LOG_TAG, "page line: -> $i offset=${mOffset} -> $target")
+        mOffset = target
+        sendToDisplay()
+        showPage()
+        saveProgress()
+    }
+
+    private fun showPageLineDialog() {
+        if (mStream.isEmpty()) {
+            toastNoContent()
+            return
+        }
+        readerDialog = ReaderDialog.PageLine(
+            getString(R.string.braille_reader_page_line_title),
+            getString(
+                R.string.braille_reader_page_line_hint,
+                mPageLineStarts.size.coerceAtLeast(1),
+            ),
+        )
+    }
+
+    /** 数字输入确认：用户说的是「第 10 行」，从 1 开始。 */
+    private fun onPageLineConfirmed(n: Int) {
+        readerDialog = null
+        if (n in 1..mPageLineStarts.size.coerceAtLeast(1)) {
+            moveToPageLine(n - 1)
         }
     }
 

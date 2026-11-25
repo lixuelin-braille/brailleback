@@ -25,6 +25,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
@@ -37,13 +38,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.floor
+import kotlin.math.roundToInt
 
 /** 阅读器界面静态文案（取自资源，Screen 不碰 Context）。 */
 internal data class ReaderLabels(
@@ -59,6 +68,10 @@ internal data class ReaderLabels(
     val cancel: String,
     val delete: String,
     val clearAll: String,
+    /** 本页行进度文案（当前行, 总行数）。 */
+    val pageLine: (Int, Int) -> String,
+    /** 行进度条的双击动作文案（也是 TalkBack 的动作名）。 */
+    val pageLineAction: String,
 )
 
 /** 阅读器界面状态：使能位与文本都由 Activity 的 updateUiState 汇总后喂进来。 */
@@ -75,6 +88,9 @@ internal data class ReaderUiState(
     val bookmarkEnabled: Boolean = false,
     val gotoEnabled: Boolean = false,
     val exportEnabled: Boolean = false,
+    /** 本页行进度：当前第几行（0 基）、本页共几行，供进度条与「跳到第 N 行」使用。 */
+    val lineIndex: Int = 0,
+    val lineCount: Int = 1,
 )
 
 /** 阅读器弹窗：目录 / 书签 / 删书签 / 跳页 / 导出格式。 */
@@ -91,6 +107,8 @@ internal sealed interface ReaderDialog {
         val offsets: List<Int>,
     ) : ReaderDialog
     data class Goto(val title: String, val hint: String) : ReaderDialog
+    /** 跳到本页第 N 行：标题 + 可输入范围提示。 */
+    data class PageLine(val title: String, val hint: String) : ReaderDialog
     /** 导出格式：标题、每种格式一句用途说明、以及弹窗顶部的一句选择建议。 */
     data class ExportFormat(
         val title: String,
@@ -133,6 +151,12 @@ internal fun BrailleReaderScreen(
     onGeometryPick: (Int) -> Unit,
     onCustomGeometryConfirm: (Int, Int) -> Unit,
     onDismissDialog: () -> Unit,
+    /** 拖动行进度条：按行号（0 基）定位。 */
+    onLineSeek: (Int) -> Unit = {},
+    /** 点行号文字：弹数字输入「跳到本页第 N 行」。 */
+    onLineEdit: () -> Unit = {},
+    /** 数字输入确认（行号从 1 开始）。 */
+    onLineConfirm: (Int) -> Unit = {},
     /** 实测正文区一行能排几个等宽字符、能排几行（换字号/横竖屏都要重报）。 */
     onTextMetrics: (Int, Int) -> Unit = { _, _ -> },
 ) {
@@ -183,6 +207,59 @@ internal fun BrailleReaderScreen(
                 text = uiState.pageInfo,
                 style = MaterialTheme.typography.bodyMedium,
             )
+        }
+
+        // 本页行进度条：滑块一格一行，点行号可以直接输入「跳到本页第 N 行」。
+        // 只有一行时不给滑块：valueRange 为空，拖不出任何东西，反而让 TalkBack 白读一遍。
+        //
+        // 无障碍：行文案和滑块必须是**一个**焦点。TalkBack 下这里是「滑块」语义，
+        // 上滑/下滑一格走一行；双击弹出数字输入跳行。分成两个焦点时，读行号要跳一次、
+        // 调滑轨又要跳一次，来回找位置，所以行文案自身的语义清空，统一挂在整行上。
+        if (uiState.hasContent && uiState.lineCount >= 2) {
+            val lineText = labels.pageLine(uiState.lineIndex + 1, uiState.lineCount)
+            val maxIndex = (uiState.lineCount - 1).coerceAtLeast(1)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics(mergeDescendants = true) {
+                        contentDescription = lineText
+                        // 自己声明可调范围：不依赖子节点 Slider 合并后是否还带着 RangeInfo，
+                        // TalkBack 读到的稳定是「滑块」，上滑/下滑一格一行。
+                        progressBarRangeInfo = ProgressBarRangeInfo(
+                            uiState.lineIndex.toFloat(),
+                            0f..maxIndex.toFloat(),
+                            (uiState.lineCount - 2).coerceAtLeast(0),
+                        )
+                        setProgress { target ->
+                            onLineSeek(
+                                target.roundToInt().coerceIn(0, maxIndex))
+                            true
+                        }
+                        onClick(label = labels.pageLineAction) {
+                            onLineEdit()
+                            true
+                        }
+                    },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = lineText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier
+                        // 触摸上点行号也能弹输入；语义清空，避免又变成第二个焦点。
+                        .combinedClickable(onClick = onLineEdit)
+                        .clearAndSetSemantics { }
+                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                )
+                Slider(
+                    value = uiState.lineIndex.toFloat(),
+                    onValueChange = { onLineSeek(it.toInt()) },
+                    valueRange = 0f..(uiState.lineCount - 1).coerceAtLeast(0).toFloat(),
+                    steps = (uiState.lineCount - 2).coerceAtLeast(0),
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
 
         // 第一行：上一页 / 下一页（「发送点显」已按用户要求去掉：
@@ -279,6 +356,13 @@ internal fun BrailleReaderScreen(
                 onPick = onDeletePick, onDismiss = onDismissDialog)
             is ReaderDialog.Goto -> GotoDialog(
                 current, labels, onGotoConfirm, onDismissDialog)
+            is ReaderDialog.PageLine -> NumberInputDialog(
+                title = current.title,
+                hint = current.hint,
+                okLabel = labels.ok,
+                cancelLabel = labels.cancel,
+                onConfirm = onLineConfirm,
+                onDismiss = onDismissDialog)
             is ReaderDialog.ExportFormat -> ListDialog(
                 current.title, current.labels, labels.cancel,
                 onPick = onExportPick, onDismiss = onDismissDialog,
@@ -453,6 +537,41 @@ private fun GotoDialog(
         },
         dismissButton = {
             OutlinedButton(onClick = onDismiss) { Text(labels.cancel) }
+        },
+    )
+}
+
+/**
+ * 纯数字输入弹窗（跳到本页第 N 行）。
+ *
+ * 与 [GotoDialog] 分开：那边文案与「总页数」绑在一起，这里要的是本页行号范围。
+ */
+@Composable
+private fun NumberInputDialog(
+    title: String,
+    hint: String,
+    okLabel: String,
+    cancelLabel: String,
+    onConfirm: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var input by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            TextField(
+                value = input,
+                onValueChange = { input = it },
+                placeholder = { Text(hint) },
+                singleLine = true,
+            )
+        },
+        confirmButton = {
+            Button(onClick = { input.toIntOrNull()?.let(onConfirm) }) { Text(okLabel) }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = onDismiss) { Text(cancelLabel) }
         },
     )
 }

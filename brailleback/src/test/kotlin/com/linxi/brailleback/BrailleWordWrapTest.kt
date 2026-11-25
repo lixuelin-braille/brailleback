@@ -149,4 +149,41 @@ class BrailleWordWrapTest {
         assertEquals(4, next)
         assertEquals('d', stream[next])
     }
+
+    /**
+     * 行进度条依赖 [BrailleFileDecoder.lineStarts] 与 `screenAt` 完全对齐：
+     * 行数必须等于屏幕上的行数，每行起点必须递增且落在词边界上。
+     */
+    @Test
+    fun `lineStarts matches the lines screenAt renders`() {
+        val stream = wordStream() + "\n" + wordStream()
+        for (cells in 3..12) {
+            for (maxLines in 1..8) {
+                val starts = BrailleFileDecoder.lineStarts(stream, 0, cells, maxLines)
+                val screen = BrailleFileDecoder.screenAt(stream, 0, cells, maxLines)
+                val rendered = screen.split('\n').size
+                assertEquals(
+                    "cells=$cells maxLines=$maxLines 行数不一致",
+                    rendered, starts.size)
+                assertEquals(0, starts[0])
+                for (i in 1 until starts.size) {
+                    assertTrue("行起点未递增：$i", starts[i] > starts[i - 1])
+                    // 只有「词本身比一行还长」时才允许从词中间开始
+                    if (!isSafeStart(stream, starts[i])) {
+                        assertTrue(
+                            "第 $i 行起点 ${starts[i]} 落在词中间",
+                            wordLengthAt(stream, starts[i]) >= cells)
+                    }
+                }
+            }
+        }
+    }
+
+    /** 页内行导航不能越过本页终点（`endLimit`）。 */
+    @Test
+    fun `lineStarts stops at endLimit`() {
+        val stream = wordStream() + "\n" + wordStream()
+        val starts = BrailleFileDecoder.lineStarts(stream, 0, 5, 10, 12)
+        for (s in starts) assertTrue("行起点越过本页终点：$s", s < 12)
+    }
 }
