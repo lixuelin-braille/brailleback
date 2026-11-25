@@ -58,7 +58,7 @@ import kotlinx.coroutines.launch
 
 class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChangeListener {
 
-    private var mDisplay: DisplayClient? = null
+    internal var mDisplay: DisplayClient? = null
 
     /**
      * 是否已向无障碍服务申请独占点显器。
@@ -68,7 +68,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      * 「一会儿点位、一会儿文字」。正文在屏期间冻结服务输出，只留点位；
      * 没有正文（提示语 / 刚进页）时交还，让服务的常规文字照常显示。
      */
-    private var holdingDisplay = false
+    internal var holdingDisplay = false
 
     /**
      * 正文页的点显器按键入口。
@@ -77,48 +77,48 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      * 回调在 DisplayClient 的 handler（主线程）上到，仍统一 post 一次再改状态，避免
      * 以后换成别的线程时静默出错。
      */
-    private val displayKeyListener = object : Display.OnInputEventListener {
+    internal val displayKeyListener = object : Display.OnInputEventListener {
         override fun onInputEvent(inputEvent: BrailleInputEvent) {
             runOnUiThread { onDisplayKey(inputEvent.command) }
         }
     }
 
     /** 阅读流：段落以 '\n' 分隔，空行已折叠。 */
-    private var mStream = ""
+    internal var mStream = ""
     /** 当前阅读位置（字符偏移）。 */
-    private var mOffset = 0
-    private var mConnected = false
-    private var mFileUri: Uri? = null
+    internal var mOffset = 0
+    internal var mConnected = false
+    internal var mFileUri: Uri? = null
 
     /** Compose 界面状态与弹窗。 */
-    private var uiState by mutableStateOf(ReaderUiState())
-    private var readerDialog by mutableStateOf<ReaderDialog?>(null)
+    internal var uiState by mutableStateOf(ReaderUiState())
+    internal var readerDialog by mutableStateOf<ReaderDialog?>(null)
 
     /** 翻译服务（明眼 txt 电子书 → 盲文）。懒初始化：绑定 service 模块的翻译服务。 */
-    private val mTranslatorManager by lazy { TranslatorManager(this) }
+    internal val mTranslatorManager by lazy { TranslatorManager(this) }
 
     /** 正在翻译标志，防止重复触发。 */
-    private var mTranslating = false
+    internal var mTranslating = false
 
     /** 用户在翻译未完成时点了导出：翻完自动把导出弹窗接着打开。 */
-    private var mPendingExport = false
+    internal var mPendingExport = false
 
     /** 翻译服务超时未就绪只播报一次，避免每本书都重复吵。 */
-    private var mWarnedTranslatorUnavailable = false
+    internal var mWarnedTranslatorUnavailable = false
 
     /** 当前流是否来自明眼 txt 翻译。翻译流与屏幕尺寸无关，重排时无需重翻。 */
-    private var mIsTranslated = false
+    internal var mIsTranslated = false
 
     /** 逐格源区间（仅翻译流有）；点位 JSON 导出与屏幕取字共用。 */
-    private var mCellSpans: List<CellSource>? = null
+    internal var mCellSpans: List<CellSource>? = null
 
     /** TEXT 源原始明文；盲文源为空。屏幕回显原文用，不参与点显/导出。 */
-    private var mSourceText = ""
+    internal var mSourceText = ""
     /** 当前屏显来源类型：TEXT 回显原文，其余回显点字。 */
-    private var mSourceKind = ReaderSourceKind.BRAILLE
+    internal var mSourceKind = ReaderSourceKind.BRAILLE
 
     /** 最近一屏视图模型结果，供页码行与无障碍播报取用。 */
-    private var mLastView: ReaderPageView? = null
+    internal var mLastView: ReaderPageView? = null
 
     /**
      * 正文列表当前加载的段落窗口（本页 + 后面几页）。
@@ -126,18 +126,18 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      * 读屏焦点滑到页末最后一段时必须有「下一段」可去，否则焦点就停在页末不动。
      * 窗口里接着后面页的段，焦点于是能一路滑下去，滚过页边界时页号跟着前进。
      */
-    private var mWindowSegments: List<ReaderSegment> = emptyList()
+    internal var mWindowSegments: List<ReaderSegment> = emptyList()
 
     /** 窗口里已经装到第几页（含），滚到窗口尾部时按页续装。 */
-    private var mWindowEndUnit = 0
+    internal var mWindowEndUnit = 0
 
     /** 已播报过的屏序号，避免逐行移动重复播报。 */
-    private var mAnnouncedUnit = -1
+    internal var mAnnouncedUnit = -1
 
     /** 翻译服务未就绪时挂起的翻译请求。 */
-    private var mPendingTranslation: PendingTranslation? = null
+    internal var mPendingTranslation: PendingTranslation? = null
 
-    private val mTranslationReadyListener: TranslatorManager.OnTablesChangedListener =
+    internal val mTranslationReadyListener: TranslatorManager.OnTablesChangedListener =
         object : TranslatorManager.OnTablesChangedListener {
             override fun onTablesChanged() {
                 val pending = mPendingTranslation
@@ -162,22 +162,22 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      * 必须按屏幕算：若按固定值折行，超出屏宽时文本会自动换行，
      * 一页 20 行会被撑成 40 行，得滚动才能看完。
      */
-    private var mCellsPerLine = DEFAULT_CELLS
+    internal var mCellsPerLine = DEFAULT_CELLS
     /** 屏幕每页显示的行数，由屏幕高度实测得出。 */
-    private var mLinesPerPage = LINES_PER_PAGE
+    internal var mLinesPerPage = LINES_PER_PAGE
     /** 点显器每行方数，连接后由 getDisplayProperties() 更新；未连接用默认值。 */
-    private var mDisplayCells = DEFAULT_CELLS
+    internal var mDisplayCells = DEFAULT_CELLS
     /**
      * 回到本页（onResume / 重新连上点显器）时，先把屏清成空方再铺本页。
      *
      * 从别的界面切回来时，点显器上常常还留着那边的字（服务/输入法的文字输出），
      * 不先清一次就会和这一页的点位混在一起，摸到的既不像书也不像刚离开的界面。
      */
-    private var mClearDisplayOnEnter = true
+    internal var mClearDisplayOnEnter = true
     /** 当前页内每一行的起点偏移，行进度条与「跳到第 N 行」都按它走。 */
-    private var mPageLineStarts: IntArray = intArrayOf(0)
+    internal var mPageLineStarts: IntArray = intArrayOf(0)
     /** 上次读到、但因后台翻译还没翻到而暂时落不了地的位置。 */
-    private var mPendingRestoreOffset: Int? = null
+    internal var mPendingRestoreOffset: Int? = null
 
     /**
      * 每一屏的起始偏移。
@@ -185,7 +185,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      * 采用边界对齐步进（[BrailleFileDecoder.nextOffset]）后步进长度不再固定，
      * 页码无法再用「偏移 / 单元」换算，故预先算好页表（见 [rebuildPageOffsets]）。
      */
-    private var mPageOffsets: IntArray = intArrayOf()
+    internal var mPageOffsets: IntArray = intArrayOf()
 
     /**
      * 阅读单元：一「页」是多少方 —— **只按手机屏幕自己一屏算**，
@@ -196,16 +196,16 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      * 当前位置 [mOffset]，不必也不能凑成同一个单位：一页约有三十多个点显器屏，
      * 硬凑成同一格反而会出现「页码走了一页、手上还在读同一页」的怪账。
      */
-    private fun readingUnit(): Int =
+    internal fun readingUnit(): Int =
         (mCellsPerLine * mLinesPerPage).coerceAtLeast(1)
 
-    private fun totalUnits(): Int = mPageOffsets.size.coerceAtLeast(1)
+    internal fun totalUnits(): Int = mPageOffsets.size.coerceAtLeast(1)
 
     /** 当前屏序号：页表中不超过 [mOffset] 的最后一个页起点。 */
-    private fun currentUnit(): Int = unitForOffset(mOffset)
+    internal fun currentUnit(): Int = unitForOffset(mOffset)
 
     /** 页表中不超过 [offset] 的最后一个页起点序号（屏号）。 */
-    private fun unitForOffset(offset: Int): Int {
+    internal fun unitForOffset(offset: Int): Int {
         val a = mPageOffsets
         if (a.isEmpty()) return 0
         var lo = 0
@@ -223,39 +223,39 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         return ans
     }
 
-    private fun maxOffset(): Int = (mStream.length - 1).coerceAtLeast(0)
+    internal fun maxOffset(): Int = (mStream.length - 1).coerceAtLeast(0)
 
     // ------------------------------------------------------------------
     // 导出（SAF + 后台写盘）
     // ------------------------------------------------------------------
 
     /** 导出防重入；编码与写盘都在后台线程，主线程只做弹窗/按钮态/播报。 */
-    private var mExporting = false
-    private var pendingFormat: BrailleExportFormat? = null
+    internal var mExporting = false
+    internal var pendingFormat: BrailleExportFormat? = null
 
     /**
      * 点显器上报的原始方数（未连接或上报异常时为 null）。
      * 和 [mDisplayCells] 的区别：mDisplayCells 会在异常时兜底成默认值，
      * 导出排版不能把「兜底的 40」当成设备真方数，所以这里单独留一份可空的原值。
      */
-    private var mReportedCells: Int? = null
+    internal var mReportedCells: Int? = null
 
     /** 版面预设：4 档方数 × 3 档行数，顺序与版面菜单项一致。 */
-    private val geometryPresets: List<PageGeometry> =
+    internal val geometryPresets: List<PageGeometry> =
         PageGeometry.PRESET_COLUMNS.flatMap { columns ->
             PageGeometry.PRESET_LINES.map { lines -> PageGeometry(columns, lines) }
         }
 
     /** BRF 按 octet-stream 落盘；BRL / 文本按 text/plain。 */
-    private val brfExportLauncher = registerForActivityResult(
+    internal val brfExportLauncher = registerForActivityResult(
         ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
         onExportUri(uri)
     }
-    private val textExportLauncher = registerForActivityResult(
+    internal val textExportLauncher = registerForActivityResult(
         ActivityResultContracts.CreateDocument("text/plain")) { uri ->
         onExportUri(uri)
     }
-    private val jsonExportLauncher = registerForActivityResult(
+    internal val jsonExportLauncher = registerForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")) { uri ->
         onExportUri(uri)
     }
@@ -291,258 +291,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             getString(R.string.braille_reader_export_hint))
     }
 
-    private fun exportFormatLabelRes(format: BrailleExportFormat): Int = when (format) {
-        BrailleExportFormat.BRF -> R.string.braille_reader_export_fmt_brf
-        BrailleExportFormat.BRL -> R.string.braille_reader_export_fmt_brl
-        BrailleExportFormat.UNICODE_TXT -> R.string.braille_reader_export_fmt_utf
-        BrailleExportFormat.JSON -> R.string.braille_reader_export_fmt_json
-    }
-
-    private fun exportFormatDescRes(format: BrailleExportFormat): Int = when (format) {
-        BrailleExportFormat.BRF -> R.string.braille_reader_export_fmt_brf_desc
-        BrailleExportFormat.BRL -> R.string.braille_reader_export_fmt_brl_desc
-        BrailleExportFormat.UNICODE_TXT -> R.string.braille_reader_export_fmt_utf_desc
-        BrailleExportFormat.JSON -> R.string.braille_reader_export_fmt_json_desc
-    }
-
-    private fun onExportPicked(index: Int) {
-        val format = ExportFormatCatalog.formatAt(index)
-        pendingFormat = format
-        showGeometryDialog()
-    }
-
-    /** 当前可用作排版的版面项：连接点显器时第一项是「按点显器方数」。 */
-    private fun geometryChoices(): List<GeometryChoice> = ExportGeometryCatalog.choices(
-        reportedCells = mReportedCells,
-        fixedColumns = PageGeometry.PRESET_COLUMNS,
-        fixedLines = PageGeometry.PRESET_LINES,
-        linesForFollow = loadGeometry().linesPerPage,
-        wordWrap = wordWrapEnabled(),
-    )
-
-    private fun showGeometryDialog() {
-        val choices = geometryChoices()
-        val labels = choices.map { choice ->
-            when (choice) {
-                is GeometryChoice.FollowDisplay -> getString(
-                    R.string.braille_reader_export_geometry_follow,
-                    choice.cells, choice.lines)
-                is GeometryChoice.Fixed -> getString(
-                    R.string.braille_reader_export_geometry_item,
-                    choice.columns, choice.lines)
-                GeometryChoice.Custom ->
-                    getString(R.string.braille_reader_export_geometry_custom)
-                is GeometryChoice.WrapToggle -> getString(
-                    if (choice.wordWrap) R.string.braille_reader_export_wrap_word
-                    else R.string.braille_reader_export_wrap_cell)
-            }
-        }
-        val reported = ExportGeometryCatalog.followCells(mReportedCells)
-        val hint = if (reported != null) {
-            getString(R.string.braille_reader_export_geometry_hint_connected, reported)
-        } else {
-            getString(R.string.braille_reader_export_geometry_hint_offline)
-        }
-        readerDialog = ReaderDialog.ExportGeometry(
-            getString(R.string.braille_reader_export_geometry_title), labels, hint)
-    }
-
-    private fun onGeometryPicked(which: Int) {
-        when (val choice = geometryChoices().getOrNull(which)) {
-            is GeometryChoice.FollowDisplay -> {
-                readerDialog = null
-                saveFollowDisplay(true)
-                startExport(pendingFormat ?: BrailleExportFormat.BRF)
-            }
-            is GeometryChoice.Fixed -> {
-                readerDialog = null
-                saveFollowDisplay(false)
-                saveGeometry(PageGeometry(choice.columns, choice.lines))
-                startExport(pendingFormat ?: BrailleExportFormat.BRF)
-            }
-            GeometryChoice.Custom, null -> {
-                saveFollowDisplay(false)
-                readerDialog = ReaderDialog.ExportCustomGeometry(
-                    getString(R.string.braille_reader_export_geometry_title))
-            }
-            is GeometryChoice.WrapToggle -> {
-                // 折行开关不导出、不关弹窗：切完立刻把弹窗按新状态重建，
-                // 让用户马上听到「现在是按词断/按方数」，再决定选哪一档版面。
-                val next = !choice.wordWrap
-                saveWordWrap(next)
-                announce(getString(
-                    if (next) R.string.braille_reader_export_wrap_word_announce
-                    else R.string.braille_reader_export_wrap_cell_announce))
-                showGeometryDialog()
-            }
-        }
-    }
-
-    private fun onCustomGeometryConfirmed(columns: Int, lines: Int) {
-        val geometry = PageGeometry(
-            columns.coerceIn(EXPORT_MIN_COLUMNS, EXPORT_MAX_COLUMNS),
-            lines.coerceIn(EXPORT_MIN_LINES, EXPORT_MAX_LINES),
-        )
-        saveGeometry(geometry)
-        saveFollowDisplay(false)
-        readerDialog = null
-        startExport(pendingFormat ?: BrailleExportFormat.BRF)
-    }
-
-    private fun loadGeometry(): PageGeometry {
-        val prefs = SettingsStore.get(this)
-        val columns = prefs.getInt(KEY_EXPORT_COLUMNS, PageGeometry.Default.columns)
-        val lines = prefs.getInt(KEY_EXPORT_LINES, PageGeometry.Default.linesPerPage)
-        return PageGeometry(
-            columns.coerceIn(EXPORT_MIN_COLUMNS, EXPORT_MAX_COLUMNS),
-            lines.coerceIn(EXPORT_MIN_LINES, EXPORT_MAX_LINES),
-        )
-    }
-
-    private fun saveGeometry(geometry: PageGeometry) {
-        SettingsStore.get(this).edit()
-            .putInt(KEY_EXPORT_COLUMNS, geometry.columns)
-            .putInt(KEY_EXPORT_LINES, geometry.linesPerPage)
-            .apply()
-    }
-
-    /** 导出排版是否跟随点显器方数；默认开启，但只在有可用设备方数时才生效。 */
-    private fun followDisplayEnabled(): Boolean =
-        SettingsStore.get(this).getBoolean(KEY_EXPORT_FOLLOW_DISPLAY, true)
-
-    private fun saveFollowDisplay(enabled: Boolean) {
-        SettingsStore.get(this).edit()
-            .putBoolean(KEY_EXPORT_FOLLOW_DISPLAY, enabled)
-            .apply()
-    }
-
-    /** 导出折行是否按词断；默认开启，关掉就是改造前的纯方数硬切。 */
-    private fun wordWrapEnabled(): Boolean =
-        SettingsStore.get(this).getBoolean(KEY_EXPORT_WORD_WRAP, true)
-
-    private fun saveWordWrap(enabled: Boolean) {
-        SettingsStore.get(this).edit()
-            .putBoolean(KEY_EXPORT_WORD_WRAP, enabled)
-            .apply()
-    }
-
-    /** 真正用于导出/播报的版面：跟随开启且有设备方数时按设备方数折行。 */
-    private fun resolvedGeometry(): PageGeometry = ExportGeometryCatalog.resolve(
-        stored = loadGeometry(),
-        followEnabled = followDisplayEnabled(),
-        reportedCells = mReportedCells,
-    )
-
-    private fun startExport(format: BrailleExportFormat) {
-        if (mExporting || isFinishing) return
-        mExporting = true
-        pendingFormat = format
-        val geometry = resolvedGeometry()
-        val pages = BrailleExporter.pageCount(mStream, geometry)
-        announce(getString(R.string.braille_reader_export_geometry_preview,
-            geometry.columns, geometry.linesPerPage, pages))
-        Toast.makeText(this, R.string.braille_reader_export_preparing,
-            Toast.LENGTH_SHORT).show()
-
-        val base = BrailleExporter.sanitizeFileName(currentBookName())
-        val stamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault())
-            .format(Date())
-        val initialName = "$base$stamp.${format.extension}"
-        when (format) {
-            BrailleExportFormat.BRF -> brfExportLauncher.launch(initialName)
-            BrailleExportFormat.BRL,
-            BrailleExportFormat.UNICODE_TXT -> textExportLauncher.launch(initialName)
-            BrailleExportFormat.JSON -> jsonExportLauncher.launch(initialName)
-        }
-    }
-
-    private fun onExportUri(uri: Uri?) {
-        if (isFinishing) {
-            mExporting = false
-            return
-        }
-        if (uri == null) {
-            mExporting = false
-            announce(getString(R.string.braille_reader_export_cancelled))
-            Toast.makeText(this, R.string.braille_reader_export_cancelled,
-                Toast.LENGTH_SHORT).show()
-            return
-        }
-        val format = pendingFormat ?: BrailleExportFormat.BRF
-        // 后台线程不碰 Activity 状态：先把版面定死再进线程，
-        // 保证「播报的页数」和「写进文件的行列」是同一个版面。
-        val geometry = resolvedGeometry()
-        // 折行方式同样在主线程定死，后台线程只按参数编码。
-        val wrapMode = if (wordWrapEnabled()) BrailleWrapMode.WORD else BrailleWrapMode.CELL
-        Thread {
-            val result = try {
-                BrailleExporter.export(mStream, format, geometry,
-                    currentBookName(), mCellSpans, wrapMode)
-            } catch (e: Exception) {
-                Log.w(LOG_TAG, "导出编码失败: ${e.message}")
-                null
-            }
-            if (result == null) {
-                runOnUiThread { exportFail() }
-                return@Thread
-            }
-            try {
-                contentResolver.openOutputStream(uri)?.use { out ->
-                    val bytes = if (format == BrailleExportFormat.BRF) {
-                        result.content.toByteArray(StandardCharsets.US_ASCII)
-                    } else {
-                        result.content.toByteArray(StandardCharsets.UTF_8)
-                    }
-                    out.write(bytes)
-                } ?: throw IOException("openOutputStream returned null")
-                runOnUiThread { exportSuccess(uri, result) }
-            } catch (e: Exception) {
-                Log.w(LOG_TAG, "导出写盘失败: ${e.message}")
-                runOnUiThread { exportFail() }
-            }
-        }.start()
-    }
-
-    private fun exportSuccess(uri: Uri, result: BrailleExportResult) {
-        mExporting = false
-        val warnings = buildList {
-            if (result.unmappableCells > 0) {
-                add(getString(R.string.braille_reader_export_warn_unmappable,
-                    result.unmappableCells))
-            }
-            if (result.droppedChars > 0) {
-                add(getString(R.string.braille_reader_export_warn_dropped,
-                    result.droppedChars))
-            }
-            if (result.eightDotCells > 0) {
-                add(getString(R.string.braille_reader_export_warn_eightdot,
-                    result.eightDotCells))
-            }
-        }
-        val fileName = uri.lastPathSegment ?: ""
-        val message = buildString {
-            append(getString(R.string.braille_reader_export_done, fileName))
-            if (warnings.isNotEmpty()) {
-                append("；").append(warnings.joinToString("；"))
-            }
-        }
-        announce(message)
-        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-    }
-
-    private fun exportFail() {
-        mExporting = false
-        announce(getString(R.string.braille_reader_export_fail))
-        Toast.makeText(this, R.string.braille_reader_export_fail,
-            Toast.LENGTH_LONG).show()
-    }
-
-    private fun currentBookName(): String {
-        val fromResolver = mFileUri?.let { displayNameOf(it) }
-        return fromResolver ?: mFileUri?.lastPathSegment ?: "book"
-    }
-
-    private fun announce(msg: CharSequence) {
+    internal fun announce(msg: CharSequence) {
         window.decorView.announceForAccessibility(msg)
     }
 
@@ -724,7 +473,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     // 文件选择 / 读取
     // ------------------------------------------------------------------
 
-    private fun loadFile(uri: Uri, targetOffset: Int? = null) {
+    internal fun loadFile(uri: Uri, targetOffset: Int? = null) {
         try {
             loadBytes(uri, resetPosition = true, targetOffset = targetOffset)
         } catch (e: Exception) {
@@ -745,7 +494,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      * @param targetOffset 非 null 时流就绪后直接跳到该偏移（用于续读）；
      *   null 则按 [resetPosition] 决定从 0 还是按比例保持。
      */
-    private fun loadBytes(uri: Uri, resetPosition: Boolean, targetOffset: Int? = null) {
+    internal fun loadBytes(uri: Uri, resetPosition: Boolean, targetOffset: Int? = null) {
         // 读文件 + 解码是 IO/CPU 密集操作（txt/bdo 可能数 MB），放在后台线程，
         // 避免阻塞主线程导致打开大书时卡顿/ANR；UI 更新（startTranslation /
         // setBrailleStream）回到主线程执行。失败时在主线程 Toast 提示。
@@ -815,7 +564,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      * 盲人用户看不到界面，只能听到这一句：必须说清是「文件空」「不是 bdo」
      * 还是「内容太少」，而不是统一的「不是有效的盲文文档」。
      */
-    private fun loadFailureMessage(
+    internal fun loadFailureMessage(
         failure: BrailleFileDecoder.DecodedDocument.Failure
     ): String = when (failure) {
         BrailleFileDecoder.DecodedDocument.Failure.EmptyFile ->
@@ -830,7 +579,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      * 电子书容器提取失败的原因。和 bdo 的失败提示分开，用户听到的是
      * 「不是 EPUB」「只有图片」这种能据此行动的话。
      */
-    private fun ebookFailureMessage(
+    internal fun ebookFailureMessage(
         failure: EbookTextExtractor.Result.Failure
     ): String = when (failure) {
         EbookTextExtractor.Result.Failure.EmptyFile ->
@@ -849,7 +598,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      * 设置盲文阅读流并完成收尾：记录最近打开、重建页表、刷新屏幕与点显器。
      * 翻译模式翻译完成后也走这里，与非翻译路径完全一致。
      */
-    private fun setBrailleStream(
+    internal fun setBrailleStream(
         brailleText: String,
         name: String?,
         uri: Uri,
@@ -894,7 +643,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      * 时可能尚未就绪；未就绪则挂起请求，服务就绪后由 [mTranslationReadyListener]
      * 自动继续。
      */
-    private fun startTranslation(
+    internal fun startTranslation(
         text: String,
         name: String?,
         uri: Uri,
@@ -949,7 +698,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      * 应用一块翻译结果。第一块整块铺流（分配位置、记最近打开），之后只往末尾追：
      * 追加不改变已有偏移，所以用户正读的那一屏不会被拽走。
      */
-    private fun applyTranslatedChunk(
+    internal fun applyTranslatedChunk(
         chunk: TranslatedChunk,
         name: String?,
         uri: Uri,
@@ -1014,7 +763,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      *
      * 追加不改动原有偏移，故页表按 keepPosition 重建；屏与点显器按当前位置刷新。
      */
-    private fun appendBrailleStream(deltaText: String, deltaCells: IntArray) {
+    internal fun appendBrailleStream(deltaText: String, deltaCells: IntArray) {
         val before = mStream.length
         val table = mCellSpans as? CellSourceTable
         if (table != null && table.sourceText == mSourceText) {
@@ -1034,7 +783,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      * 上次读到的位置可能还没翻到：记住目标偏移，等流长够了再一次性回去，
      * 免得刚开书就停在「还没翻完的部分末尾」。
      */
-    private fun restorePendingOffsetIfReached() {
+    internal fun restorePendingOffsetIfReached() {
         val target = mPendingRestoreOffset ?: return
         if (mStream.length <= target) return
         Log.d(LOG_TAG, "restore pending: target=$target stream=${mStream.length}")
@@ -1053,7 +802,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      * 无任何提示（与 S7 分词降级同款静默降级）。这里给出明确提示；
      * 是否切换盲文表属用户决策，不擅自改设置。
      */
-    private fun warnIfTableMismatch(text: String, translator: BrailleTranslator) {
+    internal fun warnIfTableMismatch(text: String, translator: BrailleTranslator) {
         if (!CJK_CONTENT.containsMatchIn(text)) return
         val tableLang = translator.tableInfo?.locale?.language
         if (tableLang in CJK_TABLE_LANGUAGES) return
@@ -1078,7 +827,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      * （或因失败停下），[failedAtParagraph] 为 0 表示没失败。
      * [text] 为空表示「这一块没有新内容，只是状态」。
      */
-    private data class TranslatedChunk(
+    internal data class TranslatedChunk(
         val text: String,
         val cellPositions: IntArray,
         val done: Boolean,
@@ -1095,7 +844,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      * 不用 List<CellSource>（378 万格逐格建对象会把 256MB 堆吃穿）。
      * 某段翻译失败时不再整本回退，而是把已经翻好的部分交出去并说明停在哪。
      */
-    private fun translateParagraphs(
+    internal fun translateParagraphs(
         text: String,
         translator: BrailleTranslator,
         onChunk: (TranslatedChunk) -> Unit,
@@ -1202,7 +951,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      * 明眼原文（TEXT 源）屏显是汉字，一个汉字平均占 [CELLS_PER_SOURCE_CHAR] 方，
      * 所以一行可排的格数要按这个比例放大，屏幕才刚好铺满一页正文。
      */
-    private fun onScreenTextMetrics(charsPerLine: Int, linesPerPage: Int) {
+    internal fun onScreenTextMetrics(charsPerLine: Int, linesPerPage: Int) {
         val cells = if (mSourceKind == ReaderSourceKind.TEXT) {
             (charsPerLine * CELLS_PER_SOURCE_CHAR).toInt()
         } else {
@@ -1223,7 +972,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         showPage()
     }
 
-    private fun rebuildPageOffsets(keepPosition: Boolean = false) {
+    internal fun rebuildPageOffsets(keepPosition: Boolean = false) {
         val keep = keepPosition && mStream.isNotEmpty()
             && mOffset >= 0 && mOffset <= maxOffset()
         mPageOffsets = if (mStream.isEmpty()) {
@@ -1242,7 +991,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      * 拒绝明确不支持的格式，避免用户打开 Word/PDF 等得到一堆乱码却以为是 bug。
      * 未列出的后缀（含无后缀）一律放行，按文本尝试解码。
      */
-    private fun checkSupportedFormat(name: String?) {
+    internal fun checkSupportedFormat(name: String?) {
         val ext = name?.substringAfterLast('.', "")?.lowercase() ?: return
         if (ext == "doc") {
             // 97-2003 是 OLE 复合文档，不是 zip，解不出正文；给出可执行的下一步。
@@ -1255,7 +1004,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     }
 
     /** 取文件显示名（用于按后缀判断格式）；查询失败时回落到 URI 末段。 */
-    private fun displayNameOf(uri: Uri): String? {
+    internal fun displayNameOf(uri: Uri): String? {
         try {
             contentResolver.query(uri, null, null, null, null)?.use { cursor ->
                 val idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
@@ -1269,7 +1018,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         return uri.lastPathSegment
     }
 
-    private fun readAllBytes(uri: Uri): ByteArray {
+    internal fun readAllBytes(uri: Uri): ByteArray {
         contentResolver.openInputStream(uri)?.use { input ->
             val out = ByteArrayOutputStream()
             val buf = ByteArray(8192)
@@ -1284,7 +1033,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     }
 
     /** 翻译流的段落结构已固定，与屏幕尺寸无关：只需按新阅读单元重建页表。 */
-    private fun reloadKeepingPosition() {
+    internal fun reloadKeepingPosition() {
         val uri = mFileUri ?: return
         if (mIsTranslated) {
             rebuildPageOffsets(keepPosition = true)
@@ -1303,13 +1052,13 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     // ------------------------------------------------------------------
 
     /** 前进/后退 [delta] 屏。 */
-    private fun advance(delta: Int) {
+    internal fun advance(delta: Int) {
         if (mPageOffsets.isEmpty()) return
         gotoUnit(currentUnit() + delta)
     }
 
     /** 跳到第 [unit] 屏（0 基）。起点取自页表，故不会把字切成两半。 */
-    private fun gotoUnit(unit: Int) {
+    internal fun gotoUnit(unit: Int) {
         if (mPageOffsets.isEmpty()) return
         mOffset = mPageOffsets[unit.coerceIn(0, mPageOffsets.size - 1)]
         // 用户明确换页：正文列表回顶，从这一页第一段开始。
@@ -1323,7 +1072,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      * 连接点显器时按**点显器一屏**（单行点显器的「一行」就是它的整屏），
      * 未连接时按**屏幕一行**。两种操作经 [showPage] 都会自动同步点显器。
      */
-    private fun moveLine(delta: Int) {
+    internal fun moveLine(delta: Int) {
         if (mStream.isEmpty()) return
         val beforeOffset = mOffset
         val step = if (mConnected && mDisplayCells > 0) mDisplayCells else mCellsPerLine
@@ -1345,7 +1094,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      * 点显器按键的逐行移动：到文首 / 文末时 [moveLine] 会原地钳住，不播报的话用户会以为
      * 按键失灵（两键设备尤其明显，因为它只有这一个前进方向）。
      */
-    private fun moveLineFromKey(delta: Int) {
+    internal fun moveLineFromKey(delta: Int) {
         if (mStream.isEmpty()) return
         val before = mOffset
         moveLine(delta)
@@ -1361,7 +1110,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      *
      * 平移键逐行、上下行键整屏翻、顶/底键跳文首文末、回车播报当前页位置。
      */
-    private fun onDisplayKey(command: Int) {
+    internal fun onDisplayKey(command: Int) {
         val action = ReaderDisplayKey.resolve(command)
         if (action == ReaderDisplayAction.NONE) return
         if (mStream.isEmpty()) return
@@ -1390,7 +1139,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      * 只做纯文本重建，不动 mOffset 与页表；页号由「首可见段落在哪一页」反查，
      * 所以这里给的 pageIndex 就是分页的依据。
      */
-    private fun buildWindowSegment(fromUnit: Int, pages: Int): List<ReaderSegment> {
+    internal fun buildWindowSegment(fromUnit: Int, pages: Int): List<ReaderSegment> {
         if (mStream.isEmpty()) return emptyList()
         val unit = readingUnit()
         val out = ArrayList<ReaderSegment>()
@@ -1402,7 +1151,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     }
 
     /** 单独一页的段落（页首铺满一整页），供窗口续装用。 */
-    private fun buildUnitSegments(u: Int, unit: Int): List<ReaderSegment> {
+    internal fun buildUnitSegments(u: Int, unit: Int): List<ReaderSegment> {
         val start = mPageOffsets.getOrElse(u) { mOffset }
         val pageEnd = BrailleFileDecoder.nextOffset(mStream, start, unit)
         val brailleText = BrailleFileDecoder.screenAt(
@@ -1428,7 +1177,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      * 只改 mOffset 与本页行表，**不重建段落**——重建会把滚动位置顶回去，
      * 跟手指抢。滚屏时「一页」只是分页刻度，行号从页首重新算。
      */
-    private fun onTopSegment(index: Int) {
+    internal fun onTopSegment(index: Int) {
         val seg = mWindowSegments.getOrNull(index) ?: return
         val unit = seg.pageIndex
         if (unit == currentUnit()) return
@@ -1441,7 +1190,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     }
 
     /** 窗口快滚到头了：再往后装一页，焦点才不会断在半路。 */
-    private fun onNeedMoreSegments() {
+    internal fun onNeedMoreSegments() {
         if (mStream.isEmpty()) return
         val next = mWindowEndUnit + 1
         if (next >= totalUnits()) return
@@ -1452,7 +1201,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     }
 
     /** 只重算当前页的行表与行号（页号变了但不重铺正文时用）。 */
-    private fun refreshPageGeometry() {
+    internal fun refreshPageGeometry() {
         val unit = readingUnit()
         val pageStart = if (mStream.isEmpty()) mOffset
         else mPageOffsets.getOrElse(currentUnit()) { mOffset }
@@ -1468,7 +1217,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         )
     }
 
-    private fun showPage(resetScroll: Boolean = true) {
+    internal fun showPage(resetScroll: Boolean = true) {
         val unit = readingUnit()
         // 屏幕正文从**视口首行**开始铺满一整屏。
         // 视口首行取光标所在的那一行：光标停在页首时视口就是整页（与翻页观感完全一致），
@@ -1541,7 +1290,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         }
     }
 
-    private fun updateUiState() {
+    internal fun updateUiState() {
         val hasContent = mStream.isNotEmpty()
         val unit = readingUnit()
         val view = mLastView
@@ -1582,320 +1331,6 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     }
 
     // ------------------------------------------------------------------
-    // 目录 / 书签 / 跳页
-    // ------------------------------------------------------------------
-
-    /**
-     * 目录：优先按书自己的章节标题（「第X章」「序言」「尾声」…）列，识别不到才按页分组。
-     *
-     * 早先一律按 10 页一组：一本 300 万字的书页数上万，目录变成上万条「第 1-10 页」，
-     * 听下来全是页码，没有任何能用来找内容的线索。章节标题是书自己给的结构，
-     * 出发点是「第几章 什么题目」，比页码有用得多。
-     */
-    private fun showToc() {
-        if (mStream.isEmpty()) {
-            toastNoContent()
-            return
-        }
-        val table = mCellSpans as? CellSourceTable
-        if (mSourceKind == ReaderSourceKind.TEXT && table != null) {
-            val chapters = ReaderChapters.detect(mSourceText)
-            if (chapters.size >= 2) {
-                val targets = mapChaptersToStream(chapters, table)
-                if (targets.size == chapters.size) {
-                    readerDialog = ReaderDialog.Toc(
-                        getString(R.string.braille_reader_toc_title),
-                        chapters.map { it.title }, targets)
-                    Log.d(LOG_TAG, "toc: chapters=${chapters.size} entries")
-                    return
-                }
-            }
-        }
-        showPageGroupedToc(table)
-    }
-
-    /**
-     * 逐章起点映射到盲文流偏移：走一遍流，格序号对应的源字符下标一越过章节起点
-     * 就记下当前流位置。整本只扫一次，不按章重复扫。
-     */
-    private fun mapChaptersToStream(
-        chapters: List<ReaderChapters.Chapter>,
-        table: CellSourceTable,
-    ): List<Int> {
-        val targets = ArrayList<Int>(chapters.size)
-        var chapter = 0
-        var cells = 0
-        for (i in mStream.indices) {
-            val c = mStream[i]
-            if (c.code !in 0x2800..0x28FF) continue
-            val charPos = if (cells < table.size) table.charPosAt(cells) else Int.MAX_VALUE
-            while (chapter < chapters.size && charPos >= chapters[chapter].startChar) {
-                targets.add(i)
-                chapter++
-            }
-            cells++
-            if (chapter >= chapters.size) break
-        }
-        // 剩下没找到的（章节在流的末尾之外，例如还没翻到）落在文末。
-        while (targets.size < chapters.size) targets.add(maxOffset())
-        return targets
-    }
-
-    /** 兜底目录：按页分组，条目数控制在 [TOC_MAX_ENTRIES] 以内，尽量带上首行预览。 */
-    private fun showPageGroupedToc(table: CellSourceTable?) {
-        val total = totalUnits()
-        val step = maxOf(TOC_PAGE_STEP, (total + TOC_MAX_ENTRIES - 1) / TOC_MAX_ENTRIES)
-        val labels = ArrayList<String>()
-        val targets = ArrayList<Int>()
-        var u = 0
-        while (u < total) {
-            val last = min(u + step, total) - 1
-            val preview = pagePreview(u, table)
-            labels.add(if (preview.isEmpty()) {
-                getString(R.string.braille_reader_toc_item, u + 1, last + 1)
-            } else {
-                getString(R.string.braille_reader_toc_item_preview,
-                    u + 1, last + 1, preview)
-            })
-            targets.add(u)
-            u = last + 1
-        }
-        readerDialog = ReaderDialog.Toc(
-            getString(R.string.braille_reader_toc_title), labels, targets)
-    }
-
-    /**
-     * 某组页的首行预览（原文）。只有翻译流（有逐格源表）才给得出汉字；
-     * 纯盲文文件没有原文，预览留空，让标签只显示页范围，免得念一串点位。
-     */
-    private fun pagePreview(unit: Int, table: CellSourceTable?): String {
-        if (table == null || mSourceKind != ReaderSourceKind.TEXT) return ""
-        val startOffset = mPageOffsets.getOrElse(unit) { 0 }
-        var cells = 0
-        for (i in 0 until startOffset.coerceAtMost(mStream.length)) {
-            if (mStream[i].code in 0x2800..0x28FF) cells++
-        }
-        if (cells >= table.size) return ""
-        val charPos = table.charPosAt(cells)
-        if (charPos !in mSourceText.indices) return ""
-        val sb = StringBuilder()
-        var i = charPos
-        // 取到换行或够长为止，跳过缩进空格
-        while (i < mSourceText.length && sb.length < PREVIEW_CHARS) {
-            val c = mSourceText[i]
-            if (c == '\n' || c == '\r') break
-            if (c != '\u3000' && c != ' ') sb.append(c)
-            i++
-        }
-        return sb.toString()
-    }
-
-    private fun onTocPicked(which: Int) {
-        val dialog = readerDialog as? ReaderDialog.Toc ?: return
-        readerDialog = null
-        if (which in dialog.targets.indices) gotoUnit(dialog.targets[which])
-    }
-
-    /** 书签：尚无书签时直接把当前页加为书签，否则弹出列表供跳转/删除。 */
-    private fun showBookmarks() {
-        if (mStream.isEmpty()) {
-            toastNoContent()
-            return
-        }
-        val offsets = loadBookmarkOffsets()
-        if (offsets.isEmpty()) {
-            addBookmark()
-            return
-        }
-        val labels = offsets.map { offsetLabel(it) }
-        readerDialog = ReaderDialog.Bookmarks(
-            getString(R.string.braille_reader_bookmarks_title), labels, offsets)
-    }
-
-    private fun onBookmarkPicked(which: Int) {
-        val dialog = readerDialog as? ReaderDialog.Bookmarks ?: return
-        readerDialog = null
-        if (which in dialog.offsets.indices) jumpToOffset(dialog.offsets[which])
-    }
-
-    private fun onBookmarkDeleteRequested() {
-        val dialog = readerDialog as? ReaderDialog.Bookmarks ?: return
-        showDeleteBookmark(dialog.offsets)
-    }
-
-    private fun onBookmarkClearRequested() {
-        clearBookmarks()
-        readerDialog = null
-    }
-
-    /** 删除单条书签。 */
-    private fun showDeleteBookmark(offsets: List<Int>) {
-        val labels = offsets.map { offsetLabel(it) }
-        readerDialog = ReaderDialog.DeleteBookmark(
-            getString(R.string.braille_reader_bm_delete), labels, offsets)
-    }
-
-    private fun onDeletePicked(which: Int) {
-        val dialog = readerDialog as? ReaderDialog.DeleteBookmark ?: return
-        val remaining = dialog.offsets.toMutableList().also { it.removeAt(which) }
-        saveBookmarkOffsets(remaining)
-        readerDialog = null
-        Toast.makeText(this, R.string.braille_reader_bm_deleted,
-            Toast.LENGTH_SHORT).show()
-    }
-
-    private fun addBookmark() {
-        val offsets = loadBookmarkOffsets()
-        if (offsets.contains(mOffset)) {
-            Toast.makeText(this, getString(R.string.braille_reader_bm_exists,
-                currentUnit() + 1), Toast.LENGTH_SHORT).show()
-            return
-        }
-        offsets.add(mOffset)
-        offsets.sort()
-        saveBookmarkOffsets(offsets)
-        Toast.makeText(this, getString(R.string.braille_reader_bm_added,
-            currentUnit() + 1), Toast.LENGTH_SHORT).show()
-    }
-
-    /** 跳到书签位置：落到该位置所在那一串盲文的词首，不劈字。 */
-    private fun jumpToOffset(offset: Int) {
-        if (mStream.isEmpty()) return
-        mOffset = BrailleFileDecoder.wordStartAtOrBefore(
-            mStream, offset.coerceIn(0, maxOffset()))
-        showPage()
-    }
-
-    private fun offsetLabel(offset: Int): String =
-        getString(R.string.braille_reader_bm_item,
-            unitForOffset(offset) + 1, previewAt(offset))
-
-    /** 取某偏移处的一行预览（去掉首尾空白方，按词边界截断，不劈字）。 */
-    private fun previewAt(offset: Int): String {
-        val line = BrailleFileDecoder.screenAt(mStream, offset, mCellsPerLine, 1)
-            .trim('\u2800')
-        return BrailleFileDecoder.cutAtBoundary(line, PREVIEW_CELLS)
-    }
-
-    private fun clearBookmarks() {
-        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-            .remove(bookmarkKey()).apply()
-        Toast.makeText(this, R.string.braille_reader_bm_cleared, Toast.LENGTH_SHORT).show()
-    }
-
-    /** 跳到指定页（阅读单元序号，从 1 开始）。 */
-    private fun showGotoDialog() {
-        if (mStream.isEmpty()) {
-            toastNoContent()
-            return
-        }
-        readerDialog = ReaderDialog.Goto(
-            getString(R.string.braille_reader_goto_title),
-            getString(R.string.braille_reader_goto_hint, totalUnits()))
-    }
-
-    private fun onGotoConfirmed(n: Int) {
-        readerDialog = null
-        if (n in 1..totalUnits()) {
-            gotoUnit(n - 1)
-        }
-    }
-
-    /**
-     * 跳到本页第 [index] 行（0 基）。只在本页范围内动，不跨页：
-     * 行进度条说的是「这一页有几行」，拖到底就是本页最后一行。
-     */
-    private fun moveToPageLine(index: Int) {
-        if (mStream.isEmpty() || mPageLineStarts.isEmpty()) return
-        val i = index.coerceIn(0, mPageLineStarts.size - 1)
-        val target = mPageLineStarts[i]
-        if (target == mOffset) return
-        Log.i(LOG_TAG, "page line: -> $i offset=${mOffset} -> $target")
-        mOffset = target
-        sendToDisplay()
-        showPage(resetScroll = true)
-        saveProgress()
-    }
-
-    /**
-     * 行滑块走到头还继续往前（[delta] = +1 下一页 / -1 上一页）：直接翻页，
-     * 新页仍从第 1 行起铺。滚屏时拖到本页最后一行再往前，就顺势滚进下一页，
-     * 不会像以前那样卡在页末一动不动。
-     */
-    private fun onLineOverflow(delta: Int) {
-        if (mStream.isEmpty()) return
-        val target = (currentUnit() + delta).coerceIn(0, (totalUnits() - 1).coerceAtLeast(0))
-        if (target == currentUnit()) {
-            val msg = if (delta > 0) R.string.braille_reader_last_page else R.string.braille_reader_first_page
-            Log.i(LOG_TAG, "page overflow: 到头了 delta=$delta unit=${currentUnit()}")
-            announce(getString(msg))
-            return
-        }
-        Log.i(LOG_TAG, "page overflow: delta=$delta unit ${currentUnit()} -> $target")
-        gotoUnit(target)
-    }
-
-    private fun showPageLineDialog() {        if (mStream.isEmpty()) {
-            toastNoContent()
-            return
-        }
-        readerDialog = ReaderDialog.PageLine(
-            getString(R.string.braille_reader_page_line_title),
-            getString(
-                R.string.braille_reader_page_line_hint,
-                mPageLineStarts.size.coerceAtLeast(1),
-            ),
-        )
-    }
-
-    /** 数字输入确认：用户说的是「第 10 行」，从 1 开始。 */
-    private fun onPageLineConfirmed(n: Int) {
-        readerDialog = null
-        if (n in 1..mPageLineStarts.size.coerceAtLeast(1)) {
-            moveToPageLine(n - 1)
-        }
-    }
-
-    private fun showFontSizeDialog() {
-        val labels = FONT_SIZES.map {
-            getString(R.string.braille_reader_font_size_item, it)
-        }
-        readerDialog = ReaderDialog.FontSize(
-            getString(R.string.braille_reader_font_size_title), labels)
-    }
-
-    private fun onFontSizePicked(index: Int) {
-        readerDialog = null
-        val size = FONT_SIZES.getOrElse(index) { DEFAULT_READER_FONT_SP }
-        SettingsStore.get(this).edit()
-            .putInt(KEY_READER_FONT_SP, size)
-            .apply()
-        updateUiState()
-    }
-
-    private fun toastNoContent() {
-        Toast.makeText(this, R.string.braille_reader_no_content, Toast.LENGTH_SHORT).show()
-    }
-
-    /**
-     * 书签按文件 URI 隔离存储，值为**字符偏移**。
-     * 存偏移是为了让屏幕尺寸或点显器方数变化引起重排后仍能定位到原处。
-     */
-    private fun bookmarkKey(): String = KEY_BM_PREFIX + (mFileUri?.toString() ?: "")
-
-    private fun loadBookmarkOffsets(): MutableList<Int> {
-        val raw = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-            .getStringSet(bookmarkKey(), null) ?: return ArrayList()
-        return raw.mapNotNull { it.toIntOrNull() }.toMutableList().also { it.sort() }
-    }
-
-    private fun saveBookmarkOffsets(offsets: List<Int>) {
-        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-            .putStringSet(bookmarkKey(), offsets.map { it.toString() }.toSet())
-            .apply()
-    }
-
-    // ------------------------------------------------------------------
     // 发送到点显器
     // ------------------------------------------------------------------
 
@@ -1904,7 +1339,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      * 旧实现发送「当前屏幕页的前 N 方」，一页可达数百方，
      * 20 方点显器只能读到开头一小段，其余内容永远读不到。
      */
-    private fun sendToDisplay() {
+    internal fun sendToDisplay() {
         val display = mDisplay ?: return
         if (mStream.isEmpty()) {
             releaseDisplay()
@@ -1941,7 +1376,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      * 与 `DisplayManager` 清屏同一做法：全 0 点位 + 空文本。
      * 先冻服务再清，避免服务那边的文字输出紧接着又盖回来。
      */
-    private fun clearDisplay() {
+    internal fun clearDisplay() {
         val display = mDisplay ?: return
         val cells = mDisplayCells.coerceIn(1, MAX_DISPLAY_CELLS)
         holdDisplay()
@@ -1953,13 +1388,13 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      * 正文在屏期间独占点显器：冻结服务侧文字输出，屏上只剩这一页点位。
      * 服务没起来时返回 false，行为回落到普通模式，不报错。
      */
-    private fun holdDisplay() {
+    internal fun holdDisplay() {
         if (holdingDisplay) return
         holdingDisplay = BrailleBackService.holdDisplayForApp()
     }
 
     /** 交还点显器；重复调用无副作用。 */
-    private fun releaseDisplay() {
+    internal fun releaseDisplay() {
         if (!holdingDisplay) return
         holdingDisplay = false
         BrailleBackService.releaseDisplayForApp()
@@ -1969,7 +1404,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     // 阅读进度记忆
     // ------------------------------------------------------------------
 
-    private fun saveProgress() {
+    internal fun saveProgress() {
         if (mStream.isEmpty()) return
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
             .putString(KEY_URI, mFileUri?.toString())
@@ -1977,7 +1412,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             .apply()
     }
 
-    private fun restoreProgress() {
+    internal fun restoreProgress() {
         val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         val uriStr = prefs.getString(KEY_URI, null) ?: return
         val uri = try {
@@ -2001,89 +1436,89 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     }
 
     companion object {
-        private const val LOG_TAG = "BrailleReader"
+        internal const val LOG_TAG = "BrailleReader"
 
         /** CJK 字符（汉字扩展 A 区+基本区/假名/谚文），用于内容语言检测。 */
-        private val CJK_CONTENT = Regex("[\\u3400-\\u4DBF\\u4E00-\\u9FFF\\u3040-\\u30FF\\uAC00-\\uD7AF]")
+        internal val CJK_CONTENT = Regex("[\\u3400-\\u4DBF\\u4E00-\\u9FFF\\u3040-\\u30FF\\uAC00-\\uD7AF]")
 
         /** 以 CJK 为主要书写语言的表 locale.language 集合。 */
-        private val CJK_TABLE_LANGUAGES = setOf("zh", "ja", "ko")
+        internal val CJK_TABLE_LANGUAGES = setOf("zh", "ja", "ko")
 
         /** 书架/最近打开跳转时携带待打开文件 uri（见 BookshelfActivity）。 */
         const val EXTRA_URI = "com.linxi.brailleback.extra.OPEN_URI"
 
-        private const val DEFAULT_CELLS = 40
-        private const val LINES_PER_PAGE = 20
+        internal const val DEFAULT_CELLS = 40
+        internal const val LINES_PER_PAGE = 20
 
         /** 翻译服务超过这个时长仍未就绪，就播报一次“先按原文读”。 */
-        private const val TRANSLATOR_WARN_DELAY_MS = 8000L
+        internal const val TRANSLATOR_WARN_DELAY_MS = 8000L
 
         /** 单段翻译失败后的原地重试次数与间隔（桥抖动多为瞬时）。 */
-        private const val TRANSLATE_ATTEMPTS = 3
-        private const val TRANSLATE_RETRY_DELAY_MS = 300L
+        internal const val TRANSLATE_ATTEMPTS = 3
+        internal const val TRANSLATE_RETRY_DELAY_MS = 300L
 
         /**
          * 边翻边读：第一块攒够这么多字就先上屏（约 1–2 秒），之后每
          * [PUBLISH_INTERVAL_MS] 毫秒续一块，免得用户对着「正在翻译」干等一分钟。
          */
-        private const val FIRST_PUBLISH_CHARS = 12_000
-        private const val PUBLISH_INTERVAL_MS = 2_000L
+        internal const val FIRST_PUBLISH_CHARS = 12_000
+        internal const val PUBLISH_INTERVAL_MS = 2_000L
         /** 单块最少这么多字；不到就先攒着，免得先推上去半页空屏。约 1.5 页正文。 */
-        private const val MIN_PUBLISH_CHARS = 1_200
+        internal const val MIN_PUBLISH_CHARS = 1_200
         /**
          * 点显器方数上限，仅用于兜住驱动误报。
          * 常见单行点显器为 12–80 方，多行显示器最多数百方；
          * 超过此值基本可判定为上报异常（照单全收会让「一屏」变成整本书）。
          */
-        private const val MAX_DISPLAY_CELLS = 4096
+        internal const val MAX_DISPLAY_CELLS = 4096
         /**
          * 低于此值视为布局未完成或极端小屏，不据此重排。
          * 横屏时分屏只剩几行可显示，一页 3 行会把页码撑到一两万页，
          * 这里兜到 5 行：屏幕可能少显示几行，但盲文流是齐的、页码也还说得通。
          */
-        private const val MIN_LINES_PER_PAGE = 5
-        private const val MIN_CELLS_PER_LINE = 8
+        internal const val MIN_LINES_PER_PAGE = 5
+        internal const val MIN_CELLS_PER_LINE = 8
         /** 屏幕一行最多按这么多方算（400 字 × 2.5 方），兜住横屏/分屏误测。 */
-        private const val MAX_CELLS_PER_LINE = 1000
-        private const val MAX_LINES_PER_PAGE = 80
+        internal const val MAX_CELLS_PER_LINE = 1000
+        internal const val MAX_LINES_PER_PAGE = 80
         /** 明眼原文屏显是汉字：通用盲文一个汉字平均占约 2.5 方，用来把「一行几个字」换成「一行几方」。 */
-        private const val CELLS_PER_SOURCE_CHAR = 2.5
+        internal const val CELLS_PER_SOURCE_CHAR = 2.5
         /**
          * 正文列表一次装几页的段落。
          *
          * 读屏焦点滑到页末最后一段时，后面必须有段可去；装 3 页够滑一阵，
          * 又不会一次重建太多文本（每次换页都要按页重建一遍）。
          */
-        private const val WINDOW_PAGES = 3
+        internal const val WINDOW_PAGES = 3
         /** 满方盲文，用于测量单个盲文字符的实际宽度。 */
-        private const val CELL_SAMPLE = "\u283F"
-        private const val PREFS_NAME = "braille_reader"
-        private const val KEY_URI = "last_uri"
-        private const val KEY_OFFSET = "last_offset"
-        private const val KEY_BM_PREFIX = "bm_"
-        private const val KEY_EXPORT_COLUMNS = "export_columns"
-        private const val KEY_EXPORT_LINES = "export_lines_per_page"
+        internal const val CELL_SAMPLE = "\u283F"
+        internal const val PREFS_NAME = "braille_reader"
+        internal const val KEY_URI = "last_uri"
+        internal const val KEY_OFFSET = "last_offset"
+        internal const val KEY_BM_PREFIX = "bm_"
+        internal const val KEY_EXPORT_COLUMNS = "export_columns"
+        internal const val KEY_EXPORT_LINES = "export_lines_per_page"
         /** 导出排版是否跟随点显器上报的方数；默认开启。 */
-        private const val KEY_EXPORT_FOLLOW_DISPLAY = "export_follow_display"
+        internal const val KEY_EXPORT_FOLLOW_DISPLAY = "export_follow_display"
         /** 导出折行是否按词断（空方处断行）；默认开启。 */
-        private const val KEY_EXPORT_WORD_WRAP = "export_word_wrap"
-        private const val EXPORT_MIN_COLUMNS = 20
-        private const val EXPORT_MAX_COLUMNS = 40
-        private const val EXPORT_MIN_LINES = 20
-        private const val EXPORT_MAX_LINES = 28
-        private const val KEY_READER_FONT_SP = "reader_font_sp"
-        private const val DEFAULT_READER_FONT_SP = 18
-        private val FONT_SIZES = listOf(18, 22, 26)
+        internal const val KEY_EXPORT_WORD_WRAP = "export_word_wrap"
+        internal const val EXPORT_MIN_COLUMNS = 20
+        internal const val EXPORT_MAX_COLUMNS = 40
+        internal const val EXPORT_MIN_LINES = 20
+        internal const val EXPORT_MAX_LINES = 28
+        internal const val KEY_READER_FONT_SP = "reader_font_sp"
+        internal const val DEFAULT_READER_FONT_SP = 18
+        internal val FONT_SIZES = listOf(18, 22, 26)
         /** 目录每 N 页一条。 */
-        private const val TOC_PAGE_STEP = 10
+        internal const val TOC_PAGE_STEP = 10
         /** 兜底（按页分组）目录最多这么多条，超了就把每组页数加大。 */
-        private const val TOC_MAX_ENTRIES = 150
+        internal const val TOC_MAX_ENTRIES = 150
         /** 目录/书签列表里预览用到的方数。 */
-        private const val PREVIEW_CELLS = 40
+        internal const val PREVIEW_CELLS = 40
         /** 目录预览取多少个原文字。 */
-        private const val PREVIEW_CHARS = 14
+        internal const val PREVIEW_CHARS = 14
         /** 翻译服务未就绪时挂起的翻译请求。 */
-        private data class PendingTranslation(
+        internal data class PendingTranslation(
             val text: String,
             val name: String?,
             val uri: Uri,
@@ -2097,7 +1532,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
          * .epub/.html/.md/.docx/.docm（由 [EbookTextExtractor] 取出文字后翻译）。
          * PDF/MOBI 等需先转成盲文；旧版 .doc 在 checkSupportedFormat 里单独提示。
          */
-        private val UNSUPPORTED_EXT = setOf(
+        internal val UNSUPPORTED_EXT = setOf(
             "doc", "wps", "rtf", "odt",
             "pdf", "mobi", "azw3",
             "rar", "zip", "7z",
