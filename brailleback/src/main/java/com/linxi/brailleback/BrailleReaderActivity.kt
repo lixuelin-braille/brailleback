@@ -1244,8 +1244,18 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      */
     private fun moveLine(delta: Int) {
         if (mStream.isEmpty()) return
+        val beforeOffset = mOffset
         val step = if (mConnected && mDisplayCells > 0) mDisplayCells else mCellsPerLine
-        mOffset = (mOffset + delta * step).coerceIn(0, maxOffset())
+        // 步进必须落在词首：固定挪 [step] 方会把一个字（甚至一个词）劈在下一屏开头，
+        // 上一屏只剩半个字。往前用 nextOffset（回退到本屏最后一个完整词），
+        // 往后用 prevOffset（把目标位置对齐到词首）。
+        mOffset = if (delta >= 0) {
+            BrailleFileDecoder.nextOffset(mStream, mOffset, step)
+        } else {
+            BrailleFileDecoder.prevOffset(mStream, mOffset, step)
+        }.coerceIn(0, maxOffset())
+        Log.d(LOG_TAG, "move: ${if (delta >= 0) "+" else "-"}$step " +
+            "offset=$beforeOffset -> $mOffset")
         showPage()
     }
 
@@ -1299,7 +1309,11 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             BrailleFileDecoder.screenAt(
                 mStream, mOffset, mCellsPerLine, mLinesPerPage)
         }
-        val count = mCellsPerLine * mLinesPerPage
+        // 本屏可见格数截到词边界：末行不会露出半个字（屏显还原同口径）。
+        val unit = readingUnit()
+        val end = if (mStream.isEmpty()) mOffset
+        else BrailleFileDecoder.nextOffset(mStream, mOffset, unit)
+        val count = (end - mOffset).coerceIn(1, unit)
         val view = ReaderSourceModel.build(
             kind = mSourceKind,
             sourceText = mSourceText,
@@ -1321,9 +1335,9 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             sendToDisplay()
         }
         updateUiState()
-        val unit = currentUnit()
-        if (unit != mAnnouncedUnit) {
-            mAnnouncedUnit = unit
+        val unitIndex = currentUnit()
+        if (unitIndex != mAnnouncedUnit) {
+            mAnnouncedUnit = unitIndex
             val firstLine = mLastView?.focusSegments?.firstOrNull().orEmpty()
             announce(listOf(uiState.pageInfo, firstLine)
                 .filter { it.isNotEmpty() }.joinToString("，"))
@@ -1549,10 +1563,11 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             currentUnit() + 1), Toast.LENGTH_SHORT).show()
     }
 
-    /** 跳到书签位置：直接落到该偏移，不做单元对齐以精确保位。 */
+    /** 跳到书签位置：落到该位置所在那一串盲文的词首，不劈字。 */
     private fun jumpToOffset(offset: Int) {
         if (mStream.isEmpty()) return
-        mOffset = offset.coerceIn(0, maxOffset())
+        mOffset = BrailleFileDecoder.wordStartAtOrBefore(
+            mStream, offset.coerceIn(0, maxOffset()))
         showPage()
     }
 
@@ -1560,11 +1575,11 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         getString(R.string.braille_reader_bm_item,
             unitForOffset(offset) + 1, previewAt(offset))
 
-    /** 取某偏移处的一行预览（去掉首尾空白方）。 */
+    /** 取某偏移处的一行预览（去掉首尾空白方，按词边界截断，不劈字）。 */
     private fun previewAt(offset: Int): String {
         val line = BrailleFileDecoder.screenAt(mStream, offset, mCellsPerLine, 1)
             .trim('\u2800')
-        return if (line.length <= PREVIEW_CELLS) line else line.substring(0, PREVIEW_CELLS)
+        return BrailleFileDecoder.cutAtBoundary(line, PREVIEW_CELLS)
     }
 
     private fun clearBookmarks() {
@@ -1650,7 +1665,9 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             releaseDisplay()
             return
         }
-        val cells = BrailleFileDecoder.cellsAt(mStream, mOffset, mDisplayCells)
+        // 只发到词边界为止：多出来的那半方会把字劈在屏尾，摸到的就是半个字。
+        val end = BrailleFileDecoder.nextOffset(mStream, mOffset, mDisplayCells)
+        val cells = BrailleFileDecoder.cellsAt(mStream, mOffset, end - mOffset)
         if (cells.isEmpty()) {
             releaseDisplay()
             return
@@ -1658,6 +1675,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         // 先冻服务再画点位：反过来的话，服务那次文字刷新有可能落在点位之后把它盖掉。
         holdDisplay()
         val len = cells.length
+        Log.d(LOG_TAG, "send: from=$mOffset to=$end len=$len display=$mDisplayCells")
         val patterns = ByteArray(len)
         val map = IntArray(len)
         for (i in 0 until len) {

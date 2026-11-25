@@ -560,13 +560,37 @@ object BrailleFileDecoder {
             val hang = if (pos == paraStart) 0
             else hangingIndent(leadingBlanks(stream.substring(paraStart, newLine)))
             val width = max(1, cellsPerLine - hang)
-            val end = min(pos + width, newLine)
+            val limit = min(pos + width, newLine)
+            // 行尾不劈字：回退到最近的词边界；整行都是同一个长词才硬切。
+            val end = wrapEnd(stream, pos, limit)
             out.add(indentOf(hang) + stream.substring(pos, end))
             // 到达段落边界就跳过分隔符；连续的空段落会在下一轮输出空行
             pos = if (end >= newLine) newLine + 1 else end
             remaining--
         }
         return out.joinToString("\n")
+    }
+
+    /**
+     * 行尾折行点：不超过 [limit] 的最后位置，且不把词从中间切开。
+     * 从 [limit] 往回找词边界（词首，其前一格是空方或换行）；找不到
+     * （整行只有一个超长词/长数字串）就按 [limit] 硬切。
+     */
+    private fun wrapEnd(stream: String, start: Int, limit: Int): Int {
+        if (limit >= stream.length) return limit
+        var k = limit
+        while (k > start && !isBoundary(stream[k - 1])) k--
+        return if (k > start) k else limit
+    }
+
+    /**
+     * 把一段盲文串截到不超过 [limit] 方，且不在词中间断开。
+     * 用于目录、书签这类「取一截做预览」的地方。
+     */
+    fun cutAtBoundary(s: String, limit: Int): String {
+        if (limit <= 0 || s.isEmpty()) return ""
+        if (s.length <= limit) return s
+        return s.substring(0, wrapEnd(s, 0, limit))
     }
 
     /** 按阅读单元 [unit]（点显器方数或屏幕一屏）换算的总页数。 */
@@ -628,6 +652,34 @@ object BrailleFileDecoder {
             off = nextOffset(stream, off, unit)
         }
         return out.toIntArray()
+    }
+
+    /**
+     * 把 [offset] 回退到它所在那一段盲文串（词）的起点。
+     *
+     * 词内没有分隔标记：通用盲文一个汉字占 1–3 方、词内连续书写，
+     * 只有词间空方 U+2800 和段间换行 '\n' 是可靠边界。所以「不从中间劈开一个字」
+     * 在流上等价于「不从一个词中间开始」。
+     *
+     * [offset] 本身已是边界或落在词首时原样返回。
+     */
+    fun wordStartAtOrBefore(stream: String, offset: Int): Int {
+        if (offset <= 0) return 0
+        var k = min(offset, stream.length)
+        if (k > 0 && isBoundary(stream[k - 1])) return k
+        while (k > 0 && !isBoundary(stream[k - 1])) k--
+        return k
+    }
+
+    /**
+     * 上一屏的起点：从 [offset] 往前退约 [unit] 方，再对齐到词首。
+     *
+     * 后退时只能「取整到词首」：宁可少退几方，也不能让屏首落在词中间。
+     */
+    fun prevOffset(stream: String, offset: Int, unit: Int): Int {
+        if (unit <= 0 || offset <= 0) return 0
+        val target = (offset - unit).coerceAtLeast(0)
+        return wordStartAtOrBefore(stream, target)
     }
 
     /**
