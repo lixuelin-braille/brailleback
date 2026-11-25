@@ -42,6 +42,7 @@ import com.linxi.brailleback.compose.GeometryChoice
 import com.linxi.brailleback.compose.ReaderDialog
 import com.linxi.brailleback.compose.ReaderLabels
 import com.linxi.brailleback.compose.ReaderUiState
+import com.linxi.brailleback.reader.ReaderChapters
 import com.linxi.brailleback.reader.ReaderDisplayAction
 import com.linxi.brailleback.reader.ReaderDisplayKey
 import com.linxi.brailleback.utils.LogFileWriter
@@ -155,6 +156,8 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     private var mLinesPerPage = LINES_PER_PAGE
     /** 点显器每行方数，连接后由 getDisplayProperties() 更新；未连接用默认值。 */
     private var mDisplayCells = DEFAULT_CELLS
+    /** 上次读到、但因后台翻译还没翻到而暂时落不了地的位置。 */
+    private var mPendingRestoreOffset: Int? = null
 
     /**
      * 每一屏的起始偏移。
@@ -165,17 +168,16 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     private var mPageOffsets: IntArray = intArrayOf()
 
     /**
-     * 阅读单元：一次前进多少个方。
+     * 阅读单元：一「页」是多少方。
      *
-     * 连接点显器时按**点显器一屏**推进（20/30/40 方不等），
-     * 未连接时按屏幕一屏推进。这是适配不同方数点显器的关键。
+     * 取**手机屏幕一屏**（每行方数 × 行数），不取点显器一屏：点显器常见 20/30/40 方，
+     * 若按点显器一屏当一页，一本 300 万字的书会拆成十几万页——屏幕上的
+     * 「上一页/下一页」每按一次只挪二十几个字，看着就像没反应；目录也会变成上万条
+     * 「第 1-10 页」。点显器自己那一屏由按键按方数步进（见 [moveLine]），
+     * 两者各管一层，互不干扰。
      */
     private fun readingUnit(): Int =
-        if (mConnected && mDisplayCells > 0) {
-            mDisplayCells
-        } else {
-            (mCellsPerLine * mLinesPerPage).coerceAtLeast(1)
-        }
+        (mCellsPerLine * mLinesPerPage).coerceAtLeast(1)
 
     private fun totalUnits(): Int = mPageOffsets.size.coerceAtLeast(1)
 
@@ -806,6 +808,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         targetOffset: Int? = null,
         isTranslated: Boolean = false,
         cellSpans: List<CellSource>? = null,
+        notifyLoaded: Boolean = true,
     ) {
         val oldLength = mStream.length
         mStream = BrailleFileDecoder.toReadingStream(brailleText)
@@ -827,8 +830,10 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         }
         rebuildPageOffsets()
         showPage()
-        Toast.makeText(this, getString(R.string.braille_reader_loaded,
-            totalUnits()), Toast.LENGTH_SHORT).show()
+        if (notifyLoaded) {
+            Toast.makeText(this, getString(R.string.braille_reader_loaded,
+                totalUnits()), Toast.LENGTH_SHORT).show()
+        }
     }
 
     // ------------------------------------------------------------------
@@ -879,46 +884,118 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         uiState = uiState.copy(
             readerText = getString(R.string.braille_reader_translating))
         warnIfTableMismatch(text, translator)
+        // 后台翻译要「边翻边能读」：进度挂在字段里，翻出第一块就先上屏，
+        // 之后按间隔续块，用户不用干等整本（3MB 书整本约一分钟）。
+        mPendingRestoreOffset = targetOffset
         Thread {
-            val result = try {
-                translateParagraphs(text, translator)
-            } catch (e: Exception) {
-                Log.w(LOG_TAG, "翻译失败: ${e.message}")
-                null
-            } catch (e: OutOfMemoryError) {
-                // 内存吃紧时别让整条翻译线程把进程带走（真机曾直接 SIG 9 闪退）：
-                // 退化成原文流 + 「翻译失败」提示，用户至少还能接着读。
-                Log.w(LOG_TAG, "翻译内存不足: ${e.message}")
-                null
-            }
-            runOnUiThread {
-                mTranslating = false
-                // 若此刻屏幕上正读着兜底原文，切盲文流时按位置比例接手，
-                // 不把用户已经在读的位置拽回第 1 页。
-                val keepPlace = mSourceKind == ReaderSourceKind.TEXT &&
-                    !mIsTranslated && mStream.isNotEmpty()
-                if (result != null) {
-                    setBrailleStream(result.first, name, uri,
-                        if (keepPlace) false else resetPosition,
-                        if (keepPlace) null else targetOffset,
-                        isTranslated = true, cellSpans = result.second)
-                    // 用户是在“翻译没完”的时候点的导出，这里接着把导出弹窗打开，
-                    // 不用他再摸一遍按钮。
-                    if (mPendingExport) {
-                        mPendingExport = false
-                        showExportMenu()
-                    }
-                } else {
-                    // 翻译失败：屏幕仍可看原文，点显器暂为空方，给出明确提示
-                    setBrailleStream(text, name, uri,
-                        if (keepPlace) false else resetPosition,
-                        if (keepPlace) null else targetOffset)
-                    Toast.makeText(this,
-                        getString(R.string.braille_reader_translate_fail),
-                        Toast.LENGTH_LONG).show()
+            translateParagraphs(text, translator) { chunk ->
+                runOnUiThread {
+                    applyTranslatedChunk(chunk, name, uri, resetPosition, targetOffset)
                 }
             }
         }.start()
+    }
+
+    /**
+     * 应用一块翻译结果。第一块整块铺流（分配位置、记最近打开），之后只往末尾追：
+     * 追加不改变已有偏移，所以用户正读的那一屏不会被拽走。
+     */
+    private fun applyTranslatedChunk(
+        chunk: TranslatedChunk,
+        name: String?,
+        uri: Uri,
+        resetPosition: Boolean,
+        targetOffset: Int?
+    ) {
+        if (isFinishing || isDestroyed) {
+            mTranslating = false
+            return
+        }
+        val keepPlace = mSourceKind == ReaderSourceKind.TEXT &&
+            !mIsTranslated && mStream.isNotEmpty()
+        if (!mIsTranslated) {
+            if (chunk.text.isEmpty()) {
+                // 第一段就失败：没有可读内容，退回原文流并明说翻译失败。
+                mTranslating = false
+                setBrailleStream(mSourceText, name, uri,
+                    if (keepPlace) false else resetPosition,
+                    if (keepPlace) null else targetOffset)
+                Toast.makeText(this,
+                    getString(R.string.braille_reader_translate_fail),
+                    Toast.LENGTH_LONG).show()
+                return
+            }
+            setBrailleStream(chunk.text, name, uri,
+                if (keepPlace) false else resetPosition,
+                if (keepPlace) null else targetOffset,
+                isTranslated = true,
+                cellSpans = CellSourceTable(mSourceText, chunk.cellPositions),
+                notifyLoaded = chunk.done)
+            if (!chunk.done) {
+                // 先报一句「已经能读了、后面还在翻」，免得用户以为就这些。
+                announce(getString(R.string.braille_reader_translate_partial,
+                    totalUnits()))
+            }
+        } else if (chunk.text.isNotEmpty()) {
+            appendBrailleStream(chunk.text, chunk.cellPositions)
+        }
+        restorePendingOffsetIfReached()
+        if (chunk.done) {
+            mTranslating = false
+            val msg = if (chunk.failedAtParagraph > 0) {
+                getString(R.string.braille_reader_translate_partial_stop,
+                    chunk.failedAtParagraph, totalUnits())
+            } else {
+                getString(R.string.braille_reader_translate_done, totalUnits())
+            }
+            announce(msg)
+            Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+            Log.d(LOG_TAG, "translate done: paragraphs=${chunk.paragraphs} " +
+                "failedAt=${chunk.failedAtParagraph} units=${totalUnits()}")
+            // 用户是在“翻译没完”的时候点的导出，这里接着把导出弹窗打开。
+            if (mPendingExport) {
+                mPendingExport = false
+                showExportMenu()
+            }
+        }
+    }
+
+    /**
+     * 只往末尾追加一块翻译流。
+     *
+     * 追加不改动原有偏移，故页表按 keepPosition 重建；屏与点显器按当前位置刷新。
+     */
+    private fun appendBrailleStream(deltaText: String, deltaCells: IntArray) {
+        val before = mStream.length
+        val table = mCellSpans as? CellSourceTable
+        if (table != null && table.sourceText == mSourceText) {
+            // 表对象不换，只往尾部追加位置：屏显按格取字依赖的正是这一个表。
+            table.appendAll(deltaCells)
+        } else {
+            mCellSpans = CellSourceTable(mSourceText, deltaCells)
+        }
+        mStream += deltaText
+        rebuildPageOffsets(keepPosition = true)
+        showPage()
+        Log.d(LOG_TAG, "append: +${deltaText.length} stream=$before->${mStream.length} " +
+            "cells=${mCellSpans?.size} units=${totalUnits()} pos=$mOffset")
+    }
+
+    /**
+     * 上次读到的位置可能还没翻到：记住目标偏移，等流长够了再一次性回去，
+     * 免得刚开书就停在「还没翻完的部分末尾」。
+     */
+    private fun restorePendingOffsetIfReached() {
+        val target = mPendingRestoreOffset ?: return
+        if (mStream.length <= target) return
+        Log.d(LOG_TAG, "restore pending: target=$target stream=${mStream.length}")
+        mPendingRestoreOffset = null
+        mOffset = target.coerceIn(0, maxOffset())
+        rebuildPageOffsets(keepPosition = true)
+        mOffset = target.coerceIn(0, maxOffset())
+        showPage()
+        Log.d(LOG_TAG, "restore applied: pos=$mOffset unit=${currentUnit()} units=${totalUnits()}")
+        announce(getString(R.string.braille_reader_restored, currentUnit() + 1, totalUnits()))
     }
 
     /**
@@ -947,64 +1024,111 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      * 逐段翻译，同时按翻译结果的 brailleToTextPositions 生成逐格源区间。
      * 返回盲文阅读流与格级跨度列表；任一整段翻译失败返回 null。
      */
+    /**
+     * 一块翻译成果（**增量**，只含上次之后新翻的部分）。[done] 为 true 表示整本翻完
+     * （或因失败停下），[failedAtParagraph] 为 0 表示没失败。
+     * [text] 为空表示「这一块没有新内容，只是状态」。
+     */
+    private data class TranslatedChunk(
+        val text: String,
+        val cellPositions: IntArray,
+        val done: Boolean,
+        val failedAtParagraph: Int,
+        val paragraphs: Int,
+    )
+
+    /**
+     * 逐段翻译，边翻边交块：每满 [PUBLISH_INTERVAL_MS] 毫秒（或第一块攒够
+     * [FIRST_PUBLISH_CHARS] 字）就把当前成果交出去上屏，用户在后台翻译还在跑时
+     * 就能开始读；收尾再交最后一块。
+     *
+     * 段落起点记在全书坐标系里，跨段不串位；逐格源下标进 int 缓冲，
+     * 不用 List<CellSource>（378 万格逐格建对象会把 256MB 堆吃穿）。
+     * 某段翻译失败时不再整本回退，而是把已经翻好的部分交出去并说明停在哪。
+     */
     private fun translateParagraphs(
         text: String,
-        translator: BrailleTranslator
-    ): Pair<String, List<CellSource>>? {
+        translator: BrailleTranslator,
+        onChunk: (TranslatedChunk) -> Unit,
+    ) {
+        val startedAt = System.currentTimeMillis()
         val sb = StringBuilder(text.length)
-        // 逐格源下标用 int 缓冲攒，不用 List<CellSource>：整本大书逐格建对象会
-        // 把 256MB 堆吃穿（真机 OOM）。段落起点记在全书坐标系里，跨段不串位。
         val positions = IntPositionBuffer(text.length + 16)
         var index = 0
         var paragraphStart = 0
         var invalidCells = 0
-        for (paragraph in text.split('\n')) {
-            if (paragraph.isBlank()) {
-                sb.append('\n')
-                paragraphStart += paragraph.length + 1
-                continue
-            }
-            index++
-            val startedAt = System.currentTimeMillis()
-            var res = translator.translate(paragraph, -1, false)
-            var attempt = 1
-            while (res == null && attempt < TRANSLATE_ATTEMPTS) {
-                // 桥偶尔会在长书翻译中途返回 null（服务重启、AIDL 抖动）。先原地重试，
-                // 别因为一段失败把整本打回原文——用户看到的就是「翻译失败」。
-                Log.w(LOG_TAG, "translate retry #$attempt at paragraph #$index len=${paragraph.length}")
-                SystemClock.sleep(TRANSLATE_RETRY_DELAY_MS)
-                res = translator.translate(paragraph, -1, false)
-                attempt++
-            }
-            if (res == null) {
-                // 定位「翻译失败」到底卡在哪一段：段序、段长、耗时一起记，便于判断是
-                // 单段过大、表不匹配还是服务在中途掉线。
-                Log.w(LOG_TAG, "translate null at paragraph #$index len=${paragraph.length} " +
-                    "elapsed=${System.currentTimeMillis() - startedAt}ms")
-                return null
-            }
-            sb.append(BrailleFileDecoder.cellsToUnicodeText(res.cells)).append('\n')
-            // 每格回挂到源字符：位置数组比格数短时缺的格按无映射补 -1，宁缺不串。
-            val cellCount = res.cells.size
-            val toText = res.brailleToTextPositions
-            var invalid = 0
-            for (cell in 0 until cellCount) {
-                val pos = toText.getOrNull(cell) ?: -1
-                val mapped = if (pos in paragraph.indices) paragraphStart + pos else -1
-                if (mapped < 0) invalid++
-                positions.add(mapped)
-            }
-            invalidCells += invalid
-            if (index == 1 || index % 1000 == 0) {
-                Log.d(LOG_TAG, "map probe #$index para=${paragraph.take(12)} " +
-                    "cells=$cellCount invalid=$invalid " +
-                    "pos=${toText.take(24).joinToString(",")}")
-            }
-            paragraphStart += paragraph.length + 1
+        var failedAt = 0
+        var publishedChars = 0
+        var publishedCells = 0
+        var lastPublishAt = SystemClock.uptimeMillis()
+
+        fun publish(done: Boolean) {
+            if (sb.length == publishedChars && !done) return
+            // 交出去的必须是**增量**：UI 侧只往流末尾追，整段重复交会翻倍铺流。
+            val delta = sb.substring(publishedChars)
+            val deltaCells = positions.copyFrom(publishedCells)
+            publishedChars = sb.length
+            publishedCells += deltaCells.size
+            lastPublishAt = SystemClock.uptimeMillis()
+            onChunk(TranslatedChunk(
+                text = delta,
+                cellPositions = deltaCells,
+                done = done,
+                failedAtParagraph = failedAt,
+                paragraphs = index,
+            ))
         }
-        Log.d(LOG_TAG, "translate ok: paragraphs=$index cells=${sb.length} " +
-            "invalidCells=$invalidCells")
-        return sb.toString() to CellSourceTable(text, positions.toIntArray())
+
+        try {
+            for (paragraph in text.split('\n')) {
+                if (paragraph.isBlank()) {
+                    sb.append('\n')
+                    paragraphStart += paragraph.length + 1
+                    continue
+                }
+                index++
+                val paraStartedAt = System.currentTimeMillis()
+                var res = translator.translate(paragraph, -1, false)
+                var attempt = 1
+                while (res == null && attempt < TRANSLATE_ATTEMPTS) {
+                    Log.w(LOG_TAG, "translate retry #$attempt at paragraph #$index len=${paragraph.length}")
+                    SystemClock.sleep(TRANSLATE_RETRY_DELAY_MS)
+                    res = translator.translate(paragraph, -1, false)
+                    attempt++
+                }
+                if (res == null) {
+                    Log.w(LOG_TAG, "translate null at paragraph #$index len=${paragraph.length} " +
+                        "elapsed=${System.currentTimeMillis() - paraStartedAt}ms")
+                    failedAt = index
+                    break
+                }
+                sb.append(BrailleFileDecoder.cellsToUnicodeText(res.cells)).append('\n')
+                // 每格回挂到源字符：位置数组比格数短时缺的格按无映射补 -1，宁缺不串。
+                val cellCount = res.cells.size
+                val toText = res.brailleToTextPositions
+                for (cell in 0 until cellCount) {
+                    val pos = if (cell < toText.size) toText[cell] else -1
+                    val mapped = if (pos in paragraph.indices) paragraphStart + pos else -1
+                    if (mapped < 0) invalidCells++
+                    positions.add(mapped)
+                }
+                paragraphStart += paragraph.length + 1
+                val sincePublish = SystemClock.uptimeMillis() - lastPublishAt
+                if ((publishedChars == 0 && sb.length >= FIRST_PUBLISH_CHARS) ||
+                    sincePublish >= PUBLISH_INTERVAL_MS) {
+                    publish(false)
+                }
+            }
+        } catch (t: Throwable) {
+            // 包括 OutOfMemoryError：别让翻译线程把进程带走，已翻好的部分照样交出去。
+            Log.w(LOG_TAG, "翻译中断: ${t.message}")
+            if (failedAt == 0) failedAt = index + 1
+        }
+
+        Log.d(LOG_TAG, "translate end: paragraphs=$index chars=${sb.length} " +
+            "invalidCells=$invalidCells failedAt=$failedAt " +
+            "elapsed=${System.currentTimeMillis() - startedAt}ms")
+        publish(true)
     }
 
     /**
@@ -1149,8 +1273,10 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         when (action) {
             ReaderDisplayAction.PREV_LINE -> moveLineFromKey(-1)
             ReaderDisplayAction.NEXT_LINE -> moveLineFromKey(1)
-            ReaderDisplayAction.PREV_PAGE -> advance(-1)
-            ReaderDisplayAction.NEXT_PAGE -> advance(1)
+            // 上下行键在单行点显器上没有行可分，按「它自己一屏」步进：
+            // 一次挪动 mDisplayCells 方，正好换掉点显器上的一屏。
+            ReaderDisplayAction.PREV_PAGE -> moveLineFromKey(-1)
+            ReaderDisplayAction.NEXT_PAGE -> moveLineFromKey(1)
             ReaderDisplayAction.FIRST_PAGE -> gotoUnit(0)
             // 越界由 gotoUnit 钳到末屏，不必自己算页数。
             ReaderDisplayAction.LAST_PAGE -> gotoUnit(Int.MAX_VALUE)
@@ -1248,30 +1374,108 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     // ------------------------------------------------------------------
 
     /**
-     * 目录：按固定页数分组的导航。
+     * 目录：优先按书自己的章节标题（「第X章」「序言」「尾声」…）列，识别不到才按页分组。
      *
-     * 不做章节自动识别——实测不可靠：1787 行的书只能识别出 3 个「候选标题」，
-     * 且全是封面/版权信息，真实章节标题与正文连在一起无法自动切分。
-     * 改为按页分组 + 首行预览，行为可预期。
+     * 早先一律按 10 页一组：一本 300 万字的书页数上万，目录变成上万条「第 1-10 页」，
+     * 听下来全是页码，没有任何能用来找内容的线索。章节标题是书自己给的结构，
+     * 出发点是「第几章 什么题目」，比页码有用得多。
      */
     private fun showToc() {
         if (mStream.isEmpty()) {
             toastNoContent()
             return
         }
-        val unit = readingUnit()
+        val table = mCellSpans as? CellSourceTable
+        if (mSourceKind == ReaderSourceKind.TEXT && table != null) {
+            val chapters = ReaderChapters.detect(mSourceText)
+            if (chapters.size >= 2) {
+                val targets = mapChaptersToStream(chapters, table)
+                if (targets.size == chapters.size) {
+                    readerDialog = ReaderDialog.Toc(
+                        getString(R.string.braille_reader_toc_title),
+                        chapters.map { it.title }, targets)
+                    Log.d(LOG_TAG, "toc: chapters=${chapters.size} entries")
+                    return
+                }
+            }
+        }
+        showPageGroupedToc(table)
+    }
+
+    /**
+     * 逐章起点映射到盲文流偏移：走一遍流，格序号对应的源字符下标一越过章节起点
+     * 就记下当前流位置。整本只扫一次，不按章重复扫。
+     */
+    private fun mapChaptersToStream(
+        chapters: List<ReaderChapters.Chapter>,
+        table: CellSourceTable,
+    ): List<Int> {
+        val targets = ArrayList<Int>(chapters.size)
+        var chapter = 0
+        var cells = 0
+        for (i in mStream.indices) {
+            val c = mStream[i]
+            if (c.code !in 0x2800..0x28FF) continue
+            val charPos = if (cells < table.size) table.charPosAt(cells) else Int.MAX_VALUE
+            while (chapter < chapters.size && charPos >= chapters[chapter].startChar) {
+                targets.add(i)
+                chapter++
+            }
+            cells++
+            if (chapter >= chapters.size) break
+        }
+        // 剩下没找到的（章节在流的末尾之外，例如还没翻到）落在文末。
+        while (targets.size < chapters.size) targets.add(maxOffset())
+        return targets
+    }
+
+    /** 兜底目录：按页分组，条目数控制在 [TOC_MAX_ENTRIES] 以内，尽量带上首行预览。 */
+    private fun showPageGroupedToc(table: CellSourceTable?) {
         val total = totalUnits()
+        val step = maxOf(TOC_PAGE_STEP, (total + TOC_MAX_ENTRIES - 1) / TOC_MAX_ENTRIES)
         val labels = ArrayList<String>()
         val targets = ArrayList<Int>()
         var u = 0
         while (u < total) {
-            val last = min(u + TOC_PAGE_STEP, total) - 1
-            labels.add(getString(R.string.braille_reader_toc_item, u + 1, last + 1))
+            val last = min(u + step, total) - 1
+            val preview = pagePreview(u, table)
+            labels.add(if (preview.isEmpty()) {
+                getString(R.string.braille_reader_toc_item, u + 1, last + 1)
+            } else {
+                getString(R.string.braille_reader_toc_item_preview,
+                    u + 1, last + 1, preview)
+            })
             targets.add(u)
             u = last + 1
         }
         readerDialog = ReaderDialog.Toc(
             getString(R.string.braille_reader_toc_title), labels, targets)
+    }
+
+    /**
+     * 某组页的首行预览（原文）。只有翻译流（有逐格源表）才给得出汉字；
+     * 纯盲文文件没有原文，预览留空，让标签只显示页范围，免得念一串点位。
+     */
+    private fun pagePreview(unit: Int, table: CellSourceTable?): String {
+        if (table == null || mSourceKind != ReaderSourceKind.TEXT) return ""
+        val startOffset = mPageOffsets.getOrElse(unit) { 0 }
+        var cells = 0
+        for (i in 0 until startOffset.coerceAtMost(mStream.length)) {
+            if (mStream[i].code in 0x2800..0x28FF) cells++
+        }
+        if (cells >= table.size) return ""
+        val charPos = table.charPosAt(cells)
+        if (charPos !in mSourceText.indices) return ""
+        val sb = StringBuilder()
+        var i = charPos
+        // 取到换行或够长为止，跳过缩进空格
+        while (i < mSourceText.length && sb.length < PREVIEW_CHARS) {
+            val c = mSourceText[i]
+            if (c == '\n' || c == '\r') break
+            if (c != '\u3000' && c != ' ') sb.append(c)
+            i++
+        }
+        return sb.toString()
     }
 
     private fun onTocPicked(which: Int) {
@@ -1532,6 +1736,13 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         /** 单段翻译失败后的原地重试次数与间隔（桥抖动多为瞬时）。 */
         private const val TRANSLATE_ATTEMPTS = 3
         private const val TRANSLATE_RETRY_DELAY_MS = 300L
+
+        /**
+         * 边翻边读：第一块攒够这么多字就先上屏（约 1–2 秒），之后每
+         * [PUBLISH_INTERVAL_MS] 毫秒续一块，免得用户对着「正在翻译」干等一分钟。
+         */
+        private const val FIRST_PUBLISH_CHARS = 12_000
+        private const val PUBLISH_INTERVAL_MS = 2_000L
         /**
          * 点显器方数上限，仅用于兜住驱动误报。
          * 常见单行点显器为 12–80 方，多行显示器最多数百方；
@@ -1562,8 +1773,12 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         private val FONT_SIZES = listOf(18, 22, 26)
         /** 目录每 N 页一条。 */
         private const val TOC_PAGE_STEP = 10
+        /** 兜底（按页分组）目录最多这么多条，超了就把每组页数加大。 */
+        private const val TOC_MAX_ENTRIES = 150
         /** 目录/书签列表里预览用到的方数。 */
         private const val PREVIEW_CELLS = 40
+        /** 目录预览取多少个原文字。 */
+        private const val PREVIEW_CHARS = 14
         /** 翻译服务未就绪时挂起的翻译请求。 */
         private data class PendingTranslation(
             val text: String,

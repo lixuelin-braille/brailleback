@@ -96,6 +96,10 @@
     <string name="braille_reader_translating">"正在翻译为盲文…"</string>
     <string name="braille_reader_translator_waiting">"正在启动盲文翻译服务…"</string>
     <string name="braille_reader_translate_fail">"翻译失败，已显示原文；连接点显器可输出盲文"</string>
+    <string name="braille_reader_translate_partial">"已翻出前 %1$d 页，可以先读；剩下的在后台接着翻。"</string>
+    <string name="braille_reader_translate_done">"整本翻译完成，共 %1$d 页。"</string>
+    <string name="braille_reader_translate_partial_stop">"翻译在第 %1$d 段停下，已翻出的 %2$d 页可以先读。"</string>
+    <string name="braille_reader_restored">"已回到上次读到的第 %1$d 页，共 %2$d 页。"</string>
     <string name="braille_reader_table_mismatch">"当前盲文表（%1$s）可能不支持本书的语言，翻译结果可能不正确；请在设置中选择中文盲文表"</string>
     <string name="braille_reader_unsupported_format">"暂不支持 .%1$s 格式。可打开盲文文件（.bdo、.bdoc、.brf、.brl）、纯文本（.txt）、EPUB、HTML、Markdown 或 Word（.docx）"</string>
     <string name="braille_reader_page">"第 %1$d / %2$d 页"</string>
@@ -107,6 +111,7 @@
     <string name="braille_reader_no_content">"请先打开文件"</string>
     <string name="braille_reader_toc_title">"目录"</string>
     <string name="braille_reader_toc_item">"第%1$d-%2$d页"</string>
+    <string name="braille_reader_toc_item_preview">"第%1$d-%2$d页  %3$s"</string>
     <string name="braille_reader_bookmarks_title">"书签"</string>
     <string name="braille_reader_bm_item">"第%1$d页  %2$s"</string>
     <string name="braille_reader_bm_added">"已添加书签：第 %1$d 页"</string>

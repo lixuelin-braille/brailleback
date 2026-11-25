@@ -10,13 +10,17 @@
 
 package com.linxi.brailleback.compose
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -28,10 +32,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /** 阅读器界面静态文案（取自资源，Screen 不碰 Context）。 */
 internal data class ReaderLabels(
@@ -161,24 +168,23 @@ internal fun BrailleReaderScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                OutlinedButton(
-                    onClick = onPrev,
+                // 一个按键只挂一处点击：早先是 OutlinedButton(onClick) 外面又套
+                // combinedClickable，双击 TalkBack 时两条路径都触发，一次点按走两页；
+                // 这里直接用一个 combinedClickable 的盒子承担点击与长按。
+                ReaderButton(
+                    label = labels.prev,
                     enabled = uiState.prevEnabled,
-                    modifier = Modifier
-                        .weight(1f)
-                        .combinedClickable(onClick = onPrev, onLongClick = onPrevLine),
-                ) {
-                    Text(labels.prev)
-                }
-                OutlinedButton(
-                    onClick = onNext,
+                    onClick = onPrev,
+                    onLongClick = onPrevLine,
+                    modifier = Modifier.weight(1f),
+                )
+                ReaderButton(
+                    label = labels.next,
                     enabled = uiState.nextEnabled,
-                    modifier = Modifier
-                        .weight(1f)
-                        .combinedClickable(onClick = onNext, onLongClick = onNextLine),
-                ) {
-                    Text(labels.next)
-                }
+                    onClick = onNext,
+                    onLongClick = onNextLine,
+                    modifier = Modifier.weight(1f),
+                )
             }
 
             // 第二行：目录 / 书签 / 跳页
@@ -425,4 +431,41 @@ private fun GotoDialog(
             OutlinedButton(onClick = onDismiss) { Text(labels.cancel) }
         },
     )
+}
+
+/**
+ * 单一点击入口的按钮：点击前进/后退，长按逐行。
+ *
+ * 不用 OutlinedButton 再套 combinedClickable——那样一次点按会从两条路径各走一次，
+ * 翻页变成一次跳两页（真机上就像「翻页不对劲」）。这里 enabled 也交给
+ * combinedClickable，禁用时 TalkBack 与长按一起失效，语义与视觉一致。
+ */
+@Composable
+private fun ReaderButton(
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val borderColor = if (enabled) MaterialTheme.colorScheme.outline
+    else MaterialTheme.colorScheme.outlineVariant
+    val textColor = if (enabled) MaterialTheme.colorScheme.onSurface
+    else MaterialTheme.colorScheme.onSurfaceVariant
+    Box(
+        modifier = modifier
+            .heightIn(min = 48.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .border(1.dp, borderColor, RoundedCornerShape(8.dp))
+            .combinedClickable(
+                enabled = enabled,
+                role = Role.Button,
+                onClick = onClick,
+                onLongClick = onLongClick,
+            )
+            .padding(vertical = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, color = textColor, style = MaterialTheme.typography.labelLarge)
+    }
 }

@@ -36,16 +36,31 @@ data class CellSource(
  */
 class CellSourceTable(
     val sourceText: String,
-    private val charPositions: IntArray,
+    charPositions: IntArray,
 ) : AbstractList<CellSource>() {
 
-    override val size: Int get() = charPositions.size
+    private var positions: IntArray = charPositions
+
+    override val size: Int get() = positions.size
 
     /** 第 [cell] 格对应的源字符下标；-1 或越界都表示无映射。 */
-    fun charPosAt(cell: Int): Int = charPositions[cell]
+    fun charPosAt(cell: Int): Int = positions[cell]
+
+    /**
+     * 后台翻译续块时往表尾追加一段位置（只在 UI 线程调用，与阅读流追加同序）。
+     * 与 [append] 不同，这里保持同一个表对象：`ReaderSourceModel` 拿着的引用不用换。
+     */
+    fun appendAll(more: IntArray) {
+        if (more.isEmpty()) return
+        val old = positions
+        val grown = IntArray(old.size + more.size)
+        old.copyInto(grown)
+        more.copyInto(grown, old.size)
+        positions = grown
+    }
 
     override fun get(index: Int): CellSource {
-        val pos = charPositions[index]
+        val pos = positions[index]
         if (pos !in sourceText.indices) return CellSource.NONE
         val ch = sourceText[pos].toString()
         return CellSource(SourceSpan(pos, pos + 1, ch), ch)
@@ -72,6 +87,12 @@ class IntPositionBuffer(initialCapacity: Int = 1024) {
     }
 
     fun toIntArray(): IntArray = data.copyOf(size)
+
+    /** 取 [from, size) 这一段，用于按块交出去的增量。 */
+    fun copyFrom(from: Int): IntArray {
+        if (from >= size) return IntArray(0)
+        return data.copyOfRange(from, size)
+    }
 }
 
 object SourceSpanMapper {
