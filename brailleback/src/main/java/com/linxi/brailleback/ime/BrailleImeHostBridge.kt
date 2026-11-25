@@ -21,15 +21,11 @@ import android.content.Context
 import android.graphics.Region
 import android.os.Build
 import android.os.Bundle
-import android.speech.tts.TextToSpeech
-import android.speech.tts.UtteranceProgressListener
 import android.util.DisplayMetrics
 import android.util.Log
 import android.view.Display
 import android.view.View
 import android.view.WindowManager
-import android.view.accessibility.AccessibilityEvent
-import android.view.accessibility.AccessibilityManager
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import com.google.android.accessibility.braille.interfaces.BrailleImeForTalkBack
@@ -51,9 +47,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.util.ArrayDeque
-import java.util.Locale
-import java.util.Queue
 
 /** BrailleBack 侧的 TalkBack 桥接实现。 */
 class BrailleImeHostBridge(private val service: BrailleBackService) :
@@ -62,6 +55,7 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
   private val context: Context = service.getApplicationContext()
   private val focusFinder: FocusFinder = FocusFinder(service)
   private val feedbackController: FeedbackController = FeedbackController(context)
+  private val speech = BrailleImeHostSpeech(context)
 
   /**
    * 本桥接的主线程作用域。原来这里有一个自建的 main Handler，专门排三种延迟
@@ -82,75 +76,10 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
   /** 宿主提供的键盘容器视图，用于把播报内容转成读屏可读的无障碍公告。 */
   private var announcementView: View? = null
 
-  private var textToSpeech: TextToSpeech? = null
-  private var ttsReady = false
-  private val pendingUtterances: Queue<CharSequence> = ArrayDeque()
-
   private var readingGranularity: ReadingGranularity = ReadingGranularity.CHARACTER
 
   init {
-    initTts()
-  }
-
-  private fun initTts() {
-    textToSpeech =
-        TextToSpeech(
-            context,
-            TextToSpeech.OnInitListener { status ->
-              val tts = textToSpeech
-              if (status != TextToSpeech.SUCCESS || tts == null) {
-                // 没有可用 TTS 引擎时静默降级：键盘仍可打字，只是没有字符语音反馈。
-                ttsReady = false
-                return@OnInitListener
-              }
-              val result = tts.setLanguage(Locale.getDefault())
-              if (result == TextToSpeech.LANG_MISSING_DATA ||
-                  result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                tts.setLanguage(Locale.ENGLISH)
-              }
-              tts.setOnUtteranceProgressListener(
-                  object : UtteranceProgressListener() {
-                    override fun onStart(utteranceId: String?) {}
-
-                    override fun onDone(utteranceId: String?) {}
-
-                    override fun onError(utteranceId: String?) {}
-                  })
-              ttsReady = true
-              drainPendingUtterances()
-            })
-  }
-
-  private fun drainPendingUtterances() {
-    if (!ttsReady || textToSpeech == null) {
-      return
-    }
-    var text: CharSequence? = pendingUtterances.poll()
-    while (text != null) {
-      speakNow(text, /* flush= */ false)
-      text = pendingUtterances.poll()
-    }
-  }
-
-  private fun speakNow(text: CharSequence?, flush: Boolean) {
-    if (text == null || text.length == 0) {
-      return
-    }
-    if (!ttsReady || textToSpeech == null) {
-      // 限制队列长度，避免 TTS 一直不可用时无限堆积。
-      if (pendingUtterances.size < 8) {
-        pendingUtterances.add(text)
-      }
-      return
-    }
-    // 属性不参与智能转换：这里再取一次，取不到就放弃这句朗读。
-    val tts = textToSpeech ?: return
-    val params = Bundle()
-    tts.speak(
-        text,
-        if (flush) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD,
-        params,
-        TTS_UTTERANCE_ID)
+    speech.initTts()
   }
 
   // ---------------------------------------------------------------------------------------
@@ -163,17 +92,17 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
     // 有外部读屏在跑时，把播报内容以无障碍公告（TYPE_ANNOUNCEMENT）交给读屏朗读：
     // 这样语音库、语速、音量全部跟读屏一致，不会出现"读屏读一段、自带 TTS 读另一段"。
     val view = announcementView
-    val viaAnnouncement = hasExternalScreenReader() && view != null
+    val viaAnnouncement = speech.hasExternalScreenReader() && view != null
     Log.d(
         "BBSpeech",
         "speak text=" + charSequence + " delay=" + delayMs +
             " via=" + (if (viaAnnouncement) "announcement" else "tts"))
     if (viaAnnouncement) {
       val announce = {
-        if (sendAnnouncementEvent(charSequence)) {
+        if (speech.sendAnnouncementEvent(charSequence)) {
           // 公告投递成功，就不再走自带 TTS，避免两路语音同时出声。
         } else {
-          speakNow(charSequence, flush)
+          speech.speakNow(charSequence, flush)
         }
       }
       if (delayMs > 0) {
@@ -187,10 +116,10 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
     } else if (delayMs > 0) {
       mainScope.launch {
         delay(delayMs.toLong())
-        speakNow(charSequence, flush)
+        speech.speakNow(charSequence, flush)
       }
     } else {
-      speakNow(charSequence, flush)
+      speech.speakNow(charSequence, flush)
     }
     if (speakOptions != null && speakOptions.mCompletedAction != null) {
       // 简化：不追踪读屏朗读完成事件，直接回调成功状态。
@@ -203,38 +132,6 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
     if (view != null) {
       // 仅作兜底：真正的公告改由 AccessibilityManager 直接投递，不再依赖视图的无障碍重要度。
       view.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES)
-    }
-  }
-
-  /**
-   * 以无障碍公告事件（TYPE_ANNOUNCEMENT）把文本交给读屏朗读。
-   *
-   * <p>此前用的是 {@code View.announceForAccessibility}，它必须通过视图的
-   * {@code includeForAccessibility()} 判定：键盘容器只是个普通 FrameLayout，既不可点击也没有
-   * live region，很多 ROM 会判定"对无障碍不重要"而把公告静默丢掉，表现就是"一部分内容读不出来"。
-   * 改为 {@link AccessibilityManager#sendAccessibilityEvent} 直接投递，绕开视图重要度门槛。
-   *
-   * @return true 表示事件已投递成功（不代表读屏一定朗读）
-   */
-  private fun sendAnnouncementEvent(text: CharSequence?): Boolean {
-    if (text == null || text.length == 0) {
-      return false
-    }
-    try {
-      val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
-      if (am == null || !am.isEnabled()) {
-        return false
-      }
-      val event = AccessibilityEvent.obtain(AccessibilityEvent.TYPE_ANNOUNCEMENT)
-      event.setPackageName(context.getPackageName())
-      event.setClassName(BrailleImeHostBridge::class.java.name)
-      event.getText().add(text)
-      // 该事件由系统回收，不要自行 recycle。
-      am.sendAccessibilityEvent(event)
-      return true
-    } catch (t: Throwable) {
-      Log.w(TAG, "sendAnnouncementEvent failed", t)
-      return false
     }
   }
 
@@ -654,11 +551,7 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
   }
 
   override fun interruptSpeak() {
-    val tts = textToSpeech
-    if (tts != null && ttsReady) {
-      tts.stop()
-    }
-    pendingUtterances.clear()
+    speech.interrupt()
   }
 
   override fun disableSilenceOnProximity() {
@@ -688,30 +581,6 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
 
   override fun shouldAnnounceCharacterForPhysicalKeyboard(): Boolean {
     return true
-  }
-
-  /** 是否除本应用之外还有别的无障碍服务在跑（即存在读屏接管朗读）。 */
-  private fun hasExternalScreenReader(): Boolean {
-    try {
-      val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
-      if (am == null || !am.isEnabled()) {
-        return false
-      }
-      val services =
-          am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
-      for (info in services) {
-        if (info.getResolveInfo() == null || info.getResolveInfo().serviceInfo == null) {
-          continue
-        }
-        val pkg = info.getResolveInfo().serviceInfo.packageName
-        if (pkg != null && pkg != context.getPackageName()) {
-          return true
-        }
-      }
-    } catch (e: RuntimeException) {
-      Log.w(TAG, "hasExternalScreenReader failed", e)
-    }
-    return false
   }
 
   override fun shouldUseCharacterGranularity(): Boolean {
@@ -760,18 +629,13 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
     // 先撤掉所有在排的延迟（播报延迟、直通区落地），再关 TTS：
     // 否则服务销毁后还会有一拍往已 shutdown 的 TTS 里说话。
     mainScope.cancel()
-    val tts = textToSpeech
-    if (tts != null) {
-      tts.stop()
-      tts.shutdown()
-      textToSpeech = null
-    }
+    speech.shutdown()
     feedbackController.shutdown()
   }
 
   companion object {
-    private const val TAG = "BrailleImeHostBridge"
-    private const val TTS_UTTERANCE_ID = "brailleime"
+    internal const val TAG = "BrailleImeHostBridge"
+    internal const val TTS_UTTERANCE_ID = "brailleime"
     /** 等待 setServiceInfo 在系统侧生效的时间，再设置直通区。 */
     private const val PASSTHROUGH_APPLY_DELAY_MS = 150L
 
