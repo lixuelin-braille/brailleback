@@ -18,6 +18,7 @@
 <string name="connprog_wujie_service_missing">"设备没有提供无界 GATT 服务，请保持厂商 BLE 模式"</string>
 <string name="connprog_wujie_mtu">"BLE 未能协商到足够大的数据包（需要 MTU 33 以上），请重试连接"</string>
 <string name="connprog_wujie_no_write">"没有找到可写特征，无法发送盲文数据"</string>
+<string name="connprog_wujie_timeout">"点显器对蓝牙写入没有响应，正在重新连接"</string>
 <string name="key_wujie_page_next">"下一页"</string>
 <string name="key_wujie_page_previous">"上一页"</string>
 <string name="pref_connection_protocol_wujie_label">"无界书城 BLE GATT（厂商协议）"</string>

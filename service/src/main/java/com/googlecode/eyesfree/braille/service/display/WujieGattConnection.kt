@@ -78,6 +78,7 @@ class WujieGattConnection {
     @Volatile private var mClosed = false
     private var mOpInFlight = false
     private var mFrameOpQueued = false
+    private var mConsecutiveOpTimeouts = 0
     private var mCandidateIndex = 0
     private var mInFlightFrame: ByteArray? = null
     private var mMtu = 23
@@ -96,6 +97,31 @@ class WujieGattConnection {
             Timber.w("Wujie GATT setup incomplete after %d ms; " +
                     "continuing with the display", SETUP_TIMEOUT_MS)
             finishSetup()
+        }
+    }
+
+    /**
+     * 单次 GATT 操作超时：Android 的 BLE 栈一次只允许一个操作，回调一丢整个队列就卡死，
+     * 表现是「连着，但屏不再更新」。这里超时即放弃该操作、重排队列；连续
+     * [OP_TIMEOUTS_BEFORE_FAIL] 次都拿不到回调，说明通道已经废了，直接断链让服务走重连退避。
+     */
+    private val mOpTimeout = Runnable {
+        val escalated = synchronized(mLock) {
+            if (!mOpInFlight || mClosed) {
+                return@synchronized false
+            }
+            mOpInFlight = false
+            mConsecutiveOpTimeouts += 1
+            mInFlightFrame = null
+            mFrameOpQueued = false
+            Timber.w("Wujie GATT op timed out (%d in a row, %d ms)",
+                    mConsecutiveOpTimeouts, OP_TIMEOUT_MS)
+            queueFrameOpLocked()
+            runNextOpLocked()
+            mConsecutiveOpTimeouts >= OP_TIMEOUTS_BEFORE_FAIL
+        }
+        if (escalated) {
+            fail(ERROR_TIMEOUT)
         }
     }
 
@@ -641,6 +667,9 @@ class WujieGattConnection {
             return
         }
         mOpInFlight = true
+        // 每个操作都上一根计时绳：回调不来就不会有人调 finishOp，队列会一直卡在这里。
+        mHandler.removeCallbacks(mOpTimeout)
+        mHandler.postDelayed(mOpTimeout, OP_TIMEOUT_MS)
         next.run()
     }
 
@@ -652,6 +681,9 @@ class WujieGattConnection {
 
     private fun finishOpLocked() {
         mOpInFlight = false
+        // 拿到回调就说明栈还活着，把连续超时计数归零。
+        mConsecutiveOpTimeouts = 0
+        mHandler.removeCallbacks(mOpTimeout)
         runNextOpLocked()
     }
 
@@ -662,6 +694,7 @@ class WujieGattConnection {
         mFailureNotified = true
         mHandler.removeCallbacks(mConnectTimeout)
         mHandler.removeCallbacks(mSetupTimeout)
+        mHandler.removeCallbacks(mOpTimeout)
         closeGatt()
         mListener.onWujieConnectFailed(this, error)
     }
@@ -716,6 +749,12 @@ class WujieGattConnection {
         private val CONNECT_TIMEOUT_MS = 15000L
         private val SETUP_TIMEOUT_MS = 4000L
 
+        /** 单次 GATT 操作多久没回调就按超时处理；正常写一帧在毫秒级，4 秒足够宽松。 */
+        private val OP_TIMEOUT_MS = 4000L
+
+        /** 连续这么多次操作超时，判定通道已死，断链交服务重连。 */
+        private val OP_TIMEOUTS_BEFORE_FAIL = 3
+
         private val KEY_NAME_NEXT = "next"
         private val KEY_NAME_PREVIOUS = "prev"
 
@@ -724,6 +763,9 @@ class WujieGattConnection {
         const val ERROR_SERVICE = -3
         const val ERROR_MTU = -4
         const val ERROR_NO_WRITE = -5
+
+        /** 连续 GATT 操作拿不到回调，通道判定已死。 */
+        const val ERROR_TIMEOUT = -6
 
         private fun findCharacteristic(
                 gatt: BluetoothGatt, uuid: UUID): BluetoothGattCharacteristic? {

@@ -36,6 +36,7 @@
     <string name="connprog_wujie_service_missing">The display did not expose the Wujie GATT service. Keep it in vendor BLE mode.</string>
     <string name="connprog_wujie_mtu">The BLE connection could not negotiate a large enough packet (MTU 33+). Try reconnecting.</string>
     <string name="connprog_wujie_no_write">No writable characteristic was found, so braille output cannot be sent.</string>
+    <string name="connprog_wujie_timeout">The display stopped responding to Bluetooth writes; reconnecting.</string>
     <!-- Friendly names for the two paging keys on the Wujie display. -->
     <string name="key_wujie_page_next">Next page</string>
     <string name="key_wujie_page_previous">Previous page</string>

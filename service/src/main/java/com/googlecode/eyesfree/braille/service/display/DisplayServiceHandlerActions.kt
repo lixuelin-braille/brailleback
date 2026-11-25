@@ -212,6 +212,7 @@ fun handleOnWujieConnectFailed(
         WujieGattConnection.ERROR_SERVICE -> R.string.connprog_wujie_service_missing
         WujieGattConnection.ERROR_MTU -> R.string.connprog_wujie_mtu
         WujieGattConnection.ERROR_NO_WRITE -> R.string.connprog_wujie_no_write
+        WujieGattConnection.ERROR_TIMEOUT -> R.string.connprog_wujie_timeout
         else -> {
             service.mHandler.setConnectionProgress(
                     service.getString(

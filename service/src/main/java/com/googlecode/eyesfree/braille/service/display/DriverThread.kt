@@ -58,6 +58,22 @@ class DriverThread(
     private val TELEMETRY_INTERVAL_MILLIS = 5000L
     private val STALL_WARN_MILLIS = 2000L
 
+    /**
+     * 链路停滞判定：连续写失败 3 次，或有待写内容却 10 秒没成功写过一次，就认定这条
+     * 连接已死，报 onDriverFailed 让服务走既有退避重连。11-13 记的「USB 写超时后只能
+     * 拔插」就是缺这一步——写不进去时连接状态还挂着，刷新永远停在上一次内容。
+     */
+    private val stallPolicy = LinkStallPolicy()
+
+    /** 连续失败计数；成功一次清零。只在驱动线程与遥测线程之间用 @Volatile。 */
+    @Volatile private var consecutiveWriteFailures = 0
+
+    /** 只报一次 onDriverFailed，避免重连过程中反复触发。 */
+    private val driverFailureNotified = AtomicBoolean(false)
+
+    /** 最近一次成功写入的时刻（uptime），停滞判定的基准。 */
+    @Volatile private var lastSuccessAt = SystemClock.uptimeMillis()
+
     private val mHandler: Handler
     private val mHandlerThread: HandlerThread
 
@@ -98,6 +114,27 @@ class DriverThread(
                     "window refresh stalled: %d request(s) waiting, " +
                         "last write %dms ago",
                     pending, idle)
+            }
+            // 警告之外还要动作：停太久或连续失败，就判定链路已死，交给服务断链重连。
+            if (stallPolicy.shouldEscalate(
+                    SystemClock.uptimeMillis(), lastSuccessAt,
+                    pending > 0, consecutiveWriteFailures)) {
+                if (driverFailureNotified.compareAndSet(false, true)) {
+                    LogUtils.e(this@DriverThread,
+                        "link declared dead: %d request(s) waiting, " +
+                            "last success %dms ago, %d consecutive failure(s); " +
+                            "asking the service to reconnect",
+                        pending,
+                        SystemClock.uptimeMillis() - lastSuccessAt,
+                        consecutiveWriteFailures)
+                    try {
+                        initListener.onDriverFailed()
+                    } catch (ex: Throwable) {
+                        // 回调异常不能带走守护线程，否则没人再判死链。
+                        LogUtils.e(this@DriverThread, ex,
+                            "onDriverFailed dispatch failed")
+                    }
+                }
             }
         }
     }.apply {
@@ -252,8 +289,11 @@ class DriverThread(
         statExecuted += 1
         if (ok) {
             statNativeOk += 1
+            consecutiveWriteFailures = 0
+            lastSuccessAt = SystemClock.uptimeMillis()
         } else {
             statNativeFail += 1
+            consecutiveWriteFailures += 1
         }
         statLastElapsedMs = elapsed
         statLastCells = buffer.size
