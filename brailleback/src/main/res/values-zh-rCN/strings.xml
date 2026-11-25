@@ -81,7 +81,7 @@
     <string name="braille_reader_open">"打开"</string>
     <string name="braille_reader_prev">"上一页"</string>
     <string name="braille_reader_next">"下一页"</string>
-    <string name="braille_reader_nav_hint">"长按「上一页/下一页」可逐行移动；双击页码滑块可输入页码"</string>
+    <string name="braille_reader_nav_hint">"长按翻页可逐行；双击滑块输页码"</string>
     <string name="braille_reader_send">"发送点显"</string>
     <string name="braille_reader_load_fail">"文件读取失败：%1$s"</string>
     <string name="braille_reader_err_empty">"这个文件是空的"</string>

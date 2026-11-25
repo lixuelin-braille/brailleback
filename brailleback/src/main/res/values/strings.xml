@@ -109,7 +109,7 @@
     <string name="braille_reader_open">Open</string>
     <string name="braille_reader_prev">Prev</string>
     <string name="braille_reader_next">Next</string>
-    <string name="braille_reader_nav_hint">Long-press Prev / Next to move one line; double-tap the page slider to enter a page number</string>
+    <string name="braille_reader_nav_hint">Long-press paging to move by line; double-tap a slider to type a number</string>
     <string name="braille_reader_send">Send to display</string>
     <string name="braille_reader_load_fail">Failed to load file: %1$s</string>
     <string name="braille_reader_err_empty">The file is empty</string>

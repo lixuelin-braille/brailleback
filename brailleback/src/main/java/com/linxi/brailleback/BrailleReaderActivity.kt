@@ -592,6 +592,8 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
                 onDismissDialog = { readerDialog = null },
                 onPageSeek = ::gotoUnit,
                 onPageEdit = ::showGotoDialog,
+                onLineSeek = ::moveToPageLine,
+                onLineEdit = ::showPageLineDialog,
                 onLineConfirm = ::onPageLineConfirmed,
                 onTextMetrics = ::onScreenTextMetrics,
             )

@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -27,6 +28,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
@@ -49,6 +51,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.invisibleToUser
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.role
@@ -172,6 +175,10 @@ internal fun BrailleReaderScreen(
     onPageSeek: (Int) -> Unit = {},
     /** 点页码文字：弹数字输入「跳到第几页」。 */
     onPageEdit: () -> Unit = {},
+    /** 拖动行滑块：按本页行号（0 基）定位。 */
+    onLineSeek: (Int) -> Unit = {},
+    /** 点行文字：弹数字输入「跳到本页第 N 行」。 */
+    onLineEdit: () -> Unit = {},
     /** 数字输入确认（行号从 1 开始）。 */
     onLineConfirm: (Int) -> Unit = {},
     /** 实测正文区一行能排几个等宽字符、能排几行（换字号/横竖屏都要重报）。 */
@@ -180,8 +187,10 @@ internal fun BrailleReaderScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            // 底部提示行会被系统导航栏压住，按导航栏高度让开。
+            .navigationBarsPadding(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         // 文本区：按行/段拆成多个可聚焦节点，不整页合并为一个焦点。
         var textArea by remember { mutableStateOf(IntSize.Zero) }
@@ -227,26 +236,45 @@ internal fun BrailleReaderScreen(
             }
         }
 
-        // 页码滑块：自绘的一个部件，**只占一个无障碍节点**，照系统桌面底部那排翻页提示。
+        // 两个滑块：上面管页（整本书跨页），下面管本页的行（页内逐行切换）。
         //
-        // 这一段前后踩过两个坑：把文字与 Slider 并排，是三个焦点（页码、行号、滑块）；
-        // 用 mergeDescendants 把整块并起来，TalkBack 仍然读到「滑块」两次——
-        // 因为 M3 Slider 自带 RangeInfo 语义，它和外面声明的描述会各自成节点。
-        // 所以这里不用 Slider：自己画一条滑轨，语义只声明一次
-        // （contentDescription = 第 N 页 共 M 页，progressBarRangeInfo/setProgress = 上下滑一格一页，
-        // onClick = 双击弹页码输入），绘制走 Canvas，不产生任何子节点。
-        // 上方的段号小字只给眼睛看，不进朗读内容。
+        // 每一块都是自绘的部件、各占一个无障碍节点。为什么不用 M3 Slider：
+        // 它自带 RangeInfo 语义，与外面声明的描述会各自变成一个节点，读屏念两遍。
+        // 所以自己画滑轨，语义各声明一次，子节点为零。
+        // 段号小字只给眼睛看，不进朗读内容。
         if (uiState.hasContent) {
-            PageScrubber(
-                description = labels.pageScrubber(uiState.pageIndex + 1, uiState.pageCount),
-                pageInfo = uiState.pageInfo,
-                pageIndex = uiState.pageIndex,
-                pageCount = uiState.pageCount,
-                actionLabel = labels.pageScrubberAction,
-                fontSizeSp = uiState.fontSizeSp,
-                onSeek = onPageSeek,
-                onEdit = onPageEdit,
-            )
+            // 段号小字：只给眼睛看，不进朗读（invisibleToUser 让它不产生可聚焦节点）。
+            if (uiState.pageInfo.isNotEmpty()) {
+                Text(
+                    text = uiState.pageInfo,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.semantics { invisibleToUser() },
+                )
+            }
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                ScrubberBar(
+                    description = labels.pageScrubber(uiState.pageIndex + 1, uiState.pageCount),
+                    index = uiState.pageIndex,
+                    count = uiState.pageCount,
+                    actionLabel = labels.pageScrubberAction,
+                    fontSizeSp = uiState.fontSizeSp,
+                    onSeek = onPageSeek,
+                    onEdit = onPageEdit,
+                )
+                ScrubberBar(
+                    description = labels.pageLine(uiState.lineIndex + 1, uiState.lineCount),
+                    index = uiState.lineIndex,
+                    count = uiState.lineCount,
+                    actionLabel = labels.pageLineAction,
+                    fontSizeSp = uiState.fontSizeSp,
+                    onSeek = onLineSeek,
+                    onEdit = onLineEdit,
+                )
+            }
         } else if (uiState.pageInfo.isNotEmpty()) {
             Text(
                 text = uiState.pageInfo,
@@ -254,34 +282,10 @@ internal fun BrailleReaderScreen(
             )
         }
 
-        // 第一行：上一页 / 下一页（「发送点显」已按用户要求去掉：
-        // 连上点显器后翻页与进页会自动推屏，不需要一个常年停用的按钮）
+        // 第一行：目录 / 书签。
+        // 翻页与逐行都改成滑块了，「上一页 / 下一页」按钮不再需要；
+        // 「跳页」按钮也去掉了：页码滑块双击就是「跳到第几页」。
         if (uiState.hasContent) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                // 一个按键只挂一处点击：早先是 OutlinedButton(onClick) 外面又套
-                // combinedClickable，双击 TalkBack 时两条路径都触发，一次点按走两页；
-                // 这里直接用一个 combinedClickable 的盒子承担点击与长按。
-                ReaderButton(
-                    label = labels.prev,
-                    enabled = uiState.prevEnabled,
-                    onClick = onPrev,
-                    onLongClick = onPrevLine,
-                    modifier = Modifier.weight(1f),
-                )
-                ReaderButton(
-                    label = labels.next,
-                    enabled = uiState.nextEnabled,
-                    onClick = onNext,
-                    onLongClick = onNextLine,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-
-            // 第二行：目录 / 书签。
-            // 「跳页」按钮已去掉：页码滑块双击就是「跳到第几页」，同一个功能不再留两个入口。
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -323,10 +327,11 @@ internal fun BrailleReaderScreen(
             }
         }
 
-        // 底部提示行（最后焦点）
+        // 底部提示行（最后焦点）。加了第二条滑块之后纵向吃紧，这里用最小字号，
+        // 免得被系统导航栏压住。
         Text(
             text = labels.navHint,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodySmall,
         )
     }
 
@@ -531,21 +536,20 @@ private fun GotoDialog(
  * 页码滑块：一个部件、一个无障碍节点，照系统桌面底部那排翻页提示的样子。
  *
  * 为什么不用 M3 `Slider`：它自带 `progressBarRangeInfo` 语义，与我们在外层声明的
- * 描述会各自变成一个 AccessibilityNode，读屏就停在「滑块」和「页码」两处。
+ * 描述会各自变成一个 AccessibilityNode，读屏就停在「滑块」和「文字」两处。
  * 这里自己画：Canvas 只负责像素，语义整块声明在同一个 Box 上，子节点为零。
  *
- * - 读屏：念「第 N 页 共 M 页」+「滑块」，一格一页（RangeInfo + setProgress）；
- *   双击走 onClick，弹「跳到第几页」的数字输入。
- * - 版式按用户要求：文字在左，**滑轨接在文字后面**（右侧），像普通滑块那样摆着。
- * - 上面的小字（段号）只画给眼睛看，**不进朗读内容**。
- * - 触摸：按在滑轨上就跳到对应页，横向拖动则一页一页地跟手。
+ * - 读屏：念 [description] + 「滑块」，上下滑一格一格走（RangeInfo + setProgress）；
+ *   双击走 onClick，弹数字输入。
+ * - 版式：文字在左，**滑轨接在文字后面**（右侧），像普通滑块那样摆着。
+ * - [note] 是只画给眼睛看的小字，**不进朗读内容**。
+ * - 触摸：按在滑轨上就跳到对应格，横向拖动则一格一格地跟手。
  */
 @Composable
-private fun PageScrubber(
+private fun ScrubberBar(
     description: String,
-    pageInfo: String,
-    pageIndex: Int,
-    pageCount: Int,
+    index: Int,
+    count: Int,
     actionLabel: String,
     fontSizeSp: Int,
     onSeek: (Int) -> Unit,
@@ -558,25 +562,20 @@ private fun PageScrubber(
         color = MaterialTheme.colorScheme.onSurface,
     )
     val text = measurer.measure(AnnotatedString(description), lineStyle)
-    // 页码：只供眼睛看的小字，比正文小一号、暗一档。
-    val pageText = if (pageInfo.isEmpty()) null else measurer.measure(
-        AnnotatedString(pageInfo),
-        lineStyle.copy(
-            fontSize = (fontSizeSp - 4).sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        ),
-    )
-    val pageHeightDp = pageText?.let { with(density) { it.size.height.toDp() } } ?: 0.dp
-    // 页码文字与滑轨同一行、滑轨在文字右侧；这一行的高度取「文字高度」与「滑轨高度」的较大者。
+    // 文字与滑轨同一行、滑轨在文字右侧；这一行的高度取「文字高度」与「滑轨高度」的较大者。
     val textHeightDp = with(density) { text.size.height.toDp() }
-    val rowHeight = maxOf(textHeightDp, 26.dp)
-    val barHeight = pageHeightDp + rowHeight + 4.dp
-    val maxIndex = (pageCount - 1).coerceAtLeast(1)
+    // 行高要比文字本身再高一点：正好等于文字高度时上下会被 Canvas 切掉半截笔画。
+    val rowHeight = maxOf(textHeightDp + 6.dp, 26.dp)
+    val barHeight = rowHeight
+    val maxIndex = (count - 1).coerceAtLeast(1)
     val thumbColor = MaterialTheme.colorScheme.primary
     val trackColor = MaterialTheme.colorScheme.outlineVariant
     // drawText 不会沿用 layout 里 style 的颜色，必须显式传，否则默认画成黑色
     // （在深色背景上就等于看不见）。
-    val lineColor = MaterialTheme.colorScheme.onSurface
+    
+    // 正文那些 Text 用的是 LocalContentColor；Canvas 自绘必须取同一个色，
+    // 用 onSurface 在深色主题里会画得明显偏暗（读屏不受影响，但屏上几乎看不见）。
+    val lineColor = LocalContentColor.current
     val pageColor = MaterialTheme.colorScheme.onSurfaceVariant
     // 滑轨几何先算成像素：Canvas 与 pointerInput 用同一套，免得触摸和画的位置对不上。
     val radiusPx = with(density) { 6.dp.toPx() }
@@ -588,10 +587,10 @@ private fun PageScrubber(
         modifier = Modifier
             .fillMaxWidth()
             .height(barHeight)
-            // 触摸：按下即跳到该页，拖动时一页一页跟手。
-            // 只有一页时不必响应（拖不出任何东西）。
-            .pointerInput(pageCount, maxIndex, trackStartPx) {
-                if (pageCount < 2) return@pointerInput
+            // 触摸：按下即跳到该格，拖动时一格一格跟手。
+            // 只有一格时不必响应（拖不出任何东西）。
+            .pointerInput(count, maxIndex, trackStartPx) {
+                if (count < 2) return@pointerInput
                 awaitEachGesture {
                     val down = awaitFirstDown()
                     val span = (size.width - trackStartPx).coerceAtLeast(1f)
@@ -613,13 +612,13 @@ private fun PageScrubber(
             .semantics {
                 contentDescription = description
                 // 滑块语义（用户要求保留「滑块」这个词，像桌面那排翻页提示）：
-                // 读屏念「第 N 页 共 M 页」+「滑块」，一格一页。
+                // 读屏念 [description] + 「滑块」，一格一格走。
                 stateDescription = description
-                if (pageCount >= 2) {
+                if (count >= 2) {
                     progressBarRangeInfo = ProgressBarRangeInfo(
-                        pageIndex.toFloat(),
+                        index.toFloat(),
                         0f..maxIndex.toFloat(),
-                        (pageCount - 2).coerceAtLeast(0),
+                        (count - 2).coerceAtLeast(0),
                     )
                     setProgress { target ->
                         onSeek(target.roundToInt().coerceIn(0, maxIndex))
@@ -633,15 +632,12 @@ private fun PageScrubber(
             },
     ) {
         Canvas(Modifier.fillMaxSize()) {
-            val pageHeightPx = with(density) { pageHeightDp.toPx() }
-            pageText?.let { drawText(it, color = pageColor, topLeft = Offset(0f, 0f)) }
-            val rowTop = pageHeightPx
             val rowHeightPx = rowHeight.toPx()
-            // 页码在左、垂直居中；滑轨接在它后面（右侧），同一行里摆开。
-            val textTop = rowTop + (rowHeightPx - text.size.height) / 2
+            // 文字在左、垂直居中；滑轨接在它后面（右侧），同一行里摆开。
+            val textTop = (rowHeightPx - text.size.height) / 2
             drawText(text, color = lineColor, topLeft = Offset(0f, textTop))
-            val cy = rowTop + rowHeightPx / 2
-            if (pageCount >= 2 && trackStartPx + radiusPx < size.width) {
+            val cy = rowHeightPx / 2
+            if (count >= 2 && trackStartPx + radiusPx < size.width) {
                 drawLine(
                     color = trackColor,
                     start = Offset(trackStartPx, cy),
@@ -650,7 +646,7 @@ private fun PageScrubber(
                     cap = StrokeCap.Round,
                 )
                 val span = (size.width - trackStartPx - radiusPx).coerceAtLeast(1f)
-                val fraction = pageIndex.toFloat() / maxIndex
+                val fraction = index.toFloat() / maxIndex
                 drawCircle(
                     color = thumbColor,
                     radius = radiusPx,
