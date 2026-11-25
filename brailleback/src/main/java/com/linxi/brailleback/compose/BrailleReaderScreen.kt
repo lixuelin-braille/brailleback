@@ -46,13 +46,14 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.drawText
@@ -525,8 +526,10 @@ private fun GotoDialog(
  * 这里自己画：Canvas 只负责像素，语义整块声明在同一个 Box 上，子节点为零。
  *
  * - 读屏：只念「第几行 / 共几行」；上下滑一格走一行（RangeInfo + setProgress）；
+ * - 读屏：这一块是「滑块」语义，调它时会先念百分比、再念「第几行 / 共几行」；
  *   双击走 onClick，弹「跳到本页第 N 行」的数字输入。
- * - 页码只画在屏上（第二行小字），**不进朗读内容**：用户要求滑块里不要页码。
+ * - 版式按用户要求：行数在左，**滑块在行数后面**（右侧），像普通滑块那样摆着。
+ * - 页码只画在屏上（顶部小字），**不进朗读内容**：用户要求滑块里不要页码。
  * - 触摸：按在滑轨上就跳到对应行，横向拖动则一行一行地跟手。
  */
 @Composable
@@ -556,8 +559,10 @@ private fun LineScrubber(
         ),
     )
     val pageHeightDp = pageText?.let { with(density) { it.size.height.toDp() } } ?: 0.dp
-    val trackHeight = 18.dp
-    val barHeight = pageHeightDp + with(density) { text.size.height.toDp() } + trackHeight + 4.dp
+    // 行数与滑轨同一行、滑轨在行数右侧；这一行的高度取「文字高度」与「滑轨高度」的较大者。
+    val textHeightDp = with(density) { text.size.height.toDp() }
+    val rowHeight = maxOf(textHeightDp, 26.dp)
+    val barHeight = pageHeightDp + rowHeight + 4.dp
     val maxIndex = (lineCount - 1).coerceAtLeast(1)
     val thumbColor = MaterialTheme.colorScheme.primary
     val trackColor = MaterialTheme.colorScheme.outlineVariant
@@ -565,6 +570,11 @@ private fun LineScrubber(
     // （在深色背景上就等于看不见）。
     val lineColor = MaterialTheme.colorScheme.onSurface
     val pageColor = MaterialTheme.colorScheme.onSurfaceVariant
+    // 滑轨几何先算成像素：Canvas 与 pointerInput 用同一套，免得触摸和画的位置对不上。
+    val radiusPx = with(density) { 6.dp.toPx() }
+    val gapPx = with(density) { 14.dp.toPx() }
+    val textWidthPx = text.size.width.toFloat()
+    val trackStartPx = textWidthPx + gapPx + radiusPx
 
     Box(
         modifier = Modifier
@@ -572,12 +582,13 @@ private fun LineScrubber(
             .height(barHeight)
             // 触摸：按下即跳到该行，拖动时一行一行跟手。
             // 只有一行时不必响应（拖不出任何东西）。
-            .pointerInput(lineCount, maxIndex) {
+            .pointerInput(lineCount, maxIndex, trackStartPx) {
                 if (lineCount < 2) return@pointerInput
                 awaitEachGesture {
                     val down = awaitFirstDown()
+                    val span = (size.width - trackStartPx).coerceAtLeast(1f)
                     fun seekAt(x: Float) {
-                        val fraction = (x / size.width).coerceIn(0f, 1f)
+                        val fraction = ((x - trackStartPx) / span).coerceIn(0f, 1f)
                         onSeek((fraction * maxIndex).roundToInt())
                     }
                     seekAt(down.position.x)
@@ -593,26 +604,20 @@ private fun LineScrubber(
             }
             .semantics {
                 contentDescription = description
-                // 这里**故意不声明** progressBarRangeInfo：
-                // 一旦是「滑块/进度条」语义，读屏调它时必定先念「百分之 5」，
-                // 而这一页要的读数只有行号。去掉 RangeInfo 就没有百分比，
-                // 调整改由下面的自定义动作承担（操作菜单里「上一行 / 下一行」）。
+                // 恢复「滑块」语义（用户要求）：读屏调它时会先念百分比、再念
+                // 「第 N 行 / 共 M 行」。stateDescription 保证行号那句用的是我们的文案，
+                // 不会被换成别的说法。
                 stateDescription = description
                 if (lineCount >= 2) {
-                    customActions = listOf(
-                        CustomAccessibilityAction("上一行") {
-                            if (lineIndex > 0) onSeek(lineIndex - 1)
-                            true
-                        },
-                        CustomAccessibilityAction("下一行") {
-                            if (lineIndex < maxIndex) onSeek(lineIndex + 1)
-                            true
-                        },
-                        CustomAccessibilityAction(actionLabel) {
-                            onEdit()
-                            true
-                        },
+                    progressBarRangeInfo = ProgressBarRangeInfo(
+                        lineIndex.toFloat(),
+                        0f..maxIndex.toFloat(),
+                        (lineCount - 2).coerceAtLeast(0),
                     )
+                    setProgress { target ->
+                        onSeek(target.roundToInt().coerceIn(0, maxIndex))
+                        true
+                    }
                 }
                 onClick(label = actionLabel) {
                     onEdit()
@@ -623,24 +628,26 @@ private fun LineScrubber(
         Canvas(Modifier.fillMaxSize()) {
             val pageHeightPx = with(density) { pageHeightDp.toPx() }
             pageText?.let { drawText(it, color = pageColor, topLeft = Offset(0f, 0f)) }
-            drawText(text, color = lineColor, topLeft = Offset(0f, pageHeightPx))
-            val radius = 6.dp.toPx()
-            // 滑轨贴底画，别压到文字：上面两行文字，下面一条轨。
-            val cy = size.height - radius - 1.dp.toPx()
-            if (lineCount >= 2) {
+            val rowTop = pageHeightPx
+            val rowHeightPx = rowHeight.toPx()
+            // 行数在左、垂直居中；滑轨接在它后面（右侧），同一行里摆开。
+            val textTop = rowTop + (rowHeightPx - text.size.height) / 2
+            drawText(text, color = lineColor, topLeft = Offset(0f, textTop))
+            val cy = rowTop + rowHeightPx / 2
+            if (lineCount >= 2 && trackStartPx + radiusPx < size.width) {
                 drawLine(
                     color = trackColor,
-                    start = Offset(radius, cy),
-                    end = Offset(size.width - radius, cy),
+                    start = Offset(trackStartPx, cy),
+                    end = Offset(size.width - radiusPx, cy),
                     strokeWidth = 2.dp.toPx(),
                     cap = StrokeCap.Round,
                 )
-                val span = (size.width - radius * 2).coerceAtLeast(1f)
+                val span = (size.width - trackStartPx - radiusPx).coerceAtLeast(1f)
                 val fraction = lineIndex.toFloat() / maxIndex
                 drawCircle(
                     color = thumbColor,
-                    radius = radius,
-                    center = Offset(radius + span * fraction, cy),
+                    radius = radiusPx,
+                    center = Offset(trackStartPx + span * fraction, cy),
                 )
             }
         }
