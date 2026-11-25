@@ -56,6 +56,7 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
   private val focusFinder: FocusFinder = FocusFinder(service)
   private val feedbackController: FeedbackController = FeedbackController(context)
   private val speech = BrailleImeHostSpeech(context)
+  private val nodeActions = BrailleImeHostNodeActions(service, focusFinder)
 
   /**
    * 本桥接的主线程作用域。原来这里有一个自建的 main Handler，专门排三种延迟
@@ -158,13 +159,13 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
           service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS)
 
       // ---------------- 节点动作 ----------------
-      ScreenReaderAction.CLICK_CURRENT, ScreenReaderAction.CLICK_NODE -> clickFocusedNode()
+      ScreenReaderAction.CLICK_CURRENT, ScreenReaderAction.CLICK_NODE -> nodeActions.clickFocusedNode()
       ScreenReaderAction.LONG_CLICK_CURRENT, ScreenReaderAction.LONG_CLICK_NODE ->
-          longClickFocusedNode()
+          nodeActions.longClickFocusedNode()
       ScreenReaderAction.SCROLL_FORWARD ->
-          scrollFocusedNode(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+          nodeActions.scrollFocusedNode(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
       ScreenReaderAction.SCROLL_BACKWARD ->
-          scrollFocusedNode(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
+          nodeActions.scrollFocusedNode(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
 
       // ---------------- 光标按粒度移动 ----------------
       // 这三个动作以前一律返回 false，等于"逐字符/逐词/逐行"三组手势在帮助里有、按了没反应。
@@ -192,9 +193,9 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
       ScreenReaderAction.PREVIOUS_READING_CONTROL -> cycleReadingGranularity(/* forward= */ false)
 
       // ---------------- 页首 / 页尾 ----------------
-      ScreenReaderAction.CURSOR_TO_BEGINNING -> selectRange(/* start= */ 0, /* end= */ 0)
+      ScreenReaderAction.CURSOR_TO_BEGINNING -> nodeActions.selectRange(/* start= */ 0, /* end= */ 0)
       ScreenReaderAction.CURSOR_TO_END ->
-          selectRange(/* start= */ NO_POSITION, /* end= */ NO_POSITION)
+          nodeActions.selectRange(/* start= */ NO_POSITION, /* end= */ NO_POSITION)
 
       // ---------------- 选择 ----------------
       ScreenReaderAction.SELECT_NEXT_CHARACTER ->
@@ -209,14 +210,14 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
           moveByGranularity(ReadingGranularity.LINE, /* forward= */ true, EXTEND)
       ScreenReaderAction.SELECT_PREVIOUS_LINE ->
           moveByGranularity(ReadingGranularity.LINE, /* forward= */ false, EXTEND)
-      ScreenReaderAction.SELECT_ALL -> selectAll()
-      ScreenReaderAction.SELECT_CURRENT_TO_START -> selectCurrentTo(/* toStart= */ true)
-      ScreenReaderAction.SELECT_CURRENT_TO_END -> selectCurrentTo(/* toStart= */ false)
+      ScreenReaderAction.SELECT_ALL -> nodeActions.selectAll()
+      ScreenReaderAction.SELECT_CURRENT_TO_START -> nodeActions.selectCurrentTo(/* toStart= */ true)
+      ScreenReaderAction.SELECT_CURRENT_TO_END -> nodeActions.selectCurrentTo(/* toStart= */ false)
 
       // ---------------- 剪贴板 ----------------
-      ScreenReaderAction.COPY -> performNodeAction(AccessibilityNodeInfo.ACTION_COPY)
-      ScreenReaderAction.CUT -> performNodeAction(AccessibilityNodeInfo.ACTION_CUT)
-      ScreenReaderAction.PASTE -> performNodeAction(AccessibilityNodeInfo.ACTION_PASTE)
+      ScreenReaderAction.COPY -> nodeActions.performNodeAction(AccessibilityNodeInfo.ACTION_COPY)
+      ScreenReaderAction.CUT -> nodeActions.performNodeAction(AccessibilityNodeInfo.ACTION_CUT)
+      ScreenReaderAction.PASTE -> nodeActions.performNodeAction(AccessibilityNodeInfo.ACTION_PASTE)
 
       else -> {
         // 其余动作属于 TalkBack 的导航/网络浏览体系，BrailleBack 无对应实现。
@@ -249,7 +250,7 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
       forward: Boolean,
       extend: Boolean
   ): Boolean {
-    val node = findTextNode()
+    val node = nodeActions.findTextNode()
     if (node == null) {
       return false
     }
@@ -280,110 +281,9 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
     return true
   }
 
-  /** 全选。 */
-  private fun selectAll(): Boolean {
-    val node = findTextNode()
-    if (node == null || node.getText() == null) {
-      return false
-    }
-    return setSelection(node, 0, node.getText().length)
-  }
-
-  /**
-   * 选择区间。
-   *
-   * @param start NO_POSITION 表示沿用当前选区起点，end NO_POSITION 表示到文本末尾
-   */
-  private fun selectRange(start: Int, end: Int): Boolean {
-    val node = findTextNode()
-    if (node == null) {
-      return false
-    }
-    val text = node.getText()
-    val length = if (text == null) 0 else text.length
-    val resolvedStart = if (start == NO_POSITION) 0 else start
-    val resolvedEnd = if (end == NO_POSITION) length else end
-    return setSelection(node, resolvedStart, resolvedEnd)
-  }
-
-  /** 从当前光标/选区扩展到文本开头或末尾。 */
-  private fun selectCurrentTo(toStart: Boolean): Boolean {
-    val node = findTextNode()
-    if (node == null) {
-      return false
-    }
-    val text = node.getText()
-    val length = if (text == null) 0 else text.length
-    var selStart = node.getTextSelectionStart()
-    var selEnd = node.getTextSelectionEnd()
-    if (selStart < 0) {
-      selStart = 0
-    }
-    if (selEnd < 0) {
-      selEnd = selStart
-    }
-    // 以"离目标更远的那一端"为基准扩展，保证从任意方向都能一次到位。
-    if (toStart) {
-      return setSelection(node, 0, Math.max(selStart, selEnd))
-    }
-    return setSelection(node, Math.min(selStart, selEnd), length)
-  }
-
-  private fun setSelection(node: AccessibilityNodeInfoCompat, start: Int, end: Int): Boolean {
-    val args = Bundle()
-    args.putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, Math.max(0, start))
-    args.putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, Math.max(0, end))
-    return node.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, args)
-  }
-
-  private fun performNodeAction(action: Int): Boolean {
-    val node = findTextNode()
-    return node != null && node.performAction(action)
-  }
-
-  /** 找到当前可操作的文本框：优先输入焦点，其次无障碍焦点，最后在活跃窗口里搜第一个可编辑节点。 */
-  private fun findTextNode(): AccessibilityNodeInfoCompat? {
-    var node = focusFinder.findFocusCompat(AccessibilityNodeInfo.FOCUS_INPUT)
-    if (isTextNode(node)) {
-      return node
-    }
-    node = focusFinder.findAccessibilityFocus()
-    if (isTextNode(node)) {
-      return node
-    }
-    try {
-      val root = service.getRootInActiveWindow()
-      if (root == null) {
-        return null
-      }
-      return findEditableDescendant(AccessibilityNodeInfoCompat.wrap(root), /* depth= */ 0)
-    } catch (e: RuntimeException) {
-      Log.w(TAG, "findTextNode failed", e)
-      return null
-    }
-  }
-
   /** 播报一段文字：有外部读屏时走无障碍公告，否则用自带 TTS。 */
   private fun announce(text: CharSequence) {
     speak(text, /* delayMs= */ 0, /* speakOptions= */ null)
-  }
-
-  private fun clickFocusedNode(): Boolean {
-    var node = focusFinder.findAccessibilityFocus()
-    if (node == null) {
-      node = focusFinder.findFocusCompat(AccessibilityNodeInfo.FOCUS_INPUT)
-    }
-    return node != null && node.performAction(AccessibilityNodeInfoCompat.ACTION_CLICK)
-  }
-
-  private fun longClickFocusedNode(): Boolean {
-    val node = focusFinder.findAccessibilityFocus()
-    return node != null && node.performAction(AccessibilityNodeInfoCompat.ACTION_LONG_CLICK)
-  }
-
-  private fun scrollFocusedNode(action: Int): Boolean {
-    val node = focusFinder.findAccessibilityFocus()
-    return node != null && node.performAction(action)
   }
 
   override fun onBrailleImeActivated(
@@ -642,7 +542,7 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
     private const val NO_EXTEND = false
     private const val EXTEND = true
     /** 表示"用节点当前的选区/文本长度"，而不是一个具体下标。 */
-    private const val NO_POSITION = -1
+    internal const val NO_POSITION = -1
 
     private fun granularityAnnouncementRes(granularity: ReadingGranularity): Int {
       return when (granularity) {
@@ -656,33 +556,6 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
         else ->
             com.google.android.accessibility.brailleime.R.string.bb_granularity_character
       }
-    }
-
-    private fun findEditableDescendant(
-        node: AccessibilityNodeInfoCompat?,
-        depth: Int
-    ): AccessibilityNodeInfoCompat? {
-      if (node == null || depth > 40) {
-        return null
-      }
-      if (isTextNode(node)) {
-        return node
-      }
-      for (i in 0 until node.getChildCount()) {
-        val child = node.getChild(i)
-        if (child == null) {
-          continue
-        }
-        val found = findEditableDescendant(child, depth + 1)
-        if (found != null) {
-          return found
-        }
-      }
-      return null
-    }
-
-    private fun isTextNode(node: AccessibilityNodeInfoCompat?): Boolean {
-      return node != null && node.getText() != null
     }
   }
 }
