@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  仅 debug 构建：把「点显图片」页开放给 adb，供脚本化冒烟测试使用。
+  理由：主清单里它是 exported=false（只能从书架进），盲人用户不方便靠点屏幕进页，
+  debug 包放开一条 adb 直达路径（带 image_file 参数即可），
+  release 构建不合并本文件，主清单仍是 exported=false。
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    package="com.linxi.brailleback">
+
+    <application>
+        <activity
+            android:name=".tactile.TactileStripActivity"
+            android:exported="true"
+            tools:replace="android:exported"
+            tools:ignore="ExportedActivity" />
+    </application>
+</manifest>
