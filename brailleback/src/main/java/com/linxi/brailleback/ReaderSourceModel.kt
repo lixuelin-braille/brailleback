@@ -25,6 +25,15 @@ data class ReaderPageView(
     val paragraphCount: Int,
 )
 
+/**
+ * 正文列表里的一项 = 一段可聚焦文本 + 它属于第几页（0 基）。
+ *
+ * 正文现在是一条可以往下滚的焦点流：屏幕里摆的不止本页的段，
+ * 还接着后面几页的段，焦点滑到页末会自然进到下一页的段。
+ * 页号不必等翻页动作，看「当前第一段落在哪一页」就知道了。
+ */
+data class ReaderSegment(val text: String, val pageIndex: Int)
+
 object ReaderSourceModel {
 
     /**

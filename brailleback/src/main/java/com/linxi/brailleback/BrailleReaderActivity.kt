@@ -120,6 +120,17 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     /** 最近一屏视图模型结果，供页码行与无障碍播报取用。 */
     private var mLastView: ReaderPageView? = null
 
+    /**
+     * 正文列表当前加载的段落窗口（本页 + 后面几页）。
+     *
+     * 读屏焦点滑到页末最后一段时必须有「下一段」可去，否则焦点就停在页末不动。
+     * 窗口里接着后面页的段，焦点于是能一路滑下去，滚过页边界时页号跟着前进。
+     */
+    private var mWindowSegments: List<ReaderSegment> = emptyList()
+
+    /** 窗口里已经装到第几页（含），滚到窗口尾部时按页续装。 */
+    private var mWindowEndUnit = 0
+
     /** 已播报过的屏序号，避免逐行移动重复播报。 */
     private var mAnnouncedUnit = -1
 
@@ -568,6 +579,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
                     },
                     pageScrubberAction = getString(R.string.braille_reader_page_scrubber_action),
                     pageLineAction = getString(R.string.braille_reader_page_line_action),
+                    nextPage = getString(R.string.braille_reader_next_page),
                 ),
                 dialog = readerDialog,
                 onPrev = { advance(-1) },
@@ -595,6 +607,9 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
                 onLineSeek = ::moveToPageLine,
                 onLineEdit = ::showPageLineDialog,
                 onLineOverflow = ::onLineOverflow,
+                // 滚屏即分页：首可见段落在哪一页，页号就跟到哪一页。
+                onTopSegment = ::onTopSegment,
+                onNeedMoreSegments = ::onNeedMoreSegments,
                 onLineConfirm = ::onPageLineConfirmed,
                 onTextMetrics = ::onScreenTextMetrics,
             )
@@ -1297,7 +1312,8 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     private fun gotoUnit(unit: Int) {
         if (mPageOffsets.isEmpty()) return
         mOffset = mPageOffsets[unit.coerceIn(0, mPageOffsets.size - 1)]
-        showPage()
+        // 用户明确换页：正文列表回顶，从这一页第一段开始。
+        showPage(resetScroll = true)
     }
 
     /**
@@ -1321,7 +1337,8 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         }.coerceIn(0, maxOffset())
         Log.d(LOG_TAG, "move: ${if (delta >= 0) "+" else "-"}$step " +
             "offset=$beforeOffset -> $mOffset")
-        showPage()
+        // 逐行是「整屏上移一行」：窗口从新的视口首行重铺，列表跟着回顶。
+        showPage(resetScroll = true)
     }
 
     /**
@@ -1367,7 +1384,91 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         }
     }
 
-    private fun showPage() {
+    /**
+     * 正文列表的段落窗口：从 [fromUnit] 起连续 [pages] 页的可聚焦段落，每段带页号。
+     *
+     * 只做纯文本重建，不动 mOffset 与页表；页号由「首可见段落在哪一页」反查，
+     * 所以这里给的 pageIndex 就是分页的依据。
+     */
+    private fun buildWindowSegment(fromUnit: Int, pages: Int): List<ReaderSegment> {
+        if (mStream.isEmpty()) return emptyList()
+        val unit = readingUnit()
+        val out = ArrayList<ReaderSegment>()
+        val endUnit = (fromUnit + pages - 1).coerceAtMost(totalUnits() - 1)
+        for (u in fromUnit..endUnit) {
+            out.addAll(buildUnitSegments(u, unit))
+        }
+        return out
+    }
+
+    /** 单独一页的段落（页首铺满一整页），供窗口续装用。 */
+    private fun buildUnitSegments(u: Int, unit: Int): List<ReaderSegment> {
+        val start = mPageOffsets.getOrElse(u) { mOffset }
+        val pageEnd = BrailleFileDecoder.nextOffset(mStream, start, unit)
+        val brailleText = BrailleFileDecoder.screenAt(
+            mStream, start, mCellsPerLine, mLinesPerPage)
+        val count = (pageEnd - start).coerceIn(1, unit)
+        val view = ReaderSourceModel.build(
+            kind = mSourceKind,
+            sourceText = mSourceText,
+            brailleScreenText = brailleText,
+            spans = mCellSpans,
+            offset = start,
+            count = count,
+            currentUnit = u,
+            totalUnits = totalUnits(),
+            stream = mCellSpans?.let { mStream },
+        )
+        return view.focusSegments.map { ReaderSegment(it, u) }
+    }
+
+    /**
+     * 正文滚到第 [index] 段成为首可见项：页号跟着它所属的页走。
+     *
+     * 只改 mOffset 与本页行表，**不重建段落**——重建会把滚动位置顶回去，
+     * 跟手指抢。滚屏时「一页」只是分页刻度，行号从页首重新算。
+     */
+    private fun onTopSegment(index: Int) {
+        val seg = mWindowSegments.getOrNull(index) ?: return
+        val unit = seg.pageIndex
+        if (unit == currentUnit()) return
+        mOffset = mPageOffsets.getOrElse(unit) { mOffset }
+        Log.i(LOG_TAG, "scroll page: unit=$unit offset=$mOffset")
+        refreshPageGeometry()
+        updateUiState()
+        if (mConnected) sendToDisplay()
+        saveProgress()
+    }
+
+    /** 窗口快滚到头了：再往后装一页，焦点才不会断在半路。 */
+    private fun onNeedMoreSegments() {
+        if (mStream.isEmpty()) return
+        val next = mWindowEndUnit + 1
+        if (next >= totalUnits()) return
+        mWindowSegments = mWindowSegments + buildUnitSegments(next, readingUnit())
+        mWindowEndUnit = next
+        uiState = uiState.copy(focusSegments = mWindowSegments)
+        Log.i(LOG_TAG, "scroll window: +unit=$next size=${mWindowSegments.size}")
+    }
+
+    /** 只重算当前页的行表与行号（页号变了但不重铺正文时用）。 */
+    private fun refreshPageGeometry() {
+        val unit = readingUnit()
+        val pageStart = if (mStream.isEmpty()) mOffset
+        else mPageOffsets.getOrElse(currentUnit()) { mOffset }
+        val pageEnd = if (mStream.isEmpty()) pageStart
+        else BrailleFileDecoder.nextOffset(mStream, pageStart, unit)
+        mPageLineStarts = if (mStream.isEmpty()) intArrayOf(0)
+        else BrailleFileDecoder.lineStarts(
+            mStream, pageStart, mCellsPerLine, mLinesPerPage, pageEnd)
+        Log.i(LOG_TAG, "page geometry: unit=${currentUnit()} lines=${mPageLineStarts.size}")
+        uiState = uiState.copy(
+            lineIndex = 0,
+            lineCount = mPageLineStarts.size.coerceAtLeast(1),
+        )
+    }
+
+    private fun showPage(resetScroll: Boolean = true) {
         val unit = readingUnit()
         // 屏幕正文从**视口首行**开始铺满一整屏。
         // 视口首行取光标所在的那一行：光标停在页首时视口就是整页（与翻页观感完全一致），
@@ -1408,11 +1509,23 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             stream = mCellSpans?.let { mStream },
         )
         mLastView = view
+        // 正文列表的窗口：**本屏（视口首行起）的段**，再接后面几页的段。
+        // 读屏焦点滑到页末最后一段时，后面必须有下一段可去，它才肯继续往下；
+        // 窗口里已有后续页的段，焦点于是能一路滑过去，滚过页边界时页号自己前进，
+        // 不需要「下一页」节点、也不需要双击。
+        //
+        // 第一页从 viewStart（视口首行）起而不是页首：硬件键逐行 / 长按翻页仍然
+        // 是「整屏上移一行」，窗口跟着 viewStart 走，观感不变。
+        mWindowSegments = view.focusSegments.map { ReaderSegment(it, currentUnit()) } +
+            buildWindowSegment(currentUnit() + 1, WINDOW_PAGES - 1)
+        mWindowEndUnit = (currentUnit() + WINDOW_PAGES - 1).coerceAtMost(totalUnits() - 1)
         uiState = uiState.copy(
             readerText = view.displayText,
-            focusSegments = view.focusSegments,
+            focusSegments = mWindowSegments,
             lineIndex = lineIndex,
             lineCount = mPageLineStarts.size.coerceAtLeast(1),
+            // 只有用户自己换页/跳行才回顶；翻译推进导致页表重建、滚屏引起页号变化都不回顶。
+            scrollToken = if (resetScroll) uiState.scrollToken + 1 else uiState.scrollToken,
         )
         // 翻页后自动同步点显器，省去盲文用户每次手动点「发送点显」
         if (mConnected) {
@@ -1700,7 +1813,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         Log.i(LOG_TAG, "page line: -> $i offset=${mOffset} -> $target")
         mOffset = target
         sendToDisplay()
-        showPage()
+        showPage(resetScroll = true)
         saveProgress()
     }
 
@@ -1935,6 +2048,13 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         private const val MAX_LINES_PER_PAGE = 80
         /** 明眼原文屏显是汉字：通用盲文一个汉字平均占约 2.5 方，用来把「一行几个字」换成「一行几方」。 */
         private const val CELLS_PER_SOURCE_CHAR = 2.5
+        /**
+         * 正文列表一次装几页的段落。
+         *
+         * 读屏焦点滑到页末最后一段时，后面必须有段可去；装 3 页够滑一阵，
+         * 又不会一次重建太多文本（每次换页都要按页重建一遍）。
+         */
+        private const val WINDOW_PAGES = 3
         /** 满方盲文，用于测量单个盲文字符的实际宽度。 */
         private const val CELL_SAMPLE = "\u283F"
         private const val PREFS_NAME = "braille_reader"

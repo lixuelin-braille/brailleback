@@ -10,8 +10,10 @@
 
 package com.linxi.brailleback.compose
 
+import com.linxi.brailleback.ReaderSegment
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -25,6 +27,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -41,6 +46,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -67,6 +73,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.floor
 import kotlin.math.roundToInt
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 /** 阅读器界面静态文案（取自资源，Screen 不碰 Context）。 */
 internal data class ReaderLabels(
@@ -90,12 +97,14 @@ internal data class ReaderLabels(
     val pageScrubberAction: String,
     /** 行进度条的双击动作文案（也是 TalkBack 的动作名）。 */
     val pageLineAction: String,
+    /** 正文列表末尾那一行的翻页文案（「下一页」）。 */
+    val nextPage: String = "下一页",
 )
 
 /** 阅读器界面状态：使能位与文本都由 Activity 的 updateUiState 汇总后喂进来。 */
 internal data class ReaderUiState(
     val readerText: String = "",
-    val focusSegments: List<String> = emptyList(),
+    val focusSegments: List<ReaderSegment> = emptyList(),
     val fontSizeSp: Int = 18,
     val pageInfo: String = "",
     /** 有没有可读内容。没有时不摆一排停用按钮，只留提示与字号。 */
@@ -112,6 +121,13 @@ internal data class ReaderUiState(
     /** 当前第几页（0 基）与全书共几页：滑块按「第 N 页 共 M 页」朗读，照系统桌面翻页提示的样子。 */
     val pageIndex: Int = 0,
     val pageCount: Int = 1,
+    /**
+     * 显式换页/跳行的计数器：一变就让正文列表回到顶部。
+     *
+     * 滚屏时页号是跟着滚动走的，列表位置不能被动；只有用户自己按滑块/跳页/换字号
+     * 明确换了位置，才需要回顶。
+     */
+    val scrollToken: Int = 0,
 )
 
 /** 阅读器弹窗：目录 / 书签 / 删书签 / 跳页 / 导出格式。 */
@@ -182,6 +198,10 @@ internal fun BrailleReaderScreen(
     onLineEdit: () -> Unit = {},
     /** 行滑块到头还继续往前：+1 下一页、-1 上一页（滚屏不在页末卡住）。 */
     onLineOverflow: (Int) -> Unit = {},
+    /** 正文列表滚到某一项成为「首可见项」：Activity 据此更新页号（滚屏时的分页）。 */
+    onTopSegment: (Int) -> Unit = {},
+    /** 正文列表快滚到已加载的末尾了：请求再补一页的段落，焦点才不会断。 */
+    onNeedMoreSegments: () -> Unit = {},
     /** 数字输入确认（行号从 1 开始）。 */
     onLineConfirm: (Int) -> Unit = {},
     /** 实测正文区一行能排几个等宽字符、能排几行（换字号/横竖屏都要重报）。 */
@@ -219,24 +239,68 @@ internal fun BrailleReaderScreen(
                 (usable / lineH).coerceIn(2, 80),
             )
         }
+        // 正文改成一条可滚动的焦点流：一段一项、一项一个焦点，列表一直往后续下去。
+        //
+        // 为什么用 LazyColumn（Compose 里的 RecyclerView）而不是 Column：段数一多只有可见项
+        // 参与组合与测量，翻看长书不会一次铺出上百个节点。
+        //
+        // 为什么要把后面几页的段也放进来：读屏焦点滑到页末最后一段时，必须有「下一个节点」
+        // 才肯继续动。窗口里接着后面页的段，焦点就能一路滑下去，滚过一页页码自己往前走，
+        // 不需要额外的「下一页」节点，也不需要双击。
+        val listState = rememberLazyListState()
         Column(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
                 .onSizeChanged { textArea = it },
-            // 段与段之间不再额外留白：屏幕正文严格按「行高 × 行数」铺，
-            // 行数与页表的 mLinesPerPage 口径一致，滚屏到段边界时最后一行不会被裁掉。
-            // 段落区分靠盲文自身的段首缩进与段间换行。
         ) {
-            val segments = uiState.focusSegments.ifEmpty { listOf(uiState.readerText) }
-            segments.forEach { segment ->
-                Text(
-                    text = segment,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontSize = uiState.fontSizeSp.sp,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+            val segments = uiState.focusSegments
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                if (segments.isEmpty()) {
+                    item(key = "empty") {
+                        Text(
+                            text = uiState.readerText,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontSize = uiState.fontSizeSp.sp,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                } else {
+                    // key 用下标：窗口是「往后续」的，已有项的下标不会变，
+                    // 续装或整窗重铺时列表都能把滚动位置按项对齐。
+                    itemsIndexed(segments, key = { index, _ -> index }) { _, segment ->
+                        Text(
+                            text = segment.text,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontSize = uiState.fontSizeSp.sp,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
             }
+        }
+
+        // 滚屏时的分页：首可见项落在哪一页，页号就跟着走。
+        // 读屏自己滚列表（TalkBack 把焦点推到屏外节点时会带容器一起滚），
+        // 这里只看滚动结果，不主动改列表位置，免得跟手指抢。
+        val segmentCount = uiState.focusSegments.size
+        LaunchedEffect(segmentCount) {
+            snapshotFlow { listState.firstVisibleItemIndex }
+                .distinctUntilChanged()
+                .collect { index ->
+                    if (uiState.focusSegments.isEmpty()) return@collect
+                    onTopSegment(index)
+                    if (index >= (listState.layoutInfo.totalItemsCount - 4)) {
+                        onNeedMoreSegments()
+                    }
+                }
+        }
+        // 显式换页/跳行/换字号：列表回到顶部（滚屏自己引起的页号变化不带这个 token）。
+        LaunchedEffect(uiState.scrollToken) {
+            listState.scrollToItem(0)
         }
 
         // 两个滑块：上面管页（整本书跨页），下面管本页的行（页内逐行切换）。

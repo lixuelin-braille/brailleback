@@ -104,6 +104,8 @@
     <string name="braille_reader_at_end">Already at the end of the book.</string>
     <string name="braille_reader_first_page">Already at the first page.</string>
     <string name="braille_reader_last_page">Already at the last page.</string>
+    <string name="braille_reader_prev_page">Previous page</string>
+    <string name="braille_reader_next_page">Next page</string>
     <string name="braille_reader_translator_pending">Translation service is not ready yet — showing the original text for now. It switches to braille automatically once the service is up.</string>
     <string name="braille_reader_translator_unavailable">The translation service did not start. You can keep reading the original text; reopen the book to retry braille.</string>
     <string name="braille_reader_export_wait_translate">Translation is still running — the export dialog will open as soon as it finishes.</string>
