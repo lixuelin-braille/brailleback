@@ -1036,6 +1036,29 @@ class BrailleBackService : AccessibilityService(),
             return text.substring(0, EVENT_TEXT_LIMIT) + "..."
         }
 
+        /**
+         * 应用内界面（图片转点位视口）请求独占点显器：冻结服务侧的文字输出，
+         * 屏上只留界面自己下发的点位。
+         *
+         * 为什么要独占：服务会把前台界面的无障碍文本翻译成盲文往下发，视口里每换一屏、
+         * 每报一次状态都会被「文字」盖住点位，用户摸到的是字不是图。
+         * 传 clear=false：冻结时不清屏，否则刚画上的点位可能被这条清屏命令擦掉。
+         *
+         * @return 是否真的冻上了（服务未启动 / 点显器没连时返回 false，调用方可不管你）
+         */
+        @JvmStatic
+        fun holdDisplayForApp(): Boolean {
+            val dm = instance?.displayManager ?: return false
+            dm.setFrozen(true, clear = false)
+            return true
+        }
+
+        /** 交还点显器：解冻并让服务按当前焦点内容重画一遍。 */
+        @JvmStatic
+        fun releaseDisplayForApp() {
+            instance?.displayManager?.setFrozen(false)
+        }
+
         @JvmStatic
         fun getActiveInstance(): BrailleBackService? {
             return instance

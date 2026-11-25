@@ -81,6 +81,7 @@ import com.googlecode.eyesfree.braille.display.BrailleInputEvent
 import com.googlecode.eyesfree.braille.display.Display
 import com.googlecode.eyesfree.braille.display.DisplayClient
 import com.linxi.brailleback.BuildConfig
+import com.linxi.brailleback.BrailleBackService
 import com.linxi.brailleback.R
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -197,6 +198,9 @@ class TactileStripActivity : AppCompatActivity(),
     /** 当前是否停在独立图例屏；图例不占图形页。 */
     private var vpLegend by mutableStateOf(false)
 
+    /** 细节态是否已向无障碍服务申请独占点显器（冻结服务侧文字输出）；只在真冻上过才交还。 */
+    private var holdingDisplay = false
+
     /**
      * 点显器自带按键监听：视口态下这四个方向 / 图例优先由设备按键触发，屏幕按钮仍保留作备用。
      * 屏蔽表见 [TactileDisplayKey]；未映射的命令原样放过。
@@ -279,6 +283,7 @@ class TactileStripActivity : AppCompatActivity(),
                     canPrev = pager?.canPrev() == true,
                     canNext = pager?.canNext() == true,
                     viewportActive = viewport != null,
+                    detailMode = viewport?.isOverview == false,
                     displayConnected = displayConnected,
                     vpIsOverview = viewport?.isOverview == true,
                     vpIsLegend = vpLegend,
@@ -311,7 +316,16 @@ class TactileStripActivity : AppCompatActivity(),
         }
     }
 
+    /**
+     * 退到后台就交还点显器：否则服务一直冻着，用户切到别的应用摸到的还是上一屏点位。
+     */
+    override fun onStop() {
+        releaseDisplayFromDetail()
+        super.onStop()
+    }
+
     override fun onDestroy() {
+        releaseDisplayFromDetail()
         // 点显客户端解绑；观察客户端只听状态，一并释放。
         display?.setOnInputEventListener(null)
         display?.close()
@@ -702,15 +716,33 @@ class TactileStripActivity : AppCompatActivity(),
     }
 
     private fun vpEnterDetail() {
+        holdDisplayForDetail()
         viewport?.enterDetail()
         vpLegend = false
         renderViewport(announce = true)
     }
 
     private fun vpBackOverview() {
+        releaseDisplayFromDetail()
         viewport?.backToOverview()
         vpLegend = false
         renderViewport(announce = true)
+    }
+
+    /**
+     * 细节态独占点显器：服务侧文字输出冻结，屏上只剩我们自己下发的点位。
+     * 服务没起来、点显器没连上都按「没冻上」处理，不报错，行为回落到普通模式。
+     */
+    private fun holdDisplayForDetail() {
+        if (holdingDisplay) return
+        holdingDisplay = BrailleBackService.holdDisplayForApp()
+    }
+
+    /** 交还点显器；重复调用无副作用，未持有过也不打扰服务。 */
+    private fun releaseDisplayFromDetail() {
+        if (!holdingDisplay) return
+        holdingDisplay = false
+        BrailleBackService.releaseDisplayForApp()
     }
 
     private fun vpOpenLegend() {
@@ -741,6 +773,14 @@ class TactileStripActivity : AppCompatActivity(),
     /** 点显连接状态回调：只刷新状态行文案，不重复下发点位。 */
     override fun onConnectionStateChanged(state: Int) {
         displayConnected = state == Display.STATE_CONNECTED
+        // 断线时把独占标记清掉；重新连上而人还停在细节态，就重新申请一次，
+        // 否则这中间服务又会把文字翻上来盖住点位。
+        if (displayConnected) {
+            holdingDisplay = false
+            if (viewport?.isOverview == false) holdDisplayForDetail()
+        } else {
+            releaseDisplayFromDetail()
+        }
         // 连上就按设备的方数换行（跟随模式），再把当前屏重画一遍。
         if (applyDisplayCells() == true && sourceUri != null) rebuild()
         if (pager != null) renderCurrent(announce = false)
@@ -864,6 +904,7 @@ private fun StripScreen(
     canPrev: Boolean,
     canNext: Boolean,
     viewportActive: Boolean,
+    detailMode: Boolean,
     displayConnected: Boolean,
     vpIsOverview: Boolean,
     vpIsLegend: Boolean,
@@ -921,6 +962,9 @@ private fun StripScreen(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            // 细节态收成单屏：选图、方数、行数、点数、高级项全部隐去。手机上的文字节点越少，
+            // 读屏越不会把大段设置文案翻到点显器上盖住点位；挪视口靠点显器按键与音量键。
+            if (!detailMode) {
             Button(
                 onClick = onPickImage,
                 enabled = !converting,
@@ -1065,6 +1109,7 @@ private fun StripScreen(
                     enabled = linesPerScreen >= 2,
                     onClick = { onG1Change(!g1SplitCover) },
                 )
+            }
             }
 
             // 状态区放在翻页按钮上方：连接 / 解码 / 页签结果直接进首屏无障碍焦点序列，

@@ -832,11 +832,11 @@ class DisplayManager(
      * Pauses or resumes the display output. While paused, the current content
      * stays on the display and updates are suppressed until resumed.
      */
-    fun setFrozen(frozen: Boolean) {
+    fun setFrozen(frozen: Boolean, clear: Boolean = mPauseClear) {
         displayHandler.post {
             runtimeState.update { it.copy(frozen = frozen) }
             if (frozen) {
-                if (mPauseClear) {
+                if (clear) {
                     // Paused: clear the display.
                     doSendEmptyCommand()
                 }
