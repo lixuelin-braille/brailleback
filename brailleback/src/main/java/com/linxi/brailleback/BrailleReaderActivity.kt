@@ -168,13 +168,13 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     private var mPageOffsets: IntArray = intArrayOf()
 
     /**
-     * 阅读单元：一「页」是多少方。
+     * 阅读单元：一「页」是多少方 —— **只按手机屏幕自己一屏算**，
+     * 与点显器一屏无关。
      *
-     * 取**手机屏幕一屏**（每行方数 × 行数），不取点显器一屏：点显器常见 20/30/40 方，
-     * 若按点显器一屏当一页，一本 300 万字的书会拆成十几万页——屏幕上的
-     * 「上一页/下一页」每按一次只挪二十几个字，看着就像没反应；目录也会变成上万条
-     * 「第 1-10 页」。点显器自己那一屏由按键按方数步进（见 [moveLine]），
-     * 两者各管一层，互不干扰。
+     * 屏幕上的正文就该像普通电子书那样按版面排（实测出来的「一行几方 × 几行」），
+     * 点显器那一路是后台翻译完的盲文流，按它自己的方数独立推进。两边共享的只有
+     * 当前位置 [mOffset]，不必也不能凑成同一个单位：一页约有三十多个点显器屏，
+     * 硬凑成同一格反而会出现「页码走了一页、手上还在读同一页」的怪账。
      */
     private fun readingUnit(): Int =
         (mCellsPerLine * mLinesPerPage).coerceAtLeast(1)
@@ -634,6 +634,8 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         val wasConnected = mConnected
         val oldDisplayCells = mDisplayCells
         mConnected = state == Display.STATE_CONNECTED
+        Log.d(LOG_TAG, "display state=$state connected=$mConnected " +
+            "cells=${mDisplay?.displayProperties?.numTextCells ?: -1}")
         if (mConnected) {
             // 完全采用系统/驱动上报的方数（numTextCells），不做推测。
             // 仅对明显异常的值兜底：0 表示尚未就绪，过大则是驱动误报，
@@ -1170,6 +1172,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             updateUiState()
             return
         }
+        // 页单位变了：重建页表，但阅读位置与点显器推送位置都不动。
         rebuildPageOffsets(keepPosition = true)
         showPage()
     }
@@ -1182,6 +1185,8 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         } else {
             BrailleFileDecoder.pageOffsets(mStream, readingUnit())
         }
+        Log.d(LOG_TAG, "page table: unit=${readingUnit()} pages=${mPageOffsets.size} " +
+            "connected=$mConnected displayCells=$mDisplayCells keep=$keep")
         if (mPageOffsets.isNotEmpty() && !keep) {
             mOffset = mPageOffsets[currentUnit()]
         }
@@ -1332,23 +1337,27 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     }
 
     private fun showPage() {
+        val unit = readingUnit()
+        // 屏幕正文按书页显示：从**本页起点**开始铺满一整屏，不看点显器推到哪一方。
+        // 点显器那一路由 sendToDisplay 从 mOffset 独立推送，两边互不牵制。
+        val pageStart = if (mStream.isEmpty()) mOffset
+        else mPageOffsets.getOrElse(currentUnit()) { mOffset }
         val brailleText = if (mStream.isEmpty()) {
             getString(R.string.braille_reader_hint)
         } else {
             BrailleFileDecoder.screenAt(
-                mStream, mOffset, mCellsPerLine, mLinesPerPage)
+                mStream, pageStart, mCellsPerLine, mLinesPerPage)
         }
-        // 本屏可见格数截到词边界：末行不会露出半个字（屏显还原同口径）。
-        val unit = readingUnit()
-        val end = if (mStream.isEmpty()) mOffset
-        else BrailleFileDecoder.nextOffset(mStream, mOffset, unit)
-        val count = (end - mOffset).coerceIn(1, unit)
+        // 本页可见格数截到词边界：末行不会露出半个字（屏显还原同口径）。
+        val end = if (mStream.isEmpty()) pageStart
+        else BrailleFileDecoder.nextOffset(mStream, pageStart, unit)
+        val count = (end - pageStart).coerceIn(1, unit)
         val view = ReaderSourceModel.build(
             kind = mSourceKind,
             sourceText = mSourceText,
             brailleScreenText = brailleText,
             spans = mCellSpans,
-            offset = mOffset,
+            offset = pageStart,
             count = count,
             currentUnit = currentUnit(),
             totalUnits = totalUnits(),
