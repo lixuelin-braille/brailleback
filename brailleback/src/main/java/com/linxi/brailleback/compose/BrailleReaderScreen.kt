@@ -28,6 +28,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,10 +36,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.floor
 
 /** 阅读器界面静态文案（取自资源，Screen 不碰 Context）。 */
 internal data class ReaderLabels(
@@ -128,6 +133,8 @@ internal fun BrailleReaderScreen(
     onGeometryPick: (Int) -> Unit,
     onCustomGeometryConfirm: (Int, Int) -> Unit,
     onDismissDialog: () -> Unit,
+    /** 实测正文区一行能排几个等宽字符、能排几行（换字号/横竖屏都要重报）。 */
+    onTextMetrics: (Int, Int) -> Unit = { _, _ -> },
 ) {
     Column(
         modifier = Modifier
@@ -136,10 +143,27 @@ internal fun BrailleReaderScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         // 文本区：按行/段拆成多个可聚焦节点，不整页合并为一个焦点。
+        var textArea by remember { mutableStateOf(IntSize.Zero) }
+        val measurer = rememberTextMeasurer()
+        val probeStyle = MaterialTheme.typography.bodyLarge.copy(
+            fontSize = uiState.fontSizeSp.sp)
+        // 「一页 = 屏幕上真正能排下的方数 × 行数」：字号、屏幕宽度、横竖屏都会变，
+        // 所以每次排版稳定后重测一次，交给 Activity 重建页表（保留阅读位置）。
+        LaunchedEffect(textArea, uiState.fontSizeSp) {
+            if (textArea.width <= 0 || textArea.height <= 0) return@LaunchedEffect
+            val charW = measurer.measure("汉", probeStyle).size.width
+            val lineH = measurer.measure("汉", probeStyle).size.height
+            if (charW <= 0 || lineH <= 0) return@LaunchedEffect
+            onTextMetrics(
+                (textArea.width / charW).coerceIn(8, 400),
+                (textArea.height / lineH).coerceIn(2, 80),
+            )
+        }
         Column(
             modifier = Modifier
                 .weight(1f)
-                .fillMaxWidth(),
+                .fillMaxWidth()
+                .onSizeChanged { textArea = it },
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             val segments = uiState.focusSegments.ifEmpty { listOf(uiState.readerText) }

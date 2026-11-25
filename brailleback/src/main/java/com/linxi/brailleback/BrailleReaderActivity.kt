@@ -573,6 +573,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
                 onGeometryPick = ::onGeometryPicked,
                 onCustomGeometryConfirm = ::onCustomGeometryConfirmed,
                 onDismissDialog = { readerDialog = null },
+                onTextMetrics = ::onScreenTextMetrics,
             )
         }
 
@@ -1145,6 +1146,34 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      *   用于点显器连接/断开导致的页表重建——阅读位置不能跳。
      *   为 false（默认）时把偏移吸附到最近的页起点，用于打开文件。
      */
+    /**
+     * Compose 正文区实测结果：一行能排几个等宽字符、能排几行。
+     *
+     * 页单位从此跟随真实排版（屏幕宽度、字号、横竖屏、分屏都算），不再写死
+     * 40 方 × 20 行；换字号或转屏时重测、重建页表，但**当前阅读位置不动**。
+     * 明眼原文（TEXT 源）屏显是汉字，一个汉字平均占 [CELLS_PER_SOURCE_CHAR] 方，
+     * 所以一行可排的格数要按这个比例放大，屏幕才刚好铺满一页正文。
+     */
+    private fun onScreenTextMetrics(charsPerLine: Int, linesPerPage: Int) {
+        val cells = if (mSourceKind == ReaderSourceKind.TEXT) {
+            (charsPerLine * CELLS_PER_SOURCE_CHAR).toInt()
+        } else {
+            charsPerLine
+        }.coerceIn(MIN_CELLS_PER_LINE, MAX_CELLS_PER_LINE)
+        val lines = linesPerPage.coerceIn(MIN_LINES_PER_PAGE, MAX_LINES_PER_PAGE)
+        if (cells == mCellsPerLine && lines == mLinesPerPage) return
+        Log.d(LOG_TAG, "screen metrics: chars=$charsPerLine lines=$linesPerPage " +
+            "-> cells=$cells lines=$lines unit=${cells * lines}")
+        mCellsPerLine = cells
+        mLinesPerPage = lines
+        if (mStream.isEmpty()) {
+            updateUiState()
+            return
+        }
+        rebuildPageOffsets(keepPosition = true)
+        showPage()
+    }
+
     private fun rebuildPageOffsets(keepPosition: Boolean = false) {
         val keep = keepPosition && mStream.isNotEmpty()
             && mOffset >= 0 && mOffset <= maxOffset()
@@ -1772,9 +1801,18 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
          * 超过此值基本可判定为上报异常（照单全收会让「一屏」变成整本书）。
          */
         private const val MAX_DISPLAY_CELLS = 4096
-        /** 低于此值视为布局未完成或极端小屏，不据此重排。 */
+        /**
+         * 低于此值视为布局未完成或极端小屏，不据此重排。
+         * 横屏时分屏只剩几行可显示，一页 3 行会把页码撑到一两万页，
+         * 这里兜到 5 行：屏幕可能少显示几行，但盲文流是齐的、页码也还说得通。
+         */
         private const val MIN_LINES_PER_PAGE = 5
         private const val MIN_CELLS_PER_LINE = 8
+        /** 屏幕一行最多按这么多方算（400 字 × 2.5 方），兜住横屏/分屏误测。 */
+        private const val MAX_CELLS_PER_LINE = 1000
+        private const val MAX_LINES_PER_PAGE = 80
+        /** 明眼原文屏显是汉字：通用盲文一个汉字平均占约 2.5 方，用来把「一行几个字」换成「一行几方」。 */
+        private const val CELLS_PER_SOURCE_CHAR = 2.5
         /** 满方盲文，用于测量单个盲文字符的实际宽度。 */
         private const val CELL_SAMPLE = "\u283F"
         private const val PREFS_NAME = "braille_reader"
