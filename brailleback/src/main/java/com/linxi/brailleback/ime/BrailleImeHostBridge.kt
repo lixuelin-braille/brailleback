@@ -16,14 +16,11 @@
 package com.linxi.brailleback.ime
 
 import android.accessibilityservice.AccessibilityService
-import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Context
 import android.graphics.Region
 import android.os.Build
 import android.os.Bundle
-import android.util.DisplayMetrics
 import android.util.Log
-import android.view.Display
 import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityNodeInfo
@@ -57,6 +54,7 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
   private val feedbackController: FeedbackController = FeedbackController(context)
   private val speech = BrailleImeHostSpeech(context)
   private val nodeActions = BrailleImeHostNodeActions(service, focusFinder)
+  private val passthrough = BrailleImeHostPassthrough(service)
 
   /**
    * 本桥接的主线程作用域。原来这里有一个自建的 main Handler，专门排三种延迟
@@ -70,9 +68,6 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
   private var passthroughApplyJob: Job? = null
 
   private var brailleImeForTalkBack: BrailleImeForTalkBack? = null
-
-  /** 直通区是否处于已挂载状态（用于兜底清理与延迟任务判定）。 */
-  private var passthroughActive = false
 
   /** 宿主提供的键盘容器视图，用于把播报内容转成读屏可读的无障碍公告。 */
   private var announcementView: View? = null
@@ -348,7 +343,7 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
       Log.i(TAG, "applyPassthrough: skipped, sdk=" + Build.VERSION.SDK_INT)
       return
     }
-    setTouchExplorationRequested(true)
+    passthrough.setTouchExplorationRequested(true)
     val target: Region
     if (usePassThrough && passThroughRegion != null && !passThroughRegion.isEmpty()) {
       // 键盘用的是"输入法自带窗口"策略，上报的就是真正可触摸的输入视图区域，照用即可。
@@ -359,23 +354,18 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
       // 直接用它会让直通区只剩屏幕顶上一条，手指真正摸的点阵区域仍在探索拦截之下。
       // 真正画点阵的 overlay 窗口是铺满整个 display 的（FLAG_LAYOUT_IN_SCREEN|NO_LIMITS），
       // 所以这里退回整屏。
-      target = obtainDisplayRegion()
+      target = passthrough.obtainDisplayRegion()
     }
-    passthroughActive = true
+    passthrough.setActive(true)
     // setServiceInfo 到系统侧生效是异步的，立即设置直通区可能被判定为"未请求探索"而丢弃。
     passthroughApplyJob?.cancel()
     passthroughApplyJob =
         mainScope.launch {
           delay(PASSTHROUGH_APPLY_DELAY_MS)
-          if (!passthroughActive) {
+          if (!passthrough.isActive()) {
             return@launch
           }
-          try {
-            service.setTouchExplorationPassthroughRegion(Display.DEFAULT_DISPLAY, target)
-            Log.i(TAG, "passthrough applied: " + target)
-          } catch (t: Throwable) {
-            Log.e(TAG, "passthrough failed", t)
-          }
+          passthrough.applyRegion(target)
         }
   }
 
@@ -383,54 +373,16 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
       return
     }
-    passthroughActive = false
+    passthrough.setActive(false)
     passthroughApplyJob?.cancel()
     passthroughApplyJob = null
-    try {
-      // 空 Region 表示"没有直通区"，即恢复正常的触摸探索拦截。
-      service.setTouchExplorationPassthroughRegion(Display.DEFAULT_DISPLAY, Region())
-      Log.i(TAG, "passthrough cleared")
-    } catch (t: Throwable) {
-      Log.e(TAG, "clear passthrough failed", t)
-    }
-    setTouchExplorationRequested(false)
-  }
-
-  /** 临时开关本服务的"请求触摸探索"标志位（仅在本服务信息副本上修改并回设）。 */
-  private fun setTouchExplorationRequested(requested: Boolean) {
-    val info = service.getServiceInfo()
-    if (info == null) {
-      return
-    }
-    val current =
-        (info.flags and AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE) != 0
-    if (current == requested) {
-      return
-    }
-    if (requested) {
-      info.flags = info.flags or AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE
-    } else {
-      info.flags =
-          info.flags and AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE.inv()
-    }
-    try {
-      service.setServiceInfo(info)
-      Log.i(TAG, "touchExplorationRequested=" + requested + " flags=" + info.flags)
-    } catch (t: Throwable) {
-      Log.e(TAG, "setServiceInfo failed", t)
-    }
-  }
-
-  private fun obtainDisplayRegion(): Region {
-    val metrics = DisplayMetrics()
-    val display = getWindowManager().getDefaultDisplay()
-    display.getRealMetrics(metrics)
-    return Region(0, 0, metrics.widthPixels, metrics.heightPixels)
+    passthrough.clearRegion()
+    passthrough.setTouchExplorationRequested(false)
   }
 
   /** 供宿主在服务销毁/异常时兜底清理，避免直通区残留导致读屏整屏失效。 */
   fun forceClearPassthrough() {
-    if (passthroughActive) {
+    if (passthrough.isActive()) {
       clearTouchExplorationPassthrough()
     }
   }
