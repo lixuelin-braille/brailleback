@@ -17,7 +17,6 @@
 package com.linxi.brailleback
 
 import android.accessibilityservice.AccessibilityService
-import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -34,9 +33,7 @@ import android.os.Looper
 import android.os.Message
 import android.os.SystemClock
 import com.googlecode.eyesfree.utils.SettingsStore
-import androidx.core.content.ContextCompat
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
-import android.text.TextUtils
 import android.util.Log
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
@@ -65,7 +62,7 @@ class BrailleBackService : AccessibilityService(),
         SearchNavigationMode.SearchStateListener,
         BrailleMenuNavigationMode.BrailleMenuListener {
 
-    private var feedbackManager: FeedbackManager? = null
+    internal var feedbackManager: FeedbackManager? = null
 
     private val mPreferenceListener =
         object : SharedPreferences.OnSharedPreferenceChangeListener {
@@ -88,21 +85,21 @@ class BrailleBackService : AccessibilityService(),
                 }
             }
         }
-    private var translatorManager: TranslatorManager? = null
-    private var displayManager: DisplayManager? = null
-    private var selfBrailleManager: SelfBrailleManager? = null
-    private var nodeBrailler: NodeBrailler? = null
-    private var ruleRepository: BrailleRuleRepository? = null
-    private var focusTracker: FocusTracker? = null
-    private var imeHelper: IMEHelper? = null
-    private var modeSwitcher: ModeSwitcher? = null
-    private var searchNavigationMode: SearchNavigationMode? = null
-    private var brailleMenuNavigationMode: BrailleMenuNavigationMode? = null
+    internal var translatorManager: TranslatorManager? = null
+    internal var displayManager: DisplayManager? = null
+    internal var selfBrailleManager: SelfBrailleManager? = null
+    internal var nodeBrailler: NodeBrailler? = null
+    internal var ruleRepository: BrailleRuleRepository? = null
+    internal var focusTracker: FocusTracker? = null
+    internal var imeHelper: IMEHelper? = null
+    internal var modeSwitcher: ModeSwitcher? = null
+    internal var searchNavigationMode: SearchNavigationMode? = null
+    internal var brailleMenuNavigationMode: BrailleMenuNavigationMode? = null
     // Package-private so that Kotlin code in the same package (DisplayManager.kt)
     // can read it; Kotlin cannot access Java protected members from a non-subclass.
     var imeNavigationMode: IMENavigationMode? = null
-    private var labelManager: CustomLabelManager? = null
-    private var packageReceiver: PackageRemovalReceiver? = null
+    internal var labelManager: CustomLabelManager? = null
+    internal var packageReceiver: PackageRemovalReceiver? = null
 
     /** Set if the infrastructure is initialized. */
     private var isInfrastructureInitialized = false
@@ -154,110 +151,14 @@ class BrailleBackService : AccessibilityService(),
     }
 
     override fun onMappedInputEvent(event: BrailleInputEvent,
-            content: Content) {
-        // 未初始化时直接忽略；后面全部用这份局部快照。
-        val switcher = modeSwitcher ?: return
-        // Global commands can't be overriden.
-        if (handleGlobalCommands(event)) {
-            return
-        }
-        if (BuildConfig.DEBUG
-                && event.command == BrailleInputEvent.CMD_BRAILLE_KEY
-                && event.argument == SWITCH_NAVIGATION_MODE_DOTS) {
-            switcher.switchMode()
-            return
-        }
-        if (event.command == BrailleInputEvent.CMD_TOGGLE_BRAILLE_MENU) {
-            if (!LABELING_ENABLED) {
-                return
-            }
-            // 菜单模式可能还没建起来（LABELING 关闭时），活跃与否都用同一份引用。
-            val menuMode = brailleMenuNavigationMode
-            if (menuMode?.isActive() == true) {
-                switcher.overrideMode(null)
-            } else {
-                switcher.overrideMode(menuMode)
-            }
-            return
-        }
-        if (switcher.onMappedInputEvent(event, content)) {
-            return
-        }
-        // Check native case after navigation mode handler to allow navigation
-        // mode chance to deal with webview incremental search.
-        if (event.command ==
-                BrailleInputEvent.CMD_TOGGLE_INCREMENTAL_SEARCH) {
-            // Search Navigation mode will handle disabling the mode.
-            startSearchWithTutorial()
-            return
-        }
-        if (imeHelper?.onInputEvent(event) == true) {
-            return
-        }
-        if (event.command == BrailleInputEvent.CMD_TOGGLE_BRAILLE_GRADE) {
-            // 统一盲文表后，级切换直接在所选语言的六点与八点表之间切换。
-            val translator = translatorManager ?: return
-            val eightDot = translator.toggleBrailleDots()
-            feedbackManager?.emitFeedback(
-                if (eightDot) FeedbackManager.TYPE_GRADE_8_DOT
-                else FeedbackManager.TYPE_GRADE_6_DOT)
+            content: Content) =
+        dispatchMappedInputEvent(event, content)
 
-            // If showing preference screen... update displayed preference.
-            val refreshPrefIntent =
-                Intent(SettingsActivity.INTENT_REFRESH_DISPLAY)
-            refreshPrefIntent.setPackage(packageName)
-            sendBroadcast(refreshPrefIntent)
+    override fun onPanLeftOverflow(content: Content) =
+        dispatchPanLeftOverflow(content)
 
-            return
-        }
-        feedbackManager?.emitFeedback(FeedbackManager.TYPE_UNKNOWN_COMMAND)
-    }
-
-    private fun handleGlobalCommands(event: BrailleInputEvent): Boolean {
-        val success: Boolean
-        when (event.command) {
-            BrailleInputEvent.CMD_GLOBAL_HOME -> {
-                success = performGlobalAction(GLOBAL_ACTION_HOME)
-            }
-            BrailleInputEvent.CMD_GLOBAL_BACK -> {
-                success = performGlobalAction(GLOBAL_ACTION_BACK)
-            }
-            BrailleInputEvent.CMD_GLOBAL_RECENTS -> {
-                success = performGlobalAction(GLOBAL_ACTION_RECENTS)
-            }
-            BrailleInputEvent.CMD_GLOBAL_NOTIFICATIONS -> {
-                success = performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)
-            }
-            BrailleInputEvent.CMD_HELP -> {
-                success = runHelp()
-            }
-            else -> {
-                return false
-            }
-        }
-        if (!success) {
-            feedbackManager?.emitFeedback(FeedbackManager.TYPE_COMMAND_FAILED)
-        }
-        // Don't fall through even if the command failed, we own these
-        // commands.
-        return true
-    }
-
-    override fun onPanLeftOverflow(content: Content) {
-        // 未初始化时没有可用的导航模式，直接当作「到边界」处理。
-        val switcher = modeSwitcher ?: return
-        if (!switcher.onPanLeftOverflow(content)) {
-            feedbackManager?.emitFeedback(FeedbackManager.TYPE_NAVIGATE_OUT_OF_BOUNDS)
-        }
-    }
-
-    override fun onPanRightOverflow(content: Content) {
-        // 同上：没有可用的导航模式就当作已到边界。
-        val switcher = modeSwitcher ?: return
-        if (!switcher.onPanRightOverflow(content)) {
-            feedbackManager?.emitFeedback(FeedbackManager.TYPE_NAVIGATE_OUT_OF_BOUNDS)
-        }
-    }
+    override fun onPanRightOverflow(content: Content) =
+        dispatchPanRightOverflow(content)
 
     // Volume key gesture detection (long press up/down, double press).
     // While gestures are enabled the service CONSUMES every volume key and
@@ -537,15 +438,6 @@ class BrailleBackService : AccessibilityService(),
         }
     }
 
-    private fun parseIdleClearMinutes(value: String): Long {
-        try {
-            val minutes = Integer.parseInt(value)
-            return if (minutes <= 0) 0L else minutes * 60L * 1000L
-        } catch (e: NumberFormatException) {
-            return 3 * 60L * 1000L
-        }
-    }
-
     /**
      * Promotes this accessibility service to a foreground service with a
      * persistent, low-importance notification.  Uses the manifest-declared
@@ -751,100 +643,11 @@ class BrailleBackService : AccessibilityService(),
         modeSwitcher?.overrideMode(searchNavigationMode)
     }
 
-    private fun startSearchWithTutorial() {
-        searchNavigationMode?.setInitialNodeToCurrent()
-        // Try to start the search tutorial activity first. Only if it
-        // doesn't start do we activate search mode.
-        if (SearchTutorialActivity.tryStartActivity(this)) {
-            return
-        }
-        startSearchMode()
-    }
-
-    private fun initializeDependencies() {
-        // Must initialize label manager before navigation modes.
-        initializeLabelManager()
-        // 全部先落局部再赋给属性：构建 NodeBrailler 时直接用这两份引用，
-        // 不必在构造函数参数里塞断言（属性本身不参与智能转换）。
-        feedbackManager = FeedbackManager(this)
-        translatorManager = TranslatorManager(this)
-        val selfBraille = SelfBrailleManager()
-        selfBrailleManager = selfBraille
-        val rules = BrailleRuleRepository(this)
-        ruleRepository = rules
-        nodeBrailler = NodeBrailler(this, rules, selfBraille)
-        initializeDisplayManager()
-        initializeNavigationMode()
-        imeHelper = IMEHelper(this)
-        val tracker = FocusTracker(this)
-        focusTracker = tracker
-        tracker.register()
-    }
-
-    private fun updateServiceInfo() {
-        // Publicize service meta-data stating that this service does braille. Would be done in
-        // accessibility service config if it supported accessibilityFeedbackType FEEDBACK_BRAILLE.
-        val info: AccessibilityServiceInfo? = serviceInfo
-        if (info == null) {
-            LogUtils.log(this, Log.ERROR, "getServiceInfo() returned null")
-            return
-        }
-        info.feedbackType = info.feedbackType or AccessibilityServiceInfo.FEEDBACK_BRAILLE
-        info.flags = info.flags or AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
-        setServiceInfo(info)
-    }
-
-    private fun initializeLabelManager() {
-        try {
-            labelManager = CustomLabelManager(this)
-        } catch (e: SecurityException) {
-            // Don't use labeling features if there's a permission denial
-            // due to a key mismatch
-            LogUtils.log(this, Log.ERROR,
-                    "Not using labeling due to permission denial.")
-        }
-
-        // CustomLabelManager 可能因签名不匹配而没建起来：下面三行都用同一份局部引用。
-        val labels = labelManager
-        if (labels != null) {
-            val receiver = PackageRemovalReceiver()
-            packageReceiver = receiver
-            ContextCompat.registerReceiver(this, receiver,
-                receiver.getFilter(), ContextCompat.RECEIVER_NOT_EXPORTED)
-            labels.ensureDataConsistency()
-        }
-    }
-
-    private fun initializeDisplayManager() {
-        // 依赖在 initializeDependencies 里已建好；取局部后构造与后续设置用同一份引用。
-        val translator = requireNotNull(translatorManager) {
-            "initializeDisplayManager 早于 translatorManager 初始化"
-        }
-        val dm = DisplayManager(
-                translator,
-                this /*context*/,
-                this /*panOverflowListener*/,
-                this /*connectionStateChangeListener*/,
-                this /*inputEventListener*/)
-        displayManager = dm
-        dm.setContent(Content(getString(R.string.display_connected)))
-        val prefs = SettingsStore.get(this)
-        applyMotionModeDefault(prefs)
-        dm.setPauseClear(
-                getString(R.string.pref_pause_behavior_clear_value)
-                        .equals(prefs.getString(
-                                getString(R.string.pref_pause_behavior_key), "")))
-        dm.setIdleClearTimeoutMs(parseIdleClearMinutes(
-                prefs.getString(getString(R.string.pref_idle_clear_key), "3") ?: "3"))
-        dm.setCursorDotsEnabled(prefs.getBoolean(
-                getString(R.string.pref_cursor_dots_key), false))
-    }
-
     /**
      * 运动模式按连接方式取默认值：USB 默认开启，蓝牙默认关闭。
      * 用户在设置里手动拨过开关后，这个显式选择优先，不再随连接方式变化。
      */
-    private fun applyMotionModeDefault(prefs: SharedPreferences) {
+    internal fun applyMotionModeDefault(prefs: SharedPreferences) {
         val motionKey = getString(R.string.pref_motion_mode_key)
         val value = if (prefs.getBoolean(
                         getString(R.string.pref_motion_mode_explicit_key), false)) {
@@ -859,78 +662,6 @@ class BrailleBackService : AccessibilityService(),
             usb
         }
         displayManager?.setMotionMode(value)
-    }
-
-    private fun initializeNavigationMode() {
-        // 这一步的依赖都刚在 initializeDependencies 里建好：取局部后整段构造不再需要断言。
-        val dm = requireNotNull(displayManager) { "displayManager 尚未初始化" }
-        val feedback = requireNotNull(feedbackManager) { "feedbackManager 尚未初始化" }
-        val selfBraille = requireNotNull(selfBrailleManager) { "selfBrailleManager 尚未初始化" }
-        val brailler = requireNotNull(nodeBrailler) { "nodeBrailler 尚未初始化" }
-        val rules = requireNotNull(ruleRepository) { "ruleRepository 尚未初始化" }
-        val translator = requireNotNull(translatorManager) { "translatorManager 尚未初始化" }
-
-        val defaultNavigationMode =
-            DefaultNavigationMode(dm, this, feedback, selfBraille, brailler, rules)
-        val newImeNavMode =
-            IMENavigationMode(defaultNavigationMode, this, dm, feedback, selfBraille, translator)
-        imeNavigationMode = newImeNavMode
-        BrailleIME.setSingletonHost(newImeNavMode)
-        val switcher = ModeSwitcher(
-            newImeNavMode, TreeDebugNavigationMode(dm, feedback, this))
-        modeSwitcher = switcher
-        switcher.onActivate()
-
-        // Create separate SearchNavigationMode.
-        searchNavigationMode =
-            SearchNavigationMode(
-                dm,
-                this /*accessibilityService*/,
-                feedback,
-                translator,
-                selfBraille,
-                brailler,
-                this /*searchStateListener*/,
-                labelManager)
-
-        // Create separate BrailleMenuNavigationMode.
-        brailleMenuNavigationMode =
-            BrailleMenuNavigationMode(
-                dm,
-                this /*accessibilityService*/,
-                feedback,
-                requireNotNull(labelManager) { "labelManager 尚未初始化" },
-                this /*brailleMenuListener*/)
-    }
-
-    private fun shutdownDependencies() {
-        // 先摘引用再关闭：关闭过程中若回调重入，也不会再拿到半关闭的对象。
-        val dm = displayManager
-        displayManager = null
-        dm?.shutdown()
-
-        val translator = translatorManager
-        translatorManager = null
-        translator?.shutdown()
-        // Releases the TTS/audio/MIDI resources held by FeedbackController.
-        // Deliberately NOT nulling the reference: feedbackManager is used by
-        // callbacks such as onConnectionStateChanged()/onMappedInputEvent(),
-        // and nulling it could turn a leak into an NPE.  shutdown() is what
-        // actually frees the resources.
-        feedbackManager?.shutdown()
-        val tracker = focusTracker
-        focusTracker = null
-        tracker?.unregister()
-
-        val labels = labelManager
-        labelManager = null
-        labels?.shutdown()
-
-        val receiver = packageReceiver
-        packageReceiver = null
-        receiver?.let { unregisterReceiver(it) }
-
-        BrailleIME.setSingletonHost(null)
     }
 
     fun runHelp(): Boolean {
@@ -980,7 +711,7 @@ class BrailleBackService : AccessibilityService(),
          * Dot combination for switching navigation mode.
          * At this time, this is only used for debugging.
          */
-        private val SWITCH_NAVIGATION_MODE_DOTS = DOT7 or DOT8
+        internal val SWITCH_NAVIGATION_MODE_DOTS = DOT7 or DOT8
 
         private const val GESTURE_LONG_UP = 0
         private const val GESTURE_LONG_DOWN = 1
@@ -988,53 +719,6 @@ class BrailleBackService : AccessibilityService(),
 
         private const val FGS_CHANNEL_ID = "braille_display_connection"
         private const val FGS_NOTIFICATION_ID = 1
-
-        /** Upper bound on the characters kept for one field of the summary. */
-        private const val EVENT_TEXT_LIMIT = 120
-
-        /** Builds the single-line summary logged for every accessibility event. */
-        private fun describeEvent(event: AccessibilityEvent): String {
-            val summary = StringBuilder(96)
-            summary.append(AccessibilityEvent.eventTypeToString(event.eventType))
-            appendEventField(summary, "pkg", event.packageName)
-            appendEventField(summary, "cls", event.className)
-            appendEventField(summary, "text", joinEventText(event.text))
-            appendEventField(summary, "desc", event.contentDescription)
-            return summary.toString()
-        }
-
-        private fun appendEventField(
-                summary: StringBuilder, name: String, value: CharSequence?) {
-            if (TextUtils.isEmpty(value)) {
-                return
-            }
-            summary.append(' ').append(name).append('=').append(clipEventText(value))
-        }
-
-        private fun joinEventText(parts: List<CharSequence>?): String? {
-            if (parts == null || parts.isEmpty()) {
-                return null
-            }
-            val joined = StringBuilder()
-            for (part in parts) {
-                if (TextUtils.isEmpty(part)) {
-                    continue
-                }
-                if (joined.length > 0) {
-                    joined.append(" | ")
-                }
-                joined.append(part)
-            }
-            return if (joined.length == 0) null else joined.toString()
-        }
-
-        private fun clipEventText(value: CharSequence?): String {
-            val text = value.toString().replace('\n', ' ').replace('\r', ' ').trim()
-            if (text.length <= EVENT_TEXT_LIMIT) {
-                return text
-            }
-            return text.substring(0, EVENT_TEXT_LIMIT) + "..."
-        }
 
         /**
          * 应用内界面（图片转点位视口）请求独占点显器：冻结服务侧的文字输出，
