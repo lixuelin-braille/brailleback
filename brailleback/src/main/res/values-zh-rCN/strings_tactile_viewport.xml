@@ -15,6 +15,13 @@
     <string name="tactile_vp_back_overview">返回总览</string>
     <string name="tactile_vp_legend">图例</string>
     <string name="tactile_vp_legend_back">返回图形</string>
+    <!-- 图例超一屏：单行设备一行一屏，候选多时必须分页。 -->
+    <string name="tactile_vp_legend_prev">图例上一页</string>
+    <string name="tactile_vp_legend_next">图例下一页</string>
+    <string name="tactile_vp_legend_page_label">图例 %1$d/%2$d</string>
+    <string name="tactile_vp_status_legend_page">图例 %1$d/%2$d · %3$s</string>
+    <string name="tactile_vp_legend_first_page">已是图例第一屏</string>
+    <string name="tactile_vp_legend_last_page">已是图例最后一屏</string>
     <string name="tactile_vp_pan_left">左移</string>
     <string name="tactile_vp_pan_right">右移</string>
     <string name="tactile_vp_pan_up">上移</string>

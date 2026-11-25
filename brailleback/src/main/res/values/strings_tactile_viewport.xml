@@ -18,6 +18,13 @@
     <string name="tactile_vp_back_overview">Back to overview</string>
     <string name="tactile_vp_legend">Legend</string>
     <string name="tactile_vp_legend_back">Back to image</string>
+    <!-- 图例超一屏：单行设备一行一屏，候选多时必须分页。 -->
+    <string name="tactile_vp_legend_prev">Legend: previous page</string>
+    <string name="tactile_vp_legend_next">Legend: next page</string>
+    <string name="tactile_vp_legend_page_label">Legend %1$d/%2$d</string>
+    <string name="tactile_vp_status_legend_page">Legend %1$d/%2$d · %3$s</string>
+    <string name="tactile_vp_legend_first_page">First legend page</string>
+    <string name="tactile_vp_legend_last_page">Last legend page</string>
     <string name="tactile_vp_pan_left">Move left</string>
     <string name="tactile_vp_pan_right">Move right</string>
     <string name="tactile_vp_pan_up">Move up</string>

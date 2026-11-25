@@ -84,4 +84,35 @@ class TactileLegendPageTest {
         assertEquals(20, out6.size)
         for (b in out6) assertEquals(0, b.toInt() and 0xC0)
     }
+
+    @Test
+    fun singleLineDevicePagesOneLineAtATime() {
+        // 单行设备：四行图例 = 四屏，每屏一行，顺序不能乱。
+        val lines = listOf("⠁", "⠃", "⠉", "⠙")
+        assertEquals(4, TactileLegendPage.pageCount(lines.size, 1))
+        assertEquals(listOf("⠁"), TactileLegendPage.pageLines(lines, 0, 1))
+        assertEquals(listOf("⠃"), TactileLegendPage.pageLines(lines, 1, 1))
+        assertEquals(listOf("⠙"), TactileLegendPage.pageLines(lines, 3, 1))
+    }
+
+    @Test
+    fun fittingScreenKeepsAllLinesAndOnePage() {
+        val lines = listOf("⠁", "⠃")
+        assertEquals(1, TactileLegendPage.pageCount(lines.size, 4))
+        // 一屏装得下时不做切分，原样返回。
+        assertEquals(lines, TactileLegendPage.pageLines(lines, 0, 4))
+        assertEquals(1, TactileLegendPage.pageCount(0, 1))
+        assertEquals(emptyList<String>(), TactileLegendPage.pageLines(emptyList(), 0, 1))
+    }
+
+    @Test
+    fun outOfRangePageIsClamped() {
+        val lines = listOf("⠁", "⠃", "⠉", "⠙", "⠑")
+        assertEquals(3, TactileLegendPage.pageCount(lines.size, 2))
+        // 页码越界不抛异常，钳到最后一屏 / 第一屏。
+        assertEquals(listOf("⠑"), TactileLegendPage.pageLines(lines, 99, 2))
+        assertEquals(listOf("⠁", "⠃"), TactileLegendPage.pageLines(lines, -3, 2))
+        // 第 1 屏（0 基）= 第三、四行。
+        assertEquals(listOf("⠉", "⠙"), TactileLegendPage.pageLines(lines, 1, 2))
+    }
 }

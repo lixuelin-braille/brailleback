@@ -140,6 +140,8 @@ private data class StripLabels(
     val vpBackOverview: String,
     val vpLegend: String,
     val vpLegendBack: String,
+    val vpLegendPrev: String,
+    val vpLegendNext: String,
     val vpPanLeft: String,
     val vpPanRight: String,
     val vpPanUp: String,
@@ -197,6 +199,9 @@ class TactileStripActivity : AppCompatActivity(),
 
     /** 当前是否停在独立图例屏；图例不占图形页。 */
     private var vpLegend by mutableStateOf(false)
+
+    /** 图例屏当前页码（0 基）。单行设备一行一屏，候选一多就必须翻页。 */
+    private var vpLegendPage by mutableStateOf(0)
 
     /** 细节态是否已向无障碍服务申请独占点显器（冻结服务侧文字输出）；只在真冻上过才交还。 */
     private var holdingDisplay = false
@@ -287,6 +292,8 @@ class TactileStripActivity : AppCompatActivity(),
                     displayConnected = displayConnected,
                     vpIsOverview = viewport?.isOverview == true,
                     vpIsLegend = vpLegend,
+                    // 图例行数超一屏才给翻页按钮；一屏装得下就不多摆两个空按钮。
+                    vpLegendMultiPage = viewport?.let { legendPageCount(it) > 1 } == true,
                     onFirstShown = { announce(labels.firstHint) },
                     onPickImage = { pickImageLauncher.launch(arrayOf("image/*")) },
                     onCellsChange = ::onCellsChange,
@@ -311,6 +318,8 @@ class TactileStripActivity : AppCompatActivity(),
                     onBackOverview = ::vpBackOverview,
                     onOpenLegend = ::vpOpenLegend,
                     onCloseLegend = ::vpCloseLegend,
+                    onLegendPrev = { vpLegendNavigate(-1) },
+                    onLegendNext = { vpLegendNavigate(1) },
                 )
             }
         }
@@ -626,9 +635,20 @@ class TactileStripActivity : AppCompatActivity(),
         }
 
         if (vpLegend) {
-            display?.show(legendBytes(vp), getString(R.string.tactile_vp_legend))
-            status = getString(R.string.tactile_vp_status_legend, note)
-            if (announce) announce(getString(R.string.tactile_vp_legend))
+            val pages = legendPageCount(vp)
+            val page = vpLegendPage.coerceIn(0, pages - 1)
+            val pageLabel = if (pages > 1) {
+                getString(R.string.tactile_vp_legend_page_label, page + 1, pages)
+            } else {
+                getString(R.string.tactile_vp_legend)
+            }
+            display?.show(legendBytes(vp, page), pageLabel)
+            status = if (pages > 1) {
+                getString(R.string.tactile_vp_status_legend_page, page + 1, pages, note)
+            } else {
+                getString(R.string.tactile_vp_status_legend, note)
+            }
+            if (announce) announce(pageLabel)
             return
         }
 
@@ -650,21 +670,51 @@ class TactileStripActivity : AppCompatActivity(),
         }
     }
 
-    /** 图例屏点位：检测到的标注位置汇总行（盲文）；无候选时出「未检测到图内标注」屏。 */
-    private fun legendBytes(vp: TactileViewport): ByteArray =
-        TactileLegendPage.build(legendBrailleLines, vp.spec)
+    /** 图例屏总页数；单行设备一行一屏，所以候选越多页越多。 */
+    private fun legendPageCount(vp: TactileViewport): Int =
+        TactileLegendPage.pageCount(legendBrailleLines.size, vp.spec.linesPerScreen)
+
+    /** 图例第 [page] 屏的点位；无候选时出「未检测到图内标注」屏。 */
+    private fun legendBytes(vp: TactileViewport, page: Int): ByteArray =
+        TactileLegendPage.build(
+            TactileLegendPage.pageLines(legendBrailleLines, page, vp.spec.linesPerScreen),
+            vp.spec,
+        )
+
+    /** 图例翻页：越界短震并播报「已是第一屏 / 最后一屏」，不重复朗读整页。 */
+    private fun vpLegendNavigate(delta: Int) {
+        val vp = viewport ?: return
+        val pages = legendPageCount(vp)
+        val next = (vpLegendPage + delta).coerceIn(0, pages - 1)
+        if (next == vpLegendPage) {
+            buzz()
+            announce(
+                getString(
+                    if (delta < 0) R.string.tactile_vp_legend_first_page
+                    else R.string.tactile_vp_legend_last_page
+                )
+            )
+            return
+        }
+        vpLegendPage = next
+        renderViewport(announce = true)
+    }
 
     /**
      * 点显器按键分发：只在视口态生效，映射见 [TactileDisplayKey]。
      *
-     * 图例屏是个「临时挡住图形」的独立屏：此时按到任何已映射的键都先退回图形页，
-     * 不让人困在图例里摸方向键却毫无反应。
+     * 图例屏：回车（或再按图例键）退回图形页；四个方向键翻图例页——单行设备一行一屏，
+     * 候选多的图例必然超过一屏，翻页比「一按就退出」有用。
      */
     private fun onDisplayKey(command: Int) {
         if (viewport == null) return
         val action = TactileDisplayKey.actionFor(command) ?: return
         if (vpLegend) {
-            vpCloseLegend()
+            when (action) {
+                TactileDisplayKey.Action.Legend -> vpCloseLegend()
+                TactileDisplayKey.Action.Up, TactileDisplayKey.Action.Left -> vpLegendNavigate(-1)
+                TactileDisplayKey.Action.Down, TactileDisplayKey.Action.Right -> vpLegendNavigate(1)
+            }
             return
         }
         when (action) {
@@ -754,11 +804,14 @@ class TactileStripActivity : AppCompatActivity(),
 
     private fun vpOpenLegend() {
         vpLegend = true
+        // 每次进图例都从第一屏开始，免得上次停在半截让人以为图例缺内容。
+        vpLegendPage = 0
         renderViewport(announce = true)
     }
 
     private fun vpCloseLegend() {
         vpLegend = false
+        vpLegendPage = 0
         renderViewport(announce = true)
     }
 
@@ -790,9 +843,24 @@ class TactileStripActivity : AppCompatActivity(),
         if (pager != null) renderCurrent(announce = false)
     }
 
-    /** 音量键 / DPAD 单手操作：视口态四向平移，三段式态上下翻页。 */
+    /** 音量键 / DPAD 单手操作：视口态四向平移，图例态翻图例页，三段式态上下翻页。 */
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         val vpActive = viewport != null
+        // 图例态下手机上能按的键也要能翻页，不然只有一个「返回图形」按钮就没法看后面的候选。
+        if (vpActive && vpLegend) {
+            when (keyCode) {
+                KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_DPAD_DOWN,
+                KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    vpLegendNavigate(1)
+                    return true
+                }
+                KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_DPAD_UP,
+                KeyEvent.KEYCODE_DPAD_LEFT -> {
+                    vpLegendNavigate(-1)
+                    return true
+                }
+            }
+        }
         when (keyCode) {
             KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_DPAD_DOWN -> {
                 if (vpActive) vpNavigate(0, 1) else goNext()
@@ -871,6 +939,8 @@ class TactileStripActivity : AppCompatActivity(),
         vpBackOverview = getString(R.string.tactile_vp_back_overview),
         vpLegend = getString(R.string.tactile_vp_legend),
         vpLegendBack = getString(R.string.tactile_vp_legend_back),
+        vpLegendPrev = getString(R.string.tactile_vp_legend_prev),
+        vpLegendNext = getString(R.string.tactile_vp_legend_next),
         vpPanLeft = getString(R.string.tactile_vp_pan_left),
         vpPanRight = getString(R.string.tactile_vp_pan_right),
         vpPanUp = getString(R.string.tactile_vp_pan_up),
@@ -912,6 +982,7 @@ private fun StripScreen(
     displayConnected: Boolean,
     vpIsOverview: Boolean,
     vpIsLegend: Boolean,
+    vpLegendMultiPage: Boolean,
     onFirstShown: () -> Unit,
     onPickImage: () -> Unit,
     onCellsChange: (Int) -> Unit,
@@ -936,6 +1007,8 @@ private fun StripScreen(
     onBackOverview: () -> Unit,
     onOpenLegend: () -> Unit,
     onCloseLegend: () -> Unit,
+    onLegendPrev: () -> Unit,
+    onLegendNext: () -> Unit,
 ) {
     // 首屏只播报一次功能说明；LaunchedEffect(Unit) 在重组 / 状态变化时不会重跑。
     LaunchedEffect(Unit) { onFirstShown() }
@@ -1139,6 +1212,21 @@ private fun StripScreen(
                     )
                 }
                 if (vpIsLegend) {
+                    // 图例超一屏时给「上一页 / 下一页」，手机也能翻，不只靠点显器按键。
+                    if (vpLegendMultiPage) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            TextButton(onClick = onLegendPrev, modifier = Modifier.weight(1f)) {
+                                Text(labels.vpLegendPrev)
+                            }
+                            TextButton(onClick = onLegendNext, modifier = Modifier.weight(1f)) {
+                                Text(labels.vpLegendNext)
+                            }
+                        }
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),

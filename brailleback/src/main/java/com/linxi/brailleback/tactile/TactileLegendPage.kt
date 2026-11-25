@@ -55,6 +55,29 @@ object TactileLegendPage {
     }
 
     /**
+     * 图例共几屏。单行设备一行就是一屏，候选一多必然超屏，所以图例本身也要能翻页。
+     *
+     * @param lineCount 盲文行数
+     * @param linesPerScreen 一屏行数（<1 按 1 处理）
+     */
+    fun pageCount(lineCount: Int, linesPerScreen: Int): Int {
+        val per = linesPerScreen.coerceAtLeast(1)
+        return if (lineCount <= 0) 1 else (lineCount + per - 1) / per
+    }
+
+    /**
+     * 取图例第 [page] 屏（0 基）的行；页码越界时钳制到最后一屏，不抛异常。
+     * 一屏装得下全部行时原样返回，不做多余切分。
+     */
+    fun pageLines(brailleLines: List<String>, page: Int, linesPerScreen: Int): List<String> {
+        val per = linesPerScreen.coerceAtLeast(1)
+        if (brailleLines.size <= per) return brailleLines
+        val lastPage = pageCount(brailleLines.size, per) - 1
+        val start = page.coerceIn(0, lastPage) * per
+        return brailleLines.drop(start).take(per)
+    }
+
+    /**
      * 把若干行 Unicode 盲文（U+2800..U+28FF）排进一屏。
      *
      * @param brailleLines 每行一个盲文字符串；行数不得超过一屏行数。
