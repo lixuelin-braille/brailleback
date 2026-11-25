@@ -183,14 +183,21 @@ internal fun BrailleReaderScreen(
             fontSize = uiState.fontSizeSp.sp)
         // 「一页 = 屏幕上真正能排下的方数 × 行数」：字号、屏幕宽度、横竖屏都会变，
         // 所以每次排版稳定后重测一次，交给 Activity 重建页表（保留阅读位置）。
+        //
+        // 行高必须用**多行文本的平均行高**，不能用单字的 height：Text 的实际行距
+        // 由 style 的 lineHeight 决定，比单字高出一截。按单字算出来的行数会偏多，
+        // 结果页面尾部几行被容器裁掉——滚屏时最明显（段边界那几行看不全）。
         LaunchedEffect(textArea, uiState.fontSizeSp) {
             if (textArea.width <= 0 || textArea.height <= 0) return@LaunchedEffect
             val charW = measurer.measure("汉", probeStyle).size.width
-            val lineH = measurer.measure("汉", probeStyle).size.height
+            val lineH = measurer.measure("汉\n汉\n汉", probeStyle).size.height / 3
             if (charW <= 0 || lineH <= 0) return@LaunchedEffect
+            // 再留 2 行的余量：多段 Text 每段都有首末行 font padding，
+            // 段数一多就攒出小半行，铺满时最后一行会被容器切掉半截。
+            val usable = textArea.height - lineH * 2
             onTextMetrics(
                 (textArea.width / charW).coerceIn(8, 400),
-                (textArea.height / lineH).coerceIn(2, 80),
+                (usable / lineH).coerceIn(2, 80),
             )
         }
         Column(
@@ -198,7 +205,9 @@ internal fun BrailleReaderScreen(
                 .weight(1f)
                 .fillMaxWidth()
                 .onSizeChanged { textArea = it },
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            // 段与段之间不再额外留白：屏幕正文严格按「行高 × 行数」铺，
+            // 行数与页表的 mLinesPerPage 口径一致，滚屏到段边界时最后一行不会被裁掉。
+            // 段落区分靠盲文自身的段首缩进与段间换行。
         ) {
             val segments = uiState.focusSegments.ifEmpty { listOf(uiState.readerText) }
             segments.forEach { segment ->

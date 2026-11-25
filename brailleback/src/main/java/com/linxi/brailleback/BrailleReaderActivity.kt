@@ -1362,31 +1362,39 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
 
     private fun showPage() {
         val unit = readingUnit()
-        // 屏幕正文按书页显示：从**本页起点**开始铺满一整屏，不看点显器推到哪一方。
-        // 点显器那一路由 sendToDisplay 从 mOffset 独立推送，两边互不牵制。
+        // 屏幕正文从**视口首行**开始铺满一整屏。
+        // 视口首行取光标所在的那一行：光标停在页首时视口就是整页（与翻页观感完全一致），
+        // 光标落在页内第 i 行时，视口从该行起铺，屏底自然接上下一页开头的正文，
+        // 于是「下移一行」看起来就是整屏向上滚一行——滚屏，而页号仍由 mOffset 反查，
+        // 章节、进度、点显器推送口径都不受影响。
         val pageStart = if (mStream.isEmpty()) mOffset
         else mPageOffsets.getOrElse(currentUnit()) { mOffset }
-        val brailleText = if (mStream.isEmpty()) {
-            getString(R.string.braille_reader_hint)
-        } else {
-            BrailleFileDecoder.screenAt(
-                mStream, pageStart, mCellsPerLine, mLinesPerPage)
-        }
-        // 本页可见格数截到词边界：末行不会露出半个字（屏显还原同口径）。
-        val end = if (mStream.isEmpty()) pageStart
+        // 本页末（截到词边界），用来界定「本页有哪些行」。
+        val pageEnd = if (mStream.isEmpty()) pageStart
         else BrailleFileDecoder.nextOffset(mStream, pageStart, unit)
-        val count = (end - pageStart).coerceIn(1, unit)
         // 本页每一行的起点（与屏幕折行同规则），供行进度条与「跳到第 N 行」。
         mPageLineStarts = if (mStream.isEmpty()) intArrayOf(0)
         else BrailleFileDecoder.lineStarts(
-            mStream, pageStart, mCellsPerLine, mLinesPerPage, end)
+            mStream, pageStart, mCellsPerLine, mLinesPerPage, pageEnd)
         val lineIndex = mPageLineStarts.indexOfLast { it <= mOffset }.coerceAtLeast(0)
+        val viewStart = mPageLineStarts.getOrElse(lineIndex) { pageStart }
+        val brailleText = if (mStream.isEmpty()) {
+            getString(R.string.braille_reader_hint)
+        } else {
+            // 不截页末：铺满一屏，允许越过页边界，跨页连续才叫滚屏。
+            BrailleFileDecoder.screenAt(
+                mStream, viewStart, mCellsPerLine, mLinesPerPage)
+        }
+        // 视口可见格数截到词边界：末行不会露出半个字（屏显还原同口径）。
+        val end = if (mStream.isEmpty()) viewStart
+        else BrailleFileDecoder.nextOffset(mStream, viewStart, unit)
+        val count = (end - viewStart).coerceIn(1, unit)
         val view = ReaderSourceModel.build(
             kind = mSourceKind,
             sourceText = mSourceText,
             brailleScreenText = brailleText,
             spans = mCellSpans,
-            offset = pageStart,
+            offset = viewStart,
             count = count,
             currentUnit = currentUnit(),
             totalUnits = totalUnits(),
