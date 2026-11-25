@@ -55,6 +55,16 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
 
     private var mDisplay: DisplayClient? = null
 
+    /**
+     * 是否已向无障碍服务申请独占点显器。
+     *
+     * 正文页有两个写入方：本页 [sendToDisplay] 直接下发点位，无障碍服务又把本页的无障碍
+     * 文本（页码行、首行摘要、播报）翻成盲文下发。两个都写同一块屏，用户摸到的就是
+     * 「一会儿点位、一会儿文字」。正文在屏期间冻结服务输出，只留点位；
+     * 没有正文（提示语 / 刚进页）时交还，让服务的常规文字照常显示。
+     */
+    private var holdingDisplay = false
+
     /** 阅读流：段落以 '\n' 分隔，空行已折叠。 */
     private var mStream = ""
     /** 当前阅读位置（字符偏移）。 */
@@ -579,6 +589,8 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     override fun onPause() {
         super.onPause()
         saveProgress()
+        // 离开正文页就交还点显器，否则服务一直冻着，别的界面摸不到字。
+        releaseDisplay()
         mDisplay?.shutdown()
         mDisplay = null
         mConnected = false
@@ -614,6 +626,8 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             mReportedCells = cells.takeIf { it in 1..MAX_DISPLAY_CELLS }
         } else {
             mReportedCells = null
+            // 断开后冻结没有意义，清掉独占标记；重连时正文在屏会重新申请。
+            holdingDisplay = false
         }
         // 阅读单元随连接状态/方数变化：连接后按点显器一屏步进、断开后回屏幕一屏。
         // 页表步进单位变了必须重建，但只换「翻页的格子」，不移动当前阅读位置。
@@ -1303,11 +1317,22 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      */
     private fun sendToDisplay() {
         val display = mDisplay ?: return
-        if (mStream.isEmpty()) return
+        if (mStream.isEmpty()) {
+            releaseDisplay()
+            return
+        }
         // 明眼原文（翻译尚未就绪时的兜底流）不是点位，发过去只会是乱码。
-        if (mSourceKind == ReaderSourceKind.TEXT && !mIsTranslated) return
+        if (mSourceKind == ReaderSourceKind.TEXT && !mIsTranslated) {
+            releaseDisplay()
+            return
+        }
         val cells = BrailleFileDecoder.cellsAt(mStream, mOffset, mDisplayCells)
-        if (cells.isEmpty()) return
+        if (cells.isEmpty()) {
+            releaseDisplay()
+            return
+        }
+        // 先冻服务再画点位：反过来的话，服务那次文字刷新有可能落在点位之后把它盖掉。
+        holdDisplay()
         val len = cells.length
         val patterns = ByteArray(len)
         val map = IntArray(len)
@@ -1316,6 +1341,22 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             map[i] = i
         }
         display.displayDots(patterns, cells, map)
+    }
+
+    /**
+     * 正文在屏期间独占点显器：冻结服务侧文字输出，屏上只剩这一页点位。
+     * 服务没起来时返回 false，行为回落到普通模式，不报错。
+     */
+    private fun holdDisplay() {
+        if (holdingDisplay) return
+        holdingDisplay = BrailleBackService.holdDisplayForApp()
+    }
+
+    /** 交还点显器；重复调用无副作用。 */
+    private fun releaseDisplay() {
+        if (!holdingDisplay) return
+        holdingDisplay = false
+        BrailleBackService.releaseDisplayForApp()
     }
 
     // ------------------------------------------------------------------
