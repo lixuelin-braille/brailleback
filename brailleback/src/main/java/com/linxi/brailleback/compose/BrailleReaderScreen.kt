@@ -280,7 +280,8 @@ internal fun BrailleReaderScreen(
                 )
             }
 
-            // 第二行：目录 / 书签 / 跳页
+            // 第二行：目录 / 书签。
+            // 「跳页」按钮已去掉：页码滑块双击就是「跳到第几页」，同一个功能不再留两个入口。
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -298,13 +299,6 @@ internal fun BrailleReaderScreen(
                     modifier = Modifier.weight(1f),
                 ) {
                     Text(labels.bookmark)
-                }
-                OutlinedButton(
-                    onClick = onGoto,
-                    enabled = uiState.gotoEnabled,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(labels.goto)
                 }
             }
 
