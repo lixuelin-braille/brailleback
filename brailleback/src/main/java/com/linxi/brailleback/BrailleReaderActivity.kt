@@ -594,6 +594,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
                 onPageEdit = ::showGotoDialog,
                 onLineSeek = ::moveToPageLine,
                 onLineEdit = ::showPageLineDialog,
+                onLineOverflow = ::onLineOverflow,
                 onLineConfirm = ::onPageLineConfirmed,
                 onTextMetrics = ::onScreenTextMetrics,
             )
@@ -1703,8 +1704,25 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         saveProgress()
     }
 
-    private fun showPageLineDialog() {
-        if (mStream.isEmpty()) {
+    /**
+     * 行滑块走到头还继续往前（[delta] = +1 下一页 / -1 上一页）：直接翻页，
+     * 新页仍从第 1 行起铺。滚屏时拖到本页最后一行再往前，就顺势滚进下一页，
+     * 不会像以前那样卡在页末一动不动。
+     */
+    private fun onLineOverflow(delta: Int) {
+        if (mStream.isEmpty()) return
+        val target = (currentUnit() + delta).coerceIn(0, (totalUnits() - 1).coerceAtLeast(0))
+        if (target == currentUnit()) {
+            val msg = if (delta > 0) R.string.braille_reader_last_page else R.string.braille_reader_first_page
+            Log.i(LOG_TAG, "page overflow: 到头了 delta=$delta unit=${currentUnit()}")
+            announce(getString(msg))
+            return
+        }
+        Log.i(LOG_TAG, "page overflow: delta=$delta unit ${currentUnit()} -> $target")
+        gotoUnit(target)
+    }
+
+    private fun showPageLineDialog() {        if (mStream.isEmpty()) {
             toastNoContent()
             return
         }
