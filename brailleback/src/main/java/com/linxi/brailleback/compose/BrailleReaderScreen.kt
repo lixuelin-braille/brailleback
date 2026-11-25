@@ -212,23 +212,20 @@ internal fun BrailleReaderScreen(
             }
         }
 
-        // 页码 + 本页行进度条：自绘的一个部件，**只占一个无障碍节点**。
+        // 本页行进度条：自绘的一个部件，**只占一个无障碍节点**。
         //
         // 这一段前后踩过两个坑：把行信息文字与 Slider 并排，是三个焦点（页码、行号、滑块）；
         // 用 mergeDescendants 把整块并起来，TalkBack 仍然读到「滑块」两次——
         // 因为 M3 Slider 自带 RangeInfo 语义，它和外面声明的描术会各自成节点。
         // 所以这里不用 Slider：自己画一条滑轨，语义只声明一次
-        // （contentDescription = 页码 + 第几行，progressBarRangeInfo/setProgress = 上下滑一格一行，
+        // （contentDescription = 第几行 / 共几行，progressBarRangeInfo/setProgress = 上下滑一格一行，
         // onClick = 双击弹数字输入），绘制走 Canvas，不产生任何子节点。
+        // 页码只画在屏上给眼睛看，不进朗读内容（用户要求滑块里不要页码）。
         if (uiState.hasContent) {
             val lineText = labels.pageLine(uiState.lineIndex + 1, uiState.lineCount)
-            val desc = if (uiState.pageInfo.isNotEmpty()) {
-                "${uiState.pageInfo}，$lineText"
-            } else {
-                lineText
-            }
             LineScrubber(
-                description = desc,
+                description = lineText,
+                pageInfo = uiState.pageInfo,
                 lineIndex = uiState.lineIndex,
                 lineCount = uiState.lineCount,
                 actionLabel = labels.pageLineAction,
@@ -523,19 +520,21 @@ private fun GotoDialog(
 }
 
 /**
- * 页码 + 本页行进度条，合成一个部件、一个无障碍节点。
+ * 本页行进度条：一个部件、一个无障碍节点。
  *
  * 为什么不用 M3 `Slider`：它自带 `progressBarRangeInfo` 语义，与我们在外层声明的
  * 描述会各自变成一个 AccessibilityNode，读屏就停在「滑块」和「第几行」两处。
  * 这里自己画：Canvas 只负责像素，语义整块声明在同一个 Box 上，子节点为零。
  *
- * - 读屏：念「页码，第几行 / 共几行」；上下滑一格走一行（RangeInfo + setProgress）；
+ * - 读屏：只念「第几行 / 共几行」；上下滑一格走一行（RangeInfo + setProgress）；
  *   双击走 onClick，弹「跳到本页第 N 行」的数字输入。
+ * - 页码只画在屏上（第二行小字），**不进朗读内容**：用户要求滑块里不要页码。
  * - 触摸：按在滑轨上就跳到对应行，横向拖动则一行一行地跟手。
  */
 @Composable
 private fun LineScrubber(
     description: String,
+    pageInfo: String,
     lineIndex: Int,
     lineCount: Int,
     actionLabel: String,
@@ -545,16 +544,29 @@ private fun LineScrubber(
 ) {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    val textStyle = MaterialTheme.typography.bodyMedium.copy(
+    val lineStyle = MaterialTheme.typography.bodyMedium.copy(
         fontSize = fontSizeSp.sp,
         color = MaterialTheme.colorScheme.onSurface,
     )
-    val text = measurer.measure(AnnotatedString(description), textStyle)
+    val text = measurer.measure(AnnotatedString(description), lineStyle)
+    // 页码：只供眼睛看的小字，比正文小一号、暗一档。
+    val pageText = if (pageInfo.isEmpty()) null else measurer.measure(
+        AnnotatedString(pageInfo),
+        lineStyle.copy(
+            fontSize = (fontSizeSp - 4).sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        ),
+    )
+    val pageHeightDp = pageText?.let { with(density) { it.size.height.toDp() } } ?: 0.dp
     val trackHeight = 18.dp
-    val barHeight = with(density) { text.size.height.toDp() } + trackHeight + 4.dp
+    val barHeight = pageHeightDp + with(density) { text.size.height.toDp() } + trackHeight + 4.dp
     val maxIndex = (lineCount - 1).coerceAtLeast(1)
     val thumbColor = MaterialTheme.colorScheme.primary
     val trackColor = MaterialTheme.colorScheme.outlineVariant
+    // drawText 不会沿用 layout 里 style 的颜色，必须显式传，否则默认画成黑色
+    // （在深色背景上就等于看不见）。
+    val lineColor = MaterialTheme.colorScheme.onSurface
+    val pageColor = MaterialTheme.colorScheme.onSurfaceVariant
 
     Box(
         modifier = Modifier
@@ -601,9 +613,11 @@ private fun LineScrubber(
             },
     ) {
         Canvas(Modifier.fillMaxSize()) {
-            drawText(text, topLeft = Offset(0f, 0f))
+            val pageHeightPx = with(density) { pageHeightDp.toPx() }
+            pageText?.let { drawText(it, color = pageColor, topLeft = Offset(0f, 0f)) }
+            drawText(text, color = lineColor, topLeft = Offset(0f, pageHeightPx))
             val radius = 6.dp.toPx()
-            // 滑轨贴底画，别压到文字：文字占上面一整行的高度。
+            // 滑轨贴底画，别压到文字：上面两行文字，下面一条轨。
             val cy = size.height - radius - 1.dp.toPx()
             if (lineCount >= 2) {
                 drawLine(
