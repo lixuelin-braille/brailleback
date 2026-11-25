@@ -46,16 +46,13 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.invisibleToUser
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.onClick
-import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.drawText
@@ -596,19 +593,26 @@ private fun LineScrubber(
             }
             .semantics {
                 contentDescription = description
+                // 这里**故意不声明** progressBarRangeInfo：
+                // 一旦是「滑块/进度条」语义，读屏调它时必定先念「百分之 5」，
+                // 而这一页要的读数只有行号。去掉 RangeInfo 就没有百分比，
+                // 调整改由下面的自定义动作承担（操作菜单里「上一行 / 下一行」）。
+                stateDescription = description
                 if (lineCount >= 2) {
-                    // TalkBack 调滑块时默认念「百分之多少」，这里用 stateDescription
-                    // 覆盖成「第 6 行 / 共 20 行」——行号才是读数，百分比对书页没意义。
-                    stateDescription = description
-                    progressBarRangeInfo = ProgressBarRangeInfo(
-                        lineIndex.toFloat(),
-                        0f..maxIndex.toFloat(),
-                        (lineCount - 2).coerceAtLeast(0),
+                    customActions = listOf(
+                        CustomAccessibilityAction("上一行") {
+                            if (lineIndex > 0) onSeek(lineIndex - 1)
+                            true
+                        },
+                        CustomAccessibilityAction("下一行") {
+                            if (lineIndex < maxIndex) onSeek(lineIndex + 1)
+                            true
+                        },
+                        CustomAccessibilityAction(actionLabel) {
+                            onEdit()
+                            true
+                        },
                     )
-                    setProgress { target ->
-                        onSeek(target.roundToInt().coerceIn(0, maxIndex))
-                        true
-                    }
                 }
                 onClick(label = actionLabel) {
                     onEdit()
