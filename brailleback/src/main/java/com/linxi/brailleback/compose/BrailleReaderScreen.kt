@@ -48,15 +48,15 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.invisibleToUser
 import androidx.compose.ui.semantics.onClick
-import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.semantics.ScrollAxisRange
+import androidx.compose.ui.semantics.scrollBy
+import androidx.compose.ui.semantics.verticalScrollAxisRange
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.drawText
@@ -611,17 +611,24 @@ private fun ScrubberBar(
             }
             .semantics {
                 contentDescription = description
-                // 滑块语义（用户要求保留「滑块」这个词，像桌面那排翻页提示）：
-                // 读屏念 [description] + 「滑块」，一格一格走。
+                // 这里**故意不声明 progressBarRangeInfo**。
+                //
+                // 声明了它，节点就成了 SeekBar，读屏会按范围自己算一句「百分之 X」念在
+                // 描述前面；第三方读屏（小米增强 / 天坦）不看 stateDescription，压不掉。
+                // 换成滚动语义：读屏把它当可滚动内容，上下滑照样一格一格走，
+                // 但不再算百分比。
                 stateDescription = description
                 if (count >= 2) {
-                    progressBarRangeInfo = ProgressBarRangeInfo(
-                        index.toFloat(),
-                        0f..maxIndex.toFloat(),
-                        (count - 2).coerceAtLeast(0),
+                    verticalScrollAxisRange = ScrollAxisRange(
+                        value = { index.toFloat() },
+                        maxValue = { maxIndex.toFloat() },
+                        reverseScrolling = false,
                     )
-                    setProgress { target ->
-                        onSeek(target.roundToInt().coerceIn(0, maxIndex))
+                    scrollBy { _, delta ->
+                        // delta > 0 是「向后滚动」一格（手势向下滑），反之为向前。
+                        val step = if (delta > 0f) 1 else -1
+                        val target = (index + step).coerceIn(0, maxIndex)
+                        if (target != index) onSeek(target)
                         true
                     }
                 }
