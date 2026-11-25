@@ -1059,6 +1059,17 @@ class BrailleBackService : AccessibilityService(),
             instance?.displayManager?.setFrozen(false)
         }
 
+        /**
+         * 应用内界面把点显器整屏清空（全空方），不改冻结状态。
+         *
+         * 用在「离开阅读器回到书架」这类场景：屏上不该再留着上一本书的点位。
+         * 服务没起来、点显器没连时静默返回，调用方不必判断。
+         */
+        @JvmStatic
+        fun clearDisplayContent() {
+            instance?.displayManager?.sendEmptyCommand()
+        }
+
         @JvmStatic
         fun getActiveInstance(): BrailleBackService? {
             return instance

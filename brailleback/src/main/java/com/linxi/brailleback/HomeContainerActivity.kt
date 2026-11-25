@@ -16,6 +16,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.util.Log
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -154,6 +155,11 @@ class HomeContainerActivity : AppCompatActivity(),
         // 用户可能刚从系统无障碍设置里启用/停用服务，摘要必须跟着变。
         mServiceEnabled = isServiceEnabled()
         bookshelfController.refreshList()
+        // 从阅读器回到书架（本界面的阅读 Tab）：把点显器清空。
+        // 阅读器 onPause 交还了点显器，屏上还留着上一本书的点位，
+        // 书架这边不该继续摸到那本书的正文。
+        BrailleBackService.clearDisplayContent()
+        Log.d("BrailleShelf", "home clear display")
     }
 
     override fun onDestroy() {

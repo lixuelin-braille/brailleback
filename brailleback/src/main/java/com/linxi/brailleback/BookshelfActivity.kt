@@ -12,6 +12,7 @@ package com.linxi.brailleback
 
 import android.app.Activity
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import com.linxi.brailleback.compose.BookshelfController
@@ -41,6 +42,10 @@ class BookshelfActivity : ComponentActivity() {
         // 阅读器里打开过的书会 recordRecent 进书架，返回时刷新列表。
         // 列表用 uri 做 key，刷新后滚动位置仍然保持。
         controller.refreshList()
+        // 从阅读器回到书架：把点显器清空。阅读器在 onPause 里交还了点显器，
+        // 屏上还留着上一本书的点位，书架这边不该继续摸到那本书的字。
+        BrailleBackService.clearDisplayContent()
+        Log.d("BrailleShelf", "shelf clear display")
     }
 
     companion object {

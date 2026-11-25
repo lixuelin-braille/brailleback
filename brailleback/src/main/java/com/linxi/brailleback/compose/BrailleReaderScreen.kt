@@ -56,6 +56,7 @@ import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -596,6 +597,9 @@ private fun LineScrubber(
             .semantics {
                 contentDescription = description
                 if (lineCount >= 2) {
+                    // TalkBack 调滑块时默认念「百分之多少」，这里用 stateDescription
+                    // 覆盖成「第 6 行 / 共 20 行」——行号才是读数，百分比对书页没意义。
+                    stateDescription = description
                     progressBarRangeInfo = ProgressBarRangeInfo(
                         lineIndex.toFloat(),
                         0f..maxIndex.toFloat(),
