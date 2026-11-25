@@ -63,6 +63,17 @@ public class TranslatorService extends Service {
     private JiebaDict mJiebaDict;
     private BrailleSegmenter mSegmenter;
     private volatile boolean mSegmenterReady = false;
+    /** 分词器初始化彻底失败（词典缺失等）：此后不再等它，直接走无分词兜底。 */
+    private volatile boolean mSegmenterInitFailed = false;
+    /**
+     * 长文本翻译等分词器就绪的上限。冷启动服务第一次翻书时词典还在加载，
+     * 早先直接走 liblouis，等于整段整段地「按字出盲文」，用户读到的头几页就是
+     * 没有分词的（真机日志：'zhcn-cbs.ctb' translated WITHOUT segmentation）。
+     * 长文本宁可等几秒也要出分词结果；短文本（界面标签/播报）不等，免得拖慢读屏。
+     */
+    private static final long SEGMENTER_WAIT_MS = 8000L;
+    /** 只打前若干段落的分词诊断日志，避免整本书刷屏。 */
+    private volatile int mSegLogCount = 0;
     // Logged once so the log is not flooded by repeated translate() calls
     // while the segmenter is still loading.
     private volatile boolean mWarnedUnsegmented = false;
@@ -226,9 +237,14 @@ public class TranslatorService extends Service {
                         loadUserSegDict();
                         mSegmenterReady = true;
                         Log.i(LOG_TAG, "Braille segmenter ready");
+                    } else {
+                        // 词典没初始化起来：不会再有 ready，别让每次长文本都白等。
+                        mSegmenterInitFailed = true;
+                        Log.e(LOG_TAG, "Jieba dict not initialised, segmentation unavailable");
                     }
                 } catch (Exception e) {
                     Log.e(LOG_TAG, "Segmenter init failed", e);
+                    mSegmenterInitFailed = true;
                 }
             }
         }, "BrailleSegmenterInit");
@@ -266,12 +282,22 @@ public class TranslatorService extends Service {
         return n.startsWith("zh");
     }
 
+    /** 头 n 个点位的十进制值，逗号分隔；0 = 空方。仅用于分词诊断日志。 */
+    private String cellHead(byte[] cells, int n) {
+        if (cells == null) return "null";
+        StringBuilder sb = new StringBuilder();
+        int end = Math.min(cells.length, n);
+        for (int i = 0; i < end; i++) {
+            if (i > 0) sb.append(',');
+            sb.append(cells[i]);
+        }
+        return sb.toString();
+    }
+
     private TranslationResult translateWithSegment(String text, String tableName,
             int cursorPosition, boolean computerBrailleAtCursor) {
         try {
             BrailleSegmenter.Result seg = mSegmenter.segment(text);
-            Timber.tag("SegDebug").d("IN : [%s] L=%d", text, text.length());
-            Timber.tag("SegDebug").d("OUT: [%s] segL=%d", seg.text, seg.text.length());
             int segCursor = cursorPosition;
             if (cursorPosition >= 0 && cursorPosition < seg.origToSeg.length) {
                 segCursor = seg.origToSeg[cursorPosition];
@@ -282,6 +308,16 @@ public class TranslatorService extends Service {
                     segCursor, computerBrailleAtCursor);
             if (tr == null) {
                 return null;
+            }
+            if (mSegLogCount < 20) {
+                // 分词前后的长度、空格数、盲文方数，以及头几个点位的十进制值
+                // （0 表示空方，用来确证「分词」真的在输出里留下了词间空格）。
+                mSegLogCount++;
+                Log.d(LOG_TAG, "segment: in=" + text.length() + " out="
+                        + seg.text.length() + " spaces="
+                        + Math.max(0, seg.text.length() - text.length())
+                        + " cells=" + tr.getCells().length
+                        + " head=" + cellHead(tr.getCells(), 36));
             }
             int[] ttb = tr.getTextToBraillePositions();
             int[] btt = tr.getBrailleToTextPositions();
@@ -562,6 +598,18 @@ public class TranslatorService extends Service {
                 return translateWithSegment(text, tableName, cursorPosition,
                         computerBrailleAtCursor);
             }
+            // 分词器还在加载（服务刚起来那几秒）：先等它就绪，别把这段文字按
+            // 「一字一方」翻出去——阅读器最先上屏、用户最先读到的就是这几页，
+            // 一旦漏分词，整本书的开头听起来就是没有分词的。
+            // 任何长度的中文文本都等：短段落（小说里很多）同样要分词；
+            // 读屏标签在这段时间最多多等几百毫秒到几秒，但结果是对的。
+            if (mChineseSegmentationEnabled && isChineseTable(tableName)
+                    && !mSegmenterReady && !mSegmenterInitFailed) {
+                if (awaitSegmenter()) {
+                    return translateWithSegment(text, tableName, cursorPosition,
+                            computerBrailleAtCursor);
+                }
+            }
             if (mChineseSegmentationEnabled && isChineseTable(tableName)
                     && !mSegmenterReady && !mWarnedUnsegmented) {
                 // Chinese table but the segmenter is not up yet (dictionary
@@ -576,6 +624,31 @@ public class TranslatorService extends Service {
             }
             return LibLouisWrapper.translate(text, tableName, cursorPosition,
                     computerBrailleAtCursor);
+        }
+
+        /**
+         * 等分词器就绪，最多 [SEGMENTER_WAIT_MS]。
+         *
+         * 只在分词器初始化线程里短暂等待，调用方（阅读器翻译线程）本来就是后台线程；
+         * 超时或初始化失败返回 false，调用方继续走无分词兜底，不让调用卡死。
+         */
+        private boolean awaitSegmenter() {
+            long deadline = System.currentTimeMillis() + SEGMENTER_WAIT_MS;
+            while (System.currentTimeMillis() < deadline) {
+                if (mSegmenterReady) {
+                    Log.i(LOG_TAG, "waited for segmenter before translating");
+                    return true;
+                }
+                if (mSegmenterInitFailed) return false;
+                try {
+                    Thread.sleep(20L);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                }
+            }
+            Log.w(LOG_TAG, "segmenter still not ready after " + SEGMENTER_WAIT_MS + "ms");
+            return false;
         }
 
         @Override

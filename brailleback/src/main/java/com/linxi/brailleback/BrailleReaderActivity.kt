@@ -1114,8 +1114,11 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
                 }
                 paragraphStart += paragraph.length + 1
                 val sincePublish = SystemClock.uptimeMillis() - lastPublishAt
-                if ((publishedChars == 0 && sb.length >= FIRST_PUBLISH_CHARS) ||
-                    sincePublish >= PUBLISH_INTERVAL_MS) {
+                // 一次至少交够 MIN_PUBLISH_CHARS，别把一段话当一页先推上去：
+                // 冷启动等分词器的那几秒会把「2 秒交一块」的时钟提前打满。
+                if (sb.length >= MIN_PUBLISH_CHARS &&
+                    ((publishedChars == 0 && sb.length >= FIRST_PUBLISH_CHARS) ||
+                        sincePublish >= PUBLISH_INTERVAL_MS)) {
                     publish(false)
                 }
             }
@@ -1743,6 +1746,8 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
          */
         private const val FIRST_PUBLISH_CHARS = 12_000
         private const val PUBLISH_INTERVAL_MS = 2_000L
+        /** 单块最少这么多字；不到就先攒着，免得先推上去半页空屏。约 1.5 页正文。 */
+        private const val MIN_PUBLISH_CHARS = 1_200
         /**
          * 点显器方数上限，仅用于兜住驱动误报。
          * 常见单行点显器为 12–80 方，多行显示器最多数百方；
