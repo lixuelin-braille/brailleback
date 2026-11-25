@@ -10,14 +10,18 @@
 
 package com.linxi.brailleback.compose
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -37,16 +41,23 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.invisibleToUser
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -201,65 +212,35 @@ internal fun BrailleReaderScreen(
             }
         }
 
-        // 页码行
-        if (uiState.pageInfo.isNotEmpty()) {
+        // 页码 + 本页行进度条：自绘的一个部件，**只占一个无障碍节点**。
+        //
+        // 这一段前后踩过两个坑：把行信息文字与 Slider 并排，是三个焦点（页码、行号、滑块）；
+        // 用 mergeDescendants 把整块并起来，TalkBack 仍然读到「滑块」两次——
+        // 因为 M3 Slider 自带 RangeInfo 语义，它和外面声明的描术会各自成节点。
+        // 所以这里不用 Slider：自己画一条滑轨，语义只声明一次
+        // （contentDescription = 页码 + 第几行，progressBarRangeInfo/setProgress = 上下滑一格一行，
+        // onClick = 双击弹数字输入），绘制走 Canvas，不产生任何子节点。
+        if (uiState.hasContent) {
+            val lineText = labels.pageLine(uiState.lineIndex + 1, uiState.lineCount)
+            val desc = if (uiState.pageInfo.isNotEmpty()) {
+                "${uiState.pageInfo}，$lineText"
+            } else {
+                lineText
+            }
+            LineScrubber(
+                description = desc,
+                lineIndex = uiState.lineIndex,
+                lineCount = uiState.lineCount,
+                actionLabel = labels.pageLineAction,
+                fontSizeSp = uiState.fontSizeSp,
+                onSeek = onLineSeek,
+                onEdit = onLineEdit,
+            )
+        } else if (uiState.pageInfo.isNotEmpty()) {
             Text(
                 text = uiState.pageInfo,
                 style = MaterialTheme.typography.bodyMedium,
             )
-        }
-
-        // 本页行进度条：滑块一格一行，点行号可以直接输入「跳到本页第 N 行」。
-        // 只有一行时不给滑块：valueRange 为空，拖不出任何东西，反而让 TalkBack 白读一遍。
-        //
-        // 无障碍：行文案和滑块必须是**一个**焦点。TalkBack 下这里是「滑块」语义，
-        // 上滑/下滑一格走一行；双击弹出数字输入跳行。分成两个焦点时，读行号要跳一次、
-        // 调滑轨又要跳一次，来回找位置，所以行文案自身的语义清空，统一挂在整行上。
-        if (uiState.hasContent && uiState.lineCount >= 2) {
-            val lineText = labels.pageLine(uiState.lineIndex + 1, uiState.lineCount)
-            val maxIndex = (uiState.lineCount - 1).coerceAtLeast(1)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .semantics(mergeDescendants = true) {
-                        contentDescription = lineText
-                        // 自己声明可调范围：不依赖子节点 Slider 合并后是否还带着 RangeInfo，
-                        // TalkBack 读到的稳定是「滑块」，上滑/下滑一格一行。
-                        progressBarRangeInfo = ProgressBarRangeInfo(
-                            uiState.lineIndex.toFloat(),
-                            0f..maxIndex.toFloat(),
-                            (uiState.lineCount - 2).coerceAtLeast(0),
-                        )
-                        setProgress { target ->
-                            onLineSeek(
-                                target.roundToInt().coerceIn(0, maxIndex))
-                            true
-                        }
-                        onClick(label = labels.pageLineAction) {
-                            onLineEdit()
-                            true
-                        }
-                    },
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text(
-                    text = lineText,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier
-                        // 触摸上点行号也能弹输入；语义清空，避免又变成第二个焦点。
-                        .combinedClickable(onClick = onLineEdit)
-                        .clearAndSetSemantics { }
-                        .padding(horizontal = 6.dp, vertical = 4.dp),
-                )
-                Slider(
-                    value = uiState.lineIndex.toFloat(),
-                    onValueChange = { onLineSeek(it.toInt()) },
-                    valueRange = 0f..(uiState.lineCount - 1).coerceAtLeast(0).toFloat(),
-                    steps = (uiState.lineCount - 2).coerceAtLeast(0),
-                    modifier = Modifier.weight(1f),
-                )
-            }
         }
 
         // 第一行：上一页 / 下一页（「发送点显」已按用户要求去掉：
@@ -539,6 +520,109 @@ private fun GotoDialog(
             OutlinedButton(onClick = onDismiss) { Text(labels.cancel) }
         },
     )
+}
+
+/**
+ * 页码 + 本页行进度条，合成一个部件、一个无障碍节点。
+ *
+ * 为什么不用 M3 `Slider`：它自带 `progressBarRangeInfo` 语义，与我们在外层声明的
+ * 描述会各自变成一个 AccessibilityNode，读屏就停在「滑块」和「第几行」两处。
+ * 这里自己画：Canvas 只负责像素，语义整块声明在同一个 Box 上，子节点为零。
+ *
+ * - 读屏：念「页码，第几行 / 共几行」；上下滑一格走一行（RangeInfo + setProgress）；
+ *   双击走 onClick，弹「跳到本页第 N 行」的数字输入。
+ * - 触摸：按在滑轨上就跳到对应行，横向拖动则一行一行地跟手。
+ */
+@Composable
+private fun LineScrubber(
+    description: String,
+    lineIndex: Int,
+    lineCount: Int,
+    actionLabel: String,
+    fontSizeSp: Int,
+    onSeek: (Int) -> Unit,
+    onEdit: () -> Unit,
+) {
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val textStyle = MaterialTheme.typography.bodyMedium.copy(
+        fontSize = fontSizeSp.sp,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+    val text = measurer.measure(AnnotatedString(description), textStyle)
+    val trackHeight = 18.dp
+    val barHeight = with(density) { text.size.height.toDp() } + trackHeight + 4.dp
+    val maxIndex = (lineCount - 1).coerceAtLeast(1)
+    val thumbColor = MaterialTheme.colorScheme.primary
+    val trackColor = MaterialTheme.colorScheme.outlineVariant
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(barHeight)
+            // 触摸：按下即跳到该行，拖动时一行一行跟手。
+            // 只有一行时不必响应（拖不出任何东西）。
+            .pointerInput(lineCount, maxIndex) {
+                if (lineCount < 2) return@pointerInput
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    fun seekAt(x: Float) {
+                        val fraction = (x / size.width).coerceIn(0f, 1f)
+                        onSeek((fraction * maxIndex).roundToInt())
+                    }
+                    seekAt(down.position.x)
+                    down.consume()
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull() ?: break
+                        if (!change.pressed) break
+                        seekAt(change.position.x)
+                        change.consume()
+                    }
+                }
+            }
+            .semantics {
+                contentDescription = description
+                if (lineCount >= 2) {
+                    progressBarRangeInfo = ProgressBarRangeInfo(
+                        lineIndex.toFloat(),
+                        0f..maxIndex.toFloat(),
+                        (lineCount - 2).coerceAtLeast(0),
+                    )
+                    setProgress { target ->
+                        onSeek(target.roundToInt().coerceIn(0, maxIndex))
+                        true
+                    }
+                }
+                onClick(label = actionLabel) {
+                    onEdit()
+                    true
+                }
+            },
+    ) {
+        Canvas(Modifier.fillMaxSize()) {
+            drawText(text, topLeft = Offset(0f, 0f))
+            val radius = 6.dp.toPx()
+            // 滑轨贴底画，别压到文字：文字占上面一整行的高度。
+            val cy = size.height - radius - 1.dp.toPx()
+            if (lineCount >= 2) {
+                drawLine(
+                    color = trackColor,
+                    start = Offset(radius, cy),
+                    end = Offset(size.width - radius, cy),
+                    strokeWidth = 2.dp.toPx(),
+                    cap = StrokeCap.Round,
+                )
+                val span = (size.width - radius * 2).coerceAtLeast(1f)
+                val fraction = lineIndex.toFloat() / maxIndex
+                drawCircle(
+                    color = thumbColor,
+                    radius = radius,
+                    center = Offset(radius + span * fraction, cy),
+                )
+            }
+        }
+    }
 }
 
 /**
