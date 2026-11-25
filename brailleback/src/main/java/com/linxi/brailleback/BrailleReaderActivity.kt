@@ -29,6 +29,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
+import com.googlecode.eyesfree.braille.display.BrailleInputEvent
 import com.googlecode.eyesfree.braille.display.Display
 import com.googlecode.eyesfree.braille.display.DisplayClient
 import com.googlecode.eyesfree.braille.translate.BrailleTranslator
@@ -40,6 +41,8 @@ import com.linxi.brailleback.compose.GeometryChoice
 import com.linxi.brailleback.compose.ReaderDialog
 import com.linxi.brailleback.compose.ReaderLabels
 import com.linxi.brailleback.compose.ReaderUiState
+import com.linxi.brailleback.reader.ReaderDisplayAction
+import com.linxi.brailleback.reader.ReaderDisplayKey
 import com.linxi.brailleback.utils.LogFileWriter
 import java.io.ByteArrayOutputStream
 import java.io.IOException
@@ -64,6 +67,19 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      * 没有正文（提示语 / 刚进页）时交还，让服务的常规文字照常显示。
      */
     private var holdingDisplay = false
+
+    /**
+     * 正文页的点显器按键入口。
+     *
+     * 输入事件由服务向所有客户端广播，所以本页自带监听即可（同 81 号视口的做法）。
+     * 回调在 DisplayClient 的 handler（主线程）上到，仍统一 post 一次再改状态，避免
+     * 以后换成别的线程时静默出错。
+     */
+    private val displayKeyListener = object : Display.OnInputEventListener {
+        override fun onInputEvent(inputEvent: BrailleInputEvent) {
+            runOnUiThread { onDisplayKey(inputEvent.command) }
+        }
+    }
 
     /** 阅读流：段落以 '\n' 分隔，空行已折叠。 */
     private var mStream = ""
@@ -576,6 +592,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         val display = DisplayClient(this)
         mDisplay = display
         display.setOnConnectionStateChangeListener(this)
+        display.setOnInputEventListener(displayKeyListener)
         onConnectionStateChanged(Display.STATE_NOT_CONNECTED)
         // 首次进入且尚无内容时，尝试恢复上次阅读进度。
         // mFileUri != null 说明本次是书架/最近打开明确指定的书（onCreate 已同步
@@ -1044,6 +1061,32 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         val step = if (mConnected && mDisplayCells > 0) mDisplayCells else mCellsPerLine
         mOffset = (mOffset + delta * step).coerceIn(0, maxOffset())
         showPage()
+    }
+
+    /**
+     * 点显器按键落在正文页时的处理（映射见 [ReaderDisplayKey]）。
+     *
+     * 平移键逐行、上下行键整屏翻、顶/底键跳文首文末、回车播报当前页位置。
+     */
+    private fun onDisplayKey(command: Int) {
+        val action = ReaderDisplayKey.resolve(command)
+        if (action == ReaderDisplayAction.NONE) return
+        if (mStream.isEmpty()) return
+        when (action) {
+            ReaderDisplayAction.PREV_LINE -> moveLine(-1)
+            ReaderDisplayAction.NEXT_LINE -> moveLine(1)
+            ReaderDisplayAction.PREV_PAGE -> advance(-1)
+            ReaderDisplayAction.NEXT_PAGE -> advance(1)
+            ReaderDisplayAction.FIRST_PAGE -> gotoUnit(0)
+            // 越界由 gotoUnit 钳到末屏，不必自己算页数。
+            ReaderDisplayAction.LAST_PAGE -> gotoUnit(Int.MAX_VALUE)
+            ReaderDisplayAction.ANNOUNCE_PAGE -> {
+                val firstLine = mLastView?.focusSegments?.firstOrNull().orEmpty()
+                announce(listOf(uiState.pageInfo, firstLine)
+                    .filter { it.isNotEmpty() }.joinToString("，"))
+            }
+            ReaderDisplayAction.NONE -> return
+        }
     }
 
     private fun showPage() {
