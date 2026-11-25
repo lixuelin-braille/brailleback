@@ -95,10 +95,85 @@ object ReaderSourceModel {
         stream: String?,
     ): String? {
         if (spans == null) return null
+        if (spans is CellSourceTable) {
+            // 紧凑表：直接按源字符下标走，跳过的相邻字按原文补齐（见 reconstructFromTable）。
+            return reconstructFromTable(
+                spans, offset, count,
+                if (stream != null && countBrailleCells(stream) == spans.size) stream else null)
+        }
         if (stream != null && countBrailleCells(stream) == spans.size) {
             return reconstructFromStream(spans, offset, count, stream)
         }
         return reconstructByCellIndex(spans, offset, count)
+    }
+
+    /** 相邻源字被跳过的最大补齐长度；超过视为跳转（换段/换章），不硬补。 */
+    private const val MAX_GAP_CHARS = 200
+
+    /**
+     * 紧凑逐格表版还原：[stream] 非 null 时 [offset] 是流内字符位置，否则按格序号。
+     *
+     * 词式分割下常出现相邻两个字的多格被压到同一个源位置（位置序列 0,0,1,1,2,2…），
+     * 早先只按「与上一格相同就跳过」会把后一个字整字吞掉，屏显和播报就成了
+     * 「身地」「举手之劳」这种缺字的句子。这里按源字符下标单调推进：
+     * 位置前进超过 1 就把中间被跳过的原字按原文补齐，位置不前进则同一字的多格只出一次。
+     */
+    private fun reconstructFromTable(
+        table: CellSourceTable,
+        offset: Int,
+        count: Int,
+        stream: String?,
+    ): String? {
+        val sourceText = table.sourceText
+        var index = 0
+        var streamPos = 0
+        if (stream != null) {
+            val start = offset.coerceIn(0, stream.length)
+            for (i in 0 until start) {
+                if (isBrailleCell(stream[i])) index++
+            }
+            streamPos = start
+        } else {
+            index = offset.coerceIn(0, table.size)
+        }
+        if (index >= table.size) return null
+        val sb = StringBuilder()
+        var remaining = count
+        var lastPos = -1
+        while (remaining > 0 && index < table.size) {
+            if (stream != null) {
+                if (streamPos >= stream.length) break
+                if (stream[streamPos] == '\n') {
+                    if (sb.isNotEmpty() && !sb.endsWith('\n')) sb.append('\n')
+                    lastPos = -1
+                    streamPos++
+                    continue
+                }
+            }
+            val charPos = table.charPosAt(index)
+            if (charPos >= 0 && charPos < sourceText.length) {
+                when {
+                    lastPos < 0 -> sb.append(sourceText[charPos])
+                    charPos == lastPos -> Unit // 同一源字的多格，只出一次
+                    charPos > lastPos -> {
+                        val gapFrom = lastPos + 1
+                        val gapTo = charPos
+                        val gap = gapTo - gapFrom + 1
+                        if (gap <= MAX_GAP_CHARS) {
+                            sb.append(sourceText, gapFrom, gapTo + 1)
+                        } else {
+                            sb.append(sourceText[charPos])
+                        }
+                    }
+                    else -> Unit // 位置回退（极少见）按同一字处理
+                }
+                lastPos = charPos
+            }
+            remaining--
+            index++
+            if (stream != null) streamPos++
+        }
+        return sb.toString().ifEmpty { null }
     }
 
     /**

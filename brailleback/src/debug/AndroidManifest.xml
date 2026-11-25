@@ -15,5 +15,11 @@
             android:exported="true"
             tools:replace="android:exported"
             tools:ignore="ExportedActivity" />
+        <!-- 阅读器同样放开：冒烟要能用 EXTRA_URI 直接打开指定文件，量「翻译跑了几次」。 -->
+        <activity
+            android:name=".BrailleReaderActivity"
+            android:exported="true"
+            tools:replace="android:exported"
+            tools:ignore="ExportedActivity" />
     </application>
 </manifest>

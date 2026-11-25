@@ -19,6 +19,7 @@ package com.linxi.brailleback
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.os.SystemClock
 import android.provider.OpenableColumns
 import android.util.Log
 import android.widget.Toast
@@ -128,12 +129,19 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         object : TranslatorManager.OnTablesChangedListener {
             override fun onTablesChanged() {
                 val pending = mPendingTranslation
-                if (pending != null) {
-                    mPendingTranslation = null
-                    mTranslatorManager.removeOnTablesChangedListener(mTranslationReadyListener)
-                    startTranslation(pending.text, pending.name, pending.uri,
-                        pending.resetPosition, pending.targetOffset)
-                }
+                // 排查「进书后像翻译了好几次」：清单/表变化会重复通知，这里记一条，
+                // 有没有挂起的翻译请求一眼就能看出来。
+                Log.d(LOG_TAG, "tables changed: pending=${pending != null}, " +
+                    "translator=${mTranslatorManager.getTranslator() != null}")
+                if (pending == null) return
+                // 表清单就绪 ≠ 翻译器造好：这一步可能先到。此时若照原逻辑重跑
+                // startTranslation，会再铺一遍原文流（用户听到两次「先按原文读」、
+                // 点显器也被重推一次），看起来就像「翻译了好几次」。继续挂起等下一次通知。
+                if (mTranslatorManager.getTranslator() == null) return
+                mPendingTranslation = null
+                mTranslatorManager.removeOnTablesChangedListener(mTranslationReadyListener)
+                startTranslation(pending.text, pending.name, pending.uri,
+                    pending.resetPosition, pending.targetOffset)
             }
         }
 
@@ -727,6 +735,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             }
             val text = decoded.first
             val name = decoded.second
+            Log.d(LOG_TAG, "load done: name=$name chars=${text.length}")
             runOnUiThread {
                 when (BrailleFileDecoder.detectKind(text)) {
                     BrailleFileDecoder.ContentKind.TEXT -> {
@@ -802,6 +811,9 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         mStream = BrailleFileDecoder.toReadingStream(brailleText)
         mIsTranslated = isTranslated
         mCellSpans = cellSpans
+        // 每进一次流记一条：同一本书若出现两条以上，说明真的重复解码/翻译了。
+        Log.d(LOG_TAG, "stream set: len=${mStream.length} translated=$isTranslated " +
+            "reset=$resetPosition target=$targetOffset")
         // 记录最近打开（书架「最近」列表数据源），解码/翻译成功才算真正打开
         BookshelfActivity.recordRecent(this, uri.toString(),
             name ?: uri.lastPathSegment ?: "file")
@@ -863,6 +875,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             return
         }
         mTranslating = true
+        Log.d(LOG_TAG, "translate start: chars=${text.length}")
         uiState = uiState.copy(
             readerText = getString(R.string.braille_reader_translating))
         warnIfTableMismatch(text, translator)
@@ -871,6 +884,11 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
                 translateParagraphs(text, translator)
             } catch (e: Exception) {
                 Log.w(LOG_TAG, "翻译失败: ${e.message}")
+                null
+            } catch (e: OutOfMemoryError) {
+                // 内存吃紧时别让整条翻译线程把进程带走（真机曾直接 SIG 9 闪退）：
+                // 退化成原文流 + 「翻译失败」提示，用户至少还能接着读。
+                Log.w(LOG_TAG, "翻译内存不足: ${e.message}")
                 null
             }
             runOnUiThread {
@@ -934,18 +952,59 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         translator: BrailleTranslator
     ): Pair<String, List<CellSource>>? {
         val sb = StringBuilder(text.length)
-        val spans = ArrayList<CellSource>()
+        // 逐格源下标用 int 缓冲攒，不用 List<CellSource>：整本大书逐格建对象会
+        // 把 256MB 堆吃穿（真机 OOM）。段落起点记在全书坐标系里，跨段不串位。
+        val positions = IntPositionBuffer(text.length + 16)
+        var index = 0
+        var paragraphStart = 0
+        var invalidCells = 0
         for (paragraph in text.split('\n')) {
             if (paragraph.isBlank()) {
                 sb.append('\n')
+                paragraphStart += paragraph.length + 1
                 continue
             }
-            val res = translator.translate(paragraph, -1, false) ?: return null
+            index++
+            val startedAt = System.currentTimeMillis()
+            var res = translator.translate(paragraph, -1, false)
+            var attempt = 1
+            while (res == null && attempt < TRANSLATE_ATTEMPTS) {
+                // 桥偶尔会在长书翻译中途返回 null（服务重启、AIDL 抖动）。先原地重试，
+                // 别因为一段失败把整本打回原文——用户看到的就是「翻译失败」。
+                Log.w(LOG_TAG, "translate retry #$attempt at paragraph #$index len=${paragraph.length}")
+                SystemClock.sleep(TRANSLATE_RETRY_DELAY_MS)
+                res = translator.translate(paragraph, -1, false)
+                attempt++
+            }
+            if (res == null) {
+                // 定位「翻译失败」到底卡在哪一段：段序、段长、耗时一起记，便于判断是
+                // 单段过大、表不匹配还是服务在中途掉线。
+                Log.w(LOG_TAG, "translate null at paragraph #$index len=${paragraph.length} " +
+                    "elapsed=${System.currentTimeMillis() - startedAt}ms")
+                return null
+            }
             sb.append(BrailleFileDecoder.cellsToUnicodeText(res.cells)).append('\n')
-            spans += SourceSpanMapper.buildParagraphSpans(
-                paragraph, res.brailleToTextPositions)
+            // 每格回挂到源字符：位置数组比格数短时缺的格按无映射补 -1，宁缺不串。
+            val cellCount = res.cells.size
+            val toText = res.brailleToTextPositions
+            var invalid = 0
+            for (cell in 0 until cellCount) {
+                val pos = toText.getOrNull(cell) ?: -1
+                val mapped = if (pos in paragraph.indices) paragraphStart + pos else -1
+                if (mapped < 0) invalid++
+                positions.add(mapped)
+            }
+            invalidCells += invalid
+            if (index == 1 || index % 1000 == 0) {
+                Log.d(LOG_TAG, "map probe #$index para=${paragraph.take(12)} " +
+                    "cells=$cellCount invalid=$invalid " +
+                    "pos=${toText.take(24).joinToString(",")}")
+            }
+            paragraphStart += paragraph.length + 1
         }
-        return sb.toString() to spans
+        Log.d(LOG_TAG, "translate ok: paragraphs=$index cells=${sb.length} " +
+            "invalidCells=$invalidCells")
+        return sb.toString() to CellSourceTable(text, positions.toIntArray())
     }
 
     /**
@@ -1469,6 +1528,10 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
 
         /** 翻译服务超过这个时长仍未就绪，就播报一次“先按原文读”。 */
         private const val TRANSLATOR_WARN_DELAY_MS = 8000L
+
+        /** 单段翻译失败后的原地重试次数与间隔（桥抖动多为瞬时）。 */
+        private const val TRANSLATE_ATTEMPTS = 3
+        private const val TRANSLATE_RETRY_DELAY_MS = 300L
         /**
          * 点显器方数上限，仅用于兜住驱动误报。
          * 常见单行点显器为 12–80 方，多行显示器最多数百方；

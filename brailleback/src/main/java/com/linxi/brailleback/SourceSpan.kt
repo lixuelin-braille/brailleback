@@ -25,6 +25,55 @@ data class CellSource(
     }
 }
 
+/**
+ * 紧凑的逐格源区间表：只保存每格对应的**源字符下标**（-1 表示无映射），
+ * 需要 [CellSource] 时才现拼。
+ *
+ * 为什么不用 List<CellSource> 直接攒：一本 300 万字级的 txt 能翻出近 200 万格，
+ * 逐格一个 CellSource + 一个 SourceSpan + 一个单字 String，加起来要 190MB 左右，
+ * 远超 256MB 堆上限，翻译到一半就 java.lang.OutOfMemoryError（真机已复现）。
+ * 这里 200 万格只占 8MB，且对外仍是 List<CellSource>，调用方不用改。
+ */
+class CellSourceTable(
+    val sourceText: String,
+    private val charPositions: IntArray,
+) : AbstractList<CellSource>() {
+
+    override val size: Int get() = charPositions.size
+
+    /** 第 [cell] 格对应的源字符下标；-1 或越界都表示无映射。 */
+    fun charPosAt(cell: Int): Int = charPositions[cell]
+
+    override fun get(index: Int): CellSource {
+        val pos = charPositions[index]
+        if (pos !in sourceText.indices) return CellSource.NONE
+        val ch = sourceText[pos].toString()
+        return CellSource(SourceSpan(pos, pos + 1, ch), ch)
+    }
+
+    companion object {
+        val EMPTY = CellSourceTable("", IntArray(0))
+    }
+}
+
+/** 增长型 int 缓冲：逐格记源下标，避免 ArrayList<Integer> 的装箱与倍增拷贝。 */
+class IntPositionBuffer(initialCapacity: Int = 1024) {
+
+    private var data = IntArray(if (initialCapacity > 0) initialCapacity else 16)
+
+    var size: Int = 0
+        private set
+
+    fun add(value: Int) {
+        if (size == data.size) {
+            data = data.copyOf(if (size >= 1 shl 20) size + (size shr 1) else maxOf(16, size * 2))
+        }
+        data[size++] = value
+    }
+
+    fun toIntArray(): IntArray = data.copyOf(size)
+}
+
 object SourceSpanMapper {
 
     /**
