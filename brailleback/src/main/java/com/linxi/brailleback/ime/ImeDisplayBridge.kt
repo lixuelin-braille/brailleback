@@ -24,6 +24,7 @@ import com.googlecode.eyesfree.braille.display.BrailleInputEvent
 import com.googlecode.eyesfree.braille.display.Display
 import com.googlecode.eyesfree.braille.display.DisplayClient
 import com.linxi.brailleback.BrailleIME
+import com.linxi.brailleback.onHardwareInputEvent
 
 /**
  * 输入法自己的点显器连接：不开无障碍也能用点显器打字。
