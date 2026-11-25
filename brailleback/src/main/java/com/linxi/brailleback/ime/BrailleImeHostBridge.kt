@@ -16,20 +16,13 @@
 package com.linxi.brailleback.ime
 
 import android.accessibilityservice.AccessibilityService
-import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Context
 import android.graphics.Region
 import android.os.Build
 import android.os.Bundle
-import android.speech.tts.TextToSpeech
-import android.speech.tts.UtteranceProgressListener
-import android.util.DisplayMetrics
 import android.util.Log
-import android.view.Display
 import android.view.View
 import android.view.WindowManager
-import android.view.accessibility.AccessibilityEvent
-import android.view.accessibility.AccessibilityManager
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import com.google.android.accessibility.braille.interfaces.BrailleImeForTalkBack
@@ -51,9 +44,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.util.ArrayDeque
-import java.util.Locale
-import java.util.Queue
 
 /** BrailleBack 侧的 TalkBack 桥接实现。 */
 class BrailleImeHostBridge(private val service: BrailleBackService) :
@@ -62,6 +52,9 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
   private val context: Context = service.getApplicationContext()
   private val focusFinder: FocusFinder = FocusFinder(service)
   private val feedbackController: FeedbackController = FeedbackController(context)
+  private val speech = BrailleImeHostSpeech(context)
+  private val nodeActions = BrailleImeHostNodeActions(service, focusFinder)
+  private val passthrough = BrailleImeHostPassthrough(service)
 
   /**
    * 本桥接的主线程作用域。原来这里有一个自建的 main Handler，专门排三种延迟
@@ -76,81 +69,13 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
 
   private var brailleImeForTalkBack: BrailleImeForTalkBack? = null
 
-  /** 直通区是否处于已挂载状态（用于兜底清理与延迟任务判定）。 */
-  private var passthroughActive = false
-
   /** 宿主提供的键盘容器视图，用于把播报内容转成读屏可读的无障碍公告。 */
   private var announcementView: View? = null
-
-  private var textToSpeech: TextToSpeech? = null
-  private var ttsReady = false
-  private val pendingUtterances: Queue<CharSequence> = ArrayDeque()
 
   private var readingGranularity: ReadingGranularity = ReadingGranularity.CHARACTER
 
   init {
-    initTts()
-  }
-
-  private fun initTts() {
-    textToSpeech =
-        TextToSpeech(
-            context,
-            TextToSpeech.OnInitListener { status ->
-              val tts = textToSpeech
-              if (status != TextToSpeech.SUCCESS || tts == null) {
-                // 没有可用 TTS 引擎时静默降级：键盘仍可打字，只是没有字符语音反馈。
-                ttsReady = false
-                return@OnInitListener
-              }
-              val result = tts.setLanguage(Locale.getDefault())
-              if (result == TextToSpeech.LANG_MISSING_DATA ||
-                  result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                tts.setLanguage(Locale.ENGLISH)
-              }
-              tts.setOnUtteranceProgressListener(
-                  object : UtteranceProgressListener() {
-                    override fun onStart(utteranceId: String?) {}
-
-                    override fun onDone(utteranceId: String?) {}
-
-                    override fun onError(utteranceId: String?) {}
-                  })
-              ttsReady = true
-              drainPendingUtterances()
-            })
-  }
-
-  private fun drainPendingUtterances() {
-    if (!ttsReady || textToSpeech == null) {
-      return
-    }
-    var text: CharSequence? = pendingUtterances.poll()
-    while (text != null) {
-      speakNow(text, /* flush= */ false)
-      text = pendingUtterances.poll()
-    }
-  }
-
-  private fun speakNow(text: CharSequence?, flush: Boolean) {
-    if (text == null || text.length == 0) {
-      return
-    }
-    if (!ttsReady || textToSpeech == null) {
-      // 限制队列长度，避免 TTS 一直不可用时无限堆积。
-      if (pendingUtterances.size < 8) {
-        pendingUtterances.add(text)
-      }
-      return
-    }
-    // 属性不参与智能转换：这里再取一次，取不到就放弃这句朗读。
-    val tts = textToSpeech ?: return
-    val params = Bundle()
-    tts.speak(
-        text,
-        if (flush) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD,
-        params,
-        TTS_UTTERANCE_ID)
+    speech.initTts()
   }
 
   // ---------------------------------------------------------------------------------------
@@ -163,17 +88,17 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
     // 有外部读屏在跑时，把播报内容以无障碍公告（TYPE_ANNOUNCEMENT）交给读屏朗读：
     // 这样语音库、语速、音量全部跟读屏一致，不会出现"读屏读一段、自带 TTS 读另一段"。
     val view = announcementView
-    val viaAnnouncement = hasExternalScreenReader() && view != null
+    val viaAnnouncement = speech.hasExternalScreenReader() && view != null
     Log.d(
         "BBSpeech",
         "speak text=" + charSequence + " delay=" + delayMs +
             " via=" + (if (viaAnnouncement) "announcement" else "tts"))
     if (viaAnnouncement) {
       val announce = {
-        if (sendAnnouncementEvent(charSequence)) {
+        if (speech.sendAnnouncementEvent(charSequence)) {
           // 公告投递成功，就不再走自带 TTS，避免两路语音同时出声。
         } else {
-          speakNow(charSequence, flush)
+          speech.speakNow(charSequence, flush)
         }
       }
       if (delayMs > 0) {
@@ -187,10 +112,10 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
     } else if (delayMs > 0) {
       mainScope.launch {
         delay(delayMs.toLong())
-        speakNow(charSequence, flush)
+        speech.speakNow(charSequence, flush)
       }
     } else {
-      speakNow(charSequence, flush)
+      speech.speakNow(charSequence, flush)
     }
     if (speakOptions != null && speakOptions.mCompletedAction != null) {
       // 简化：不追踪读屏朗读完成事件，直接回调成功状态。
@@ -203,38 +128,6 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
     if (view != null) {
       // 仅作兜底：真正的公告改由 AccessibilityManager 直接投递，不再依赖视图的无障碍重要度。
       view.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES)
-    }
-  }
-
-  /**
-   * 以无障碍公告事件（TYPE_ANNOUNCEMENT）把文本交给读屏朗读。
-   *
-   * <p>此前用的是 {@code View.announceForAccessibility}，它必须通过视图的
-   * {@code includeForAccessibility()} 判定：键盘容器只是个普通 FrameLayout，既不可点击也没有
-   * live region，很多 ROM 会判定"对无障碍不重要"而把公告静默丢掉，表现就是"一部分内容读不出来"。
-   * 改为 {@link AccessibilityManager#sendAccessibilityEvent} 直接投递，绕开视图重要度门槛。
-   *
-   * @return true 表示事件已投递成功（不代表读屏一定朗读）
-   */
-  private fun sendAnnouncementEvent(text: CharSequence?): Boolean {
-    if (text == null || text.length == 0) {
-      return false
-    }
-    try {
-      val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
-      if (am == null || !am.isEnabled()) {
-        return false
-      }
-      val event = AccessibilityEvent.obtain(AccessibilityEvent.TYPE_ANNOUNCEMENT)
-      event.setPackageName(context.getPackageName())
-      event.setClassName(BrailleImeHostBridge::class.java.name)
-      event.getText().add(text)
-      // 该事件由系统回收，不要自行 recycle。
-      am.sendAccessibilityEvent(event)
-      return true
-    } catch (t: Throwable) {
-      Log.w(TAG, "sendAnnouncementEvent failed", t)
-      return false
     }
   }
 
@@ -261,13 +154,13 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
           service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS)
 
       // ---------------- 节点动作 ----------------
-      ScreenReaderAction.CLICK_CURRENT, ScreenReaderAction.CLICK_NODE -> clickFocusedNode()
+      ScreenReaderAction.CLICK_CURRENT, ScreenReaderAction.CLICK_NODE -> nodeActions.clickFocusedNode()
       ScreenReaderAction.LONG_CLICK_CURRENT, ScreenReaderAction.LONG_CLICK_NODE ->
-          longClickFocusedNode()
+          nodeActions.longClickFocusedNode()
       ScreenReaderAction.SCROLL_FORWARD ->
-          scrollFocusedNode(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
+          nodeActions.scrollFocusedNode(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
       ScreenReaderAction.SCROLL_BACKWARD ->
-          scrollFocusedNode(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
+          nodeActions.scrollFocusedNode(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
 
       // ---------------- 光标按粒度移动 ----------------
       // 这三个动作以前一律返回 false，等于"逐字符/逐词/逐行"三组手势在帮助里有、按了没反应。
@@ -295,9 +188,9 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
       ScreenReaderAction.PREVIOUS_READING_CONTROL -> cycleReadingGranularity(/* forward= */ false)
 
       // ---------------- 页首 / 页尾 ----------------
-      ScreenReaderAction.CURSOR_TO_BEGINNING -> selectRange(/* start= */ 0, /* end= */ 0)
+      ScreenReaderAction.CURSOR_TO_BEGINNING -> nodeActions.selectRange(/* start= */ 0, /* end= */ 0)
       ScreenReaderAction.CURSOR_TO_END ->
-          selectRange(/* start= */ NO_POSITION, /* end= */ NO_POSITION)
+          nodeActions.selectRange(/* start= */ NO_POSITION, /* end= */ NO_POSITION)
 
       // ---------------- 选择 ----------------
       ScreenReaderAction.SELECT_NEXT_CHARACTER ->
@@ -312,14 +205,14 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
           moveByGranularity(ReadingGranularity.LINE, /* forward= */ true, EXTEND)
       ScreenReaderAction.SELECT_PREVIOUS_LINE ->
           moveByGranularity(ReadingGranularity.LINE, /* forward= */ false, EXTEND)
-      ScreenReaderAction.SELECT_ALL -> selectAll()
-      ScreenReaderAction.SELECT_CURRENT_TO_START -> selectCurrentTo(/* toStart= */ true)
-      ScreenReaderAction.SELECT_CURRENT_TO_END -> selectCurrentTo(/* toStart= */ false)
+      ScreenReaderAction.SELECT_ALL -> nodeActions.selectAll()
+      ScreenReaderAction.SELECT_CURRENT_TO_START -> nodeActions.selectCurrentTo(/* toStart= */ true)
+      ScreenReaderAction.SELECT_CURRENT_TO_END -> nodeActions.selectCurrentTo(/* toStart= */ false)
 
       // ---------------- 剪贴板 ----------------
-      ScreenReaderAction.COPY -> performNodeAction(AccessibilityNodeInfo.ACTION_COPY)
-      ScreenReaderAction.CUT -> performNodeAction(AccessibilityNodeInfo.ACTION_CUT)
-      ScreenReaderAction.PASTE -> performNodeAction(AccessibilityNodeInfo.ACTION_PASTE)
+      ScreenReaderAction.COPY -> nodeActions.performNodeAction(AccessibilityNodeInfo.ACTION_COPY)
+      ScreenReaderAction.CUT -> nodeActions.performNodeAction(AccessibilityNodeInfo.ACTION_CUT)
+      ScreenReaderAction.PASTE -> nodeActions.performNodeAction(AccessibilityNodeInfo.ACTION_PASTE)
 
       else -> {
         // 其余动作属于 TalkBack 的导航/网络浏览体系，BrailleBack 无对应实现。
@@ -352,7 +245,7 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
       forward: Boolean,
       extend: Boolean
   ): Boolean {
-    val node = findTextNode()
+    val node = nodeActions.findTextNode()
     if (node == null) {
       return false
     }
@@ -383,110 +276,9 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
     return true
   }
 
-  /** 全选。 */
-  private fun selectAll(): Boolean {
-    val node = findTextNode()
-    if (node == null || node.getText() == null) {
-      return false
-    }
-    return setSelection(node, 0, node.getText().length)
-  }
-
-  /**
-   * 选择区间。
-   *
-   * @param start NO_POSITION 表示沿用当前选区起点，end NO_POSITION 表示到文本末尾
-   */
-  private fun selectRange(start: Int, end: Int): Boolean {
-    val node = findTextNode()
-    if (node == null) {
-      return false
-    }
-    val text = node.getText()
-    val length = if (text == null) 0 else text.length
-    val resolvedStart = if (start == NO_POSITION) 0 else start
-    val resolvedEnd = if (end == NO_POSITION) length else end
-    return setSelection(node, resolvedStart, resolvedEnd)
-  }
-
-  /** 从当前光标/选区扩展到文本开头或末尾。 */
-  private fun selectCurrentTo(toStart: Boolean): Boolean {
-    val node = findTextNode()
-    if (node == null) {
-      return false
-    }
-    val text = node.getText()
-    val length = if (text == null) 0 else text.length
-    var selStart = node.getTextSelectionStart()
-    var selEnd = node.getTextSelectionEnd()
-    if (selStart < 0) {
-      selStart = 0
-    }
-    if (selEnd < 0) {
-      selEnd = selStart
-    }
-    // 以"离目标更远的那一端"为基准扩展，保证从任意方向都能一次到位。
-    if (toStart) {
-      return setSelection(node, 0, Math.max(selStart, selEnd))
-    }
-    return setSelection(node, Math.min(selStart, selEnd), length)
-  }
-
-  private fun setSelection(node: AccessibilityNodeInfoCompat, start: Int, end: Int): Boolean {
-    val args = Bundle()
-    args.putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, Math.max(0, start))
-    args.putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, Math.max(0, end))
-    return node.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, args)
-  }
-
-  private fun performNodeAction(action: Int): Boolean {
-    val node = findTextNode()
-    return node != null && node.performAction(action)
-  }
-
-  /** 找到当前可操作的文本框：优先输入焦点，其次无障碍焦点，最后在活跃窗口里搜第一个可编辑节点。 */
-  private fun findTextNode(): AccessibilityNodeInfoCompat? {
-    var node = focusFinder.findFocusCompat(AccessibilityNodeInfo.FOCUS_INPUT)
-    if (isTextNode(node)) {
-      return node
-    }
-    node = focusFinder.findAccessibilityFocus()
-    if (isTextNode(node)) {
-      return node
-    }
-    try {
-      val root = service.getRootInActiveWindow()
-      if (root == null) {
-        return null
-      }
-      return findEditableDescendant(AccessibilityNodeInfoCompat.wrap(root), /* depth= */ 0)
-    } catch (e: RuntimeException) {
-      Log.w(TAG, "findTextNode failed", e)
-      return null
-    }
-  }
-
   /** 播报一段文字：有外部读屏时走无障碍公告，否则用自带 TTS。 */
   private fun announce(text: CharSequence) {
     speak(text, /* delayMs= */ 0, /* speakOptions= */ null)
-  }
-
-  private fun clickFocusedNode(): Boolean {
-    var node = focusFinder.findAccessibilityFocus()
-    if (node == null) {
-      node = focusFinder.findFocusCompat(AccessibilityNodeInfo.FOCUS_INPUT)
-    }
-    return node != null && node.performAction(AccessibilityNodeInfoCompat.ACTION_CLICK)
-  }
-
-  private fun longClickFocusedNode(): Boolean {
-    val node = focusFinder.findAccessibilityFocus()
-    return node != null && node.performAction(AccessibilityNodeInfoCompat.ACTION_LONG_CLICK)
-  }
-
-  private fun scrollFocusedNode(action: Int): Boolean {
-    val node = focusFinder.findAccessibilityFocus()
-    return node != null && node.performAction(action)
   }
 
   override fun onBrailleImeActivated(
@@ -551,7 +343,7 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
       Log.i(TAG, "applyPassthrough: skipped, sdk=" + Build.VERSION.SDK_INT)
       return
     }
-    setTouchExplorationRequested(true)
+    passthrough.setTouchExplorationRequested(true)
     val target: Region
     if (usePassThrough && passThroughRegion != null && !passThroughRegion.isEmpty()) {
       // 键盘用的是"输入法自带窗口"策略，上报的就是真正可触摸的输入视图区域，照用即可。
@@ -562,23 +354,18 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
       // 直接用它会让直通区只剩屏幕顶上一条，手指真正摸的点阵区域仍在探索拦截之下。
       // 真正画点阵的 overlay 窗口是铺满整个 display 的（FLAG_LAYOUT_IN_SCREEN|NO_LIMITS），
       // 所以这里退回整屏。
-      target = obtainDisplayRegion()
+      target = passthrough.obtainDisplayRegion()
     }
-    passthroughActive = true
+    passthrough.setActive(true)
     // setServiceInfo 到系统侧生效是异步的，立即设置直通区可能被判定为"未请求探索"而丢弃。
     passthroughApplyJob?.cancel()
     passthroughApplyJob =
         mainScope.launch {
           delay(PASSTHROUGH_APPLY_DELAY_MS)
-          if (!passthroughActive) {
+          if (!passthrough.isActive()) {
             return@launch
           }
-          try {
-            service.setTouchExplorationPassthroughRegion(Display.DEFAULT_DISPLAY, target)
-            Log.i(TAG, "passthrough applied: " + target)
-          } catch (t: Throwable) {
-            Log.e(TAG, "passthrough failed", t)
-          }
+          passthrough.applyRegion(target)
         }
   }
 
@@ -586,54 +373,16 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
       return
     }
-    passthroughActive = false
+    passthrough.setActive(false)
     passthroughApplyJob?.cancel()
     passthroughApplyJob = null
-    try {
-      // 空 Region 表示"没有直通区"，即恢复正常的触摸探索拦截。
-      service.setTouchExplorationPassthroughRegion(Display.DEFAULT_DISPLAY, Region())
-      Log.i(TAG, "passthrough cleared")
-    } catch (t: Throwable) {
-      Log.e(TAG, "clear passthrough failed", t)
-    }
-    setTouchExplorationRequested(false)
-  }
-
-  /** 临时开关本服务的"请求触摸探索"标志位（仅在本服务信息副本上修改并回设）。 */
-  private fun setTouchExplorationRequested(requested: Boolean) {
-    val info = service.getServiceInfo()
-    if (info == null) {
-      return
-    }
-    val current =
-        (info.flags and AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE) != 0
-    if (current == requested) {
-      return
-    }
-    if (requested) {
-      info.flags = info.flags or AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE
-    } else {
-      info.flags =
-          info.flags and AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE.inv()
-    }
-    try {
-      service.setServiceInfo(info)
-      Log.i(TAG, "touchExplorationRequested=" + requested + " flags=" + info.flags)
-    } catch (t: Throwable) {
-      Log.e(TAG, "setServiceInfo failed", t)
-    }
-  }
-
-  private fun obtainDisplayRegion(): Region {
-    val metrics = DisplayMetrics()
-    val display = getWindowManager().getDefaultDisplay()
-    display.getRealMetrics(metrics)
-    return Region(0, 0, metrics.widthPixels, metrics.heightPixels)
+    passthrough.clearRegion()
+    passthrough.setTouchExplorationRequested(false)
   }
 
   /** 供宿主在服务销毁/异常时兜底清理，避免直通区残留导致读屏整屏失效。 */
   fun forceClearPassthrough() {
-    if (passthroughActive) {
+    if (passthrough.isActive()) {
       clearTouchExplorationPassthrough()
     }
   }
@@ -654,11 +403,7 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
   }
 
   override fun interruptSpeak() {
-    val tts = textToSpeech
-    if (tts != null && ttsReady) {
-      tts.stop()
-    }
-    pendingUtterances.clear()
+    speech.interrupt()
   }
 
   override fun disableSilenceOnProximity() {
@@ -688,30 +433,6 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
 
   override fun shouldAnnounceCharacterForPhysicalKeyboard(): Boolean {
     return true
-  }
-
-  /** 是否除本应用之外还有别的无障碍服务在跑（即存在读屏接管朗读）。 */
-  private fun hasExternalScreenReader(): Boolean {
-    try {
-      val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
-      if (am == null || !am.isEnabled()) {
-        return false
-      }
-      val services =
-          am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
-      for (info in services) {
-        if (info.getResolveInfo() == null || info.getResolveInfo().serviceInfo == null) {
-          continue
-        }
-        val pkg = info.getResolveInfo().serviceInfo.packageName
-        if (pkg != null && pkg != context.getPackageName()) {
-          return true
-        }
-      }
-    } catch (e: RuntimeException) {
-      Log.w(TAG, "hasExternalScreenReader failed", e)
-    }
-    return false
   }
 
   override fun shouldUseCharacterGranularity(): Boolean {
@@ -760,25 +481,20 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
     // 先撤掉所有在排的延迟（播报延迟、直通区落地），再关 TTS：
     // 否则服务销毁后还会有一拍往已 shutdown 的 TTS 里说话。
     mainScope.cancel()
-    val tts = textToSpeech
-    if (tts != null) {
-      tts.stop()
-      tts.shutdown()
-      textToSpeech = null
-    }
+    speech.shutdown()
     feedbackController.shutdown()
   }
 
   companion object {
-    private const val TAG = "BrailleImeHostBridge"
-    private const val TTS_UTTERANCE_ID = "brailleime"
+    internal const val TAG = "BrailleImeHostBridge"
+    internal const val TTS_UTTERANCE_ID = "brailleime"
     /** 等待 setServiceInfo 在系统侧生效的时间，再设置直通区。 */
     private const val PASSTHROUGH_APPLY_DELAY_MS = 150L
 
     private const val NO_EXTEND = false
     private const val EXTEND = true
     /** 表示"用节点当前的选区/文本长度"，而不是一个具体下标。 */
-    private const val NO_POSITION = -1
+    internal const val NO_POSITION = -1
 
     private fun granularityAnnouncementRes(granularity: ReadingGranularity): Int {
       return when (granularity) {
@@ -792,33 +508,6 @@ class BrailleImeHostBridge(private val service: BrailleBackService) :
         else ->
             com.google.android.accessibility.brailleime.R.string.bb_granularity_character
       }
-    }
-
-    private fun findEditableDescendant(
-        node: AccessibilityNodeInfoCompat?,
-        depth: Int
-    ): AccessibilityNodeInfoCompat? {
-      if (node == null || depth > 40) {
-        return null
-      }
-      if (isTextNode(node)) {
-        return node
-      }
-      for (i in 0 until node.getChildCount()) {
-        val child = node.getChild(i)
-        if (child == null) {
-          continue
-        }
-        val found = findEditableDescendant(child, depth + 1)
-        if (found != null) {
-          return found
-        }
-      }
-      return null
-    }
-
-    private fun isTextNode(node: AccessibilityNodeInfoCompat?): Boolean {
-      return node != null && node.getText() != null
     }
   }
 }
