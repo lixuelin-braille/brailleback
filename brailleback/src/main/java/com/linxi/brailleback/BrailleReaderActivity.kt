@@ -143,6 +143,9 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     /** 已播报过的屏序号，避免逐行移动重复播报。 */
     internal var mAnnouncedUnit = -1
 
+    /** 文末到头播报是否已给过；离开末页后复位，避免贴着末尾反复刷同一句。 */
+    internal var mAnnouncedEnd = false
+
     /** 翻译服务未就绪时挂起的翻译请求。 */
     internal var mPendingTranslation: PendingTranslation? = null
 

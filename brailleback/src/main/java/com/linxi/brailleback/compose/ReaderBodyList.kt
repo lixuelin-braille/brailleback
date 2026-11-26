@@ -29,6 +29,68 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.flow.distinctUntilChanged
 
+/** 续装判定的快照三元组：首可见下标、末可见下标、列表总项数。 */
+internal data class AppendScrollState(
+    val firstIndex: Int,
+    val lastIndex: Int,
+    val total: Int,
+)
+
+/**
+ * 末可见项距列表末尾 ≤ [trailingSlots] 项时，应续装下一页段落。
+ *
+ * 判据看**末可见项**而不是首可见项：首可见下标上限 = total − 可见项数，可见项多于预留槽位时
+ * 旧判据（首项 ≥ total − 4）物理上不可达；末可见项距末尾的距离与视口能摆几项无关。
+ */
+internal fun shouldAppendMore(
+    lastVisibleIndex: Int,
+    totalItemsCount: Int,
+    trailingSlots: Int = 2,
+): Boolean {
+    if (totalItemsCount <= 0 || lastVisibleIndex < 0) return false
+    return lastVisibleIndex >= totalItemsCount - 1 - trailingSlots
+}
+
+/**
+ * 续装判据 + 去重守卫。
+ *
+ * - 同一 [AppendScrollState.total] 只放行一次真正追加；追加后挂起待命，
+ *   等观察到 total 真正变大（段落已落进 state）才允许下一次追加判定；
+ * - 待命落定后仍贴在末尾，才再向 Activity 发一次「文末探测」，走溢出/到头播报分支，
+ *   不重复追加。
+ */
+internal class AppendGate(
+    private var lastAppendedTotal: Int = -1,
+    private var pending: Boolean = false,
+) {
+    /** 贴到末尾预留槽即处于需要向 Activity 要更多的窗口。 */
+    fun nearEnd(lastVisibleIndex: Int, totalItemsCount: Int): Boolean =
+        shouldAppendMore(lastVisibleIndex, totalItemsCount)
+
+    /** 本 total 是否允许真正追加：同一 total 只追加一次。 */
+    fun canAppend(lastVisibleIndex: Int, totalItemsCount: Int): Boolean =
+        nearEnd(lastVisibleIndex, totalItemsCount) &&
+            (!pending || totalItemsCount != lastAppendedTotal)
+
+    /** 记下本次追加前的 total，进入待命。 */
+    fun noteAppended(totalItemsCount: Int) {
+        lastAppendedTotal = totalItemsCount
+        pending = true
+    }
+
+    /** 观察列表总项数：total 变大说明追加已落进 state，清掉待命标记。 */
+    fun observeTotal(totalItemsCount: Int) {
+        if (totalItemsCount != lastAppendedTotal) pending = false
+    }
+
+    /** 待命已落定（追加已变长，或本就没追加过），可做文末探测。 */
+    fun isSettled(): Boolean = !pending
+
+    /** 待命期间、仍停在已续过装的同一 total：允许再发文末探测（不重复追加）。 */
+    fun canProbeEnd(totalItemsCount: Int): Boolean =
+        pending && totalItemsCount == lastAppendedTotal
+}
+
 @Composable
 internal fun ReaderBodyList(
     modifier: Modifier,
@@ -109,14 +171,32 @@ internal fun ReaderBodyList(
         // 读屏自己滚列表（TalkBack 把焦点推到屏外节点时会带容器一起滚），
         // 这里只看滚动结果，不主动改列表位置，免得跟手指抢。
         val segmentCount = uiState.focusSegments.size
+        val appendGate = remember { AppendGate() }
         LaunchedEffect(segmentCount) {
-            snapshotFlow { listState.firstVisibleItemIndex }
-                .distinctUntilChanged()
-                .collect { index ->
+            snapshotFlow {
+                val info = listState.layoutInfo
+                val visible = info.visibleItemsInfo
+                AppendScrollState(
+                    firstIndex = visible.firstOrNull()?.index ?: -1,
+                    lastIndex = visible.lastOrNull()?.index ?: -1,
+                    total = info.totalItemsCount,
+                )
+            }.distinctUntilChanged()
+                .collect { state ->
                     if (uiState.focusSegments.isEmpty()) return@collect
-                    onTopSegment(index)
-                    if (index >= (listState.layoutInfo.totalItemsCount - 4)) {
-                        onNeedMoreSegments()
+                    appendGate.observeTotal(state.total)
+                    onTopSegment(state.firstIndex)
+                    if (appendGate.nearEnd(state.lastIndex, state.total)) {
+                        when {
+                            appendGate.canAppend(state.lastIndex, state.total) -> {
+                                appendGate.noteAppended(state.total)
+                                onNeedMoreSegments()
+                            }
+                            appendGate.isSettled() || appendGate.canProbeEnd(state.total) -> {
+                                // 本 total 已续过装：仍贴在末尾即文末探测，走溢出/播报分支，不重复追加。
+                                onNeedMoreSegments()
+                            }
+                        }
                     }
                 }
         }

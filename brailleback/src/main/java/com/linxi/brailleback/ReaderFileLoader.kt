@@ -152,6 +152,8 @@ internal fun BrailleReaderActivity.setBrailleStream(
         mStream = BrailleFileDecoder.toReadingStream(brailleText)
         mIsTranslated = isTranslated
         mCellSpans = cellSpans
+        // 换一本新内容：上一本的到头播报标记复位，别压住新书真正的文末播报。
+        mAnnouncedEnd = false
         // 每进一次流记一条：同一本书若出现两条以上，说明真的重复解码/翻译了。
         Log.d(BrailleReaderActivity.LOG_TAG, "stream set: len=${mStream.length} translated=$isTranslated " +
             "reset=$resetPosition target=$targetOffset")
