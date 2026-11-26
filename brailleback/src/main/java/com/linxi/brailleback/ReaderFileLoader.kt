@@ -43,21 +43,31 @@ internal fun BrailleReaderActivity.loadBytes(uri: Uri, resetPosition: Boolean, t
                 val name = displayNameOf(uri)
                 checkSupportedFormat(name)
                 val bytes = readAllBytes(uri)
-                // EPUB/HTML/Markdown/Word 是容器或标记文本，先提取成明眼文字，
-                // 再交给下面的内容类型检测走翻译链路。
-                val text = if (EbookTextExtractor.supports(name)) {
-                    when (val extracted = EbookTextExtractor.extract(bytes, name)) {
-                        is EbookTextExtractor.Result.Success -> extracted.text
-                        is EbookTextExtractor.Result.Failure ->
-                            throw IllegalStateException(ebookFailureMessage(extracted))
-                    }
-                } else {
-                    when (val document =
-                            BrailleFileDecoder.decodeDocument(bytes, name)) {
-                        is BrailleFileDecoder.DecodedDocument.Decoded -> document.text
-                        is BrailleFileDecoder.DecodedDocument.Failure ->
-                            throw IllegalStateException(loadFailureMessage(document))
-                    }
+                // 阳光盲文图书馆电子书：正文是 PUA 私用区字符（U+E234～E273），
+                // 先按阳光 docx 解；命中 PUA 走盲文链路，EPUB/HTML/Markdown/普通
+                // Word 等明眼文字容器仍交提取器，再进翻译链路。
+                //
+                // 重排版宽取 mDisplayCells：连上点显器时它是驱动上报的
+                // numTextCells（实际文本列数，不含状态格；Metec 42 格 =
+                // 40 文本列 + 2 状态格）；未连接 / 未上报时兜底 DEFAULT_CELLS=40。
+                val sunshineRaw = BrailleFileDecoder.decodeSunshineDocx(bytes)
+                val text = when {
+                    sunshineRaw != null && BrailleFileDecoder.isSunshinePua(sunshineRaw) ->
+                        BrailleFileDecoder.reflowSunshine(sunshineRaw, width = mDisplayCells)
+                    EbookTextExtractor.supports(name) ->
+                        when (val extracted = EbookTextExtractor.extract(bytes, name)) {
+                            is EbookTextExtractor.Result.Success -> extracted.text
+                            is EbookTextExtractor.Result.Failure ->
+                                throw IllegalStateException(ebookFailureMessage(extracted))
+                        }
+                    else ->
+                        when (val document =
+                                BrailleFileDecoder.decodeDocument(
+                                    bytes, name, textCells = mDisplayCells)) {
+                            is BrailleFileDecoder.DecodedDocument.Decoded -> document.text
+                            is BrailleFileDecoder.DecodedDocument.Failure ->
+                                throw IllegalStateException(loadFailureMessage(document))
+                        }
                 }
                 text to name
             } catch (e: Exception) {
