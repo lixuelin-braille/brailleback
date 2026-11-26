@@ -55,8 +55,9 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         release {
-            minifyEnabled = true
-            shrinkResources = true
+            // 本轮不开 R8 / 资源收缩：目标是能装、签名正确、体积合理，不追体积。
+            minifyEnabled = false
+            shrinkResources = false
             // 有 keystore 就用它，没有就沿用 debug 签名（保持「不配密钥也能打包」）。
             signingConfig = hasReleaseKey ? signingConfigs.release : signingConfigs.debug
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
