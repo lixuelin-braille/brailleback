@@ -31,7 +31,8 @@ class RollingFileLog @JvmOverloads constructor(
     private val directory: File,
     private val fileName: String,
     private val maxBytes: Long = DEFAULT_MAX_BYTES,
-    private val keepFiles: Int = DEFAULT_KEEP_FILES
+    private val keepFiles: Int = DEFAULT_KEEP_FILES,
+    private val header: String? = null,
 ) : LogUtils.FileLogListener {
 
     private val lock = Any()
@@ -54,6 +55,11 @@ class RollingFileLog @JvmOverloads constructor(
                 currentFile = file
                 writer = OutputStreamWriter(
                     FileOutputStream(file, true), StandardCharsets.UTF_8)
+                // 仅在新建空文件时写首行标记，已有内容的日志不被打断。
+                if (header != null && file.length() == 0L) {
+                    writer?.write("$header\n")
+                    writer?.flush()
+                }
                 true
             } catch (e: Exception) {
                 Log.w(TAG, "Could not open log file $fileName", e)

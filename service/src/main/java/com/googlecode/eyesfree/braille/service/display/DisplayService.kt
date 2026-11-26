@@ -49,6 +49,7 @@ import com.googlecode.eyesfree.braille.service.R
 import com.googlecode.eyesfree.braille.utils.ZipResourceExtractor
 import com.googlecode.eyesfree.utils.LogUtils
 import com.googlecode.eyesfree.utils.LogFileWriter
+import com.googlecode.eyesfree.utils.TestBuild
 import java.io.File
 import java.lang.ref.WeakReference
 import java.util.concurrent.atomic.AtomicLong
@@ -480,13 +481,19 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         if (BuildConfig.DIAG_LOG_LEVEL > 0) {
             return BuildConfig.DIAG_LOG_LEVEL
         }
+        // 测试包 debug 口径默认 VERBOSE；其余 debug 包地板 INFO；正式包 INFO。
+        val floor = when {
+            BuildConfig.DEBUG && TestBuild.VERBOSE_BY_DEFAULT -> Log.VERBOSE
+            BuildConfig.DEBUG -> Log.INFO
+            else -> Log.INFO
+        }
         val raw: String? = SettingsStore.get(this)
                 .getString("log_level", null)
         if (raw != null) {
             try {
                 val stored = Integer.parseInt(raw)
                 return if (BuildConfig.DEBUG) {
-                    Math.min(stored, Log.INFO)
+                    Math.min(stored, floor)
                 } else {
                     stored
                 }
@@ -494,7 +501,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
                 // Fall through to the build default.
             }
         }
-        return Log.INFO
+        return floor
     }
 
     override fun onCreate() {

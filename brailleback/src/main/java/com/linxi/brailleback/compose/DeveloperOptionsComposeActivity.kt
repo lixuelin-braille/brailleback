@@ -26,6 +26,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.googlecode.eyesfree.utils.SettingsStore
+import com.googlecode.eyesfree.utils.TestBuild
+import com.linxi.brailleback.BuildConfig
 import com.linxi.brailleback.OverlayTutorialActivity
 import com.linxi.brailleback.R
 import com.linxi.brailleback.utils.DebugLogActions
@@ -87,9 +89,15 @@ class DeveloperOptionsComposeActivity : AppCompatActivity() {
         val levelValues = resources.getStringArray(R.array.pref_log_level_values).toList()
         val levelEntries = resources.getStringArray(R.array.pref_log_level_entries).toList()
 
+        // 测试包默认 VERBOSE（取值 2）；其余构建回落 XML 默认值（INFO=4）。
+        val defaultLevel = if (BuildConfig.DEBUG && TestBuild.VERBOSE_BY_DEFAULT) {
+            "2"
+        } else {
+            getString(R.string.pref_log_level_default)
+        }
         logLevelValue = DeveloperOptionsLogic.initialLogLevel(
             prefs.getString(logLevelKey, null),
-            getString(R.string.pref_log_level_default),
+            defaultLevel,
             levelValues,
         )
         overlayEnabled = prefs.getBoolean(

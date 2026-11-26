@@ -30,6 +30,29 @@ class RollingFileLogTest {
     private val infoPriority = 4
 
     @Test
+    fun headerIsWrittenOnNewLogFile() {
+        val directory = Files.createTempDirectory("rolling-header").toFile()
+        try {
+            val log = RollingFileLog(
+                directory,
+                RollingFileLog.MAIN_LOG_NAME,
+                header = "TEST-BUILD 2026-11-26 test/build-all-20261126",
+            )
+            assertTrue("open() 应能创建日志文件", log.open())
+            log.onLog(infoPriority, "Test", "first event")
+            val first = File(directory, RollingFileLog.MAIN_LOG_NAME)
+                .readLines().first()
+            assertEquals(
+                "首行应为测试包构建标记",
+                "TEST-BUILD 2026-11-26 test/build-all-20261126",
+                first,
+            )
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
     fun clearRemovesCurrentFileAndRotations() {
         val directory = Files.createTempDirectory("rolling-file-log").toFile()
         try {

@@ -11,6 +11,8 @@
 package com.googlecode.eyesfree.utils
 
 import android.content.Context
+import java.io.File
+import java.nio.charset.StandardCharsets
 
 /**
  * Single entry point for the app's persistent log.
@@ -23,6 +25,10 @@ object LogFileWriter {
 
     private const val LEGACY_SERVICE_LOG_NAME = RollingFileLog.LEGACY_SERVICE_LOG_NAME
 
+    /** 旧版（非本测试包）日志挪到的归档名，便于排查时对照。 */
+    private const val PREV_TESTBUILD_LOG_NAME =
+        "${RollingFileLog.MAIN_LOG_NAME}.prev-testbuild"
+
     @Volatile
     private var sLog: RollingFileLog? = null
 
@@ -32,9 +38,12 @@ object LogFileWriter {
         if (sLog != null) return
         synchronized(this) {
             if (sLog != null) return
+            val dir = RollingFileLog.logDirectory(context)
+            archivePreviousBuildLogIfNeeded(dir)
             val log = RollingFileLog(
-                RollingFileLog.logDirectory(context),
+                dir,
                 RollingFileLog.MAIN_LOG_NAME,
+                header = if (TestBuild.VERBOSE_BY_DEFAULT) TestBuild.MARKER else null,
             )
             if (log.open()) {
                 sLog = log
@@ -44,6 +53,29 @@ object LogFileWriter {
                 LogUtils.e(this, "初始化文件日志失败: %s", log.getCurrentFile())
             }
         }
+    }
+
+    /**
+     * 测试包：覆盖安装后若主日志仍是旧版（首行没有 [TestBuild.MARKER]），
+     * 先挪到 [PREV_TESTBUILD_LOG_NAME]，让新日志文件以标记首行起头。
+     * 只动日志文件，不清设置、不清阅读进度与书签。
+     */
+    private fun archivePreviousBuildLogIfNeeded(dir: File) {
+        if (!TestBuild.VERBOSE_BY_DEFAULT) return
+        val main = File(dir, RollingFileLog.MAIN_LOG_NAME)
+        if (!main.isFile || main.length() == 0L) return
+        if (firstLineContains(main, TestBuild.MARKER)) return
+        val prev = File(dir, PREV_TESTBUILD_LOG_NAME)
+        if (prev.exists()) prev.delete()
+        main.renameTo(prev)
+    }
+
+    private fun firstLineContains(file: File, marker: String): Boolean = try {
+        file.bufferedReader(StandardCharsets.UTF_8).use {
+            it.readLine()?.contains(marker) == true
+        }
+    } catch (e: Exception) {
+        false
     }
 
     /** Reads the current log plus the legacy connection log, oldest first. */
