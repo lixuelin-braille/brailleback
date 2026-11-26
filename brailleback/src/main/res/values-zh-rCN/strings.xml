@@ -38,7 +38,7 @@
     <string name="pref_connection_protocol_rfcomm_label">"蓝牙串口（旧协议）"</string>
     <string name="pref_connection_protocol_bluetooth_label">"蓝牙"</string>
     <string name="pref_connection_protocol_usb_label">"有线 USB"</string>
-    <string name="compose_settings_protocol_summary_auto">"插着点显器就走 USB，没插就走蓝牙"</string>
+    <string name="compose_settings_protocol_summary_auto">"自动：会先找 USB，找不到再找蓝牙"</string>
     <string name="compose_settings_protocol_summary_bluetooth">"只走蓝牙，插着线也不改用 USB"</string>
     <string name="compose_settings_protocol_summary_usb">"只走有线 USB，插线后要允许系统弹的 USB 授权"</string>
     <string name="pref_key_bindings_title" msgid="1228004448435300774">"键盘帮助"</string>

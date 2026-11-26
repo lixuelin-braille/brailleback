@@ -138,12 +138,17 @@ class DeviceConnectionComposeActivity : AppCompatActivity(),
 
         // 与 SettingsFragment.migrateConnectionProtocolPreference 完全同一策略：
         // 旧版六种协议值归一到「蓝牙 / USB」，并回写，避免两代 UI 读到不同值。
+        // 新用户（偏好键缺省）不落库，按 AUTO 默认；已有手动值不被静默改写。
         val rawProtocol = prefs.getString(protocolKey, null)
-        val normalized = DeviceConnectionLogic.normalizeProtocol(rawProtocol)
-        if (rawProtocol != normalized) {
-            prefs.edit().putString(protocolKey, normalized).apply()
+        if (rawProtocol != null) {
+            val normalized = DeviceConnectionLogic.normalizeProtocol(rawProtocol)
+            if (rawProtocol != normalized) {
+                prefs.edit().putString(protocolKey, normalized).apply()
+            }
+            protocolValue = normalized
+        } else {
+            protocolValue = ConnectionProtocolPolicy.DEFAULT
         }
-        protocolValue = normalized
         autoConnect = prefs.getBoolean(
             autoConnectKey, resources.getBoolean(R.bool.pref_auto_connect_default)
         )

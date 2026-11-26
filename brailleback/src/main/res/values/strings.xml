@@ -632,7 +632,7 @@
     <string name="compose_settings_transport_summary_usb_serial">Wired USB serial only; plug the cable in and allow the USB prompt</string>
     <string name="compose_settings_transport_summary_hid_classic">Classic Bluetooth HID is owned by the system input stack; this app cannot write to the display and only receives keys, so pick classic serial for two-way use</string>
     <!-- 连接方式收敛成三项后的说明：自动 / 蓝牙 / 有线 USB。 -->
-    <string name="compose_settings_protocol_summary_auto">Uses the cable when a display is plugged in, otherwise Bluetooth</string>
+    <string name="compose_settings_protocol_summary_auto">Auto: tries USB first, then Bluetooth if no USB display is found</string>
     <string name="compose_settings_protocol_summary_bluetooth">Bluetooth only; a plugged-in cable is ignored</string>
     <string name="compose_settings_protocol_summary_usb">Wired USB only; plug the cable in and allow the USB prompt</string>
     <string name="compose_settings_transport_summary_serial">Classic serial only; keys are parsed by the brltty driver</string>
