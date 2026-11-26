@@ -49,7 +49,7 @@ internal fun BrailleReaderActivity.loadBytes(uri: Uri, resetPosition: Boolean, t
                 val sunshineRaw = BrailleFileDecoder.decodeSunshineDocx(bytes)
                 val text = when {
                     sunshineRaw != null && BrailleFileDecoder.isSunshinePua(sunshineRaw) ->
-                        sunshineRaw
+                        BrailleFileDecoder.reflowSunshine(sunshineRaw)
                     EbookTextExtractor.supports(name) ->
                         when (val extracted = EbookTextExtractor.extract(bytes, name)) {
                             is EbookTextExtractor.Result.Success -> extracted.text
