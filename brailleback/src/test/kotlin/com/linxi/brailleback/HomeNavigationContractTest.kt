@@ -10,6 +10,7 @@
 
 package com.linxi.brailleback
 
+import com.linxi.brailleback.compose.HomeTab
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -49,6 +50,12 @@ class HomeNavigationContractTest {
             "第二项必须绑定 home_tab_settings_title",
             catalog.contains("SETTINGS(R.string.home_tab_settings_title)"),
         )
+    }
+
+    @Test
+    fun defaultTabIsSettings() {
+        // 初始选中项必须是设置档：主屏进入即落设置，不先停在书架。
+        assertEquals("初始选中项必须是设置档", HomeTab.SETTINGS, HomeTab.DEFAULT)
     }
 
     @Test
