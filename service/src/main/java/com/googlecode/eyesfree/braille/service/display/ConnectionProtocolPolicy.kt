@@ -40,6 +40,14 @@ object ConnectionProtocolPolicy {
 
     const val PREFERENCE_KEY = "connection_protocol"
 
+    /**
+     * 新用户默认档：偏好键从未写过时按 [AUTO] 走。
+     *
+     * 只改「读默认值」这一处：已经存下 `bluetooth` / `usb` 手动值的老用户
+     * 不会被静默改写，[normalize] 对历史显式值的折法保持不变。
+     */
+    const val DEFAULT = AUTO
+
     @JvmStatic
     fun normalize(value: String?): String {
         val trimmed = value?.trim()?.lowercase() ?: return BLUETOOTH
@@ -48,5 +56,19 @@ object ConnectionProtocolPolicy {
             AUTO -> AUTO
             else -> BLUETOOTH
         }
+    }
+
+    /**
+     * 读偏好的统一入口：缺省（新用户）给 [DEFAULT]，有显式值才归一化。
+     * 与 [normalize] 分开，是为了不破坏「null 折蓝牙」这条既有兼容口径。
+     */
+    @JvmStatic
+    fun readOrDefault(raw: String?): String = raw?.let { normalize(it) } ?: DEFAULT
+
+    /** 点名了手动档（蓝牙 / USB）：自动路由不许把它拽走。 */
+    @JvmStatic
+    fun isManual(protocol: String?): Boolean {
+        val value = normalize(protocol)
+        return value == BLUETOOTH || value == USB
     }
 }
