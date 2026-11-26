@@ -124,6 +124,7 @@ fun handleConnectionReleased(service: DisplayService) {
     service.clearConnectionProgress()
     if (service.mConnectionState != DisplayService.STATE_DISCONNECTED) {
         service.mConnectionState = DisplayService.STATE_DISCONNECTED
+        ConnectionDiagnosticsState.resetOnDisconnect()
         service.broadcastConnectionState()
     }
     if (service.mConnectPending) {
@@ -155,6 +156,8 @@ fun handleOnHidConnectFailed(
         // let the USB attach broadcast or the backoff schedule a retry.
         Timber.w("Wired USB HID connect failed (%d); waiting for a "
                 + "device or the next scheduled retry", event.error)
+        ConnectionDiagnosticsState.appendFailureReason(
+            "usb-hid", service.getUsbHidFailureMessage(event.error))
         service.mHandler.setConnectionProgress(
                 service.getUsbHidFailureMessage(event.error))
         service.scheduleAutoReconnectIfNeeded()

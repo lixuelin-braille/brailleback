@@ -65,6 +65,8 @@ class ConnectionDiagnosticsTest {
             ),
             batteryWhitelist = batt,
             fgTypeDeclared = true,
+            reasonChain = listOf("usb-port: 无匹配 USB 设备"),
+            usbPoll = listOf("t=+0s none"),
         )
 
     @Test
@@ -90,6 +92,8 @@ class ConnectionDiagnosticsTest {
             "perms=",
             "batt=",
             "fgType=",
+            "reasonChain=",
+            "usbPoll=",
         ).forEach { key ->
             assertTrue("缺少字段 $key", joined.contains("${ConnectionDiagnostics.SNAP_PREFIX}$key"))
         }
@@ -163,6 +167,6 @@ class ConnectionDiagnosticsTest {
         lines.forEach { line ->
             assertTrue(line.startsWith(ConnectionDiagnostics.SNAP_PREFIX))
         }
-        assertEquals(17, lines.size)
+        assertEquals(19, lines.size)
     }
 }

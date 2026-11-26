@@ -155,13 +155,18 @@ class DisplayManager(
     private var displayedBrailleToTextPositions: IntArray = IntArray(0)
     private var blinkNeeded = false
     /**
-     * 刷新链路心跳：每 5 秒一行，冻结时用来判断上层是否还在产生新的点阵。
-     * 同时记录被 connected/frozen/motion 三个条件拦下的刷新次数。
+     * 刷新链路心跳：30 秒一轮；只在 content / ok / route / lastWrite 等数值
+     * 变化时输出，空闲时最多 1 条/分钟，避免 256 KB 日志窗口被空转挤满。
      *
      * 计数与格式见 [DisplayRefreshStats]；上报线程仍在这里，且必须独立于刷新调度器。
      */
-    private val TELEMETRY_INTERVAL_MS = 5000L
+    private val TELEMETRY_INTERVAL_MS = 30_000L
+    private val TELEMETRY_IDLE_BEAT_MS = 60_000L
     private val stats = DisplayRefreshStats()
+    @Volatile
+    private var lastTelemetryKey = ""
+    @Volatile
+    private var lastTelemetryBeatUptime = 0L
     /**
      * 刷新闸门：指纹去重 + 最小间隔限速。三个字段本来是一组（待发指纹、
      * 已送达指纹、已送达时刻），合成一个对象才不会读到互相矛盾的快照。
@@ -181,11 +186,16 @@ class DisplayManager(
             }
             // 心跳行也取同一份快照，避免日志把两次状态拼在一起。
             val snapshot = runtimeState.value
-            LogUtils.i(
-                this@DisplayManager,
-                "%s",
-                stats.describe(snapshot.connected, snapshot.frozen, snapshot.motionMode)
-            )
+            val line = stats.describe(
+                snapshot.connected, snapshot.frozen, snapshot.motionMode)
+            val now = SystemClock.uptimeMillis()
+            val changed = line != lastTelemetryKey
+            val idleBeat = now - lastTelemetryBeatUptime >= TELEMETRY_IDLE_BEAT_MS
+            if (changed || idleBeat) {
+                LogUtils.i(this@DisplayManager, "%s", line)
+                lastTelemetryKey = line
+                lastTelemetryBeatUptime = now
+            }
         }
     }.apply {
         isDaemon = true

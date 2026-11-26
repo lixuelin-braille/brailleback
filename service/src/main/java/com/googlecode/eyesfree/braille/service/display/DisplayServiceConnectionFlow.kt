@@ -719,9 +719,16 @@ internal const val USER_DISCOVERY_WINDOW_DURATION = 12000L
      * AUTO 的冷却窗口与 USB 优先都不介入。
      */
     internal fun DisplayService.handleUsbAttached() {
+        // 插拔事件属事件触发：即便无人值守的周期重连已放弃，也要清零计数、
+        // 解除人工断开抑制并立刻再试一次；上限只约束后台周期重试。
+        mAutoReconnectAttempt = 0
+        mAutoReconnectSuppressed = false
+        resetConnectionAttemptFlags()
         ConnectionDiagnostics.emit(
             this, this, "usb-attached", "na", "USB_DEVICE_ATTACHED",
         )
+        // 插拔路径上开 10 秒逐秒枚举窗口，捕获「枚举到又消失」的瞬时掉线。
+        UsbEnumerationProbe.startWindow(this, "usb-attached")
         val protocol = getConnectionProtocol()
         val transport = ConnectionTransportPolicy.current(this)
         val auto = ConnectionProtocolPolicy.AUTO == protocol &&

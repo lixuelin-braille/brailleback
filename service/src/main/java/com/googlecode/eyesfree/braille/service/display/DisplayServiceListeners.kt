@@ -77,6 +77,8 @@ fun DisplayService.createUsbListener(): UsbDisplayConnection.Listener =
             Timber.w("Ignoring stale USB connected callback")
             return
         }
+        ConnectionDiagnosticsState.usbActive = true
+        ConnectionDiagnosticsState.lastFailureReason = null
         mHandler.onDisplayConnected(properties)
     }
 
@@ -85,6 +87,7 @@ fun DisplayService.createUsbListener(): UsbDisplayConnection.Listener =
             Timber.w("Ignoring stale USB disconnected callback")
             return
         }
+        ConnectionDiagnosticsState.resetOnDisconnect()
         mHandler.onDisplayDisconnected()
     }
 
@@ -96,6 +99,9 @@ fun DisplayService.createUsbListener(): UsbDisplayConnection.Listener =
         }
         mUsbConnection = null
         mConnectPending = false
+        ConnectionDiagnosticsState.usbActive = false
+        // 串口失败入链；随后的 HID 失败另起一环，不许覆盖串口的真实原因。
+        ConnectionDiagnosticsState.appendFailureReason("usb-port", reason)
         Timber.w("USB connection failed: %s", reason)
         if (isUsbProtocol() && !mUsbHidTried && canUseUsbHid()) {
             mUsbHidTried = true

@@ -84,6 +84,10 @@ internal object ConnectionDiagnostics {
         /** `true` / `false` / `unknown`。 */
         val batteryWhitelist: String,
         val fgTypeDeclared: Boolean,
+        /** 本轮按顺序累积的失败原因（串口 → HID → …），互不覆盖。 */
+        val reasonChain: List<String>,
+        /** 最近一次枚举轮询窗口的逐秒样本（`t=+Ns vid=… pid=…` 或 `none`）。 */
+        val usbPoll: List<String>,
     )
 
     private fun naStr(value: String?): String =
@@ -128,6 +132,8 @@ internal object ConnectionDiagnostics {
         )
         add("batt", naStr(input.batteryWhitelist))
         add("fgType", input.fgTypeDeclared.toString())
+        add("reasonChain", input.reasonChain.joinToString(" → "))
+        add("usbPoll", input.usbPoll.joinToString(" | "))
         return lines
     }
 
@@ -214,7 +220,14 @@ internal object ConnectionDiagnostics {
             usbDevices.clear()
         }
 
-        // ---- 蓝牙 / BLE ----
+        // 手动档没有 AUTO 解析，不能把实际尝试的路由写成 na：按所选协议回填
+        // 实际链路；只有真读不到偏好时才保留 na。
+        val resolvedRouteFilled = when {
+            resolvedRoute != "na" -> resolvedRoute
+            protoPref == "usb" -> "USB_SERIAL"
+            protoPref == "bluetooth" -> "BLUETOOTH"
+            else -> "na"
+        }
         var btAvailable = false
         var btEnabled = false
         var btPairedCount = 0
@@ -287,19 +300,21 @@ internal object ConnectionDiagnostics {
             } else {
                 "na"
             }
+        // FOREGROUND_SERVICE_CONNECTED_DEVICE 是 API 34 才引入的权限；低版本必然
+        // checkSelfPermission 失败，不能写成 false，按不适用处理写 `na`。
         perms[Manifest.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE] =
-            boolPerm(context, Manifest.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE)
+            if (Build.VERSION.SDK_INT >= 34) {
+                boolPerm(context, Manifest.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE)
+            } else {
+                "na"
+            }
 
-        // ---- 省电白名单 / Doze 豁免（编译桩不可见时走反射，读不到 unknown） ----
+        // ---- 省电白名单 / Doze 豁免：API 23+ 直调 isIgnoringBatteryOptimizations ----
         val batteryWhitelist = try {
             val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
             when {
                 pm == null -> "unknown"
-                else -> runCatching {
-                    PowerManager::class.java
-                        .getMethod("isIgnoringBatterySaver")
-                        .invoke(pm) as? Boolean
-                }.getOrNull()?.toString() ?: "unknown"
+                else -> pm.isIgnoringBatteryOptimizations(context.packageName).toString()
             }
         } catch (e: Exception) {
             "unknown"
@@ -329,7 +344,7 @@ internal object ConnectionDiagnostics {
             versionName = versionName,
             flavor = flavor,
             protoPref = protoPref,
-            resolvedRoute = resolvedRoute,
+            resolvedRoute = resolvedRouteFilled,
             reason = reason,
             usbManagerAvailable = usbManagerAvailable,
             usbDevices = usbDevices,
@@ -342,6 +357,8 @@ internal object ConnectionDiagnostics {
             perms = perms,
             batteryWhitelist = batteryWhitelist,
             fgTypeDeclared = fgTypeDeclared,
+            reasonChain = ConnectionDiagnosticsState.failureChain(),
+            usbPoll = ConnectionDiagnosticsState.lastPollSamples,
         )
     }
 

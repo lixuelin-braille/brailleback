@@ -135,9 +135,11 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         const val FILES_EXTRACTED = 1
         /**
          * 刷新链路心跳。冻结问题时只看三件事：上层有没有继续送点阵、
-         * 服务有没有收到、最终走了哪条连接路径。每 5 秒一行，量很小。
+         * 服务有没有收到、最终走了哪条连接路径。30 秒一轮，仅在数值变化时
+         * 输出，空闲时最多 1 条/分钟，避免 256 KB 日志窗口被空转挤满。
          */
-        private const val DOTS_TELEMETRY_INTERVAL = 5000L
+        private const val DOTS_TELEMETRY_INTERVAL = 30_000L
+        private const val DOTS_IDLE_BEAT_MS = 60_000L
         private const val ROUTE_NONE = 0
         private const val ROUTE_USB = 1
         private const val ROUTE_HID = 2
@@ -294,6 +296,8 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
     @Volatile
     private var mDotsLastRoute = ROUTE_NONE
     private var mDotsReportedCalls: Long = 0
+    private var mDotsLastKey = ""
+    private var mDotsLastBeatUptime = 0L
     private val mDotsTelemetry = object : Runnable {
         override fun run() {
             val calls = mDotsCalls.get()
@@ -301,7 +305,20 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
                     || mHidConnection != null
                     || mWujieConnection != null
                     || mReadThread != null
-            if (hasConnection || calls > mDotsReportedCalls) {
+            val key = listOf(
+                hasConnection,
+                routeName(mDotsLastRoute),
+                mDotsLastDigest,
+                mDotsLastCells,
+                mUsbConnection != null,
+                mHidConnection != null,
+                mWujieConnection != null,
+                mReadThread != null,
+            ).joinToString("|")
+            val now = SystemClock.uptimeMillis()
+            val changed = calls > mDotsReportedCalls || key != mDotsLastKey
+            val idleBeat = now - mDotsLastBeatUptime >= DOTS_IDLE_BEAT_MS
+            if (hasConnection || changed || idleBeat) {
                 LogUtils.i(this@DisplayService,
                         "dots stats: calls=%d (+%d) route=%s digest=%08X "
                         + "cells=%d usb=%s usbActive=%s hid=%s wujie=%s read=%s",
@@ -311,6 +328,8 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
                         mUsbConnection != null, isUsbActive(),
                         mHidConnection != null, mWujieConnection != null,
                         mReadThread != null)
+                mDotsLastKey = key
+                mDotsLastBeatUptime = now
             }
             mDotsReportedCalls = calls
             mHandler.postDelayed(this, DOTS_TELEMETRY_INTERVAL)
@@ -596,6 +615,13 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         if (intent?.action == ACTION_DISPLAY_KEEP_ALIVE) {
             postDisplayKeepAliveNotification()
         }
+        // 清单接收器在进程已死时收到 USB 插拔广播，会以带 WAKE_REASON extra 的
+        // intent 拉起本服务；服务创建后补一次显式重扫，不等下一次定时回调。
+        val wakeReason = intent?.getStringExtra(EXTRA_USB_WAKE_REASON)
+        if (wakeReason != null) {
+            Timber.i("Woken from USB broadcast: %s", wakeReason)
+            mHandler.connectBrailleExplicit()
+        }
         return START_NOT_STICKY
     }
 
@@ -690,6 +716,12 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         mDotsLastCells = patterns.size
         mDotsLastDigest = patterns.contentHashCode()
         mDotsLastRoute = route
+        // 诊断页路由口径：USB 串口算 usb，其余出点阵链路算 bluetooth，无链路算 none。
+        ConnectionDiagnosticsState.route = when (route) {
+            ROUTE_USB -> ConnectionDiagnosticsState.ROUTE_USB
+            ROUTE_NONE -> ConnectionDiagnosticsState.ROUTE_NONE
+            else -> ConnectionDiagnosticsState.ROUTE_BLUETOOTH
+        }
     }
 
     /** True when the wired USB path still owns a live driver thread. */
@@ -830,6 +862,10 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         // RFCOMM/HID connections are faster and more reliable when Bluetooth
         // inquiry is not competing with them.
         stopDiscoverySession("connecting display")
+        // 新一轮连接尝试：清掉上一轮留下的失败原因链，避免旧环混进本轮快照。
+        ConnectionDiagnosticsState.resetFailureChain()
+        // 重连路径上同样开一轮逐秒枚举窗口，区分物理掉线与未枚举到。
+        UsbEnumerationProbe.startWindow(this, "retry")
         val protocol = getConnectionProtocol()
         val decided = AutoConnectionRouter.route(buildAutoRouteInput())
         decided.degradedReason?.let { Timber.i("AUTO degrade: %s", it) }
