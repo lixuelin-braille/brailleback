@@ -203,6 +203,33 @@ class SunshineDocxTest {
     // ------------------------------------------------------------------
 
     @Test
+    fun `decodeDocument reflows with reported text columns`() {
+        // 驱动上报 20 文本列：重排行宽必须跟着走，不写死 40。
+        val space = '\uE273'
+        val words = (1..20).map { pua(0x01, 0x02) }
+        val longLine = words.joinToString(space.toString())
+        val decoded = BrailleFileDecoder.decodeDocument(
+            docxOf(listOf(longLine)), "book.docx", textCells = 20)
+        val text = (decoded as? BrailleFileDecoder.DecodedDocument.Decoded)?.text
+        assertNotNull(text)
+        val lines = text!!.split('\n').filter { it.isNotEmpty() }
+        assertTrue("每行 <=20 方，实际 ${lines.maxOf { it.length }}", lines.all { it.length <= 20 })
+        assertEquals(words, text.split('\n').flatMap { it.split(space).filter { w -> w.isNotEmpty() } })
+    }
+
+    @Test
+    fun `decodeDocument falls back to default width when cells unreported`() {
+        // 未连接 / 未上报（<=0）：回退默认 40，不在解码层猜设备方数。
+        val space = '\uE273'
+        val words = (1..20).map { pua(0x01, 0x02) }
+        val longLine = words.joinToString(space.toString())
+        val decoded = BrailleFileDecoder.decodeDocument(
+            docxOf(listOf(longLine)), "book.docx", textCells = 0)
+        val text = (decoded as? BrailleFileDecoder.DecodedDocument.Decoded)?.text!!
+        assertTrue("兜底宽度仍为 40，每行 <=40 方", text.split('\n').all { it.length <= 40 })
+    }
+
+    @Test
     fun `decodeDocument routes docx through reflow but txt unchanged`() {
         val space = '\uE273'
         val longLine = (1..30).map { pua(0x01, 0x02) }.joinToString(space.toString())
