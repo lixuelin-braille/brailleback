@@ -193,6 +193,18 @@ object BrailleFileDecoder {
      */
     internal const val SUNSHINE_DEFAULT_TEXT_CELLS = 40
 
+    /** 文本列数的合理上限：超出视为驱动误报，回退兜底值。 */
+    private const val SUNSHINE_MAX_CELLS = 256
+
+    /**
+     * 解析阳光重排宽度：[textCells] 来自点显器驱动上报的 `numTextCells`
+     * （实际文本列数，不含状态格）。未连接 / 未上报（<=0）或越界时回退
+     * [SUNSHINE_DEFAULT_TEXT_CELLS]，解码层不猜设备方数。
+     */
+    private fun sunshineWidth(textCells: Int): Int =
+        if (textCells in 1..SUNSHINE_MAX_CELLS) textCells
+        else SUNSHINE_DEFAULT_TEXT_CELLS
+
     /**
      * 中国盲文图书馆电子书的正文：每个字符是 Unicode 私用区的一个盲文方
      * （U+E234～U+E273），不是汉字。此函数把 docx（其实是 zip）里
@@ -288,6 +300,7 @@ object BrailleFileDecoder {
      * 不行则回退 code70 的 4/5 点规则。其他格式（brf/bdo/txt）绝不调用本函数。
      */
     fun reflowSunshine(text: String, width: Int = SUNSHINE_DEFAULT_TEXT_CELLS): String {
+        val cells = width.coerceAtLeast(1)
         val space = SUN_BLANK.toChar()
         val link = '\uE257'
         val guide = '\uE243'
@@ -347,12 +360,12 @@ object BrailleFileDecoder {
             val lines = ArrayList<String>()
             val cur = StringBuilder()
             for ((blankRun, token) in tokens) {
-                if (cur.isNotEmpty() && cur.length + token.length > width) {
+                if (cur.isNotEmpty() && cur.length + token.length > cells) {
                     lines.add(cur.toString())
                     cur.setLength(0)
                 }
                 cur.append(token)
-                if (blankRun && cur.length == width) {
+                if (blankRun && cur.length == cells) {
                     lines.add(cur.toString())
                     cur.setLength(0)
                 }
@@ -457,13 +470,22 @@ object BrailleFileDecoder {
      * - `.docx` / `.docm`：先按阳光盲文图书馆电子书解 PUA 正文；解不出时
      *   回落到普通文本解码（普通 Word 明眼文字的提取由 EbookTextExtractor 链路处理）。
      * - 其余（`.brf` / `.txt` 等）：按文本解码，后续由 [toUnicodeBraille] 处理。
+     *
+     * @param textCells 点显器实际文本列数（驱动上报的 numTextCells），只用于
+     *   阳光 docx 重排；<=0 或越界时由 [sunshineWidth] 回退默认 40。其余格式不用。
      */
-    fun decodeDocument(bytes: ByteArray, fileName: String?): DecodedDocument {
+    fun decodeDocument(
+        bytes: ByteArray,
+        fileName: String?,
+        textCells: Int = SUNSHINE_DEFAULT_TEXT_CELLS,
+    ): DecodedDocument {
         val ext = fileName?.substringAfterLast('.', "")?.lowercase()
         if (ext == "docx" || ext == "docm") {
             val sunshine = decodeSunshineDocx(bytes)
             if (sunshine != null) {
-                return DecodedDocument.Decoded(reflowSunshine(sunshine))
+                return DecodedDocument.Decoded(
+                    reflowSunshine(sunshine, width = sunshineWidth(textCells))
+                )
             }
             return DecodedDocument.Decoded(decode(bytes))
         }
