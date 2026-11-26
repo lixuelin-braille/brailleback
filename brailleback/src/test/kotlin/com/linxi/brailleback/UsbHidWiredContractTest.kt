@@ -164,16 +164,18 @@ class UsbHidWiredContractTest {
     fun autoPicksWiredOnlyWhenADisplayIsActuallyPluggedIn() {
         val source = displayServiceSource()
         val connectBraille = methodBody(source, "fun connectBraille()")
-        // 路由判定必须经过 HidTransportRouting：把「自动不无条件走 USB」这条语义
-        // 放进纯 JVM 用例里（HidTransportRoutingTest），这里只钉接入口没绕过它。
-        assertTrue(connectBraille.contains("HidTransportRouting.resolve("))
-        assertTrue(connectBraille.contains("isUsbBrailleDeviceAttached()"))
+        // 路由判定必须经过纯函数 AutoConnectionRouter：把「自动不无条件走 USB」这条
+        // 语义放进纯 JVM 用例里（AutoConnectionRouterTest），这里只钉接入口没绕过它。
+        assertTrue(connectBraille.contains("AutoConnectionRouter.route("))
         assertTrue(connectBraille.contains("connectBluetooth()"))
         assertTrue(connectBraille.contains("connectUsbHid()"))
         // 探针必须查同一张 brltty VID/PID 表，不能另写一份设备表。
-        val probe = methodBody(source, "DisplayService.isUsbBrailleDeviceAttached()")
-        assertTrue(probe.contains("BrlttyWrapper.getUsbDriverTable()"))
-        assertTrue(probe.contains("UsbBrailleDevice.candidateDrivers("))
+        val attachedProbe = methodBody(source, "DisplayService.isUsbBrailleDeviceAttached()")
+        assertTrue(attachedProbe.contains("BrlttyWrapper.getUsbDriverTable()"))
+        assertTrue(attachedProbe.contains("UsbBrailleDevice.candidateDrivers("))
+        val autoProbe = methodBody(source, "DisplayService.collectUsbProbes()")
+        assertTrue(autoProbe.contains("BrlttyWrapper.getUsbDriverTable()"))
+        assertTrue(autoProbe.contains("UsbBrailleDevice.candidateDrivers("))
         // 自动也要能被 USB 插拔广播唤醒，否则插上线不会自动切过去。
         assertTrue(source.contains("HidTransportRouting.shouldReactToUsbAttach("))
         val wiredOrAuto = methodBody(source, "DisplayService.isWiredOrAutoProtocol()")

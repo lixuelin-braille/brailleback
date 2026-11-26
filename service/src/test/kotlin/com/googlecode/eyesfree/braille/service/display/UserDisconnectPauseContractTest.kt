@@ -4,7 +4,6 @@
 
 package com.googlecode.eyesfree.braille.service.display
 
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -84,14 +83,15 @@ class UserDisconnectPauseContractTest {
             "在设备页点已配对设备那一行要能突破暂停",
             text(pairing).contains("autoConnectBraille(userInitiated = true)"),
         )
+        // 两处用户动作：service 里的配对成功，flow 里的插 USB（手动 / AUTO 两个分支）。
         val serviceBody = text(service)
-        val explicitCalls = Regex("autoConnectBraille\\(userInitiated = true\\)")
-            .findAll(serviceBody)
-            .count()
-        assertEquals(
-            "配对成功与插 USB 两处用户动作都要能突破暂停（现应为 2 处）",
-            2,
-            explicitCalls,
+        assertTrue(
+            "配对成功要能突破暂停",
+            serviceBody.contains("autoConnectBraille(userInitiated = true)"),
+        )
+        assertTrue(
+            "插 USB 要能突破暂停",
+            flowBody.contains("autoConnectBraille(userInitiated = true)"),
         )
     }
 }

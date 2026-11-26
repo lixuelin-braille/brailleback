@@ -218,19 +218,11 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
                         cancelAutoReconnect()
                     }
                 } else if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(action)) {
-                    // Wired displays only: a USB stick or keyboard must not
-                    // disturb a working Bluetooth connection. Auto counts here
-                    // because plugging the display in should switch it over.
-                    if (HidTransportRouting.shouldReactToUsbAttach(
-                            getConnectionProtocol(),
-                            ConnectionTransportPolicy.current(this@DisplayService))
-                            && !isConnectionActive()) {
-                        // 重新插入属于新的枚举，可以再问一次 USB 授权。
-                        UsbDisplayConnection.allowPermissionPromptAgain()
-                        Timber.i("USB device attached; trying wired connection");
-                        autoConnectBraille(userInitiated = true)
-                    }
+                    // 插线即时重算路由：AUTO 过幂等判据后再切，手动档沿用既有口径。
+                    handleUsbAttached()
                 } else if (UsbManager.ACTION_USB_DEVICE_DETACHED.equals(action)) {
+                    // 拔线清掉切换幂等状态：重新插上属于一次新的连接周期。
+                    mAutoSwitchState = AutoSwitchGuard.State.IDLE
                     if (mUsbConnection != null || mHidConnectionIsUsb) {
                         Timber.i("USB device detached; disconnecting display")
                         disconnectBraille()
@@ -361,6 +353,10 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
      * scanning.
      */
     var mDiscoveryAllowedForCycle = false
+    /** AUTO 档切换的幂等状态：同设备 60 秒冷却、重复 attach 不重复切。 */
+    @Volatile
+    internal var mAutoSwitchState: AutoSwitchGuard.State = AutoSwitchGuard.State.IDLE
+
     /** True while this service owns the current Bluetooth discovery session. */
     internal var mDiscoverySessionActive = false
     /** True when this service, rather than another app, started discovery. */
@@ -824,10 +820,15 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         // inquiry is not competing with them.
         stopDiscoverySession("connecting display")
         val protocol = getConnectionProtocol()
-        val route = HidTransportRouting.resolve(protocol,
-                ConnectionTransportPolicy.current(this), isUsbBrailleDeviceAttached())
-        Timber.i("Starting connection: protocol=%s route=%s", protocol, route)
-        when (route) {
+        val decided = AutoConnectionRouter.route(buildAutoRouteInput())
+        decided.degradedReason?.let { Timber.i("AUTO degrade: %s", it) }
+        if (decided.keepCurrentAndRescan) {
+            mHandler.setConnectionProgress(
+                getString(R.string.connprog_auto_waiting_display))
+        }
+        Timber.i("Starting connection: protocol=%s route=%s announce=%s",
+                protocol, decided.route, decided.announce)
+        when (decided.route) {
             LinkRoute.USB_SERIAL -> connectUsbUnified()
             LinkRoute.USB_HID -> connectUsbHid()
             LinkRoute.NONE -> reportSystemOnlyTransport()
@@ -852,10 +853,16 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM
                     && !HidBridge.isAvailable()) {
-                // The controller is briefly null while the accessibility service
-                // rebinds. Wait instead of falling back to RFCOMM prematurely.
-                waitForHidController()
-                return
+                if (isAutoProtocol()) {
+                    // AUTO：控制器不可用不等 HID 复活，直接落经典串口（RFCOMM），
+                    // 不卡在等待回调上；降级原因进日志供以后真机复验。
+                    Timber.i("AUTO: HID controller unavailable; skipping wait, falling to serial")
+                } else {
+                    // The controller is briefly null while the accessibility service
+                    // rebinds. Wait instead of falling back to RFCOMM prematurely.
+                    waitForHidController()
+                    return
+                }
             }
         }
         if (stopBeforeSerialFallback()) {
@@ -993,6 +1000,12 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         if (Build.VERSION.SDK_INT
                 < Build.VERSION_CODES.VANILLA_ICE_CREAM
                 || !HidBridge.isAvailable()) {
+            if (isAutoProtocol()) {
+                // AUTO：USB HID 控制器不可用不判失败，显式降级到 USB 串口。
+                Timber.i("AUTO: USB HID unavailable; degrading to usb_serial")
+                connectUsbUnified()
+                return
+            }
             mHandler.setConnectionProgress(
                     getString(R.string.connprog_usb_hid_unavailable))
             scheduleAutoReconnectIfNeeded()

@@ -32,6 +32,8 @@
 <string name="connprog_usb_hid_not_found">"未检测到 USB HID 有线盲文显示器，请连接设备后重试"</string>
 <string name="connprog_usb_hid_permission_denied">"USB 权限被拒绝，请在弹窗中允许后重新连接"</string>
 <string name="connprog_usb_hid_failed">"USB HID 有线连接失败（错误码 %1$d）"</string>
+    <string name="connprog_auto_usb_switched">"检测到 USB 点显器，已切换到 USB"</string>
+    <string name="connprog_auto_waiting_display">"尚未找到点显器：请插入 USB 线，或开启蓝牙点显器"</string>
     <!-- 前台保活通知：无障碍服务未开启时，点显器连接靠它保持。 -->
     <string name="display_keepalive_channel">"点显器连接"</string>
     <string name="display_keepalive_title">"点显器连接保持中"</string>
