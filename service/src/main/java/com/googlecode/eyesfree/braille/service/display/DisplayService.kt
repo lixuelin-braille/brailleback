@@ -222,6 +222,10 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
                     // 插线即时重算路由：AUTO 过幂等判据后再切，手动档沿用既有口径。
                     handleUsbAttached()
                 } else if (UsbManager.ACTION_USB_DEVICE_DETACHED.equals(action)) {
+                    ConnectionDiagnostics.emit(
+                        this@DisplayService, this@DisplayService,
+                        "usb-detached", "na", "USB_DEVICE_DETACHED",
+                    )
                     // 拔线清掉切换幂等状态：重新插上属于一次新的连接周期。
                     mAutoSwitchState = AutoSwitchGuard.State.IDLE
                     if (mUsbConnection != null || mHidConnectionIsUsb) {

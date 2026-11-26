@@ -11,6 +11,7 @@ import android.content.Intent
 import android.widget.Toast
 import androidx.core.content.FileProvider
 import com.linxi.brailleback.R
+import com.googlecode.eyesfree.utils.LogFileWriter
 import java.io.File
 import java.nio.charset.StandardCharsets
 
@@ -32,6 +33,9 @@ object DebugLogActions {
     /** 文本分享 / 复制上限：超过走 FileProvider 文件；≤ 100 KB 才直传 EXTRA_TEXT。 */
     internal const val MAX_TEXT_BYTES = 100 * 1024
 
+    /** 导出硬上限 256 KB：分享 / 复制出去的总量一律不超过，超出只取尾部。 */
+    internal const val EXPORT_MAX_BYTES = LogFileWriter.EXPORT_MAX_BYTES
+
     /** 剪贴板放不下时保留的最近行数（复制截断口径）。 */
     internal const val COPY_MAX_LINES = 200
 
@@ -47,9 +51,19 @@ object DebugLogActions {
         FILE_PROVIDER,
     }
 
-    /** 读取全部日志（历史在前，当前文件最后）。 */
+    /** 读取全部日志（历史在前，当前文件最后），按 256 KB 尾部截断。 */
     @JvmStatic
     fun readAll(context: Context): String = LogFileWriter.readAll(context)
+
+    /**
+     * 导出准备：先取未截断全文判断是否超限，再截到 [EXPORT_MAX_BYTES] 尾部。
+     * @return 截尾后的文本与「全文是否超过 256 KB」。
+     */
+    internal fun prepareExport(context: Context): Pair<String, Boolean> {
+        val full = LogFileWriter.readAll(context, Int.MAX_VALUE)
+        val truncated = utf8Bytes(full) > EXPORT_MAX_BYTES
+        return LogFileWriter.tailByBytes(full, EXPORT_MAX_BYTES) to truncated
+    }
 
     /** 空日志不能静默无反应，读屏用户需要一句明确提示。 */
     @JvmStatic
@@ -57,26 +71,35 @@ object DebugLogActions {
         Toast.makeText(context, R.string.debug_log_empty, Toast.LENGTH_SHORT).show()
     }
 
-    /** 从开发者选项直接分享当前日志。 */
+    /** 从开发者选项直接分享当前日志（总量 ≤ 256 KB，超出只取尾部）。 */
     @JvmStatic
     fun shareCurrentLog(context: Context) {
-        val log = readAll(context)
+        val (log, truncated) = prepareExport(context)
         if (log.isBlank()) {
             showEmptyToast(context)
             return
         }
         shareLog(context, log)
+        if (truncated) {
+            Toast.makeText(
+                context,
+                R.string.debug_log_share_truncated,
+                Toast.LENGTH_LONG,
+            ).show()
+        }
     }
 
-    /** 从开发者选项直接复制当前日志。 */
+    /** 从开发者选项直接复制当前日志（先 ≤256 KB，再按最近 200 行截断）。 */
     @JvmStatic
     fun copyCurrentLog(context: Context) {
-        val log = readAll(context)
-        if (log.isBlank()) {
+        val (full, byteTruncated) = prepareExport(context)
+        if (full.isBlank()) {
             showEmptyToast(context)
             return
         }
-        copyLogToClipboard(context, log)
+        val clip = tailLines(full, COPY_MAX_LINES)
+        val lineTruncated = clip.lines().size < full.lines().size
+        copyLogToClipboard(context, clip, byteTruncated || lineTruncated)
     }
 
     /** 按 UTF-8 字节数判定分享走哪条出口。 */
@@ -97,16 +120,23 @@ object DebugLogActions {
     /** 把指定文本放进剪贴板；服务缺失或系统抛异常都要给提示。 */
     @JvmStatic
     fun copyLogToClipboard(context: Context, text: String) {
+        copyLogToClipboard(context, text, false)
+    }
+
+    /** 内部入口：[truncated] 表示全文超 256 KB 或超过 200 行，需播报省略说明。 */
+    internal fun copyLogToClipboard(
+        context: Context,
+        text: String,
+        truncated: Boolean,
+    ) {
         val manager = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
         if (manager == null) {
             Toast.makeText(context, R.string.debug_log_copy_fail, Toast.LENGTH_SHORT).show()
             return
         }
-        val truncated = utf8Bytes(text) > MAX_TEXT_BYTES
-        val clipText = if (truncated) tailLines(text, COPY_MAX_LINES) else text
         try {
             manager.setPrimaryClip(
-                ClipData.newPlainText(context.getString(R.string.debug_log_view_title), clipText)
+                ClipData.newPlainText(context.getString(R.string.debug_log_view_title), text)
             )
             val toast = if (truncated) {
                 context.getString(R.string.debug_log_copy_truncated, COPY_MAX_LINES)

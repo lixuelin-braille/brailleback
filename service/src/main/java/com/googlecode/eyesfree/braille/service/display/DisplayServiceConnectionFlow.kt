@@ -172,7 +172,22 @@ internal const val USER_DISCOVERY_WINDOW_DURATION = 12000L
      * {@code poll()} / {@code disconnect()} always bypass this check so that
      * the volume-key toggle keeps working regardless of the setting.
      */
+    /** 进入连接流程前打一次快照；路由只做只读解析，失败降级 na，不影响拨号。 */
+    private fun DisplayService.emitBeforeConnectSnapshot(reason: String) {
+        val decided = try {
+            AutoConnectionRouter.route(buildAutoRouteInput())
+        } catch (e: Exception) {
+            null
+        }
+        ConnectionDiagnostics.emit(
+            this, this, "before-connect",
+            decided?.route?.name ?: "na",
+            decided?.degradedReason ?: decided?.announce?.name ?: reason,
+        )
+    }
+
     internal fun DisplayService.autoConnectBraille(userInitiated: Boolean = false) {
+        emitBeforeConnectSnapshot(if (userInitiated) "auto:user" else "auto")
         // 暂停判定见 AutoConnectPause.kt（非空行预算 1500，2026-11-26 口径）。
         if (!clearPauseForUserAction(this, userInitiated)) {
             return
@@ -194,6 +209,7 @@ internal const val USER_DISCOVERY_WINDOW_DURATION = 12000L
 
     /** Starts a connection explicitly requested by a client. */
     internal fun DisplayService.startExplicitConnect() {
+        emitBeforeConnectSnapshot("explicit")
         mAutoReconnectSuppressed = false
         mAutoReconnectAttempt = 0
         mHandler.cancelAutoReconnect()
@@ -273,6 +289,15 @@ internal const val USER_DISCOVERY_WINDOW_DURATION = 12000L
      * disconnected the display.
      */
     internal fun DisplayService.scheduleAutoReconnectIfNeeded() {
+        // 失败 / 超时后再打一次诊断快照，带上本轮失败原因；其余路径不重复打。
+        val failReason = try {
+            getHidFailureMessage()
+        } catch (e: Exception) {
+            "hidError=$mLastHidError"
+        }
+        ConnectionDiagnostics.emit(
+            this, this, "fail", "na", failReason,
+        )
         if (!shouldAutoReconnect()) {
             Timber.v("Not scheduling auto reconnect (not eligible)")
             return
@@ -694,6 +719,9 @@ internal const val USER_DISCOVERY_WINDOW_DURATION = 12000L
      * AUTO 的冷却窗口与 USB 优先都不介入。
      */
     internal fun DisplayService.handleUsbAttached() {
+        ConnectionDiagnostics.emit(
+            this, this, "usb-attached", "na", "USB_DEVICE_ATTACHED",
+        )
         val protocol = getConnectionProtocol()
         val transport = ConnectionTransportPolicy.current(this)
         val auto = ConnectionProtocolPolicy.AUTO == protocol &&
