@@ -235,8 +235,8 @@ internal fun BrailleReaderActivity.onTopSegment(index: Int) {
         val seg = mWindowSegments.getOrNull(index) ?: return
         val unit = seg.pageIndex
         if (unit == currentUnit()) return
-        // 只有退回倒数第二页之前才解除到头播报；贴在末尾的两页之间不重复播报。
-        if (unit < totalUnits() - 2) mAnnouncedEnd = false
+        // 只有往回退到倒数第二页之前才解除到头播报；往前滑贴在末尾的几页之间不复位。
+        if (shouldReenableEndAnnounce(unit, currentUnit(), totalUnits())) mAnnouncedEnd = false
         mOffset = mPageOffsets.getOrElse(unit) { mOffset }
         Log.i(BrailleReaderActivity.LOG_TAG, "scroll page: unit=$unit offset=$mOffset")
         refreshPageGeometry()
@@ -245,13 +245,30 @@ internal fun BrailleReaderActivity.onTopSegment(index: Int) {
         saveProgress()
     }
 
-    /** 窗口快滚到头了：再往后装一页，焦点才不会断在半路。 */
+/**
+ * 是否允许播报「到文末」。
+ *
+ * 翻译仍在追加（[translating] = true）时，`totalUnits()` 只是当前已翻出的页数，
+ * 后面还会陆续长出页面：此时贴到前沿不是书末，不报；同一文末也不重复刷。
+ */
+internal fun canAnnounceBookEnd(translating: Boolean, alreadyAnnounced: Boolean): Boolean =
+    !translating && !alreadyAnnounced
+
+/**
+ * 是否复位「已报到文末」标记。只有**往回退**到倒数第二页之前才解除：
+ * 往前滑贴着末尾的几页之间不复位，避免同一文末被反复播报。
+ *
+ * @param newUnit 新的首可见页；@param oldUnit 滑动前所在页；@param totalUnits 总页数
+ */
+internal fun shouldReenableEndAnnounce(newUnit: Int, oldUnit: Int, totalUnits: Int): Boolean =
+    newUnit < oldUnit && newUnit < totalUnits - 2
+
 internal fun BrailleReaderActivity.onNeedMoreSegments() {
         if (mStream.isEmpty()) return
         val next = mWindowEndUnit + 1
         if (next >= totalUnits()) {
-            // 已到文末：贴着末尾再往前滑给一次到头播报；同一文末不重复刷。
-            if (!mAnnouncedEnd) {
+            // 已到文末：贴着末尾再往前滑给一次到头播报；翻译未结束不报，同一文末不重复刷。
+            if (canAnnounceBookEnd(mTranslating, mAnnouncedEnd)) {
                 mAnnouncedEnd = true
                 Log.i(BrailleReaderActivity.LOG_TAG, "page overflow: 到文末 unit=${currentUnit()} total=${totalUnits()}")
                 announce(getString(R.string.braille_reader_at_end))
