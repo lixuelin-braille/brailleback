@@ -604,9 +604,19 @@ object BrailleFileDecoder {
     /**
      * 取字符对应的点位值（0-63）。非盲文字符返回 0（空方）。
      * 供发送到点显器时构造 patterns 数组。
+     *
+     * 阳光 PUA（U+E234～U+E273）按阳光字体字形的线性点位映射：
+     * E273 是空方（0），E234～E272 依次是点 1～63，即 `code - 0xE233`。
+     * 这正是 BdoCArchiveParser.valuesToBraille 用的同一套公式。
+     *
+     * 注意判定顺序：必须先判 [SUN_BLANK]（E273）返回 0，再走区间；
+     * 区间包含 E273，若把它放进区间会算出 0xE273 - 0xE233 = 64，
+     * 超出 0～63 点位范围，是错值。
      */
     fun toDots(c: Char): Int {
         if (c.code in 0x2800..0x28FF) return c.code - 0x2800
+        if (c.code == SUN_BLANK) return 0
+        if (c.code in SUN_MIN..SUN_MAX) return c.code - 0xE233
         return asciiToDots(c) ?: 0
     }
 
