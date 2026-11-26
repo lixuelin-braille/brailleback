@@ -315,6 +315,7 @@
     <string name="debug_log_copy">Copy log</string>
     <string name="debug_log_copied">Log copied to clipboard</string>
     <string name="debug_log_copy_fail">Could not copy the log</string>
+    <string name="debug_log_copy_truncated">Copied the last %1$d lines; use Share for the full log</string>
     <string name="debug_log_clear_confirm">Clear all debug log files?</string>
     <string name="debug_log_cleared">Debug log cleared</string>
     <string name="debug_log_share_fail">No app available to share the log</string>

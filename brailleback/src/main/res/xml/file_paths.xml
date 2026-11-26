@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  日志分享临时文件的 FileProvider 暴露范围。
+  只挂 cacheDir 下的 logs 子目录；filesDir（含持久日志与阅读数据）不暴露。
+-->
+<paths>
+    <cache-path name="log-cache" path="logs/" />
+</paths>

@@ -66,20 +66,14 @@ class RollingFileLog @JvmOverloads constructor(
         synchronized(lock) {
             try {
                 if (writer == null) return
-                // 测试包降噪：非关键 TAG 的 VERBOSE 不落盘（保留 DEBUG 及以上），
-                // 避免一行事件详情几百字节把滚动日志吃掉。
-                if (TestBuild.VERBOSE_BY_DEFAULT &&
-                    priority == Log.VERBOSE && !isVerboseAllowedTag(tag)
-                ) {
-                    return
-                }
+                if (!shouldPersistToFile(priority, tag, message)) return
                 // The other process may have cleared the log by deleting the
                 // file; reopen instead of writing into an unlinked inode.
                 if (currentFile?.exists() == false) {
                     reopenLocked()
                 }
-                val out = writer ?: return
                 rotateIfNeeded()
+                val out = writer ?: return
                 val time = SimpleDateFormat(TIME_FORMAT, Locale.US).format(Date())
                 out.write("$time ${levelChar(priority)}/$tag: $message\n")
                 out.flush()
@@ -87,6 +81,36 @@ class RollingFileLog @JvmOverloads constructor(
                 // 落盘失败静默，不干扰主流程
             }
         }
+    }
+
+    /**
+     * 判定一条日志是否落盘。logcat 不受此影响，被丢弃的行仍进系统日志。
+     *
+     * 隐私：无障碍事件 `toString()` 与节点详情会夹带 `ContentDescription`
+     * 屏幕正文（实测抓到微信聊天全文）；体积：一条事件详情几百字节，100 KB
+     * 窗口很快被吃满。所以事件流与节点工具链只进 logcat，不进文件。
+     * 落盘以连接链路为主：连接 / 显示生命周期相关 TAG 保留 VERBOSE，
+     * 其余 TAG 的 VERBOSE 不落盘，DEBUG 及以上照常。
+     */
+    private fun shouldPersistToFile(priority: Int, tag: String, message: String): Boolean {
+        // 节点工具链的逐节点排查行只进 logcat。
+        if (tag == ACCESSIBILITY_NODE_UTILS_TAG) return false
+        // 无障碍事件摘要 / 详情 / 节点快照：只进 logcat。
+        if (tag == BRAILLE_BACK_SERVICE_TAG && EVENT_PREFIXES.any { message.startsWith(it) }) {
+            return false
+        }
+        // BrailleBackService 仅保留连接生命周期行，其余行不落盘。
+        if (tag == BRAILLE_BACK_SERVICE_TAG) {
+            return CONNECTION_KEYWORDS.any {
+                message.contains(it, ignoreCase = true)
+            }
+        }
+        if (TestBuild.VERBOSE_BY_DEFAULT &&
+            priority == Log.VERBOSE && !isVerboseAllowedTag(tag)
+        ) {
+            return false
+        }
+        return true
     }
 
     /**
@@ -170,8 +194,8 @@ class RollingFileLog @JvmOverloads constructor(
         const val DEFAULT_MAX_BYTES = 256L * 1024L
         const val DEFAULT_KEEP_FILES = 3
 
-        /** 测试包单独一组：单文件 4 MB、保留 6 份；正式包沿用上面的默认值。 */
-        const val TEST_MAX_BYTES = 4L * 1024L * 1024L
+        /** 测试包单独一组：单文件 100 KB、保留 6 份（总占用约 600 KB）；正式包沿用上面的默认值。 */
+        const val TEST_MAX_BYTES = 100L * 1024L
         const val TEST_KEEP_FILES = 6
 
         /**
@@ -180,14 +204,32 @@ class RollingFileLog @JvmOverloads constructor(
          * 把滚动日志刷掉。TAG 取 `LogUtils` 由类名派生的 simpleName 或显式 TAG。
          */
         private val VERBOSE_ALLOWED_TAGS = setOf(
-            "BrailleBackService",
-            "DisplayService",
-            "BluetoothConnection",
             "UsbDisplayConnection",
             "HidDisplayConnection",
+            "BluetoothConnection",
             "WujieGattConnection",
             "DeviceFinder",
+            "DisplayService",
             "BrlttyWrapper",
+            "BrailleBackService",
+        )
+
+        /** 节点工具链 TAG：其逐节点排查行只进 logcat，不落盘。 */
+        private const val ACCESSIBILITY_NODE_UTILS_TAG = "AccessibilityNodeInfoUtils"
+
+        /** 主服务 TAG（`LogUtils.log(this, ...)` 派生 simpleName）。 */
+        private const val BRAILLE_BACK_SERVICE_TAG = "BrailleBackService"
+
+        /** 无障碍事件行前缀：摘要 / 详情 / 节点快照，一律不落盘。 */
+        private val EVENT_PREFIXES = listOf("Event:", "Event detail:", "Node detail:")
+
+        /** BrailleBackService 允许落盘的连接生命周期关键词。 */
+        private val CONNECTION_KEYWORDS = listOf(
+            "Starting connection",
+            "route",
+            "reconnect attempt",
+            "connected",
+            "disconnected",
         )
 
         private const val TIME_FORMAT = "yyyy-MM-dd HH:mm:ss.SSS"

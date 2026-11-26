@@ -322,6 +322,18 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
+
+        <!-- 大日志分享：超过 200 KB 走 cache 临时文件 + content:// URI。
+             paths 配置只暴露 cacheDir/logs 这一条路径，不对外暴露 files 目录。 -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 </application>
 </manifest>
 

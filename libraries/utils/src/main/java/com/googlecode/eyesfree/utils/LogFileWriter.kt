@@ -95,7 +95,10 @@ object LogFileWriter {
     @JvmStatic
     fun readAll(context: Context): String {
         val dir = RollingFileLog.logDirectory(context)
-        val main = RollingFileLog.readLogFiles(dir, RollingFileLog.MAIN_LOG_NAME)
+        // 已安装的实例带自己的 keepFiles（测试包 6 份）；未初始化时回落默认份数。
+        // 不能只看主文件，也不能按默认 3 份漏读 .4–.6。
+        val main = sLog?.readAll()
+            ?: RollingFileLog.readLogFiles(dir, RollingFileLog.MAIN_LOG_NAME)
         // Builds before 2026-11-12 split connection logs into a second file.
         // Keep exporting it so an update does not hide earlier USB failures.
         val legacy = RollingFileLog.readLogFiles(dir, LEGACY_SERVICE_LOG_NAME)
