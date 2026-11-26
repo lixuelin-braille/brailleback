@@ -21,8 +21,11 @@ import org.junit.Test
  * 自动重连与发现窗口整块搬到 DisplayServiceConnectionFlow.kt，以同包扩展函数
  * 承载（方法体一字未改，只把「类成员」改成「DisplayService 的扩展」）。
  *
+ * 行数预算 600/1300 → 1500，用户 2026-11-26 决定：单文件非空行上限放宽到
+ * 1500，超过 1500 必须先拆再写；既有拆分成果不回退、不合并大文件。
+ *
  * 这个测试防两件事：
- * 1) 主文件不许再长回 1400 行——那正是这次拆分的阈值；
+ * 1) 主文件不许越过 1500 行上限；
  * 2) 搬走的策略不许被抄回主文件：两份实现必然漂移，且没人知道哪份在跑。
  */
 class DisplayServiceSplitContractTest {
@@ -40,11 +43,11 @@ class DisplayServiceSplitContractTest {
         source.lineSequence().count { it.isNotBlank() }
 
     @Test
-    fun `主文件回到 1400 行以下且不再回涨`() {
+    fun `主文件不越过 1500 行上限`() {
         val lines = nonBlank(src("DisplayService.kt"))
-        // 拆分前 1763 行（非空约 1680）。拆到 1321 行后留一点余量，
-        // 一旦有人把新逻辑堆回来，先在这里断。
-        assertTrue("DisplayService.kt 非空行数 $lines 已超出拆分预算", lines < 1300)
+        // 拆分前 1763 行（非空约 1680）。预算 1500（2026-11-26 口径），
+        // 超过必须先拆再写，不许把新逻辑继续堆回本文件。
+        assertTrue("DisplayService.kt 非空行数 $lines 已超出 1500 行预算", lines <= 1500)
     }
 
     @Test
@@ -85,8 +88,8 @@ class DisplayServiceSplitContractTest {
     }
 
     @Test
-    fun `扩展函数文件自己也不许长成新的大文件`() {
+    fun `扩展函数文件自己也不越过 1500 行上限`() {
         val lines = nonBlank(src("DisplayServiceConnectionFlow.kt"))
-        assertTrue("DisplayServiceConnectionFlow.kt 非空行数 $lines 过大，该再按职责拆", lines < 600)
+        assertTrue("DisplayServiceConnectionFlow.kt 非空行数 $lines 过大，该再按职责拆", lines <= 1500)
     }
 }

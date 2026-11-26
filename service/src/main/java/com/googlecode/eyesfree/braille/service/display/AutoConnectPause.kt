@@ -17,8 +17,8 @@ import timber.log.Timber
  * 插上 USB 点显器、以及客户端 poll()（用户点了状态行刷新）。这些调用点都传
  * `userInitiated = true`。
  *
- * <p>拆成独立函数是因为 [DisplayServiceConnectionFlow.kt] 有 600 行非空行的
- * 契约预算，判定本身带注释与日志，塞回调用处会顶破预算。
+ * <p>独立成文是为可读性：判定本身带注释与日志，单独成文件便于顺着暂停语义
+ * 读；非空行契约预算 1500（2026-11-26 口径），不再按旧的 600 行划线。
  */
 internal fun clearPauseForUserAction(
     service: DisplayService,
