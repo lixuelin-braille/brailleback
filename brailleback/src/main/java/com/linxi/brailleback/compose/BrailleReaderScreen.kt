@@ -54,12 +54,11 @@ internal data class ReaderLabels(
     val nextPage: String = "下一页",
 )
 
-/** 阅读器界面状态：使能位与文本都由 Activity 的 updateUiState 汇总后喂进来。 */
+/** 阅读器界面状态：正文与按钮使能位由 Activity 的 updateUiState 汇总后喂进来。 */
 internal data class ReaderUiState(
     val readerText: String = "",
     val focusSegments: List<ReaderSegment> = emptyList(),
     val fontSizeSp: Int = 18,
-    val pageInfo: String = "",
     /** 有没有可读内容。没有时不摆一排停用按钮，只留提示与字号。 */
     val hasContent: Boolean = false,
     val prevEnabled: Boolean = false,
@@ -68,10 +67,19 @@ internal data class ReaderUiState(
     val bookmarkEnabled: Boolean = false,
     val gotoEnabled: Boolean = false,
     val exportEnabled: Boolean = false,
+)
+
+/**
+ * 滚动相关状态：页号/行号/计数/回顶令牌。
+ *
+ * 与正文、按钮状态分开持有：滚屏时只推这一份，正文列表与按钮区不跟着整份重组。
+ */
+internal data class ReaderScrollState(
+    val pageInfo: String = "",
     /** 本页行进度：当前第几行（0 基）、本页共几行，供进度条与「跳到第 N 行」使用。 */
     val lineIndex: Int = 0,
     val lineCount: Int = 1,
-    /** 当前第几页（0 基）与全书共几页：滑块按「第 N 页 共 M 页」朗读，照系统桌面翻页提示的样子。 */
+    /** 当前第几页（0 基）与全书共几页：滑块按「第 N 页 共 M 页」朗读。 */
     val pageIndex: Int = 0,
     val pageCount: Int = 1,
     /**
@@ -119,6 +127,7 @@ internal sealed interface ReaderDialog {
 @Composable
 internal fun BrailleReaderScreen(
     uiState: ReaderUiState,
+    scrollState: ReaderScrollState,
     labels: ReaderLabels,
     dialog: ReaderDialog?,
     onPrev: () -> Unit,
@@ -171,6 +180,7 @@ internal fun BrailleReaderScreen(
         ReaderBodyList(
             modifier = Modifier.weight(1f),
             uiState = uiState,
+            scrollState = scrollState,
             onTextMetrics = onTextMetrics,
             onTopSegment = onTopSegment,
             onNeedMoreSegments = onNeedMoreSegments,
@@ -184,9 +194,9 @@ internal fun BrailleReaderScreen(
         // 段号小字只给眼睛看，不进朗读内容。
         if (uiState.hasContent) {
             // 段号小字：只给眼睛看，不进朗读（invisibleToUser 让它不产生可聚焦节点）。
-            if (uiState.pageInfo.isNotEmpty()) {
+            if (scrollState.pageInfo.isNotEmpty()) {
                 Text(
-                    text = uiState.pageInfo,
+                    text = scrollState.pageInfo,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.semantics { invisibleToUser() },
@@ -197,18 +207,18 @@ internal fun BrailleReaderScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 ScrubberBar(
-                    description = labels.pageScrubber(uiState.pageIndex + 1, uiState.pageCount),
-                    index = uiState.pageIndex,
-                    count = uiState.pageCount,
+                    description = labels.pageScrubber(scrollState.pageIndex + 1, scrollState.pageCount),
+                    index = scrollState.pageIndex,
+                    count = scrollState.pageCount,
                     actionLabel = labels.pageScrubberAction,
                     fontSizeSp = uiState.fontSizeSp,
                     onSeek = onPageSeek,
                     onEdit = onPageEdit,
                 )
                 ScrubberBar(
-                    description = labels.pageLine(uiState.lineIndex + 1, uiState.lineCount),
-                    index = uiState.lineIndex,
-                    count = uiState.lineCount,
+                    description = labels.pageLine(scrollState.lineIndex + 1, scrollState.lineCount),
+                    index = scrollState.lineIndex,
+                    count = scrollState.lineCount,
                     actionLabel = labels.pageLineAction,
                     fontSizeSp = uiState.fontSizeSp,
                     onSeek = onLineSeek,
@@ -217,9 +227,9 @@ internal fun BrailleReaderScreen(
                     onOverflow = onLineOverflow,
                 )
             }
-        } else if (uiState.pageInfo.isNotEmpty()) {
+        } else if (scrollState.pageInfo.isNotEmpty()) {
             Text(
-                text = uiState.pageInfo,
+                text = scrollState.pageInfo,
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
