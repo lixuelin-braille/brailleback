@@ -7,12 +7,15 @@
 
 package com.linxi.brailleback
 
+import java.io.ByteArrayInputStream
 import java.nio.ByteBuffer
 import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
 import java.nio.charset.StandardCharsets
+import java.util.zip.ZipInputStream
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.text.RegexOption
 
 object BrailleFileDecoder {
 
@@ -172,6 +175,96 @@ object BrailleFileDecoder {
         }
     }
 
+    // ------------------------------------------------------------------
+    // 阳光盲文（中国盲文图书馆 docx，正文是私用区 PUA 字符）
+    // ------------------------------------------------------------------
+
+    /** 阳光盲文在此范围内（U+E234～U+E273）；E273 是空方。 */
+    private const val SUN_MIN = 0xE234
+    private const val SUN_MAX = 0xE273
+    private const val SUN_BLANK = 0xE273
+
+    /**
+     * 阳光书重排的兜底文本列数：点显器未连接 / 未上报方数时使用。
+     *
+     * Metec 点显器共 42 格 = 40 文本列 + 2 状态格，状态格不参与正文排版；
+     * 正常路径下文本列数取自驱动上报的 `numTextCells`（见 ReaderFileLoader
+     * 调用处传入的 textCells），这里只做兜底，不在解码层写死设备方数。
+     */
+    internal const val SUNSHINE_DEFAULT_TEXT_CELLS = 40
+
+    /**
+     * 中国盲文图书馆电子书的正文：每个字符是 Unicode 私用区的一个盲文方
+     * （U+E234～U+E273），不是汉字。此函数把 docx（其实是 zip）里
+     * `word/document.xml` 的 `<w:t>` 文本按段落提取出来，得到连续的 PUA 正文。
+     *
+     * 用标准库 [ZipInputStream] + `StringBuilder` 做轻量解析，不依赖 Android，
+     * 便于 JVM 单测。只取 `<w:t>` 的文字节点，跳过 `<w:pPr>` 等样式标签。
+     * 段落用 '\n' 分隔，与阅读器既有的段落处理保持一致。
+     *
+     * @return 提取出的 PUA 正文；不是有效 docx 或解析失败时返回 null。
+     */
+    fun decodeSunshineDocx(bytes: ByteArray): String? {
+        return try {
+            val xml = ByteArrayInputStream(bytes).use { input ->
+                ZipInputStream(input).use { zip ->
+                    var entry = zip.nextEntry
+                    var found: String? = null
+                    while (entry != null) {
+                        if (entry.name == "word/document.xml") {
+                            found = zip.readBytes().toString(StandardCharsets.UTF_8)
+                            break
+                        }
+                        zip.closeEntry()
+                        entry = zip.nextEntry
+                    }
+                    found
+                }
+            } ?: return null
+
+            // 按 <w:p> 段落切分，每段内把所有 <w:t> 的文字拼起来。
+            // docx 的 PUA 字符是直接的 UTF-16 字符（非 &#xE234; 实体），
+            // 唯一要还原的是 XML 的 5 个预定义实体。
+            val paragraphs = ArrayList<String>()
+            val paraRegex = Regex("<w:p[ >][^>]*>(.*?)</w:p>", RegexOption.DOT_MATCHES_ALL)
+            val textRegex = Regex("<w:t(?:\\s[^>]*)?>(.*?)</w:t>", RegexOption.DOT_MATCHES_ALL)
+            for (m in paraRegex.findAll(xml)) {
+                val sb = StringBuilder()
+                for (tm in textRegex.findAll(m.groupValues[1])) {
+                    sb.append(unescapeXml(tm.groupValues[1]))
+                }
+                paragraphs.add(sb.toString())
+            }
+            if (paragraphs.isEmpty()) return null
+            paragraphs.joinToString("\n")
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /** 还原 XML 的 5 个预定义实体；docx 正文的 PUA 本身是裸字符，不涉及数值实体。 */
+    private fun unescapeXml(s: String): String = s
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
+        .replace("&amp;", "&")
+
+    /**
+     * 判断正文是否为阳光 PUA 盲文（非空方字符占绝大多数）。
+     * 区别于 U+2800 系列：阳光书正文落在 U+E234～U+E273。
+     */
+    fun isSunshinePua(text: String): Boolean {
+        var pua = 0
+        var n = 0
+        for (c in text) {
+            if (c == '\n' || c == '\r' || c == '\u000C') continue
+            n++
+            if (c.code in SUN_MIN..SUN_MAX) pua++
+        }
+        return n > 0 && pua.toDouble() / n > 0.5
+    }
+
     /**
      * 解码结果。成功与失败是不同类型，调用方必须 `when` 处理，
      * 不会再有「忘了判 null」的路径。
@@ -199,10 +292,19 @@ object BrailleFileDecoder {
      * - `.bdo` / `.bdoc`：Bword 二进制盲文文档，走 [BdoCArchiveParser] 结构化解码，
      *   输出已是 Unicode 盲文（U+2800 系列），**不可**再做 ASCII 盲文转换。
      *   这是国内盲文图书馆/出版社的主力格式。
+     * - `.docx` / `.docm`：先按阳光盲文图书馆电子书解 PUA 正文；解不出时
+     *   回落到普通文本解码（普通 Word 明眼文字的提取由 EbookTextExtractor 链路处理）。
      * - 其余（`.brf` / `.txt` 等）：按文本解码，后续由 [toUnicodeBraille] 处理。
      */
     fun decodeDocument(bytes: ByteArray, fileName: String?): DecodedDocument {
         val ext = fileName?.substringAfterLast('.', "")?.lowercase()
+        if (ext == "docx" || ext == "docm") {
+            val sunshine = decodeSunshineDocx(bytes)
+            if (sunshine != null) {
+                return DecodedDocument.Decoded(sunshine)
+            }
+            return DecodedDocument.Decoded(decode(bytes))
+        }
         if (ext != "bdo" && ext != "bdoc") {
             return DecodedDocument.Decoded(decode(bytes))
         }
@@ -241,6 +343,7 @@ object BrailleFileDecoder {
      */
     fun detectKind(text: String): ContentKind {
         var braille = 0
+        var pua = 0
         var ascii = 0
         var han = 0
         var letters = 0
@@ -251,6 +354,7 @@ object BrailleFileDecoder {
             n++
             when {
                 c.code in 0x2800..0x28FF -> braille++
+                c.code in SUN_MIN..SUN_MAX -> pua++
                 c in ' '..'_' -> {
                     ascii++
                     if (c in 'A'..'Z') letters++
@@ -260,6 +364,10 @@ object BrailleFileDecoder {
             }
         }
         if (n == 0) return ContentKind.TEXT
+        // 阳光 PUA 正文优先判定：占比 >50% 直接视为已是盲文，不送翻译服务。
+        // PUA 三不沾 U+2800 盲文区 / 汉字 / Braille ASCII，不拦这一条会被
+        // 落进 TEXT 当明眼文字翻译，结果是乱码或空白。
+        if (pua.toDouble() / n > 0.5) return ContentKind.BRAILLE
         val brailleRatio = braille.toDouble() / n
         if (brailleRatio > 0.5) return ContentKind.BRAILLE
         val hanRatio = han.toDouble() / n
