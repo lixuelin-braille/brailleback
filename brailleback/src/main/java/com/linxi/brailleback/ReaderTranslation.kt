@@ -28,7 +28,7 @@ internal fun BrailleReaderActivity.appendBrailleStream(deltaText: String, deltaC
             mCellSpans = CellSourceTable(mSourceText, deltaCells)
         }
         mStream += deltaText
-        rebuildPageOffsets(keepPosition = true)
+        rebuildPageOffsetsIncremental(keepPosition = true)
         showPage(resetScroll = false)
         Log.d(BrailleReaderActivity.LOG_TAG, "append: +${deltaText.length} stream=$before->${mStream.length} " +
             "cells=${mCellSpans?.size} units=${totalUnits()} pos=$mOffset")

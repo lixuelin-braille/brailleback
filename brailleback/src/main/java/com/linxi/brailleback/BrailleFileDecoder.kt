@@ -692,6 +692,35 @@ object BrailleFileDecoder {
     }
 
     /**
+     * 增量续算页表：在 [existing]（同一份流、同一个 [unit] 下算出的旧表）尾部接着
+     * [nextOffset] 走到新的 [stream.length]，旧表项一字不动，只补新增的页起点。
+     *
+     * 用于翻译边翻边追加：每来一块新内容不必再从第 0 字符走完整本书。
+     *
+     * 回落整表重建的情形（调用方/本函数都要兜住）：
+     * - 流为空；
+     * - 旧表为空；
+     * - 旧表末位已不小于新流长度（流被截短/换书），无法在旧表上续；
+     * - 调用方发现建表时的 unit 与当前 unit 不一致（转屏、换字号、点显器方数变化）。
+     */
+    fun appendPageOffsets(stream: String, unit: Int, existing: IntArray): IntArray {
+        if (stream.isEmpty()) return intArrayOf(0)
+        if (existing.isEmpty()) return pageOffsets(stream, unit)
+        val last = existing[existing.size - 1]
+        if (last >= stream.length) return pageOffsets(stream, unit)
+        val out = ArrayList<Int>(existing.size + 16)
+        out.addAll(existing.asList())
+        var off = last
+        while (off < stream.length) {
+            val next = nextOffset(stream, off, unit)
+            if (next <= off) break // 步进不动：防死锁，余下交整表口径
+            off = next
+            if (off < stream.length) out.add(off)
+        }
+        return out.toIntArray()
+    }
+
+    /**
      * 把 [offset] 回退到它所在那一段盲文串（词）的起点。
      *
      * 词内没有分隔标记：通用盲文一个汉字占 1–3 方、词内连续书写，
