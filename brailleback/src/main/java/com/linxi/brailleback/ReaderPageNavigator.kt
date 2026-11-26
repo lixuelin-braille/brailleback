@@ -93,12 +93,38 @@ internal fun BrailleReaderActivity.onScreenTextMetrics(charsPerLine: Int, linesP
 internal fun BrailleReaderActivity.rebuildPageOffsets(keepPosition: Boolean = false) {
         val keep = keepPosition && mStream.isNotEmpty()
             && mOffset >= 0 && mOffset <= maxOffset()
+        val unit = readingUnit()
         mPageOffsets = if (mStream.isEmpty()) {
             intArrayOf()
         } else {
-            BrailleFileDecoder.pageOffsets(mStream, readingUnit())
+            BrailleFileDecoder.pageOffsets(mStream, unit)
         }
-        Log.d(BrailleReaderActivity.LOG_TAG, "page table: unit=${readingUnit()} pages=${mPageOffsets.size} " +
+        mPageUnit = unit
+        Log.d(BrailleReaderActivity.LOG_TAG, "page table: unit=$unit pages=${mPageOffsets.size} " +
+            "connected=$mConnected displayCells=$mDisplayCells keep=$keep")
+        if (mPageOffsets.isNotEmpty() && !keep) {
+            mOffset = mPageOffsets[currentUnit()]
+        }
+    }
+
+    /**
+     * 翻译流追加专用的页表更新：优先在旧表尾部增量续算，不再从第 0 字符走完整本书。
+     *
+     * 仅当建表时的 unit（[mPageUnit]）与当前 unit 一致时增量；unit 不一致
+     * （转屏、换字号、点显器方数变化）或流被截短时，解码器回落整表重建。
+     * 日志格式与 [rebuildPageOffsets] 保持一致，既有取证脚本按 tag/文案解析不受影响。
+     */
+internal fun BrailleReaderActivity.rebuildPageOffsetsIncremental(keepPosition: Boolean = true) {
+        val unit = readingUnit()
+        val keep = keepPosition && mStream.isNotEmpty()
+            && mOffset >= 0 && mOffset <= maxOffset()
+        mPageOffsets = when {
+            mStream.isEmpty() -> intArrayOf()
+            mPageUnit != unit -> BrailleFileDecoder.pageOffsets(mStream, unit)
+            else -> BrailleFileDecoder.appendPageOffsets(mStream, unit, mPageOffsets)
+        }
+        mPageUnit = unit
+        Log.d(BrailleReaderActivity.LOG_TAG, "page table: unit=$unit pages=${mPageOffsets.size} " +
             "connected=$mConnected displayCells=$mDisplayCells keep=$keep")
         if (mPageOffsets.isNotEmpty() && !keep) {
             mOffset = mPageOffsets[currentUnit()]

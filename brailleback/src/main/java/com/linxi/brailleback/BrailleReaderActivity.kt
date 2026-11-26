@@ -199,6 +199,12 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
      */
     internal var mPageOffsets: IntArray = intArrayOf()
 
+    /**
+     * 建表时的阅读单元（[readingUnit]）。增量续算只在 unit 没变时进行；
+     * 转屏、换字号、点显器方数变化导致 unit 变化后，回落整表重建并刷新这个值。
+     */
+    internal var mPageUnit: Int = -1
+
 
     // ------------------------------------------------------------------
     // 导出（SAF + 后台写盘）

@@ -60,6 +60,7 @@ internal fun BrailleReaderActivity.restoreProgress() {
             mStream = ""
             mOffset = 0
             mPageOffsets = intArrayOf()
+            mPageUnit = -1
             mFileUri = null
             prefs.edit().remove(BrailleReaderActivity.KEY_URI).remove(BrailleReaderActivity.KEY_OFFSET).apply()
         }
