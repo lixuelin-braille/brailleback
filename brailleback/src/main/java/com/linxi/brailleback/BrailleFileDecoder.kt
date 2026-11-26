@@ -266,6 +266,168 @@ object BrailleFileDecoder {
     }
 
     /**
+     * 阳光书「30 方一行 → 点显器文本列宽」重排（code71：段落感知实验版）。
+     *
+     * 只针对从中国盲文图书馆下载的电子盲文：原书每行的正文被切成 30 方，
+     * 用户点显器是 40 方。以空行分段，段内严格按原书空方（词边界）装词，
+     * 能放进当前 [width] 方行的词绝不挪到下一行，不拆词；目录行原样保留。
+     *
+     * 接缝与特殊行规则（2026-11-22 用户确认的实验方案）：
+     * - 下一行以 U+E257（36 点）开头：优先于短行判断，删掉标记后直接接，
+     *   不插空方（即使整行很短，也绝不能当页码/标题处理，否则词会被拆开）；
+     * - 正文行首恰好两个空方：原书的新段落缩进标记，结束当前段并插入空行
+     *   （只有空行才能被 K1+K2 / K1+K3 段落跳转识别），新段保留两方缩进；
+     * - 段内短行紧跟空行：视为标题，原样单独一行，由用户自己判断；
+     * - 其余短行：视为页码，按「2 空方 + 页码 + 2 空方」内联到上一行后，
+     *   再接下一行（前后共 4 个空方，页码不单独占行）；
+     * - 下一行原文已以空方开头、或上一行结尾已有空方：不重复插；
+     * - 其余正文接缝：插一个空方。
+     *
+     * 只读模拟《鹿比翁 3-1》显示本规则比 code70 多补约一倍空方、劈字风险
+     * 更高，但行尾填充率基本不变。这是用户要试的方案：先做实验版装机试听，
+     * 不行则回退 code70 的 4/5 点规则。其他格式（brf/bdo/txt）绝不调用本函数。
+     */
+    fun reflowSunshine(text: String, width: Int = SUNSHINE_DEFAULT_TEXT_CELLS): String {
+        val space = SUN_BLANK.toChar()
+        val link = '\uE257'
+        val guide = '\uE243'
+
+        fun isBlankLine(line: String) = line.isEmpty() || line.all { it == space }
+        fun isTocLine(line: String) = line.count { it == guide } >= 3
+        fun isPageNumLine(line: String): Boolean {
+            val s = line.trim(space)
+            return s.isNotEmpty() && s.length <= 8
+        }
+
+        /** 一行里的非空方数（空方是 U+E273，换行不出现在这里）。 */
+        fun nonBlankCount(line: String): Int = line.count { it != space }
+
+        /**
+         * code89：段尾若只剩 1～2 个非空方（30→40 重排把最后一个词挤成孤行），
+         * 把上一行最后一个词连同其后的空方一起挪回来，避免：
+         * - K1/K3 停在孤行上，下一屏又显示几乎相同的内容；
+         * - 阅读器跳过孤行时，把原文最后一个字整个丢掉。
+         *
+         * 只挪「最后一个词 + 它后面的空方」，原词间空方原样保留，不拆词、不吞字。
+         */
+        fun mergeTinyTail(lines: ArrayList<String>, tail: String): String {
+            if (lines.isEmpty()) return tail
+            val tiny = nonBlankCount(tail)
+            if (tiny < 1 || tiny > 2) return tail
+            val prev = lines.last()
+            var cursor = prev.length
+            while (cursor > 0 && prev[cursor - 1] == space) cursor--
+            val wordEnd = cursor
+            while (cursor > 0 && prev[cursor - 1] != space) cursor--
+            val wordStart = cursor
+            if (wordStart <= 0 || wordEnd <= wordStart) return tail
+            val moved = prev.substring(wordStart) // 最后一个词 + 其后的空方
+            val kept = prev.substring(0, wordStart)
+            val merged = moved + tail
+            if (kept.isEmpty() || nonBlankCount(merged) <= 2) return tail
+            lines[lines.size - 1] = kept
+            return merged
+        }
+
+        /** 按原书空方切成「词 / 空方段」逐 token 装行；不拆词、不吞掉连续空方。 */
+        fun reflowParagraph(text: String): List<String> {
+            val tokens = ArrayList<Pair<Boolean, String>>() // true=空方段, false=词
+            var i = 0
+            while (i < text.length) {
+                val start = i
+                if (text[i] == space) {
+                    while (i < text.length && text[i] == space) i++
+                    tokens.add(true to text.substring(start, i))
+                } else {
+                    while (i < text.length && text[i] != space) i++
+                    tokens.add(false to text.substring(start, i))
+                }
+            }
+            if (tokens.isEmpty()) return emptyList()
+            val lines = ArrayList<String>()
+            val cur = StringBuilder()
+            for ((blankRun, token) in tokens) {
+                if (cur.isNotEmpty() && cur.length + token.length > width) {
+                    lines.add(cur.toString())
+                    cur.setLength(0)
+                }
+                cur.append(token)
+                if (blankRun && cur.length == width) {
+                    lines.add(cur.toString())
+                    cur.setLength(0)
+                }
+            }
+            if (cur.isNotEmpty()) lines.add(mergeTinyTail(lines, cur.toString()))
+            return lines
+        }
+
+        val out = ArrayList<String>()
+        val stream = StringBuilder()
+        fun flush() {
+            if (stream.isNotEmpty()) {
+                out.addAll(reflowParagraph(stream.toString()))
+                stream.setLength(0)
+            }
+        }
+
+        var prevWasBlank = false
+        for (raw in text.split('\n')) {
+            if (isBlankLine(raw)) {
+                flush(); out.add(raw); prevWasBlank = true
+                continue
+            }
+            if (isTocLine(raw)) {
+                flush(); out.add(raw); prevWasBlank = false
+                continue
+            }
+            val stripped = raw.dropWhile { it == space }
+            // 36 点续行优先于短行判断：即使整行很短，也必须删标记后直接接，
+            // 否则会被当成页码/标题，词被空方拆开（code71 的漏网分支）。
+            if (stripped.startsWith(link)) {
+                stream.append(stripped.substring(1))
+                prevWasBlank = false
+                continue
+            }
+            // 原书新段落用「行首恰好两个空方」缩进标记（样例书 640 处）。
+            // 必须插入空行而不只是换行：段落跳转快捷键（K1+K2 / K1+K3）
+            // 在段落阅读模式下只把空行当段落断点。
+            val leading = raw.indexOfFirst { it != space }.let { if (it < 0) raw.length else it }
+            if (leading == 2) {
+                flush()
+                if (out.isNotEmpty()) out.add("")
+                stream.append(raw) // 保留原书的两方缩进
+                prevWasBlank = false
+                continue
+            }
+            when {
+                isPageNumLine(raw) -> {
+                    if (prevWasBlank || stream.isEmpty()) {
+                        // 空行后或正文开始前的短行是标题：原样单独一行，不参与合并。
+                        flush(); out.add(raw)
+                    } else {
+                        // 接到上一行后；末尾两个空方顺带充当与下一行的边界。
+                        val page = raw.trim(space)
+                        val pad = space.toString().repeat(2)
+                        stream.append(pad).append(page).append(pad)
+                    }
+                    prevWasBlank = false
+                }
+                else -> {
+                    if (stream.isNotEmpty() && !raw.startsWith(space) &&
+                        stream[stream.length - 1] != space
+                    ) {
+                        stream.append(space)
+                    }
+                    stream.append(raw)
+                    prevWasBlank = false
+                }
+            }
+        }
+        flush()
+        return out.joinToString("\n")
+    }
+
+    /**
      * 解码结果。成功与失败是不同类型，调用方必须 `when` 处理，
      * 不会再有「忘了判 null」的路径。
      */
@@ -301,7 +463,7 @@ object BrailleFileDecoder {
         if (ext == "docx" || ext == "docm") {
             val sunshine = decodeSunshineDocx(bytes)
             if (sunshine != null) {
-                return DecodedDocument.Decoded(sunshine)
+                return DecodedDocument.Decoded(reflowSunshine(sunshine))
             }
             return DecodedDocument.Decoded(decode(bytes))
         }
