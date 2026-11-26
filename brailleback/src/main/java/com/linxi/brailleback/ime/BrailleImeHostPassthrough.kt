@@ -10,6 +10,7 @@ package com.linxi.brailleback.ime
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Context
 import android.graphics.Region
+import android.os.Build
 import android.util.DisplayMetrics
 import android.util.Log
 import android.view.Display
@@ -62,6 +63,12 @@ internal class BrailleImeHostPassthrough(
   }
 
   fun applyRegion(target: Region) {
+    // 守卫放在真正碰 API 30 的方法内：调用方 Bridge 虽已有 SDK<R 早返回，但 lint 的
+    // NewApi 检查按方法内分析，跨类追踪不到调用方守卫；在此再兜一层，将来新增调用方也不漏。
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+      Log.i(BrailleImeHostBridge.TAG, "passthrough apply skipped, sdk=" + Build.VERSION.SDK_INT)
+      return
+    }
     try {
       service.setTouchExplorationPassthroughRegion(Display.DEFAULT_DISPLAY, target)
       Log.i(BrailleImeHostBridge.TAG, "passthrough applied: " + target)
@@ -71,6 +78,9 @@ internal class BrailleImeHostPassthrough(
   }
 
   fun clearRegion() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+      return
+    }
     try {
       // 空 Region 表示"没有直通区"，即恢复正常的触摸探索拦截。
       service.setTouchExplorationPassthroughRegion(Display.DEFAULT_DISPLAY, Region())
