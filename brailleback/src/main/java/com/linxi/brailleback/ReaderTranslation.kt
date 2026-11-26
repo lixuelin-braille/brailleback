@@ -16,6 +16,7 @@ import com.googlecode.eyesfree.braille.translate.BrailleTranslator
      * 只往末尾追加一块翻译流。
      *
      * 追加不改动原有偏移，故页表按 keepPosition 重建；屏与点显器按当前位置刷新。
+     * 翻译推进属于后台追内容：列表位置保持不动，不再 resetScroll 拽回第 1 页。
      */
 internal fun BrailleReaderActivity.appendBrailleStream(deltaText: String, deltaCells: IntArray) {
         val before = mStream.length
@@ -28,7 +29,7 @@ internal fun BrailleReaderActivity.appendBrailleStream(deltaText: String, deltaC
         }
         mStream += deltaText
         rebuildPageOffsets(keepPosition = true)
-        showPage()
+        showPage(resetScroll = false)
         Log.d(BrailleReaderActivity.LOG_TAG, "append: +${deltaText.length} stream=$before->${mStream.length} " +
             "cells=${mCellSpans?.size} units=${totalUnits()} pos=$mOffset")
     }
