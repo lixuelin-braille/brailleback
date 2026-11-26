@@ -142,6 +142,10 @@ object DebugLogActions {
             Toast.makeText(context, R.string.debug_log_share_fail, Toast.LENGTH_SHORT).show()
             return
         }
+        // 清理上一次分享遗留的临时日志，避免 cache 里堆积多份大文件。
+        dir.listFiles()?.forEach {
+            if (it.name.startsWith("brailleback-log-")) it.delete()
+        }
         val file = File(dir, "brailleback-log-${System.currentTimeMillis()}.txt")
         file.writeText(text, StandardCharsets.UTF_8)
         val uri = FileProvider.getUriForFile(
@@ -149,9 +153,12 @@ object DebugLogActions {
             "${context.packageName}.fileprovider",
             file,
         )
+        val clip = ClipData.newUri(context.contentResolver, "brailleback-log", uri)
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
             putExtra(Intent.EXTRA_STREAM, uri)
+            // ClipData 带上 URI，选择器预览与接收方都能拿到读授权。
+            clipData = clip
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         startShareChooser(context, intent)
