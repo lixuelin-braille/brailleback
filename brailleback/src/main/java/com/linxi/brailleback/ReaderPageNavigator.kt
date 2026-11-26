@@ -180,7 +180,7 @@ internal fun BrailleReaderActivity.onDisplayKey(command: Int) {
             ReaderDisplayAction.LAST_PAGE -> gotoUnit(Int.MAX_VALUE)
             ReaderDisplayAction.ANNOUNCE_PAGE -> {
                 val firstLine = mLastView?.focusSegments?.firstOrNull().orEmpty()
-                announce(listOf(uiState.pageInfo, firstLine)
+                announce(listOf(scrollState.pageInfo, firstLine)
                     .filter { it.isNotEmpty() }.joinToString("，"))
             }
             ReaderDisplayAction.NONE -> return
@@ -265,7 +265,7 @@ internal fun BrailleReaderActivity.refreshPageGeometry() {
         else BrailleFileDecoder.lineStarts(
             mStream, pageStart, mCellsPerLine, mLinesPerPage, pageEnd)
         Log.i(BrailleReaderActivity.LOG_TAG, "page geometry: unit=${currentUnit()} lines=${mPageLineStarts.size}")
-        uiState = uiState.copy(
+        scrollState = scrollState.copy(
             lineIndex = 0,
             lineCount = mPageLineStarts.size.coerceAtLeast(1),
         )
@@ -325,21 +325,24 @@ internal fun BrailleReaderActivity.showPage(resetScroll: Boolean = true) {
         uiState = uiState.copy(
             readerText = view.displayText,
             focusSegments = mWindowSegments,
+        )
+        scrollState = scrollState.copy(
             lineIndex = lineIndex,
             lineCount = mPageLineStarts.size.coerceAtLeast(1),
             // 只有用户自己换页/跳行才回顶；翻译推进导致页表重建、滚屏引起页号变化都不回顶。
-            scrollToken = if (resetScroll) uiState.scrollToken + 1 else uiState.scrollToken,
+            scrollToken = if (resetScroll) scrollState.scrollToken + 1 else scrollState.scrollToken,
         )
-        // 翻页后自动同步点显器，省去盲文用户每次手动点「发送点显」
+        // 翻页后自动同步点显器，省去盲文用户每次手动点「发送点显」。
+        // 显式换页/跳行直推；翻译推进、页表重建这类同页重铺按页节流，不重复推屏。
         if (mConnected) {
-            sendToDisplay()
+            if (resetScroll) sendToDisplay() else pushDisplayThrottled()
         }
         updateUiState()
         val unitIndex = currentUnit()
         if (unitIndex != mAnnouncedUnit) {
             mAnnouncedUnit = unitIndex
             val firstLine = mLastView?.focusSegments?.firstOrNull().orEmpty()
-            announce(listOf(uiState.pageInfo, firstLine)
+            announce(listOf(scrollState.pageInfo, firstLine)
                 .filter { it.isNotEmpty() }.joinToString("，"))
         }
     }
@@ -369,12 +372,14 @@ internal fun BrailleReaderActivity.updateUiState() {
         val rawFont = SettingsStore.get(this)
             .getInt(BrailleReaderActivity.KEY_READER_FONT_SP, BrailleReaderActivity.DEFAULT_READER_FONT_SP)
         val fontSp = BrailleReaderActivity.FONT_SIZES.firstOrNull { it == rawFont } ?: BrailleReaderActivity.DEFAULT_READER_FONT_SP
-        uiState = uiState.copy(
+        scrollState = scrollState.copy(
             pageInfo = pageInfo,
-            fontSizeSp = fontSp,
-            hasContent = hasContent,
             pageIndex = currentUnit(),
             pageCount = totalUnits(),
+        )
+        uiState = uiState.copy(
+            fontSizeSp = fontSp,
+            hasContent = hasContent,
             prevEnabled = hasContent && mOffset > 0,
             nextEnabled = hasContent && mOffset + unit <= maxOffset(),
             tocEnabled = hasContent,

@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 internal fun ReaderBodyList(
     modifier: Modifier,
     uiState: ReaderUiState,
+    scrollState: ReaderScrollState,
     onTextMetrics: (Int, Int) -> Unit,
     onTopSegment: (Int) -> Unit,
     onNeedMoreSegments: () -> Unit,
@@ -120,7 +121,7 @@ internal fun ReaderBodyList(
                 }
         }
         // 显式换页/跳行/换字号：列表回到顶部（滚屏自己引起的页号变化不带这个 token）。
-        LaunchedEffect(uiState.scrollToken) {
+        LaunchedEffect(scrollState.scrollToken) {
             listState.scrollToItem(0)
         }
 }

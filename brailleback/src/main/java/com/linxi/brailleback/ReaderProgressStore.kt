@@ -9,8 +9,32 @@ package com.linxi.brailleback
 
 import android.content.Context
 import android.net.Uri
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+/** 进度写盘去抖窗（毫秒）：滚屏连续换页时不每翻一页就落一次 SharedPreferences。 */
+private const val SAVE_PROGRESS_DEBOUNCE_MS = 900L
 
 internal fun BrailleReaderActivity.saveProgress() {
+        if (mStream.isEmpty()) return
+        progressSaveJob?.cancel()
+        // 延时不走裸 Handler：Activity 销毁时 lifecycleScope 自动取消。
+        progressSaveJob = lifecycleScope.launch {
+            delay(SAVE_PROGRESS_DEBOUNCE_MS)
+            writeProgressNow()
+        }
+    }
+
+/** 离开页面等时机立即落盘：取消待触发的去抖任务，直接写一次。 */
+internal fun BrailleReaderActivity.flushProgress() {
+        progressSaveJob?.cancel()
+        progressSaveJob = null
+        writeProgressNow()
+    }
+
+private fun BrailleReaderActivity.writeProgressNow() {
         if (mStream.isEmpty()) return
         getSharedPreferences(BrailleReaderActivity.PREFS_NAME, Context.MODE_PRIVATE).edit()
             .putString(BrailleReaderActivity.KEY_URI, mFileUri?.toString())

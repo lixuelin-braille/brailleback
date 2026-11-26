@@ -41,6 +41,7 @@ import com.linxi.brailleback.compose.ExportGeometryCatalog
 import com.linxi.brailleback.compose.GeometryChoice
 import com.linxi.brailleback.compose.ReaderDialog
 import com.linxi.brailleback.compose.ReaderLabels
+import com.linxi.brailleback.compose.ReaderScrollState
 import com.linxi.brailleback.compose.ReaderUiState
 import com.linxi.brailleback.reader.ReaderChapters
 import com.linxi.brailleback.reader.ReaderDisplayAction
@@ -53,6 +54,7 @@ import java.util.Date
 import java.util.Locale
 import java.nio.charset.StandardCharsets
 import kotlin.math.min
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -90,9 +92,16 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     internal var mConnected = false
     internal var mFileUri: Uri? = null
 
+    /** 上一次已推送到点显器的页号（unit）；同页重复重铺不重复推屏。 */
+    internal var lastPushedUnit = -1
+
     /** Compose 界面状态与弹窗。 */
     internal var uiState by mutableStateOf(ReaderUiState())
+    internal var scrollState by mutableStateOf(ReaderScrollState())
     internal var readerDialog by mutableStateOf<ReaderDialog?>(null)
+
+    /** 进度写盘去抖任务；离开页面时由 flushProgress() 立即落盘。 */
+    internal var progressSaveJob: Job? = null
 
     /** 翻译服务（明眼 txt 电子书 → 盲文）。懒初始化：绑定 service 模块的翻译服务。 */
     internal val mTranslatorManager by lazy { TranslatorManager(this) }
@@ -270,6 +279,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         setContent {
             BrailleReaderScreen(
                 uiState = uiState,
+                scrollState = scrollState,
                 labels = ReaderLabels(
                     prev = getString(R.string.braille_reader_prev),
                     next = getString(R.string.braille_reader_next),
@@ -368,7 +378,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
 
     override fun onPause() {
         super.onPause()
-        saveProgress()
+        flushProgress()
         // 离开正文页就交还点显器，否则服务一直冻着，别的界面摸不到字。
         releaseDisplay()
         mDisplay?.shutdown()
@@ -378,6 +388,8 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
 
     override fun onDestroy() {
         super.onDestroy()
+        progressSaveJob?.cancel()
+        progressSaveJob = null
         mTranslatorManager.removeOnTablesChangedListener(mTranslationReadyListener)
         mTranslatorManager.shutdown()
     }
@@ -389,6 +401,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         Log.d(LOG_TAG, "display state=$state connected=$mConnected " +
             "cells=${mDisplay?.displayProperties?.numTextCells ?: -1}")
         if (mConnected) {
+            lastPushedUnit = -1
             // 完全采用系统/驱动上报的方数（numTextCells），不做推测。
             // 仅对明显异常的值兜底：0 表示尚未就绪，过大则是驱动误报，
             // 若照单全收会让「一屏」变成整本书、步进失控。

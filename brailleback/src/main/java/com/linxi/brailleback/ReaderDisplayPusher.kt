@@ -46,6 +46,20 @@ internal fun BrailleReaderActivity.sendToDisplay() {
     }
 
     /**
+     * 按页节流推送：页号（unit）没变就不重复推屏。
+     *
+     * 用于翻译推进/页表重建这类同页内的重复重铺；显式翻页、跳行、连点显器仍走
+     * [sendToDisplay] 直推，保证手上摸到的位置即时跟上操作。
+     */
+internal fun BrailleReaderActivity.pushDisplayThrottled() {
+        if (!mConnected) return
+        val unit = currentUnit()
+        if (unit == lastPushedUnit) return
+        lastPushedUnit = unit
+        sendToDisplay()
+    }
+
+    /**
      * 把点显器整屏清成空方（不释放独占，随后照常由 [sendToDisplay] 铺本页）。
      *
      * 与 `DisplayManager` 清屏同一做法：全 0 点位 + 空文本。
