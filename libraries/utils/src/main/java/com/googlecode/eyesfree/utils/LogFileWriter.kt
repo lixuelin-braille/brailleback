@@ -40,9 +40,22 @@ object LogFileWriter {
             if (sLog != null) return
             val dir = RollingFileLog.logDirectory(context)
             archivePreviousBuildLogIfNeeded(dir)
+            // 测试包单独一组轮转参数（4 MB / 6 份）；正式包沿用默认 256 KB / 3 份。
+            val maxBytes = if (TestBuild.VERBOSE_BY_DEFAULT) {
+                RollingFileLog.TEST_MAX_BYTES
+            } else {
+                RollingFileLog.DEFAULT_MAX_BYTES
+            }
+            val keepFiles = if (TestBuild.VERBOSE_BY_DEFAULT) {
+                RollingFileLog.TEST_KEEP_FILES
+            } else {
+                RollingFileLog.DEFAULT_KEEP_FILES
+            }
             val log = RollingFileLog(
                 dir,
                 RollingFileLog.MAIN_LOG_NAME,
+                maxBytes = maxBytes,
+                keepFiles = keepFiles,
                 header = if (TestBuild.VERBOSE_BY_DEFAULT) TestBuild.MARKER else null,
             )
             if (log.open()) {

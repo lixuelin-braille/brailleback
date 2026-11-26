@@ -53,6 +53,56 @@ class RollingFileLogTest {
     }
 
     @Test
+    fun headerIsWrittenToNewCurrentFileAfterRotation() {
+        val directory = Files.createTempDirectory("rolling-rotate-header").toFile()
+        try {
+            val marker = "TEST-BUILD 2026-11-26 test/build-all-20261126"
+            val log = RollingFileLog(
+                directory,
+                RollingFileLog.MAIN_LOG_NAME,
+                /* maxBytes= */ 128L,
+                /* keepFiles= */ 1,
+                header = marker,
+            )
+            assertTrue("open() 应能创建日志文件", log.open())
+
+            repeat(8) { index ->
+                log.onLog(infoPriority, "Test", "rotation-line-$index")
+            }
+
+            val main = File(directory, RollingFileLog.MAIN_LOG_NAME)
+            assertEquals(
+                "轮转后的新主文件首行应为构建标记",
+                marker,
+                main.readLines().first(),
+            )
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun verboseOnlyAllowedTagsArePersisted() {
+        val directory = Files.createTempDirectory("rolling-tag-filter").toFile()
+        try {
+            val log = RollingFileLog(directory, RollingFileLog.MAIN_LOG_NAME)
+            assertTrue("open() 应能创建日志文件", log.open())
+
+            // android.util.Log.VERBOSE=2、DEBUG=3。
+            log.onLog(2, "NodeBrailler", "non-allowed verbose dropped")
+            log.onLog(2, "DisplayService", "allowed verbose kept")
+            log.onLog(3, "NodeBrailler", "non-allowed debug kept")
+
+            val text = File(directory, RollingFileLog.MAIN_LOG_NAME).readText()
+            assertFalse("非白名单 TAG 的 VERBOSE 不落盘", text.contains("non-allowed verbose"))
+            assertTrue("白名单 TAG 的 VERBOSE 落盘", text.contains("allowed verbose"))
+            assertTrue("非白名单 TAG 的 DEBUG 照常落盘", text.contains("non-allowed debug"))
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
     fun clearRemovesCurrentFileAndRotations() {
         val directory = Files.createTempDirectory("rolling-file-log").toFile()
         try {

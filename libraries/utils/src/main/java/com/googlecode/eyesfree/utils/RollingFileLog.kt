@@ -53,13 +53,7 @@ class RollingFileLog @JvmOverloads constructor(
                 }
                 val file = File(directory, fileName)
                 currentFile = file
-                writer = OutputStreamWriter(
-                    FileOutputStream(file, true), StandardCharsets.UTF_8)
-                // 仅在新建空文件时写首行标记，已有内容的日志不被打断。
-                if (header != null && file.length() == 0L) {
-                    writer?.write("$header\n")
-                    writer?.flush()
-                }
+                writer = openWriterLocked(file) ?: return false
                 true
             } catch (e: Exception) {
                 Log.w(TAG, "Could not open log file $fileName", e)
@@ -72,6 +66,13 @@ class RollingFileLog @JvmOverloads constructor(
         synchronized(lock) {
             try {
                 if (writer == null) return
+                // 测试包降噪：非关键 TAG 的 VERBOSE 不落盘（保留 DEBUG 及以上），
+                // 避免一行事件详情几百字节把滚动日志吃掉。
+                if (TestBuild.VERBOSE_BY_DEFAULT &&
+                    priority == Log.VERBOSE && !isVerboseAllowedTag(tag)
+                ) {
+                    return
+                }
                 // The other process may have cleared the log by deleting the
                 // file; reopen instead of writing into an unlinked inode.
                 if (currentFile?.exists() == false) {
@@ -88,18 +89,32 @@ class RollingFileLog @JvmOverloads constructor(
         }
     }
 
-    private fun reopenLocked() {
-        try {
-            writer?.close()
-            val file = currentFile ?: return
-            file.parentFile?.mkdirs()
-            writer = OutputStreamWriter(
-                FileOutputStream(file, true), StandardCharsets.UTF_8)
-        } catch (e: Exception) {
-            writer = null
-            Log.w(TAG, "Could not reopen log file $fileName", e)
+    /**
+     * Opens an append writer for [file]; a freshly created empty file gets the
+     * header marker as its first line. Every new current file (open / rotate /
+     * reopen after delete / clear) goes through here, so each shard is tagged.
+     */
+    private fun openWriterLocked(file: File): OutputStreamWriter? = try {
+        val w = OutputStreamWriter(
+            FileOutputStream(file, true), StandardCharsets.UTF_8)
+        if (header != null && file.length() == 0L) {
+            w.write("$header\n")
+            w.flush()
         }
+        w
+    } catch (e: Exception) {
+        Log.w(TAG, "Could not open log file $fileName", e)
+        null
     }
+
+    private fun reopenLocked() {
+        val file = currentFile ?: return
+        file.parentFile?.mkdirs()
+        writer = openWriterLocked(file)
+    }
+
+    private fun isVerboseAllowedTag(tag: String): Boolean =
+        VERBOSE_ALLOWED_TAGS.contains(tag)
 
     /** Rolls `.log` -> `.1` -> ... -> `.keepFiles`, dropping the oldest. */
     private fun rotateIfNeeded() {
@@ -114,8 +129,7 @@ class RollingFileLog @JvmOverloads constructor(
                 if (f.exists()) f.renameTo(File(directory, "$fileName.${i + 1}"))
             }
             current.renameTo(File(directory, "$fileName.1"))
-            writer = OutputStreamWriter(
-                FileOutputStream(current, true), StandardCharsets.UTF_8)
+            writer = openWriterLocked(current)
         } catch (e: Exception) {
             Log.w(TAG, "Could not rotate log file $fileName", e)
         }
@@ -137,8 +151,7 @@ class RollingFileLog @JvmOverloads constructor(
                 clearLogFiles(directory, fileName, keepFiles)
                 val file = File(directory, fileName)
                 currentFile = file
-                writer = OutputStreamWriter(
-                    FileOutputStream(file, true), StandardCharsets.UTF_8)
+                writer = openWriterLocked(file)
             } catch (e: Exception) {
                 Log.w(TAG, "Could not clear log file $fileName", e)
             }
@@ -156,6 +169,26 @@ class RollingFileLog @JvmOverloads constructor(
 
         const val DEFAULT_MAX_BYTES = 256L * 1024L
         const val DEFAULT_KEEP_FILES = 3
+
+        /** 测试包单独一组：单文件 4 MB、保留 6 份；正式包沿用上面的默认值。 */
+        const val TEST_MAX_BYTES = 4L * 1024L * 1024L
+        const val TEST_KEEP_FILES = 6
+
+        /**
+         * 测试包 VERBOSE 落盘白名单：连接 / 显示生命周期相关 TAG。
+         * 其余 TAG 的 VERBOSE 不落盘（DEBUG 及以上照常），避免逐节点事件详情
+         * 把滚动日志刷掉。TAG 取 `LogUtils` 由类名派生的 simpleName 或显式 TAG。
+         */
+        private val VERBOSE_ALLOWED_TAGS = setOf(
+            "BrailleBackService",
+            "DisplayService",
+            "BluetoothConnection",
+            "UsbDisplayConnection",
+            "HidDisplayConnection",
+            "WujieGattConnection",
+            "DeviceFinder",
+            "BrlttyWrapper",
+        )
 
         private const val TIME_FORMAT = "yyyy-MM-dd HH:mm:ss.SSS"
         private const val TAG = "RollingFileLog"
