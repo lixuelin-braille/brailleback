@@ -39,6 +39,7 @@ internal fun DeviceConnectionScreen(
     onAutoConnectChange: (Boolean) -> Unit,
     onStartDiscovery: () -> Unit,
     onCandidateClicked: (DeviceListEntry) -> Unit,
+    onOpenDiagnostics: () -> Unit,
     onBack: () -> Unit,
 ) {
     var showTransportDialog by remember { mutableStateOf(false) }
@@ -75,6 +76,16 @@ internal fun DeviceConnectionScreen(
                 summary = stateText,
                 clickLabel = labels.refreshHint,
                 onClick = onRefresh,
+            )
+        }
+
+        // 连接诊断入口：只读展示路由、USB 枚举、授权、打开状态、失败原因与无障碍态。
+        item(key = DeviceConnectionLogic.KEY_CONNECTION_DIAGNOSTICS) {
+            SettingsActionRow(
+                title = labels.diagTitle,
+                summary = labels.diagSummary,
+                clickLabel = labels.diagTitle,
+                onClick = onOpenDiagnostics,
             )
         }
 

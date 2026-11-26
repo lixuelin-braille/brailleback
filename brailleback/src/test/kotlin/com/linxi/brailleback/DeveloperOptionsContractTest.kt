@@ -453,8 +453,8 @@ class DeveloperOptionsContractTest {
         assertTrue(manifest.contains("""android:label="@string/pref_category_developer_title""""))
         assertTrue(manifest.contains("""android:theme="@style/BraillebackSettingsTheme""""))
         assertEquals(
-            "Manifest 中应有六个 Compose 设置子屏",
-            6,
+            "Manifest 中应有七个 Compose 设置子屏",
+            7,
             Regex("""android:name="\.compose\.\w+ComposeActivity"""").findAll(manifest).count()
         )
     }

@@ -76,6 +76,7 @@ class DeveloperOptionsComposeActivity : AppCompatActivity() {
 
     private var logLevelValue by mutableStateOf("")
     private var overlayEnabled by mutableStateOf(DeveloperOptionsLogic.OVERLAY_DEFAULT)
+    private var exportStatus by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -83,6 +84,7 @@ class DeveloperOptionsComposeActivity : AppCompatActivity() {
         supportActionBar?.hide()
         // 与旧 PreferenceFragment.onCreate 一致：无 adb 环境也能导出日志。
         LogFileWriter.init(this)
+        exportStatus = DebugLogActions.lastStatusText(this)
 
         val logLevelKey = getString(R.string.pref_log_level_key)
         val overlayKey = getString(R.string.pref_braille_overlay_key)
@@ -143,6 +145,7 @@ class DeveloperOptionsComposeActivity : AppCompatActivity() {
                 labels = labels,
                 logLevelValue = logLevelValue,
                 overlayEnabled = overlayEnabled,
+                exportStatus = exportStatus,
                 onLogLevelSelected = { value ->
                     val parsed = DeveloperOptionsLogic.parseLogLevel(value)
                     val accepted = parsed?.let { PreferenceUtils.updateLogLevel(it) } ?: false
@@ -165,7 +168,10 @@ class DeveloperOptionsComposeActivity : AppCompatActivity() {
                         truncatedHint = getString(R.string.compose_settings_log_preview_hint),
                     )
                 },
-                onShareLog = { DebugLogActions.shareCurrentLog(this) },
+                onShareLog = {
+                    DebugLogActions.shareCurrentLog(this)
+                    exportStatus = DebugLogActions.lastStatusText(this)
+                },
                 onCopyLog = { DebugLogActions.copyCurrentLog(this) },
                 onClearLog = { DebugLogActions.clear(this) },
                 onOverlayChange = { value ->

@@ -257,6 +257,30 @@
         android:theme="@style/BraillebackSettingsTheme"
         android:exported="false" />
 
+    <!-- 连接诊断页：逐项朗读路由、USB 枚举、授权、打开状态、失败原因与无障碍启用态。 -->
+    <activity
+        android:name=".compose.ConnectionDiagnosticsComposeActivity"
+        android:label="@string/conn_diag_title"
+        android:theme="@style/BraillebackSettingsTheme"
+        android:exported="false" />
+
+    <!-- USB 权限请求代理：不可见的可见窗口，承载系统授权弹窗；结果广播回灌服务端。 -->
+    <activity
+        android:name=".compose.UsbPermissionProxyActivity"
+        android:excludeFromRecents="true"
+        android:theme="@android:style/Theme.Translucent.NoTitleBar"
+        android:exported="false" />
+
+    <!-- 进程已死时由系统 USB 插拔广播拉起 DisplayService；只做唤醒与触发重扫。 -->
+    <receiver
+        android:name=".compose.UsbAttachWakeReceiver"
+        android:exported="true">
+        <intent-filter>
+            <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            <action android:name="android.hardware.usb.action.USB_DEVICE_DETACHED" />
+        </intent-filter>
+    </receiver>
+
         <!-- 实验功能：触觉图导出。独立 launcher 入口（应用列表图标直达），
              图标沿用应用默认图标。TactileExperiment 仅作为将来是否接进设置主屏的标志，
              不阻断本页流程。 -->

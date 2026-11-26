@@ -4,12 +4,15 @@
 
 package com.linxi.brailleback.utils
 
+import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.widget.Toast
 import androidx.core.content.FileProvider
+import com.googlecode.eyesfree.utils.LogUtils
 import com.linxi.brailleback.R
 import com.googlecode.eyesfree.utils.LogFileWriter
 import java.io.File
@@ -25,8 +28,12 @@ import java.nio.charset.StandardCharsets
  *
  * 大日志出口（2026-11-26 现场报障）：整份日志塞 `EXTRA_TEXT` 走 Binder，
  * 单次事务上限约 1 MB，超过必然 `TransactionTooLargeException`，表现为
- * 点了没反应或提示失败。超过 [SHARE_TEXT_MAX_BYTES] 的分享改走 cache 临时
+ * 点了没反应或提示失败。超过 [MAX_TEXT_BYTES] 的分享改走 cache 临时
  * 文件 + FileProvider `content://` URI；剪贴板放不下时只复制最近若干行。
+ *
+ * 失败留痕（2026-11-26 第二轮）：分享失败不再只弹一句短 Toast。异常类名 +
+ * message 进文件日志，分类结果落到 [DebugLogExportState] 供日志页朗读；
+ * 同时自动降级到剪贴板——对读屏用户这是不依赖第三个 App 的唯一出口。
  */
 object DebugLogActions {
 
@@ -51,6 +58,31 @@ object DebugLogActions {
         FILE_PROVIDER,
     }
 
+    /** 分享失败分类：用于分场景播报、诊断字段与单测断言。 */
+    internal enum class ExportFailureCategory {
+        /** 没有可处理该 Intent 的应用（resolveActivity 为空 / ActivityNotFoundException）。 */
+        NO_RECEIVER,
+
+        /** 接收方拒绝 URI 授权（SecurityException）。 */
+        URI_PERMISSION,
+
+        /** Intent 参数 / URI 构造无效（IllegalArgumentException）。 */
+        BAD_ARGUMENT,
+
+        /** 临时文件创建 / 写入失败。 */
+        WRITE_FAILED,
+
+        /** 其余未归类异常。 */
+        UNKNOWN,
+    }
+
+    /** 一次导出尝试的结果；[reason] 带异常类名与 message，供日志与诊断页读取。 */
+    internal data class ExportOutcome(
+        val success: Boolean,
+        val category: ExportFailureCategory?,
+        val reason: String,
+    )
+
     /** 读取全部日志（历史在前，当前文件最后），按 256 KB 尾部截断。 */
     @JvmStatic
     fun readAll(context: Context): String = LogFileWriter.readAll(context)
@@ -63,6 +95,30 @@ object DebugLogActions {
         val full = LogFileWriter.readAll(context, Int.MAX_VALUE)
         val truncated = utf8Bytes(full) > EXPORT_MAX_BYTES
         return LogFileWriter.tailByBytes(full, EXPORT_MAX_BYTES) to truncated
+    }
+
+    /**
+     * 异常 → 分类 + 诊断文案。纯函数，不碰 Android 系统服务，可直接单测覆盖
+     * 三类已命名异常与兜底分支。
+     */
+    internal fun classifyFailure(e: Throwable): ExportOutcome {
+        val reason = "${e.javaClass.simpleName}: ${e.message.orEmpty()}"
+        val category = when (e) {
+            is ActivityNotFoundException -> ExportFailureCategory.NO_RECEIVER
+            is SecurityException -> ExportFailureCategory.URI_PERMISSION
+            is IllegalArgumentException -> ExportFailureCategory.BAD_ARGUMENT
+            else -> ExportFailureCategory.UNKNOWN
+        }
+        return ExportOutcome(false, category, reason)
+    }
+
+    /** 分类对应的短文案资源 id；未知分类兜底为通用失败。 */
+    internal fun categoryMessageRes(category: ExportFailureCategory?): Int = when (category) {
+        ExportFailureCategory.NO_RECEIVER -> R.string.debug_log_share_no_receiver
+        ExportFailureCategory.URI_PERMISSION -> R.string.debug_log_share_uri_denied
+        ExportFailureCategory.BAD_ARGUMENT -> R.string.debug_log_share_bad_argument
+        ExportFailureCategory.WRITE_FAILED -> R.string.debug_log_share_write_failed
+        ExportFailureCategory.UNKNOWN, null -> R.string.debug_log_share_unknown
     }
 
     /** 空日志不能静默无反应，读屏用户需要一句明确提示。 */
@@ -145,11 +201,12 @@ object DebugLogActions {
             }
             Toast.makeText(context, toast, Toast.LENGTH_LONG).show()
         } catch (e: Exception) {
+            LogUtils.e(this, e, "copy log to clipboard failed")
             Toast.makeText(context, R.string.debug_log_copy_fail, Toast.LENGTH_SHORT).show()
         }
     }
 
-    /** 用 ACTION_SEND 选择器分享日志；没有可用应用时给提示而不是崩溃。 */
+    /** 用 ACTION_SEND 选择器分享；没有可用应用时给提示而不是崩溃。 */
     @JvmStatic
     fun shareLog(context: Context, text: String) {
         when (shareRoute(text)) {
@@ -162,46 +219,123 @@ object DebugLogActions {
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
             putExtra(Intent.EXTRA_TEXT, text)
+            putExtra(Intent.EXTRA_TITLE, context.getString(R.string.debug_log_view_title))
         }
-        startShareChooser(context, intent)
+        launchShareChooser(context, intent, text)
     }
 
     private fun shareAsFile(context: Context, text: String) {
         val dir = File(context.cacheDir, CACHE_SUBDIR)
-        if (!dir.isDirectory && !dir.mkdirs()) {
-            Toast.makeText(context, R.string.debug_log_share_fail, Toast.LENGTH_SHORT).show()
+        val file = try {
+            if (!dir.isDirectory && !dir.mkdirs()) {
+                error("cannot create cache dir ${dir.absolutePath}")
+            }
+            // 清理上一次分享遗留的临时日志，避免 cache 里堆积多份大文件。
+            dir.listFiles()?.forEach {
+                if (it.name.startsWith("brailleback-log-")) it.delete()
+            }
+            File(dir, "brailleback-log-${System.currentTimeMillis()}.txt")
+                .also { it.writeText(text, StandardCharsets.UTF_8) }
+        } catch (e: Exception) {
+            recordFailure(
+                context,
+                ExportOutcome(false, ExportFailureCategory.WRITE_FAILED,
+                    "${e.javaClass.simpleName}: ${e.message.orEmpty()}"),
+                text,
+            )
             return
         }
-        // 清理上一次分享遗留的临时日志，避免 cache 里堆积多份大文件。
-        dir.listFiles()?.forEach {
-            if (it.name.startsWith("brailleback-log-")) it.delete()
+        val uri = try {
+            FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file,
+            )
+        } catch (e: Exception) {
+            recordFailure(context, classifyFailure(e), text)
+            return
         }
-        val file = File(dir, "brailleback-log-${System.currentTimeMillis()}.txt")
-        file.writeText(text, StandardCharsets.UTF_8)
-        val uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            file,
-        )
         val clip = ClipData.newUri(context.contentResolver, "brailleback-log", uri)
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
             putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_TITLE, context.getString(R.string.debug_log_view_title))
             // ClipData 带上 URI，选择器预览与接收方都能拿到读授权。
             clipData = clip
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        startShareChooser(context, intent)
+        launchShareChooser(context, intent, text)
     }
 
-    private fun startShareChooser(context: Context, intent: Intent) {
-        try {
-            context.startActivity(
-                Intent.createChooser(intent, context.getString(R.string.debug_log_share))
-            )
+    private fun launchShareChooser(context: Context, intent: Intent, text: String) {
+        // 分享前预判接收方：resolveActivity 为空时直接归为「无可用应用」，
+        // 不等到 startActivity 抛 ActivityNotFoundException。
+        val resolved = try {
+            context.packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
         } catch (e: Exception) {
-            Toast.makeText(context, R.string.debug_log_share_fail, Toast.LENGTH_SHORT).show()
+            null
         }
+        if (resolved == null) {
+            recordFailure(
+                context,
+                ExportOutcome(false, ExportFailureCategory.NO_RECEIVER,
+                    "resolveActivity=null"),
+                text,
+            )
+            return
+        }
+        val chooser = Intent.createChooser(
+            intent,
+            context.getString(R.string.debug_log_share),
+        ).apply {
+            // 兼容将来从服务侧调用；选择器同样带上 URI 读授权。
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        try {
+            context.startActivity(chooser)
+            DebugLogExportState.lastOutcome =
+                ExportOutcome(true, null, "ok")
+        } catch (e: Exception) {
+            recordFailure(context, classifyFailure(e), text)
+        }
+    }
+
+    /**
+     * 失败留痕 + 分类播报 + 剪贴板兜底：异常进文件日志，结果落状态字段，
+     * 再把最近 [COPY_MAX_LINES] 行复制到剪贴板作为不依赖第三 App 的出口。
+     */
+    private fun recordFailure(
+        context: Context,
+        outcome: ExportOutcome,
+        text: String,
+    ) {
+        DebugLogExportState.lastOutcome = outcome
+        LogUtils.e(this, "log export failed [%s] %s", outcome.category, outcome.reason)
+
+        // 自动降级到剪贴板；200 行截断口径与「复制日志」一致。
+        val clip = tailLines(text, COPY_MAX_LINES)
+        copyLogToClipboard(context, clip, true)
+
+        val reasonLabel = context.getString(categoryMessageRes(outcome.category))
+        val announce = context.getString(
+            R.string.debug_log_share_fallback,
+            reasonLabel,
+            COPY_MAX_LINES,
+        )
+        Toast.makeText(context, announce, Toast.LENGTH_LONG).show()
+    }
+
+    /** 日志页可朗读的状态行；无历史结果时返回 null（不占一行）。 */
+    @JvmStatic
+    fun lastStatusText(context: Context): String? {
+        val outcome = DebugLogExportState.lastOutcome ?: return null
+        val detail = if (outcome.success) {
+            context.getString(R.string.debug_log_export_ok)
+        } else {
+            context.getString(categoryMessageRes(outcome.category))
+        }
+        return context.getString(R.string.debug_log_export_status, detail)
     }
 
     private fun utf8Bytes(text: String): Int =
@@ -213,4 +347,13 @@ object DebugLogActions {
         LogFileWriter.clear(context)
         Toast.makeText(context, R.string.debug_log_cleared, Toast.LENGTH_SHORT).show()
     }
+}
+
+/**
+ * 最近一次日志导出结果的内存持有者。日志页（开发者选项）读取后渲染成
+ * 一行可聚焦朗读的状态文本；不扩 AIDL，不持久化。
+ */
+object DebugLogExportState {
+    @Volatile
+    internal var lastOutcome: DebugLogActions.ExportOutcome? = null
 }

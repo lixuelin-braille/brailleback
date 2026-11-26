@@ -320,6 +320,14 @@
     <string name="debug_log_clear_confirm">Clear all debug log files?</string>
     <string name="debug_log_cleared">Debug log cleared</string>
     <string name="debug_log_share_fail">No app available to share the log</string>
+    <string name="debug_log_share_no_receiver">No app available to share the log</string>
+    <string name="debug_log_share_uri_denied">Receiver was denied access to the log file</string>
+    <string name="debug_log_share_bad_argument">Share request was invalid</string>
+    <string name="debug_log_share_write_failed">Could not write the temporary log file</string>
+    <string name="debug_log_share_unknown">Could not share the log</string>
+    <string name="debug_log_share_fallback">Sharing failed (%1$s); the last %2$d lines were copied to the clipboard. Paste them into the chat to send.</string>
+    <string name="debug_log_export_ok">succeeded</string>
+    <string name="debug_log_export_status">Last export: %1$s</string>
 
     <!-- Title for the Key Bindings activity, which shows the user key bindings for their device. [CHAR_LIMIT=35] -->
     <string name="key_bindings_title">BrailleBack Keyboard help</string>
@@ -824,4 +832,35 @@
     <string name="math_not_connected">display not connected</string>
     <string name="math_need_input">Enter a formula first</string>
     <string name="math_error">Conversion failed: %1$s</string>
+
+    <!-- Connection diagnostics page -->
+    <string name="conn_diag_title">Connection diagnostics</string>
+    <string name="conn_diag_section">Real-time connection status</string>
+    <string name="conn_diag_state_title">Connection state</string>
+    <string name="conn_diag_route_title">Current route</string>
+    <string name="conn_diag_route_usb">USB</string>
+    <string name="conn_diag_route_bluetooth">Bluetooth</string>
+    <string name="conn_diag_route_none">Not connected</string>
+    <string name="conn_diag_usb_count_title">USB devices</string>
+    <string name="conn_diag_usb_none_hint">The system detected no USB device. Check the cable, OTG adapter and port contact.</string>
+    <string name="conn_diag_device_title">Device</string>
+    <string name="conn_diag_permission_title">Permission</string>
+    <string name="conn_diag_permission_granted">Allowed</string>
+    <string name="conn_diag_permission_denied">Not allowed</string>
+    <string name="conn_diag_open_title">Open state</string>
+    <string name="conn_diag_open_active">Open</string>
+    <string name="conn_diag_open_inactive">Not open</string>
+    <string name="conn_diag_failure_title">Last connection failure</string>
+    <string name="conn_diag_failure_none">No failure recorded</string>
+    <string name="conn_diag_a11y_title">Accessibility service</string>
+    <string name="conn_diag_a11y_enabled">Enabled</string>
+    <string name="conn_diag_a11y_disabled">Disabled</string>
+    <string name="conn_diag_freeze_hint_title">Background note</string>
+    <string name="conn_diag_freeze_hint">If the app is frozen by the system, set its background management to manual; otherwise connection and refresh stop.</string>
+    <string name="conn_diag_refresh_title">Refresh</string>
+    <string name="conn_diag_refresh_hint">Re-read route, USB devices and permission state</string>
+    <string name="conn_diag_retry_title">Retry connection</string>
+    <string name="conn_diag_retry_hint">Reset reconnect attempts and try connecting the display now</string>
+    <string name="conn_diag_entry_title">Connection diagnostics</string>
+    <string name="conn_diag_entry_summary">Read route, USB enumeration, permission, open state and failure reason</string>
 </resources>

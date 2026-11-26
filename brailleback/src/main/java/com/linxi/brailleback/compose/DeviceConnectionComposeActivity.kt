@@ -12,6 +12,7 @@
 package com.linxi.brailleback.compose
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -60,6 +61,8 @@ internal data class DeviceConnectionLabels(
     val disconnectTitle: String,
     val disconnectHint: String,
     val disconnectIdle: String,
+    val diagTitle: String,
+    val diagSummary: String,
     val transportTitle: String,
     val protocolEntries: List<String>,
     val protocolValues: List<String>,
@@ -194,6 +197,8 @@ class DeviceConnectionComposeActivity : AppCompatActivity(),
                 disconnectTitle = getString(R.string.compose_settings_disconnect_title),
                 disconnectHint = getString(R.string.compose_settings_disconnect_hint),
                 disconnectIdle = getString(R.string.compose_settings_disconnect_idle),
+                diagTitle = getString(R.string.conn_diag_entry_title),
+                diagSummary = getString(R.string.conn_diag_entry_summary),
                 transportTitle = getString(R.string.compose_settings_transport_title),
                 protocolEntries = resources.getStringArray(
                     R.array.pref_connection_protocol_entries
@@ -239,6 +244,11 @@ class DeviceConnectionComposeActivity : AppCompatActivity(),
                 },
                 onStartDiscovery = { startUserDiscovery() },
                 onCandidateClicked = { entry -> onCandidateClicked(entry) },
+                onOpenDiagnostics = {
+                    startActivity(
+                        Intent(this, ConnectionDiagnosticsComposeActivity::class.java)
+                    )
+                },
                 onBack = { finish() },
             )
         }
