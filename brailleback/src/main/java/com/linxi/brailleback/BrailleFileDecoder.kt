@@ -602,11 +602,22 @@ object BrailleFileDecoder {
     }
 
     /**
-     * 取字符对应的点位值（0-63）。非盲文字符返回 0（空方）。
+     * 取字符对应的点位值（0-63，六点位掩码）。非盲文字符返回 0（空方）。
      * 供发送到点显器时构造 patterns 数组。
+     *
+     * 三类输入：
+     * - U+2800..U+28FF：标准 Unicode 盲文，取低 6 位掩码；
+     * - 阳光 PUA（U+E234..U+E273）：码位减 [SUN_MIN]-1 即六点掩码（1..63），
+     *   空方 U+E273 归 0；编码口径与 liblouis 表 zhcn-cbs.ctb 的
+     *   `noback sign` 序列逐条一致（六点制，不含点 7/8）；
+     * - 其余：Braille ASCII 走 NABCC 表，表外返回 0。
      */
     fun toDots(c: Char): Int {
         if (c.code in 0x2800..0x28FF) return c.code - 0x2800
+        if (c.code in SUN_MIN..SUN_MAX) {
+            if (c.code == SUN_BLANK) return 0
+            return c.code - (SUN_MIN - 1)
+        }
         return asciiToDots(c) ?: 0
     }
 
