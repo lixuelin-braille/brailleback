@@ -235,6 +235,8 @@ internal fun BrailleReaderActivity.onTopSegment(index: Int) {
         val seg = mWindowSegments.getOrNull(index) ?: return
         val unit = seg.pageIndex
         if (unit == currentUnit()) return
+        // 只有退回倒数第二页之前才解除到头播报；贴在末尾的两页之间不重复播报。
+        if (unit < totalUnits() - 2) mAnnouncedEnd = false
         mOffset = mPageOffsets.getOrElse(unit) { mOffset }
         Log.i(BrailleReaderActivity.LOG_TAG, "scroll page: unit=$unit offset=$mOffset")
         refreshPageGeometry()
@@ -247,7 +249,15 @@ internal fun BrailleReaderActivity.onTopSegment(index: Int) {
 internal fun BrailleReaderActivity.onNeedMoreSegments() {
         if (mStream.isEmpty()) return
         val next = mWindowEndUnit + 1
-        if (next >= totalUnits()) return
+        if (next >= totalUnits()) {
+            // 已到文末：贴着末尾再往前滑给一次到头播报；同一文末不重复刷。
+            if (!mAnnouncedEnd) {
+                mAnnouncedEnd = true
+                Log.i(BrailleReaderActivity.LOG_TAG, "page overflow: 到文末 unit=${currentUnit()} total=${totalUnits()}")
+                announce(getString(R.string.braille_reader_at_end))
+            }
+            return
+        }
         mWindowSegments = mWindowSegments + buildUnitSegments(next, readingUnit())
         mWindowEndUnit = next
         uiState = uiState.copy(focusSegments = mWindowSegments)
