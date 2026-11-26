@@ -171,7 +171,14 @@ setCellCount (BrailleDisplay *brl, unsigned char count) {
     return 0;
   }
 
-  brl->data->moduleCount = (brl->data->cellCount = count) / MT_MODULE_SIZE;
+  /*
+   * 根治 Metec 40+2（共 42 格）行尾丢字：原来整除 42/8=5 个模块，只发 40 字节，
+   * 末两显示格被挤出发送范围。改为向上取整：42 -> 6 个模块（48 字节），
+   * 覆盖全部显示格。newCells 缓冲区 80 字节、writeModule 数组 10 项，均够用；
+   * 末尾不足一格的字节恒为 0（结构 memset 清零），硬件忽略即可。
+   * 对 22 格设备：22 -> 3 模块，同样修复其末格遗漏。
+   */
+  brl->data->moduleCount = ((brl->data->cellCount = count) + MT_MODULE_SIZE - 1) / MT_MODULE_SIZE;
 
   switch (count) {
     case 22:
