@@ -627,4 +627,48 @@
     <string name="math_not_connected">点显未连接</string>
     <string name="math_need_input">请先输入公式</string>
     <string name="math_error">转换失败：%1$s</string>
+
+    <!-- 侧载自检：按厂商适配的设备与权限引导 -->
+    <string name="selfcheck_title">设备与权限自检</string>
+    <string name="selfcheck_summary">无障碍、USB、自启动、电池与厂商独有步骤</string>
+    <string name="selfcheck_first_launch_hint">可在「设备与权限自检」里检查无障碍、USB、自启动与电池。</string>
+    <string name="selfcheck_summary_title">总览</string>
+    <string name="selfcheck_all_ok">各项检查都正常</string>
+    <string name="selfcheck_summary_pending">有 %1$d 项需要处理</string>
+    <string name="selfcheck_status_ok">正常</string>
+    <string name="selfcheck_status_need_action">需要处理</string>
+    <string name="selfcheck_status_unknown">读不到状态</string>
+    <string name="selfcheck_open_page">打开设置</string>
+    <string name="selfcheck_no_settings_page">这台机器没有提供对应设置页。请手动打开系统设置，找到本应用处理。</string>
+
+    <string name="selfcheck_vendor_xiaomi">小米 HyperOS</string>
+    <string name="selfcheck_vendor_huawei">华为 EMUI / 鸿蒙兼容 Android 侧</string>
+    <string name="selfcheck_vendor_honor">荣耀 MagicOS</string>
+    <string name="selfcheck_vendor_oppo">OPPO / 一加 / realme ColorOS</string>
+    <string name="selfcheck_vendor_vivo">vivo / iQOO OriginOS</string>
+    <string name="selfcheck_vendor_samsung">三星 One UI</string>
+    <string name="selfcheck_vendor_generic">这台设备</string>
+
+    <string name="selfcheck_target_service">无障碍服务</string>
+    <string name="selfcheck_target_usb">USB 权限</string>
+    <string name="selfcheck_target_autostart">自启动与后台</string>
+    <string name="selfcheck_target_battery">电池优化</string>
+    <string name="selfcheck_target_lock">多任务加锁</string>
+    <string name="selfcheck_target_otg">OTG 连接</string>
+
+    <string name="selfcheck_body_service_never_enabled">请开启本应用的盲文服务。在系统无障碍列表里找到本应用并打开开关，做完回来点重新检查。</string>
+    <string name="selfcheck_body_service_restricted">无障碍开关被受限设置挡住。应用信息 → 右上角三点 → 允许受限设置 → 输入锁屏密码，再回来开启；做完回来点重新检查。</string>
+    <string name="selfcheck_body_service_cleaned">重启或清理后台后，系统可能已把它关掉。请重新开启，并在多任务界面给本应用加锁；做完回来点重新检查。</string>
+    <string name="selfcheck_body_service_aapm">疑似被系统高级保护模式拦截，无法自动判定。到系统设置检查「安装未知应用」开关与已验证无障碍工具名单，本项保持读不到。</string>
+    <string name="selfcheck_body_usb">点显器没被识别时，检查连接后的 USB 默认用途，不要选仅充电；做完回来点重新检查。</string>
+    <string name="selfcheck_body_usb_samsung">检查连接后的 USB 默认用途，不要选仅充电，否则枚举不到点显器；做完回来点重新检查。</string>
+    <string name="selfcheck_body_autostart_xiaomi">安全中心 → 应用管理 → 自启动，允许本应用；做完回来点重新检查。</string>
+    <string name="selfcheck_body_autostart_huawei">手机管家 → 应用启动管理，关闭自动管理，打开自启动、关联启动、后台活动；做完回来点重新检查。</string>
+    <string name="selfcheck_body_autostart_honor">设置 → 应用 → 应用启动，关闭自动管理，勾选后台运行并继续；做完回来点重新检查。</string>
+    <string name="selfcheck_body_autostart_oppo">手机管家 → 自启动管理，允许自启动或关联启动（两个任开一个即免速冻），再允许后台运行；做完回来点重新检查。</string>
+    <string name="selfcheck_body_autostart_vivo">i 管家 → 权限管理 → 自启动，允许本应用；做完回来点重新检查。</string>
+    <string name="selfcheck_body_battery">把本应用设为电池优化不限制（加入白名单）；做完回来点重新检查。</string>
+    <string name="selfcheck_body_lock_common">在多任务界面下拉本应用卡片加锁，防止一键清理把它清掉；做完回来点重新检查。</string>
+    <string name="selfcheck_body_lock_vivo">在多任务卡片列表里按住本应用卡片下滑加锁；这一步只能用手势在后台界面完成；做完回来点重新检查。</string>
+    <string name="selfcheck_body_otg_xiaomi">点显器中途断开，可能是 OTG 闲置约十分钟自动关闭：拔插一次重新连接；OTG 开关在设置 → 更多设置 → OTG 里打开。</string>
 </resources>

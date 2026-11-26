@@ -48,6 +48,7 @@ import com.linxi.brailleback.compose.KeysGesturesComposeActivity
 import com.linxi.brailleback.compose.SettingsHomeCatalog
 import com.linxi.brailleback.compose.SoundBehaviorComposeActivity
 import com.linxi.brailleback.compose.StabilityComposeActivity
+import com.linxi.brailleback.onboarding.SelfCheckActivity
 import com.linxi.brailleback.utils.LogFileWriter
 import com.googlecode.eyesfree.utils.LogUtils
 
@@ -59,6 +60,9 @@ class HomeContainerActivity : AppCompatActivity(),
         /** 从兼容别名 SettingsActivity 转回时指定落到设置 Tab。 */
         const val EXTRA_TAB = "com.linxi.brailleback.extra.HOME_TAB"
         const val TAB_SETTINGS = "settings"
+
+        /** 首次启动自检入口提示是否已播报过；只播一句，不自动跳设置页。 */
+        private const val PREF_SELFCHECK_HINT_SHOWN = "selfcheck_first_hint_shown"
     }
 
     /** 点显器客户端：Activity 级持有。主设置页只被动显示状态，不主动播报。 */
@@ -145,6 +149,22 @@ class HomeContainerActivity : AppCompatActivity(),
                 onTabSelected = ::announceTab,
             )
         }
+        maybeAnnounceSelfCheckHint()
+    }
+
+    /**
+     * 首次启动只播报一句自检入口提示。标记落默认偏好，与既有教程标记同一套存储；
+     * 这里只 announce，绝不自动跳系统设置页——对盲人用户突然被跳页是灾难。
+     */
+    private fun maybeAnnounceSelfCheckHint() {
+        val prefs = SettingsStore.get(this)
+        if (prefs.getBoolean(PREF_SELFCHECK_HINT_SHOWN, false)) return
+        prefs.edit().putBoolean(PREF_SELFCHECK_HINT_SHOWN, true).apply()
+        window.decorView.post {
+            window.decorView.announceForAccessibility(
+                getString(R.string.selfcheck_first_launch_hint)
+            )
+        }
     }
 
     override fun onResume() {
@@ -213,6 +233,7 @@ class HomeContainerActivity : AppCompatActivity(),
                     this, R.string.pref_os_license_title, "file:///android_asset/licenses.html"
                 )
             )
+            HomeAction.SelfCheck -> startActivity(Intent(this, SelfCheckActivity::class.java))
         }
     }
 

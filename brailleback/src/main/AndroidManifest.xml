@@ -89,6 +89,11 @@
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
         </intent>
+        <!-- 小米自启动页是隐式 action，Android 11+ 包可见性下需要显式声明才能 resolve；
+             其余厂商自启动页走显式 ComponentName，不进本表。禁止 QUERY_ALL_PACKAGES。 -->
+        <intent>
+            <action android:name="miui.intent.action.OP_AUTO_START" />
+        </intent>
     </queries>
 
     <application
@@ -254,6 +259,13 @@
     <activity
         android:name=".compose.StabilityComposeActivity"
         android:label="@string/pref_category_stability_title"
+        android:theme="@style/BraillebackSettingsTheme"
+        android:exported="false" />
+
+    <!-- 侧载自检：无障碍 / USB / 自启动 / 电池与厂商独有步骤；只在应用内进入。 -->
+    <activity
+        android:name=".onboarding.SelfCheckActivity"
+        android:label="@string/selfcheck_title"
         android:theme="@style/BraillebackSettingsTheme"
         android:exported="false" />
 

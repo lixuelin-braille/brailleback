@@ -196,14 +196,14 @@ class SettingsStructureContractTest {
 
     @Test
     fun everyScreenHasBoundedNodeCount() {
-        // 3 个分组标题 + 启用服务 + 6 个分类入口 + 2 个功能入口 = 12。
+        // 3 个分组标题 + 启用服务 + 6 个分类入口 + 3 个功能入口 = 13。
         val entries = catalogEntries()
         val sections = sectionOrder().size
         assertTrue(
-            "主屏朗读节点不得超过 12 个，超过会让线性浏览重新变拥挤",
-            sections + entries.size <= 12,
+            "主屏朗读节点不得超过 13 个，超过会让线性浏览重新变拥挤",
+            sections + entries.size <= 13,
         )
-        assertEquals("主屏入口应为九行", 9, entries.size)
+        assertEquals("主屏入口应为十行", 10, entries.size)
     }
 
     @Test

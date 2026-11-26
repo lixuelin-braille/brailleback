@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2026 盲文服务 (Braille Service)
  *
- * 主屏底部导航契约：Tab 顺序与首项、阅读 Tab 绑定书架、设置 Tab 保留原九行三组、
+ * 主屏底部导航契约：Tab 顺序与首项、阅读 Tab 绑定书架、设置 Tab 保留十行三组、
  * 新文案双侧齐全且英文不含中文、选中态走 stateDescription、launcher 已迁到容器、
  * 书架导入文案未被改动。
  *
@@ -64,8 +64,8 @@ class HomeNavigationContractTest {
 
         val catalog = compose("SettingsHomeCatalog.kt")
         assertEquals(
-            "设置主屏必须仍是九行",
-            9,
+            "设置主屏必须仍是十行",
+            10,
             Regex("""HomeEntry\(([\s\S]*?)\n {8}\),""").findAll(catalog).count(),
         )
         assertEquals(

@@ -822,4 +822,48 @@
     <string name="math_not_connected">display not connected</string>
     <string name="math_need_input">Enter a formula first</string>
     <string name="math_error">Conversion failed: %1$s</string>
+
+    <!-- 侧载自检：按厂商适配的设备与权限引导 -->
+    <string name="selfcheck_title">Device and permission check</string>
+    <string name="selfcheck_summary">Accessibility, USB, autostart, battery and vendor-specific steps</string>
+    <string name="selfcheck_first_launch_hint">You can open Device and permission check to verify accessibility, USB, autostart and battery.</string>
+    <string name="selfcheck_summary_title">Overall</string>
+    <string name="selfcheck_all_ok">All checks passed</string>
+    <string name="selfcheck_summary_pending">%1$d item(s) need attention</string>
+    <string name="selfcheck_status_ok">OK</string>
+    <string name="selfcheck_status_need_action">Needs action</string>
+    <string name="selfcheck_status_unknown">Unavailable to read</string>
+    <string name="selfcheck_open_page">Open settings</string>
+    <string name="selfcheck_no_settings_page">No settings page available on this device. Find this app in Settings manually.</string>
+
+    <string name="selfcheck_vendor_xiaomi">Xiaomi HyperOS</string>
+    <string name="selfcheck_vendor_huawei">Huawei EMUI / HarmonyOS Android side</string>
+    <string name="selfcheck_vendor_honor">Honor MagicOS</string>
+    <string name="selfcheck_vendor_oppo">OPPO / OnePlus / realme ColorOS</string>
+    <string name="selfcheck_vendor_vivo">vivo / iQOO OriginOS</string>
+    <string name="selfcheck_vendor_samsung">Samsung One UI</string>
+    <string name="selfcheck_vendor_generic">This device</string>
+
+    <string name="selfcheck_target_service">Accessibility service</string>
+    <string name="selfcheck_target_usb">USB permission</string>
+    <string name="selfcheck_target_autostart">Autostart and background</string>
+    <string name="selfcheck_target_battery">Battery optimization</string>
+    <string name="selfcheck_target_lock">Lock in recent tasks</string>
+    <string name="selfcheck_target_otg">OTG connection</string>
+
+    <string name="selfcheck_body_service_never_enabled">Turn on this app\'s braille service. Find this app in system Accessibility and turn the switch on, then come back and tap re-check.</string>
+    <string name="selfcheck_body_service_restricted">The accessibility switch is blocked by restricted settings. App info → top-right three dots → Allow restricted settings → enter the lock-screen password, then reopen Accessibility and turn the service on. Come back and tap re-check.</string>
+    <string name="selfcheck_body_service_cleaned">The system may have turned it off after a restart or cleanup. Turn the service on again, and lock this app card in recent tasks. Come back and tap re-check.</string>
+    <string name="selfcheck_body_service_aapm">Possibly blocked by Advanced Protection; we cannot tell automatically. Check Settings for the install-unknown-apps switch and the verified accessibility tools list. This item stays marked unknown.</string>
+    <string name="selfcheck_body_usb">If the braille display is not recognized, check the default USB mode after connecting; do not choose charging only. Come back and tap re-check when done.</string>
+    <string name="selfcheck_body_usb_samsung">Check the default USB mode after connecting; do not choose charging only, otherwise the display cannot be enumerated. Come back and tap re-check when done.</string>
+    <string name="selfcheck_body_autostart_xiaomi">Security center → App management → Autostart, allow this app. Come back and tap re-check when done.</string>
+    <string name="selfcheck_body_autostart_huawei">Phone Manager → App launch management, turn off automatic management, and enable autostart, associated launch and background activity. Come back and tap re-check when done.</string>
+    <string name="selfcheck_body_autostart_honor">Settings → Apps → App launch, turn off Manage automatically, tick Run in background and continue. Come back and tap re-check when done.</string>
+    <string name="selfcheck_body_autostart_oppo">Phone Manager → Autostart management: allow autostart or associated launch (either one avoids app freezing), then allow background running. Come back and tap re-check when done.</string>
+    <string name="selfcheck_body_autostart_vivo">i Manager → Permission management → Autostart, allow this app. Come back and tap re-check when done.</string>
+    <string name="selfcheck_body_battery">Set this app to unrestricted in battery optimization (add it to the whitelist). Come back and tap re-check when done.</string>
+    <string name="selfcheck_body_lock_common">Pull down this app card in recent tasks to lock it, so cleanup does not kill it. Come back and tap re-check when done.</string>
+    <string name="selfcheck_body_lock_vivo">Swipe down on this app card in the recent tasks list to lock it; this step must be done with a gesture in the background screen. Come back and tap re-check when done.</string>
+    <string name="selfcheck_body_otg_xiaomi">If the display disconnects mid-session, OTG may have turned itself off after about ten minutes idle: unplug and replug to reconnect. The OTG switch is in Settings → More settings → OTG.</string>
 </resources>
