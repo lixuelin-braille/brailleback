@@ -83,6 +83,50 @@ class BrailleFileDecoderTest {
             BrailleFileDecoder.toUnicodeBraille("Z").first().code)
     }
 
+    // ------------------------------------------------------------------
+    // 阳光 PUA（U+E234～U+E273）→ 6 点 bitmask 线性映射
+    // 旧工程公式：空方 E273 → 0；E234～E272 → code - 0xE233（1～63）。
+    // 判定顺序：先拦 E273，再走区间；否则 E273 会被区间算成 64（越界）。
+    // ------------------------------------------------------------------
+
+    @Test
+    fun testSunshinePuaEndpointsToDots() {
+        // 端点：E234 → 点 1（bit0=1）；E272 → 点 1～63 全亮（bit0..bit5=63）；
+        // E273 是空方 → 0（不能让区间公式算出 64）。
+        assertEquals("PUA 起点 U+E234 → bitmask 1", 1,
+            BrailleFileDecoder.toDots('\uE234'))
+        assertEquals("PUA 末个非空方 U+E272 → bitmask 63", 63,
+            BrailleFileDecoder.toDots('\uE272'))
+        assertEquals("PUA 空方 U+E273 → bitmask 0", 0,
+            BrailleFileDecoder.toDots('\uE273'))
+    }
+
+    @Test
+    fun testSunshinePuaMiddleToDots() {
+        // 区间内三个中间值：线性 code - 0xE233
+        assertEquals("U+E23A → bitmask 7", 7,
+            BrailleFileDecoder.toDots('\uE23A'))
+        assertEquals("U+E250 → bitmask 29", 29,
+            BrailleFileDecoder.toDots('\uE250'))
+        assertEquals("U+E268 → bitmask 53", 53,
+            BrailleFileDecoder.toDots('\uE268'))
+    }
+
+    @Test
+    fun testNonPuaStillAsciiFallback() {
+        // 非 PUA 字符仍走原 NABCC ASCII 分支，不得被 PUA 区间吞掉。
+        assertEquals("'A' 走 NABCC → 点 1(bitmask 1)", 1,
+            BrailleFileDecoder.toDots('A'))
+        assertEquals("空格 → 空方 0", 0,
+            BrailleFileDecoder.toDots(' '))
+        // 中文不在 ASCII 表，原逻辑返回 0（空方）。
+        assertEquals("非 ASCII 中文 → 0", 0,
+            BrailleFileDecoder.toDots('盲'))
+        // 标准 Unicode 盲文分支不变：U+2801 → bitmask 1。
+        assertEquals("U+2801 → bitmask 1", 1,
+            BrailleFileDecoder.toDots('\u2801'))
+    }
+
     @Test
     fun testUnicodeBraillePassThrough() {
         val braille = "\u2801\u2803\u2809"

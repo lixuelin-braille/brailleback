@@ -1,1 +1,6 @@
 **/export_baseline/**/*.txt -text
+
+# brltty 键位表：与 res/raw/keytables.zip 内条目逐字节比对；禁止 autocrlf 在
+# 检出时把 LF 转成 CRLF，按二进制原样落盘。按扩展名收 .ktb（含 service 表目录
+# 与 键位表试验/ 对照样本两处），.kti 不在本规则范围。
+*.ktb -text

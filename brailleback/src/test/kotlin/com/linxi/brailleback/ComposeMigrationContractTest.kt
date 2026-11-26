@@ -142,12 +142,13 @@ class ComposeMigrationContractTest {
             .map { it.groupValues[1] }
             .toSet()
         assertEquals(
-            "试点屏的 item key 集合必须正好是「两个原设置键 + 断开 + 连接方式」",
+            "试点屏的 item key 集合必须正好是「两个原设置键 + 断开 + 连接方式 + 诊断入口」",
             setOf(
                 "KEY_CONNECTION_STATUS",
                 "KEY_AUTO_CONNECT",
                 "KEY_DISCONNECT",
-                "KEY_TRANSPORT"
+                "KEY_TRANSPORT",
+                "KEY_CONNECTION_DIAGNOSTICS"
             ),
             usedKeys
         )

@@ -49,6 +49,7 @@ import com.googlecode.eyesfree.braille.service.R
 import com.googlecode.eyesfree.braille.utils.ZipResourceExtractor
 import com.googlecode.eyesfree.utils.LogUtils
 import com.googlecode.eyesfree.utils.LogFileWriter
+import com.googlecode.eyesfree.utils.TestBuild
 import java.io.File
 import java.lang.ref.WeakReference
 import java.util.concurrent.atomic.AtomicLong
@@ -134,9 +135,11 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         const val FILES_EXTRACTED = 1
         /**
          * 刷新链路心跳。冻结问题时只看三件事：上层有没有继续送点阵、
-         * 服务有没有收到、最终走了哪条连接路径。每 5 秒一行，量很小。
+         * 服务有没有收到、最终走了哪条连接路径。30 秒一轮，仅在数值变化时
+         * 输出，空闲时最多 1 条/分钟，避免 256 KB 日志窗口被空转挤满。
          */
-        private const val DOTS_TELEMETRY_INTERVAL = 5000L
+        private const val DOTS_TELEMETRY_INTERVAL = 30_000L
+        private const val DOTS_IDLE_BEAT_MS = 60_000L
         private const val ROUTE_NONE = 0
         private const val ROUTE_USB = 1
         private const val ROUTE_HID = 2
@@ -218,19 +221,15 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
                         cancelAutoReconnect()
                     }
                 } else if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(action)) {
-                    // Wired displays only: a USB stick or keyboard must not
-                    // disturb a working Bluetooth connection. Auto counts here
-                    // because plugging the display in should switch it over.
-                    if (HidTransportRouting.shouldReactToUsbAttach(
-                            getConnectionProtocol(),
-                            ConnectionTransportPolicy.current(this@DisplayService))
-                            && !isConnectionActive()) {
-                        // 重新插入属于新的枚举，可以再问一次 USB 授权。
-                        UsbDisplayConnection.allowPermissionPromptAgain()
-                        Timber.i("USB device attached; trying wired connection");
-                        autoConnectBraille(userInitiated = true)
-                    }
+                    // 插线即时重算路由：AUTO 过幂等判据后再切，手动档沿用既有口径。
+                    handleUsbAttached()
                 } else if (UsbManager.ACTION_USB_DEVICE_DETACHED.equals(action)) {
+                    ConnectionDiagnostics.emit(
+                        this@DisplayService, this@DisplayService,
+                        "usb-detached", "na", "USB_DEVICE_DETACHED",
+                    )
+                    // 拔线清掉切换幂等状态：重新插上属于一次新的连接周期。
+                    mAutoSwitchState = AutoSwitchGuard.State.IDLE
                     if (mUsbConnection != null || mHidConnectionIsUsb) {
                         Timber.i("USB device detached; disconnecting display")
                         disconnectBraille()
@@ -297,6 +296,8 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
     @Volatile
     private var mDotsLastRoute = ROUTE_NONE
     private var mDotsReportedCalls: Long = 0
+    private var mDotsLastKey = ""
+    private var mDotsLastBeatUptime = 0L
     private val mDotsTelemetry = object : Runnable {
         override fun run() {
             val calls = mDotsCalls.get()
@@ -304,7 +305,20 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
                     || mHidConnection != null
                     || mWujieConnection != null
                     || mReadThread != null
-            if (hasConnection || calls > mDotsReportedCalls) {
+            val key = listOf(
+                hasConnection,
+                routeName(mDotsLastRoute),
+                mDotsLastDigest,
+                mDotsLastCells,
+                mUsbConnection != null,
+                mHidConnection != null,
+                mWujieConnection != null,
+                mReadThread != null,
+            ).joinToString("|")
+            val now = SystemClock.uptimeMillis()
+            val changed = calls > mDotsReportedCalls || key != mDotsLastKey
+            val idleBeat = now - mDotsLastBeatUptime >= DOTS_IDLE_BEAT_MS
+            if (hasConnection || changed || idleBeat) {
                 LogUtils.i(this@DisplayService,
                         "dots stats: calls=%d (+%d) route=%s digest=%08X "
                         + "cells=%d usb=%s usbActive=%s hid=%s wujie=%s read=%s",
@@ -314,6 +328,8 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
                         mUsbConnection != null, isUsbActive(),
                         mHidConnection != null, mWujieConnection != null,
                         mReadThread != null)
+                mDotsLastKey = key
+                mDotsLastBeatUptime = now
             }
             mDotsReportedCalls = calls
             mHandler.postDelayed(this, DOTS_TELEMETRY_INTERVAL)
@@ -361,6 +377,10 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
      * scanning.
      */
     var mDiscoveryAllowedForCycle = false
+    /** AUTO 档切换的幂等状态：同设备 60 秒冷却、重复 attach 不重复切。 */
+    @Volatile
+    internal var mAutoSwitchState: AutoSwitchGuard.State = AutoSwitchGuard.State.IDLE
+
     /** True while this service owns the current Bluetooth discovery session. */
     internal var mDiscoverySessionActive = false
     /** True when this service, rather than another app, started discovery. */
@@ -484,13 +504,19 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         if (BuildConfig.DIAG_LOG_LEVEL > 0) {
             return BuildConfig.DIAG_LOG_LEVEL
         }
+        // 测试包 debug 口径默认 VERBOSE；其余 debug 包地板 INFO；正式包 INFO。
+        val floor = when {
+            BuildConfig.DEBUG && TestBuild.VERBOSE_BY_DEFAULT -> Log.VERBOSE
+            BuildConfig.DEBUG -> Log.INFO
+            else -> Log.INFO
+        }
         val raw: String? = SettingsStore.get(this)
                 .getString("log_level", null)
         if (raw != null) {
             try {
                 val stored = Integer.parseInt(raw)
                 return if (BuildConfig.DEBUG) {
-                    Math.min(stored, Log.INFO)
+                    Math.min(stored, floor)
                 } else {
                     stored
                 }
@@ -498,7 +524,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
                 // Fall through to the build default.
             }
         }
-        return Log.INFO
+        return floor
     }
 
     override fun onCreate() {
@@ -588,6 +614,13 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         // 补上 startForeground；其它启动来源不需要前台状态。
         if (intent?.action == ACTION_DISPLAY_KEEP_ALIVE) {
             postDisplayKeepAliveNotification()
+        }
+        // 清单接收器在进程已死时收到 USB 插拔广播，会以带 WAKE_REASON extra 的
+        // intent 拉起本服务；服务创建后补一次显式重扫，不等下一次定时回调。
+        val wakeReason = intent?.getStringExtra(EXTRA_USB_WAKE_REASON)
+        if (wakeReason != null) {
+            Timber.i("Woken from USB broadcast: %s", wakeReason)
+            mHandler.connectBrailleExplicit()
         }
         return START_NOT_STICKY
     }
@@ -683,6 +716,12 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         mDotsLastCells = patterns.size
         mDotsLastDigest = patterns.contentHashCode()
         mDotsLastRoute = route
+        // 诊断页路由口径：USB 串口算 usb，其余出点阵链路算 bluetooth，无链路算 none。
+        ConnectionDiagnosticsState.route = when (route) {
+            ROUTE_USB -> ConnectionDiagnosticsState.ROUTE_USB
+            ROUTE_NONE -> ConnectionDiagnosticsState.ROUTE_NONE
+            else -> ConnectionDiagnosticsState.ROUTE_BLUETOOTH
+        }
     }
 
     /** True when the wired USB path still owns a live driver thread. */
@@ -823,11 +862,20 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         // RFCOMM/HID connections are faster and more reliable when Bluetooth
         // inquiry is not competing with them.
         stopDiscoverySession("connecting display")
+        // 新一轮连接尝试：清掉上一轮留下的失败原因链，避免旧环混进本轮快照。
+        ConnectionDiagnosticsState.resetFailureChain()
+        // 重连路径上同样开一轮逐秒枚举窗口，区分物理掉线与未枚举到。
+        UsbEnumerationProbe.startWindow(this, "retry")
         val protocol = getConnectionProtocol()
-        val route = HidTransportRouting.resolve(protocol,
-                ConnectionTransportPolicy.current(this), isUsbBrailleDeviceAttached())
-        Timber.i("Starting connection: protocol=%s route=%s", protocol, route)
-        when (route) {
+        val decided = AutoConnectionRouter.route(buildAutoRouteInput())
+        decided.degradedReason?.let { Timber.i("AUTO degrade: %s", it) }
+        if (decided.keepCurrentAndRescan) {
+            mHandler.setConnectionProgress(
+                getString(R.string.connprog_auto_waiting_display))
+        }
+        Timber.i("Starting connection: protocol=%s route=%s announce=%s",
+                protocol, decided.route, decided.announce)
+        when (decided.route) {
             LinkRoute.USB_SERIAL -> connectUsbUnified()
             LinkRoute.USB_HID -> connectUsbHid()
             LinkRoute.NONE -> reportSystemOnlyTransport()
@@ -852,10 +900,16 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM
                     && !HidBridge.isAvailable()) {
-                // The controller is briefly null while the accessibility service
-                // rebinds. Wait instead of falling back to RFCOMM prematurely.
-                waitForHidController()
-                return
+                if (isAutoProtocol()) {
+                    // AUTO：控制器不可用不等 HID 复活，直接落经典串口（RFCOMM），
+                    // 不卡在等待回调上；降级原因进日志供以后真机复验。
+                    Timber.i("AUTO: HID controller unavailable; skipping wait, falling to serial")
+                } else {
+                    // The controller is briefly null while the accessibility service
+                    // rebinds. Wait instead of falling back to RFCOMM prematurely.
+                    waitForHidController()
+                    return
+                }
             }
         }
         if (stopBeforeSerialFallback()) {
@@ -993,6 +1047,12 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         if (Build.VERSION.SDK_INT
                 < Build.VERSION_CODES.VANILLA_ICE_CREAM
                 || !HidBridge.isAvailable()) {
+            if (isAutoProtocol()) {
+                // AUTO：USB HID 控制器不可用不判失败，显式降级到 USB 串口。
+                Timber.i("AUTO: USB HID unavailable; degrading to usb_serial")
+                connectUsbUnified()
+                return
+            }
             mHandler.setConnectionProgress(
                     getString(R.string.connprog_usb_hid_unavailable))
             scheduleAutoReconnectIfNeeded()

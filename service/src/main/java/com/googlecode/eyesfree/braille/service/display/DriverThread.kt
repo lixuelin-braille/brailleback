@@ -54,8 +54,12 @@ class DriverThread(
     private val COMMAND_CODE_MASK = 0xffff
     private val COMMAND_ARGUMENT_MASK = 0x7fff0000
     private val COMMAND_ARGUMENT_SHIFT = 16
-    /** Low-frequency refresh telemetry: one compact line every 5 seconds. */
-    private val TELEMETRY_INTERVAL_MILLIS = 5000L
+    /**
+     * Low-frequency refresh telemetry: 30s 一轮，仅在数值变化时打一行；
+     * 空闲时最多一条心跳 / 分钟。256KB 日志窗口按此口径至少覆盖两小时。
+     */
+    private val TELEMETRY_INTERVAL_MILLIS = 30_000L
+    private val TELEMETRY_IDLE_BEAT_MS = 60_000L
     private val STALL_WARN_MILLIS = 2000L
 
     /**
@@ -88,6 +92,9 @@ class DriverThread(
     @Volatile private var statReads = 0
     @Volatile private var statLastReadMs = 0L
     @Volatile private var lastExecutedAt = SystemClock.uptimeMillis()
+    /** 上一轮遥测指纹与最近一次主动上报时刻，用于变化门控与空闲心跳。 */
+    @Volatile private var statLastKey = ""
+    @Volatile private var statLastBeatUptime = 0L
     /**
      * 独立守护线程上报：handler 线程被长阻塞时仍会输出，req 涨而 exec 不涨
      * 即说明写消息根本没被执行。
@@ -101,12 +108,26 @@ class DriverThread(
                 break
             }
             val requested = statRequested.get()
-            LogUtils.i(this@DriverThread,
-                "driver stats: req=%d exec=%d empty=%d ok=%d fail=%d " +
-                    "lastWrite=%dms cells=%d digest=%08X polls=%d lastPoll=%dms",
-                requested, statExecuted, statEmptyDrops, statNativeOk,
-                statNativeFail, statLastElapsedMs, statLastCells,
-                statLastDigest, statReads, statLastReadMs)
+            val now = SystemClock.uptimeMillis()
+            // 指纹覆盖内容(digest/cells)、成功失败(ok/fail)、最近写入耗时与输入轮询；
+            // 任一变化才打一行，避免空闲时空转刷满 256KB 窗口。
+            val telemetryKey = listOf(
+                statExecuted, statEmptyDrops, statNativeOk, statNativeFail,
+                statLastElapsedMs, statLastCells, statLastDigest,
+                statReads, statLastReadMs,
+            ).joinToString("|")
+            val changed = telemetryKey != statLastKey
+            val idleBeat = now - statLastBeatUptime >= TELEMETRY_IDLE_BEAT_MS
+            if (changed || idleBeat) {
+                LogUtils.i(this@DriverThread,
+                    "driver stats: req=%d exec=%d empty=%d ok=%d fail=%d " +
+                        "lastWrite=%dms cells=%d digest=%08X polls=%d lastPoll=%dms",
+                    requested, statExecuted, statEmptyDrops, statNativeOk,
+                    statNativeFail, statLastElapsedMs, statLastCells,
+                    statLastDigest, statReads, statLastReadMs)
+                statLastKey = telemetryKey
+                statLastBeatUptime = now
+            }
             val idle = SystemClock.uptimeMillis() - lastExecutedAt
             val pending = requested - statExecuted
             if (pending > 0 && idle > STALL_WARN_MILLIS) {

@@ -11,6 +11,7 @@ import android.util.Log
 import com.linxi.brailleback.BuildConfig
 import com.linxi.brailleback.R
 import com.googlecode.eyesfree.utils.LogUtils
+import com.googlecode.eyesfree.utils.TestBuild
 
 /**
  * brailleback盲文-specific preference utilities (Kotlin 版).
@@ -31,8 +32,15 @@ object PreferenceUtils {
     private const val RELEASE_LOG_LEVEL = Log.INFO
 
     /**
+     * Debug 构建的日志地板：本测试包默认 VERBOSE（文件日志写 verbose），
+     * 其余 debug 包维持 INFO。设置项仍保留可改，旧偏好比地板更静时归一到地板。
+     */
+    private val debugFloor: Int
+        get() = if (TestBuild.VERBOSE_BY_DEFAULT) Log.VERBOSE else DEBUG_LOG_LEVEL
+
+    /**
      * Initializes the [LogUtils] log level from the shared preferences.
-     * In debug builds INFO is a floor: testers can raise verbosity, but an
+     * In debug builds the floor applies: testers can raise verbosity, but an
      * older build may have persisted a quieter level, so normalize it here
      * to keep the settings screen and the effective level in agreement.
      */
@@ -46,8 +54,8 @@ object PreferenceUtils {
             val prefs = SettingsStore.get(context)
             val key = context.getString(R.string.pref_log_level_key)
             val stored = prefs.getString(key, null)?.toIntOrNull()
-            if (stored != null && stored > DEBUG_LOG_LEVEL) {
-                prefs.edit().putString(key, DEBUG_LOG_LEVEL.toString()).apply()
+            if (stored != null && stored > debugFloor) {
+                prefs.edit().putString(key, debugFloor.toString()).apply()
             }
         }
         val logLevel = getLogLevel(context)
@@ -67,15 +75,15 @@ object PreferenceUtils {
             return false
         }
         // Keep the live level consistent with getLogLevel(): in debug builds a
-        // tester may raise verbosity above INFO, but never drop below it.
+        // tester may raise verbosity above the floor, but never drop below it.
         LogUtils.setLogLevel(
-            if (BuildConfig.DEBUG) minOf(logLevel, DEBUG_LOG_LEVEL) else logLevel)
+            if (BuildConfig.DEBUG) minOf(logLevel, debugFloor) else logLevel)
         return true
     }
 
     /**
      * Returns the appropriate log level to use, given the build type and user
-     * preferences. In debug builds, this is forced to be "INFO".
+     * preferences. In debug builds, this is forced to be at the floor.
      */
     @JvmStatic
     fun getLogLevel(context: Context): Int {
@@ -91,10 +99,10 @@ object PreferenceUtils {
         val stored = prefs.getString(
             context.getString(R.string.pref_log_level_key), null)
         stored?.toIntOrNull()?.let {
-            // Debug builds are the test builds: never quieter than INFO, or a
-            // connection report loses the lifecycle lines that make it useful.
-            return if (BuildConfig.DEBUG) minOf(it, DEBUG_LOG_LEVEL) else it
+            // Debug builds are the test builds: never quieter than the floor,
+            // or a connection report loses the lifecycle lines that make it useful.
+            return if (BuildConfig.DEBUG) minOf(it, debugFloor) else it
         }
-        return if (BuildConfig.DEBUG) DEBUG_LOG_LEVEL else RELEASE_LOG_LEVEL
+        return if (BuildConfig.DEBUG) debugFloor else RELEASE_LOG_LEVEL
     }
 }

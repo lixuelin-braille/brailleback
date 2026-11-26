@@ -246,8 +246,7 @@ fun SettingsActionRow(
 }
 
 @Composable
-private fun SettingsTextRow(
-    title: String,
+private fun SettingsTextRow(    title: String,
     summary: String,
     clickLabel: String,
     onClick: () -> Unit,
@@ -263,6 +262,29 @@ private fun SettingsTextRow(
                 onClickLabel = clickLabel,
                 onClick = onClick,
             )
+            .semantics(mergeDescendants = true) {}
+            .padding(horizontal = ScreenPadding, vertical = 12.dp),
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(text = title, style = MaterialTheme.typography.bodyLarge)
+        Text(
+            text = summary,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * 只读信息行：诊断页用。不可点击，整行合并成一次朗读，标题与取值各占一个
+ * Text 节点，TalkBack 逐行可聚焦；取值不写死占位符，无值时给可读的中文短句。
+ */
+@Composable
+fun SettingsInfoRow(title: String, summary: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = MinRowHeight)
             .semantics(mergeDescendants = true) {}
             .padding(horizontal = ScreenPadding, vertical = 12.dp),
         verticalArrangement = Arrangement.Center,

@@ -23,7 +23,8 @@ internal enum class HomeTab(@StringRes val titleRes: Int) {
     SETTINGS(R.string.home_tab_settings_title);
 
     companion object {
-        val DEFAULT = READING
+        /** 初始选中项：进入主屏默认落到设置档（用户 2026-11-26 要求）。 */
+        val DEFAULT = SETTINGS
 
         /** 按序号还原 Tab；越界回落到默认 Tab（进程恢复等场景兜底）。 */
         fun fromOrdinal(ordinal: Int): HomeTab =

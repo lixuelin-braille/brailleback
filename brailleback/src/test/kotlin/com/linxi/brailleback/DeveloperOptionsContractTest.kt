@@ -318,9 +318,9 @@ class DeveloperOptionsContractTest {
         ).forEach { fragment ->
             assertTrue("日志查看对话框接线缺失：$fragment", screen.contains(fragment))
         }
-        // 导出走的是全量日志，不是被裁短的预览。
+        // 导出走的是日志全文（再按 256 KB 尾部截尾），不是被裁短的预览。
         val helper = text(base + "src/main/java/com/linxi/brailleback/utils/DebugLogActions.kt")
-        assertTrue(helper.contains("val log = readAll(context)"))
+        assertTrue(helper.contains("prepareExport(context)"))
         assertTrue(helper.contains("if (log.isBlank())"))
     }
 
@@ -453,8 +453,8 @@ class DeveloperOptionsContractTest {
         assertTrue(manifest.contains("""android:label="@string/pref_category_developer_title""""))
         assertTrue(manifest.contains("""android:theme="@style/BraillebackSettingsTheme""""))
         assertEquals(
-            "Manifest 中应有六个 Compose 设置子屏",
-            6,
+            "Manifest 中应有七个 Compose 设置子屏",
+            7,
             Regex("""android:name="\.compose\.\w+ComposeActivity"""").findAll(manifest).count()
         )
     }

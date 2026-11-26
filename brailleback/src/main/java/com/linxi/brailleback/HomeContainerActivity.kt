@@ -245,7 +245,8 @@ class HomeContainerActivity : AppCompatActivity(),
     private fun migrateConnectionProtocolPreference() {
         val prefs = SettingsStore.get(this)
         val key = getString(R.string.pref_connection_protocol_key)
-        val value = prefs.getString(key, null)
+        // 缺键是新用户：不落库、不归一化，读路径按 AUTO 默认；已有值才做旧口径迁移。
+        val value = prefs.getString(key, null) ?: return
         val normalized = ConnectionProtocolPolicy.normalize(value)
         if (value != normalized) {
             prefs.edit().putString(key, normalized).apply()

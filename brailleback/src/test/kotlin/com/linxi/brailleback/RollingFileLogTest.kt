@@ -30,6 +30,172 @@ class RollingFileLogTest {
     private val infoPriority = 4
 
     @Test
+    fun headerIsWrittenOnNewLogFile() {
+        val directory = Files.createTempDirectory("rolling-header").toFile()
+        try {
+            val log = RollingFileLog(
+                directory,
+                RollingFileLog.MAIN_LOG_NAME,
+                header = "TEST-BUILD 2026-11-26 test/build-all-20261126",
+            )
+            assertTrue("open() 应能创建日志文件", log.open())
+            log.onLog(infoPriority, "Test", "first event")
+            val first = File(directory, RollingFileLog.MAIN_LOG_NAME)
+                .readLines().first()
+            assertEquals(
+                "首行应为测试包构建标记",
+                "TEST-BUILD 2026-11-26 test/build-all-20261126",
+                first,
+            )
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun headerIsWrittenToNewCurrentFileAfterRotation() {
+        val directory = Files.createTempDirectory("rolling-rotate-header").toFile()
+        try {
+            val marker = "TEST-BUILD 2026-11-26 test/build-all-20261126"
+            val log = RollingFileLog(
+                directory,
+                RollingFileLog.MAIN_LOG_NAME,
+                /* maxBytes= */ 128L,
+                /* keepFiles= */ 1,
+                header = marker,
+            )
+            assertTrue("open() 应能创建日志文件", log.open())
+
+            repeat(8) { index ->
+                log.onLog(infoPriority, "Test", "rotation-line-$index")
+            }
+
+            val main = File(directory, RollingFileLog.MAIN_LOG_NAME)
+            assertEquals(
+                "轮转后的新主文件首行应为构建标记",
+                marker,
+                main.readLines().first(),
+            )
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun verboseOnlyAllowedTagsArePersisted() {
+        val directory = Files.createTempDirectory("rolling-tag-filter").toFile()
+        try {
+            val log = RollingFileLog(directory, RollingFileLog.MAIN_LOG_NAME)
+            assertTrue("open() 应能创建日志文件", log.open())
+
+            // android.util.Log.VERBOSE=2、DEBUG=3。
+            log.onLog(2, "NodeBrailler", "non-allowed verbose dropped")
+            log.onLog(2, "DisplayService", "allowed verbose kept")
+            log.onLog(3, "NodeBrailler", "non-allowed debug kept")
+
+            val text = File(directory, RollingFileLog.MAIN_LOG_NAME).readText()
+            assertFalse("非白名单 TAG 的 VERBOSE 不落盘", text.contains("non-allowed verbose"))
+            assertTrue("白名单 TAG 的 VERBOSE 落盘", text.contains("allowed verbose"))
+            assertTrue("非白名单 TAG 的 DEBUG 照常落盘", text.contains("non-allowed debug"))
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun readAllReadsEveryRotationUpToKeepFiles() {
+        val directory = Files.createTempDirectory("rolling-six-shards").toFile()
+        try {
+            val log = RollingFileLog(
+                directory,
+                RollingFileLog.MAIN_LOG_NAME,
+                /* maxBytes= */ 128L,
+                /* keepFiles= */ 6,
+            )
+            assertTrue("open() 应能创建日志文件", log.open())
+
+            repeat(60) { index ->
+                log.onLog(infoPriority, "Test", "line-$index")
+            }
+
+            for (i in 1..6) {
+                assertTrue(
+                    "应保留 6 份轮转文件 .$i",
+                    File(directory, "${RollingFileLog.MAIN_LOG_NAME}.$i").isFile,
+                )
+            }
+            val all = log.readAll()
+            assertTrue("readAll 应覆盖主文件与 6 份保留分片", all.length > 200)
+            assertTrue("readAll 应含轮转窗口内的较新行", all.contains("line-5"))
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun readAllReturnsEmptyForFreshDirectory() {
+        val directory = Files.createTempDirectory("rolling-empty").toFile()
+        try {
+            val log = RollingFileLog(directory, RollingFileLog.MAIN_LOG_NAME)
+            assertEquals("空目录读回应为空串", "", log.readAll())
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun accessibilityEventsAreNotPersisted() {
+        val directory = Files.createTempDirectory("rolling-events").toFile()
+        try {
+            val log = RollingFileLog(directory, RollingFileLog.MAIN_LOG_NAME)
+            assertTrue("open() 应能创建日志文件", log.open())
+            log.onLog(3, "BrailleBackService", "Event: TYPE_VIEW_HOVER_ENTER")
+            log.onLog(2, "BrailleBackService", "Event detail: ContentDescription=微信聊天正文")
+            log.onLog(2, "BrailleBackService", "Node detail: source=android.widget.TextView")
+            val text = File(directory, RollingFileLog.MAIN_LOG_NAME).readText()
+            assertFalse("事件摘要不落盘", text.contains("Event: TYPE_VIEW_HOVER_ENTER"))
+            assertFalse("事件详情（含屏幕正文）不落盘", text.contains("微信聊天正文"))
+            assertFalse("节点快照不落盘", text.contains("Node detail:"))
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun nodeInfoUtilsLinesAreNotPersisted() {
+        val directory = Files.createTempDirectory("rolling-node-utils").toFile()
+        try {
+            val log = RollingFileLog(directory, RollingFileLog.MAIN_LOG_NAME)
+            assertTrue("open() 应能创建日志文件", log.open())
+            log.onLog(2, "AccessibilityNodeInfoUtils", "refreshNode focused=...")
+            log.onLog(3, "AccessibilityNodeInfoUtils", "recycleNodes")
+            val text = File(directory, RollingFileLog.MAIN_LOG_NAME).readText()
+            assertFalse("节点工具链行不落盘", text.contains("refreshNode"))
+            assertFalse("节点工具链 DEBUG 行不落盘", text.contains("recycleNodes"))
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun brailleBackServiceKeepsOnlyLifecycleConnectionLines() {
+        val directory = Files.createTempDirectory("rolling-bbs-lifecycle").toFile()
+        try {
+            val log = RollingFileLog(directory, RollingFileLog.MAIN_LOG_NAME)
+            assertTrue("open() 应能创建日志文件", log.open())
+            log.onLog(3, "BrailleBackService", "onKeyEvent 204 action=0")
+            log.onLog(4, "BrailleBackService", "Starting connection route=usb")
+            log.onLog(4, "BrailleBackService", "display connected")
+            val text = File(directory, RollingFileLog.MAIN_LOG_NAME).readText()
+            assertFalse("非连接生命周期行不落盘", text.contains("onKeyEvent"))
+            assertTrue("连接起始行落盘", text.contains("Starting connection"))
+            assertTrue("已连接行落盘", text.contains("display connected"))
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
     fun clearRemovesCurrentFileAndRotations() {
         val directory = Files.createTempDirectory("rolling-file-log").toFile()
         try {

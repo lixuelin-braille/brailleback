@@ -32,6 +32,9 @@ object DeviceConnectionLogic {
     /** 「连接方式」行的稳定列表 key；真实偏好键见 [ConnectionTransportPolicy.PREFERENCE_KEY]。 */
     const val KEY_TRANSPORT = "ui_transport"
 
+    /** 「连接诊断」入口行的稳定列表 key；纯界面键，不写偏好文件。 */
+    const val KEY_CONNECTION_DIAGNOSTICS = "ui_connection_diagnostics"
+
     const val STATE_CONNECTED = 1
     const val STATE_NOT_CONNECTED = 0
 

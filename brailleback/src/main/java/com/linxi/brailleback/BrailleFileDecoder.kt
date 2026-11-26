@@ -607,17 +607,19 @@ object BrailleFileDecoder {
      *
      * 三类输入：
      * - U+2800..U+28FF：标准 Unicode 盲文，取低 6 位掩码；
-     * - 阳光 PUA（U+E234..U+E273）：码位减 [SUN_MIN]-1 即六点掩码（1..63），
-     *   空方 U+E273 归 0；编码口径与 liblouis 表 zhcn-cbs.ctb 的
-     *   `noback sign` 序列逐条一致（六点制，不含点 7/8）；
+     * - 阳光 PUA（U+E234..U+E273）：码位减 [SUN_MIN]-1（即 0xE233）即六点掩码
+     *   1..63；空方 U+E273 归 0。编码口径与 liblouis 表 zhcn-cbs.ctb 的
+     *   `noback sign` 序列逐条一致（六点制，不含点 7/8），也是
+     *   BdoCArchiveParser.valuesToBraille 用的同一套公式。
+     *   注意判定顺序：必须先判 [SUN_BLANK]（E273）返回 0，再走区间；
+     *   区间包含 E273，若把它放进区间会算出 0xE273 - 0xE233 = 64，
+     *   超出 0～63 点位范围，是错值。
      * - 其余：Braille ASCII 走 NABCC 表，表外返回 0。
      */
     fun toDots(c: Char): Int {
         if (c.code in 0x2800..0x28FF) return c.code - 0x2800
-        if (c.code in SUN_MIN..SUN_MAX) {
-            if (c.code == SUN_BLANK) return 0
-            return c.code - (SUN_MIN - 1)
-        }
+        if (c.code == SUN_BLANK) return 0
+        if (c.code in SUN_MIN..SUN_MAX) return c.code - (SUN_MIN - 1)
         return asciiToDots(c) ?: 0
     }
 

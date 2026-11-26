@@ -54,8 +54,24 @@ class UsbDisplayConnection : DriverThread.OnInitListener {
 
     companion object {
         private const val LOG_TAG = "UsbDisplayConnection"
-        private const val ACTION_USB_PERMISSION =
+
+        /**
+         * 应用内权限结果广播。系统把 EXTRA_DEVICE / EXTRA_PERMISSION_GRANTED
+         * 填进这个 PendingIntent；服务端接收器与权限代理 Activity 都监听它。
+         */
+        @JvmField
+        val ACTION_USB_PERMISSION =
             "com.linxi.brailleback.USB_PERMISSION"
+
+        /**
+         * 由可见代理 Activity 承载的权限请求动作。后台 Service 直接调
+         * UsbManager.requestPermission 在 Android 12+（尤其 MIUI / HyperOS）
+         * 宿主无可见窗口时会被系统自行关掉对话框；因此请求动作交给 brailleback
+         * 模块的透明代理 Activity 持有，服务端只排队 + 轮询兜底。
+         */
+        @JvmField
+        val ACTION_USB_PERMISSION_PROXY =
+            "com.linxi.brailleback.action.USB_PERMISSION_PROXY"
 
         /** brltty has no Java-side input callback on USB, so poll the driver. */
         private const val INPUT_POLL_MILLIS = 50L
@@ -221,6 +237,11 @@ class UsbDisplayConnection : DriverThread.OnInitListener {
                     + " name=" + device.getDeviceName())
         }
 
+        if (plugged.isEmpty()) {
+            fail("未检测到 USB 设备（检查线 / OTG / 供电）")
+            return
+        }
+
         val table = BrlttyWrapper.getUsbDriverTable()
         LogUtils.i(this, "native USB driver table entries: " + table.size)
         if (table.isEmpty()) {
@@ -243,7 +264,10 @@ class UsbDisplayConnection : DriverThread.OnInitListener {
             }
         }
         if (selected == null || candidates == null) {
-            fail("No attached USB device matches the brltty driver table")
+            val unmatched = plugged.values.joinToString(";") {
+                "VID:%04X PID:%04X".format(it.vendorId, it.productId)
+            }
+            fail("设备不匹配任何驱动条目（$unmatched）")
             return
         }
 
@@ -262,6 +286,8 @@ class UsbDisplayConnection : DriverThread.OnInitListener {
         val usbManager = mUsbManager
         val deviceName = chosenDevice.getDeviceName()
         if (usbManager == null || !usbManager.hasPermission(chosenDevice)) {
+            ConnectionDiagnosticsState.appendFailureReason(
+                "usb-permission", "需要授权：$deviceName")
             if (sPromptedDeviceName == deviceName) {
                 startSilentPermissionWait()
             } else {
@@ -310,10 +336,39 @@ class UsbDisplayConnection : DriverThread.OnInitListener {
             fail("USB host is not available on this device")
             return
         }
-        usbManager.requestPermission(device, permissionIntent)
+        // 权限弹窗由可见代理 Activity 发起；后台 Service 直接 requestPermission
+        // 在 Android 12+ 无可见窗口时会被宿主（MIUI / HyperOS）自行关闭。
+        // 代理起不来（例如后台启动受限）才回退到后台直请，轮询兜底保留不变。
+        if (!launchPermissionProxy(device)) {
+            LogUtils.w(this, "Permission proxy unavailable; background fallback request")
+            usbManager.requestPermission(device, permissionIntent)
+        }
         // The broadcast is the primary signal; the poll protects against
         // OEMs that swallow it (and against a screen reader missing the dialog).
         mHandler.postDelayed(mPermissionPollRunnable, PERMISSION_POLL_MILLIS)
+    }
+
+    /**
+     * 拉起 brailleback 模块的透明代理 Activity，由它持有可见窗口再调
+     * [UsbManager.requestPermission]。PendingIntent 仍指向本进程已注册的
+     * [mPermissionBroadcastReceiver]，结果回灌链路不变。
+     *
+     * @return true 表示代理 Activity 已启动；false 表示应回退后台直请。
+     */
+    private fun launchPermissionProxy(device: UsbDevice): Boolean {
+        return try {
+            val proxy = Intent(ACTION_USB_PERMISSION_PROXY)
+                .setPackage(mContext.getPackageName())
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                .putExtra(UsbManager.EXTRA_DEVICE, device)
+            mContext.startActivity(proxy)
+            LogUtils.i(this, "USB permission proxy activity started for device id="
+                    + device.getDeviceId())
+            true
+        } catch (t: Throwable) {
+            LogUtils.w(this, t, "Cannot start USB permission proxy activity")
+            false
+        }
     }
 
     /**

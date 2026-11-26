@@ -97,12 +97,11 @@ internal const val USER_DISCOVERY_WINDOW_DURATION = 12000L
         return getString(R.string.connprog_usb_hid_failed, error)
     }
 
-    /** Returns the user-selected connection protocol. */
+    /** Returns the user-selected connection protocol; new users default to AUTO. */
     internal fun DisplayService.getConnectionProtocol(): String {
         val value = SettingsStore.get(this)
-                .getString(ConnectionProtocolPolicy.PREFERENCE_KEY,
-                        ConnectionProtocolPolicy.BLUETOOTH)
-        return ConnectionProtocolPolicy.normalize(value)
+                .getString(ConnectionProtocolPolicy.PREFERENCE_KEY, null)
+        return ConnectionProtocolPolicy.readOrDefault(value)
     }
 
     internal fun DisplayService.isBluetoothProtocol(): Boolean {
@@ -173,8 +172,23 @@ internal const val USER_DISCOVERY_WINDOW_DURATION = 12000L
      * {@code poll()} / {@code disconnect()} always bypass this check so that
      * the volume-key toggle keeps working regardless of the setting.
      */
+    /** 进入连接流程前打一次快照；路由只做只读解析，失败降级 na，不影响拨号。 */
+    private fun DisplayService.emitBeforeConnectSnapshot(reason: String) {
+        val decided = try {
+            AutoConnectionRouter.route(buildAutoRouteInput())
+        } catch (e: Exception) {
+            null
+        }
+        ConnectionDiagnostics.emit(
+            this, this, "before-connect",
+            decided?.route?.name ?: "na",
+            decided?.degradedReason ?: decided?.announce?.name ?: reason,
+        )
+    }
+
     internal fun DisplayService.autoConnectBraille(userInitiated: Boolean = false) {
-        // 暂停判定见 AutoConnectPause.kt（本文件有 600 行非空行预算）。
+        emitBeforeConnectSnapshot(if (userInitiated) "auto:user" else "auto")
+        // 暂停判定见 AutoConnectPause.kt（非空行预算 1500，2026-11-26 口径）。
         if (!clearPauseForUserAction(this, userInitiated)) {
             return
         }
@@ -195,6 +209,7 @@ internal const val USER_DISCOVERY_WINDOW_DURATION = 12000L
 
     /** Starts a connection explicitly requested by a client. */
     internal fun DisplayService.startExplicitConnect() {
+        emitBeforeConnectSnapshot("explicit")
         mAutoReconnectSuppressed = false
         mAutoReconnectAttempt = 0
         mHandler.cancelAutoReconnect()
@@ -274,6 +289,15 @@ internal const val USER_DISCOVERY_WINDOW_DURATION = 12000L
      * disconnected the display.
      */
     internal fun DisplayService.scheduleAutoReconnectIfNeeded() {
+        // 失败 / 超时后再打一次诊断快照，带上本轮失败原因；其余路径不重复打。
+        val failReason = try {
+            getHidFailureMessage()
+        } catch (e: Exception) {
+            "hidError=$mLastHidError"
+        }
+        ConnectionDiagnostics.emit(
+            this, this, "fail", "na", failReason,
+        )
         if (!shouldAutoReconnect()) {
             Timber.v("Not scheduling auto reconnect (not eligible)")
             return
@@ -632,4 +656,113 @@ internal const val USER_DISCOVERY_WINDOW_DURATION = 12000L
         } catch (e: SecurityException) {
             Timber.w(e, "BLUETOOTH_SCAN permission denied cancelling discovery")
         }
+    }
+
+    // ---- AUTO 路由接线：框架探针折成纯函数输入 ----
+
+    /** 已挂载 USB 设备里命中 brltty 驱动表的探针列表；JNI / 表异常降级为空。 */
+    internal fun DisplayService.collectUsbProbes(): List<UsbProbe> {
+        val usb = getSystemService(Context.USB_SERVICE) as? UsbManager ?: return emptyList()
+        val table = BrlttyWrapper.getUsbDriverTable()
+        if (table.isEmpty()) {
+            return emptyList()
+        }
+        return usb.deviceList.values.mapNotNull { device ->
+            val drivers = UsbBrailleDevice.candidateDrivers(
+                table, device.vendorId, device.productId)
+            if (drivers.isEmpty()) null
+            else UsbProbe(device.vendorId, device.productId, drivers)
+        }
+    }
+
+    /** 蓝牙适配器是否开启；权限缺失按关闭处理，不让探针把服务拖崩。 */
+    internal fun DisplayService.isBluetoothAdapterOn(): Boolean {
+        val adapter = BluetoothAdapter.getDefaultAdapter() ?: return false
+        return try {
+            adapter.isEnabled
+        } catch (e: SecurityException) {
+            Timber.w(e, "BLUETOOTH_CONNECT denied checking adapter")
+            false
+        }
+    }
+
+    /** 是否已配对本应用认识的盲文点显。 */
+    internal fun DisplayService.hasBondedBrailleDisplay(): Boolean {
+        return try {
+            DeviceFinder(this).findDevices().isNotEmpty()
+        } catch (e: SecurityException) {
+            Timber.w(e, "BLUETOOTH_CONNECT denied listing bonded devices")
+            false
+        }
+    }
+
+    /** 凑一次 AUTO 路由的纯输入快照；USB 探针可由调用方先收集好复用。 */
+    internal fun DisplayService.buildAutoRouteInput(
+        usbDisplays: List<UsbProbe> = collectUsbProbes(),
+    ): AutoRouteInput = AutoRouteInput(
+        protocol = getConnectionProtocol(),
+        transport = ConnectionTransportPolicy.current(this),
+        usbDisplays = usbDisplays,
+        bluetoothAdapterOn = isBluetoothAdapterOn(),
+        bluetoothBondedDisplay = hasBondedBrailleDisplay(),
+        hidControllerAvailable = HidBridge.isAvailable(),
+    )
+
+    /** USB 设备的稳定键：VID:PID，供幂等判据去重。 */
+    internal fun UsbProbe.deviceKey(): String =
+        "%04x:%04x".format(vendorId, productId)
+
+    /**
+     * USB 插入广播的 AUTO 分支：即时重算路由，过幂等判据后再切换。
+     *
+     * 手动档不走这里：沿用 [HidTransportRouting.shouldReactToUsbAttach] 的既有口径，
+     * AUTO 的冷却窗口与 USB 优先都不介入。
+     */
+    internal fun DisplayService.handleUsbAttached() {
+        // 插拔事件属事件触发：即便无人值守的周期重连已放弃，也要清零计数、
+        // 解除人工断开抑制并立刻再试一次；上限只约束后台周期重试。
+        mAutoReconnectAttempt = 0
+        mAutoReconnectSuppressed = false
+        resetConnectionAttemptFlags()
+        ConnectionDiagnostics.emit(
+            this, this, "usb-attached", "na", "USB_DEVICE_ATTACHED",
+        )
+        // 插拔路径上开 10 秒逐秒枚举窗口，捕获「枚举到又消失」的瞬时掉线。
+        UsbEnumerationProbe.startWindow(this, "usb-attached")
+        val protocol = getConnectionProtocol()
+        val transport = ConnectionTransportPolicy.current(this)
+        val auto = ConnectionProtocolPolicy.AUTO == protocol &&
+                ConnectionTransportPolicy.AUTO == transport
+        if (!auto) {
+            if (HidTransportRouting.shouldReactToUsbAttach(protocol, transport)
+                    && !isConnectionActive()) {
+                // 重新插入属于新的枚举，可以再问一次 USB 授权。
+                UsbDisplayConnection.allowPermissionPromptAgain()
+                Timber.i("USB device attached; trying wired connection")
+                autoConnectBraille(userInitiated = true)
+            }
+            return
+        }
+
+        val probes = collectUsbProbes()
+        val decided = AutoConnectionRouter.route(buildAutoRouteInput(probes))
+        val deviceKey = probes.firstOrNull()?.deviceKey()
+        val decision = AutoSwitchGuard.decide(
+            mAutoSwitchState, deviceKey, decided.route, SystemClock.uptimeMillis())
+        if (!decision.shouldSwitch) {
+            Timber.i("USB attach ignored: %s", decision.reason)
+            return
+        }
+        mAutoSwitchState = decision.nextState
+        UsbDisplayConnection.allowPermissionPromptAgain()
+        Timber.i("USB attach; route=%s announce=%s", decided.route, decided.announce)
+        if (decided.announce == AutoAnnounce.USB_DISPLAY_FOUND) {
+            mHandler.setConnectionProgress(
+                getString(R.string.connprog_auto_usb_switched))
+        }
+        // 已在另一条链路上时，先拆掉旧连接，再按新路由起手。
+        if (isConnectionActive()) {
+            disconnectBraille()
+        }
+        autoConnectBraille(userInitiated = true)
     }

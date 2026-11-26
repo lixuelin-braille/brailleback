@@ -38,7 +38,7 @@
     <string name="pref_connection_protocol_rfcomm_label">"蓝牙串口（旧协议）"</string>
     <string name="pref_connection_protocol_bluetooth_label">"蓝牙"</string>
     <string name="pref_connection_protocol_usb_label">"有线 USB"</string>
-    <string name="compose_settings_protocol_summary_auto">"插着点显器就走 USB，没插就走蓝牙"</string>
+    <string name="compose_settings_protocol_summary_auto">"自动：会先找 USB，找不到再找蓝牙"</string>
     <string name="compose_settings_protocol_summary_bluetooth">"只走蓝牙，插着线也不改用 USB"</string>
     <string name="compose_settings_protocol_summary_usb">"只走有线 USB，插线后要允许系统弹的 USB 授权"</string>
     <string name="pref_key_bindings_title" msgid="1228004448435300774">"键盘帮助"</string>
@@ -250,9 +250,19 @@
     <string name="debug_log_copy">"复制日志"</string>
     <string name="debug_log_copied">"日志已复制到剪贴板"</string>
     <string name="debug_log_copy_fail">"复制日志失败"</string>
+    <string name="debug_log_copy_truncated">"已复制最近 %1$d 行；仅包含最近 256 KB 日志，完整历史已省略"</string>
+    <string name="debug_log_share_truncated">"仅分享最近 256 KB 日志，完整历史已省略"</string>
     <string name="debug_log_clear_confirm">"确定清除全部调试日志？"</string>
     <string name="debug_log_cleared">"调试日志已清除"</string>
     <string name="debug_log_share_fail">"没有可用的应用分享日志"</string>
+    <string name="debug_log_share_no_receiver">"没有可用的应用分享日志"</string>
+    <string name="debug_log_share_uri_denied">"接收方拒绝访问日志文件（权限问题）"</string>
+    <string name="debug_log_share_bad_argument">"分享参数无效"</string>
+    <string name="debug_log_share_write_failed">"临时日志文件写入失败"</string>
+    <string name="debug_log_share_unknown">"分享失败"</string>
+    <string name="debug_log_share_fallback">"分享失败（%1$s），已复制最近 %2$d 行到剪贴板，请粘贴到聊天里发送"</string>
+    <string name="debug_log_export_ok">"成功"</string>
+    <string name="debug_log_export_status">"上次导出：%1$s"</string>
     <string name="key_bindings_title" msgid="7481545872884477026">"盲文提示键盘帮助"</string>
     <string name="display_connected" msgid="2008600513914815101">"BrlBack 已打开"</string>
     <string name="shutting_down" msgid="1303701310644298807">"BrlBack 已关闭"</string>
@@ -627,4 +637,35 @@
     <string name="math_not_connected">点显未连接</string>
     <string name="math_need_input">请先输入公式</string>
     <string name="math_error">转换失败：%1$s</string>
+
+    <!-- 连接诊断页 -->
+    <string name="conn_diag_title">连接诊断</string>
+    <string name="conn_diag_section">实时连接状态</string>
+    <string name="conn_diag_state_title">连接状态</string>
+    <string name="conn_diag_route_title">当前路由</string>
+    <string name="conn_diag_route_usb">USB</string>
+    <string name="conn_diag_route_bluetooth">蓝牙</string>
+    <string name="conn_diag_route_none">未连接</string>
+    <string name="conn_diag_usb_count_title">USB 设备</string>
+    <string name="conn_diag_usb_none_hint">系统未检测到 USB 设备，请检查数据线、OTG 转接头与接口接触。</string>
+    <string name="conn_diag_device_title">设备</string>
+    <string name="conn_diag_permission_title">授权状态</string>
+    <string name="conn_diag_permission_granted">已授权</string>
+    <string name="conn_diag_permission_denied">未授权</string>
+    <string name="conn_diag_open_title">打开状态</string>
+    <string name="conn_diag_open_active">已打开</string>
+    <string name="conn_diag_open_inactive">未打开</string>
+    <string name="conn_diag_failure_title">最近一次连接失败原因</string>
+    <string name="conn_diag_failure_none">暂无失败记录</string>
+    <string name="conn_diag_a11y_title">无障碍服务</string>
+    <string name="conn_diag_a11y_enabled">已启用</string>
+    <string name="conn_diag_a11y_disabled">未启用</string>
+    <string name="conn_diag_freeze_hint_title">后台提示</string>
+    <string name="conn_diag_freeze_hint">若应用被系统后台冻结，请把后台管理改为手动管理，否则连接与刷新都会停摆。</string>
+    <string name="conn_diag_refresh_title">刷新</string>
+    <string name="conn_diag_refresh_hint">重新读取路由、USB 设备与授权状态</string>
+    <string name="conn_diag_retry_title">重试连接</string>
+    <string name="conn_diag_retry_hint">清零重连计数，立刻再尝试连接点显器</string>
+    <string name="conn_diag_entry_title">连接诊断</string>
+    <string name="conn_diag_entry_summary">读取路由、USB 枚举、授权、打开状态与失败原因</string>
 </resources>

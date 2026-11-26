@@ -44,6 +44,13 @@ import timber.log.Timber
 internal const val ACTION_DISPLAY_KEEP_ALIVE =
         "com.googlecode.eyesfree.braille.service.ACTION_DISPLAY_KEEP_ALIVE"
 
+/**
+ * 清单接收器在主进程已死时收到 USB 插拔广播，用这个 extra 把触发原因塞进
+ * 拉起 DisplayService 的 intent；onStartCommand 读到后补一次显式重扫。
+ */
+const val EXTRA_USB_WAKE_REASON =
+        "com.linxi.brailleback.extra.USB_WAKE_REASON"
+
 private const val KEEP_ALIVE_CHANNEL_ID = "braille_display_keepalive"
 private const val KEEP_ALIVE_NOTIFICATION_ID = 2
 

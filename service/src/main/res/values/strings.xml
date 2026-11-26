@@ -53,6 +53,9 @@
     <string name="connprog_usb_hid_not_found">No wired USB HID braille display detected. Connect the display and try again.</string>
     <string name="connprog_usb_hid_permission_denied">USB permission was denied. Allow access when prompted, then reconnect.</string>
     <string name="connprog_usb_hid_failed">Wired USB HID connection failed (error %1$d).</string>
+    <!-- AUTO 档：检测到 USB 点显器后切到有线；两者皆无时在等设备。 -->
+    <string name="connprog_auto_usb_switched">USB braille display detected; switched to USB</string>
+    <string name="connprog_auto_waiting_display">No display found yet; plug in the USB cable or turn on the Bluetooth display</string>
     <!-- 前台保活通知：无障碍服务未开启时，点显器连接靠它保持。 -->
     <string name="display_keepalive_channel">Braille display connection</string>
     <string name="display_keepalive_title">Braille display connected</string>

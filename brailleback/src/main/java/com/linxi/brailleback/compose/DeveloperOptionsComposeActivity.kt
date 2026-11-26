@@ -26,6 +26,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.googlecode.eyesfree.utils.SettingsStore
+import com.googlecode.eyesfree.utils.TestBuild
+import com.linxi.brailleback.BuildConfig
 import com.linxi.brailleback.OverlayTutorialActivity
 import com.linxi.brailleback.R
 import com.linxi.brailleback.utils.DebugLogActions
@@ -74,6 +76,7 @@ class DeveloperOptionsComposeActivity : AppCompatActivity() {
 
     private var logLevelValue by mutableStateOf("")
     private var overlayEnabled by mutableStateOf(DeveloperOptionsLogic.OVERLAY_DEFAULT)
+    private var exportStatus by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -81,15 +84,22 @@ class DeveloperOptionsComposeActivity : AppCompatActivity() {
         supportActionBar?.hide()
         // 与旧 PreferenceFragment.onCreate 一致：无 adb 环境也能导出日志。
         LogFileWriter.init(this)
+        exportStatus = DebugLogActions.lastStatusText(this)
 
         val logLevelKey = getString(R.string.pref_log_level_key)
         val overlayKey = getString(R.string.pref_braille_overlay_key)
         val levelValues = resources.getStringArray(R.array.pref_log_level_values).toList()
         val levelEntries = resources.getStringArray(R.array.pref_log_level_entries).toList()
 
+        // 测试包默认 VERBOSE（取值 2）；其余构建回落 XML 默认值（INFO=4）。
+        val defaultLevel = if (BuildConfig.DEBUG && TestBuild.VERBOSE_BY_DEFAULT) {
+            "2"
+        } else {
+            getString(R.string.pref_log_level_default)
+        }
         logLevelValue = DeveloperOptionsLogic.initialLogLevel(
             prefs.getString(logLevelKey, null),
-            getString(R.string.pref_log_level_default),
+            defaultLevel,
             levelValues,
         )
         overlayEnabled = prefs.getBoolean(
@@ -135,6 +145,7 @@ class DeveloperOptionsComposeActivity : AppCompatActivity() {
                 labels = labels,
                 logLevelValue = logLevelValue,
                 overlayEnabled = overlayEnabled,
+                exportStatus = exportStatus,
                 onLogLevelSelected = { value ->
                     val parsed = DeveloperOptionsLogic.parseLogLevel(value)
                     val accepted = parsed?.let { PreferenceUtils.updateLogLevel(it) } ?: false
@@ -157,7 +168,10 @@ class DeveloperOptionsComposeActivity : AppCompatActivity() {
                         truncatedHint = getString(R.string.compose_settings_log_preview_hint),
                     )
                 },
-                onShareLog = { DebugLogActions.shareCurrentLog(this) },
+                onShareLog = {
+                    DebugLogActions.shareCurrentLog(this)
+                    exportStatus = DebugLogActions.lastStatusText(this)
+                },
                 onCopyLog = { DebugLogActions.copyCurrentLog(this) },
                 onClearLog = { DebugLogActions.clear(this) },
                 onOverlayChange = { value ->

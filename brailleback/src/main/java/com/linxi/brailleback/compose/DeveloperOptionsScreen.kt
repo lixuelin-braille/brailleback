@@ -24,6 +24,7 @@ internal fun DeveloperOptionsScreen(
     labels: DeveloperOptionsLabels,
     logLevelValue: String,
     overlayEnabled: Boolean,
+    exportStatus: String?,
     onLogLevelSelected: (String) -> Unit,
     onViewLog: () -> String,
     onShareLog: () -> Unit,
@@ -79,6 +80,15 @@ internal fun DeveloperOptionsScreen(
                 clickLabel = labels.actionHint,
                 onClick = onShareLog,
             )
+        }
+
+        if (!exportStatus.isNullOrEmpty()) {
+            item {
+                SettingsInfoRow(
+                    title = labels.viewLogTitle,
+                    summary = exportStatus,
+                )
+            }
         }
 
         item(key = DeveloperOptionsLogic.KEY_COPY_LOG) {
