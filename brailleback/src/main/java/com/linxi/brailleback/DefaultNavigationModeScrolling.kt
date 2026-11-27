@@ -326,11 +326,6 @@ internal fun DefaultNavigationMode.updateAfterScroll(
                         // revealed content instead of jumping away.
                         focusOrBraille(scrollable)
                     }
-                    // 整屏换掉时框架会把焦点重置到新首行，读屏随即朗读它。
-                    // 只在原焦点真的滚出视口（跨屏）时清一次，屏内滚动保持原样。
-                    if (!isStillOnScreen(scrollable, previousCopy)) {
-                        clearFocusAfterScreenChange()
-                    }
                 }
             } else {
                 // The scroll action claimed success but nothing moved:
@@ -396,48 +391,6 @@ internal fun DefaultNavigationMode.focusNextAfterNoScroll(
         }
     } finally {
         refreshed.recycle()
-    }
-}
-
-/** 节点是否与容器视口仍有交集；用来区分「屏内滚动」和「整屏换掉」。 */
-internal fun isStillOnScreen(
-        container: AccessibilityNodeInfoCompat,
-        node: AccessibilityNodeInfoCompat): Boolean {
-    val containerRect = Rect()
-    container.getBoundsInScreen(containerRect)
-    val nodeRect = Rect()
-    node.getBoundsInScreen(nodeRect)
-    return Rect.intersects(containerRect, nodeRect)
-}
-
-/**
- * 跨屏滚动后清掉无障碍焦点，让读屏不朗读新首行。
- *
- * 整屏换掉后框架会把焦点重置到新视口第一项，读屏立刻朗读它。用户要的是
- * 「只摸盲文、不要声音」，而朗读是读屏自己的行为，拦不住事件，只能让那次
- * 聚焦不成立：落定后立刻清焦点，读屏会打断这一声。紧随其后的焦点事件本来
- * 就在独占期被丢弃，不会把盲文拉走。
- *
- * 只在原焦点已经滚出视口时调用；屏内滚动不清，避免打断正常的触摸浏览。
- */
-internal fun DefaultNavigationMode.clearFocusAfterScreenChange() {
-    val root = AccessibilityServiceCompatUtils.getRootInActiveWindow(
-            mAccessibilityService) ?: return
-    try {
-        val focused = root.findFocus(
-                AccessibilityNodeInfoCompat.FOCUS_ACCESSIBILITY) ?: return
-        try {
-            val cleared = focused.performAction(
-                    AccessibilityNodeInfo.ACTION_CLEAR_ACCESSIBILITY_FOCUS)
-            LogUtils.log(this, Log.VERBOSE,
-                    "Cross-screen scroll: cleared focus=%s", cleared)
-        } finally {
-            if (focused !== root) {
-                focused.recycle()
-            }
-        }
-    } finally {
-        root.recycle()
     }
 }
 
