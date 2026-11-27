@@ -765,6 +765,17 @@ class BrailleBackService : AccessibilityService(),
             instance?.displayManager?.sendEmptyCommand()
         }
 
+        /**
+         * 清屏之后补一帧。
+         *
+         * 书架这类静止界面不产生焦点事件，清完不主动重画就会一直空着；
+         * 延后一点是为了等阅读器交还独占（解冻）先落地。
+         */
+        @JvmStatic
+        fun refreshDisplayContent() {
+            instance?.displayManager?.requestRefresh(200L)
+        }
+
         @JvmStatic
         fun getActiveInstance(): BrailleBackService? {
             return instance

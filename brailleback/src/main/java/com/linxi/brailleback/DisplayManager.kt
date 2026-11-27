@@ -728,6 +728,22 @@ class DisplayManager(
     }
 
     /**
+     * 请求按当前焦点重画一帧。
+     *
+     * 用在「本应用把屏清空了，但之后没有焦点事件触发刷新」的场合：从阅读器
+     * 退回书架时服务侧刚交还、屏又被清成空方，不主动补一帧就一直空着，
+     * 直到用户滑一下屏幕。
+     */
+    internal fun requestRefresh(delayMillis: Long = 0L) {
+        displayScope.launch {
+            if (delayMillis > 0) {
+                delay(delayMillis)
+            }
+            refresh()
+        }
+    }
+
+    /**
      * Toggles the paused state. Returns `true` if the display is now
      * paused.
      */

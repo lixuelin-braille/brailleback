@@ -34,12 +34,26 @@ internal fun BrailleReaderActivity.flushProgress() {
         writeProgressNow()
     }
 
+/**
+ * 单本书位置在偏好里的键。
+ *
+ * 位置必须按书分开存：只留「最近一本」一个槽时，读 B 书会把 A 书的进度
+ * 顶掉，回头再开 A 就是从第 1 页 —— 对一本长书来说等于白读。
+ */
+internal fun BrailleReaderActivity.perBookOffsetKey(uri: String): String = "off_$uri"
+
 private fun BrailleReaderActivity.writeProgressNow() {
         if (mStream.isEmpty()) return
-        getSharedPreferences(BrailleReaderActivity.PREFS_NAME, Context.MODE_PRIVATE).edit()
-            .putString(BrailleReaderActivity.KEY_URI, mFileUri?.toString())
+        val uriStr = mFileUri?.toString()
+        val editor = getSharedPreferences(BrailleReaderActivity.PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            // 最近一本仍记一份：阅读器单独打开（不带 uri）时靠它续读。
+            .putString(BrailleReaderActivity.KEY_URI, uriStr)
             .putInt(BrailleReaderActivity.KEY_OFFSET, mOffset)
-            .apply()
+        if (uriStr != null) {
+            editor.putInt(perBookOffsetKey(uriStr), mOffset)
+        }
+        editor.apply()
     }
 
 internal fun BrailleReaderActivity.restoreProgress() {

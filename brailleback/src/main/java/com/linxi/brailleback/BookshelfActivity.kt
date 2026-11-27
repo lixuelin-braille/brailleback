@@ -45,6 +45,8 @@ class BookshelfActivity : ComponentActivity() {
         // 从阅读器回到书架：把点显器清空。阅读器在 onPause 里交还了点显器，
         // 屏上还留着上一本书的点位，书架这边不该继续摸到那本书的字。
         BrailleBackService.clearDisplayContent()
+        // 清完补一帧：书架是静止界面，没有焦点事件，不重画就一直空屏。
+        BrailleBackService.refreshDisplayContent()
         Log.d("BrailleShelf", "shelf clear display")
     }
 

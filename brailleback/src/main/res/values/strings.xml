@@ -125,7 +125,18 @@
     <string name="braille_reader_err_doc_legacy">Legacy .doc is not supported. Save it as .docx in Word and open it again</string>
     <string name="braille_reader_err_no_text">This file has no readable text (images only)</string>
     <string name="braille_reader_err_too_large">The file is too large to unpack (limit 128 MB)</string>
-    <string name="braille_reader_translating">Starting translation</string>
+    <string name="braille_reader_translate_menu">Translate</string>
+    <string name="braille_reader_translate_menu_title">Translation</string>
+    <string name="braille_reader_translate_retry">Translate again</string>
+    <string name="braille_reader_translate_retry_desc">Discard the previous result and start over</string>
+    <string name="braille_reader_translate_stop">Stop translating</string>
+    <string name="braille_reader_translate_stop_desc">Stop here; what is already translated stays readable</string>
+    <string name="braille_reader_translate_clear">Clear stored translation</string>
+    <string name="braille_reader_translate_clear_desc">Delete the saved braille and translate again next time</string>
+    <string name="braille_reader_translate_stopped">Translation stopped</string>
+    <string name="braille_reader_translate_cache_cleared">Stored translation cleared</string>
+    <string name="braille_reader_translate_no_text">This is a braille file; no translation needed</string>
+    <string name="braille_reader_translate_cached">Using the stored translation</string>    <string name="braille_reader_translating">Starting translation</string>
     <string name="braille_reader_translator_waiting">Starting braille translation service…</string>
     <string name="braille_reader_translate_fail">Translation failed. Showing original text; connect a display for braille output.</string>
     <string name="braille_reader_translate_partial">First %1$d pages are ready — you can read now, the rest keeps translating in the background.</string>

@@ -36,6 +36,8 @@ internal data class ReaderLabels(
     val bookmark: String,
     val goto: String,
     val export: String,
+    /** 「翻译」菜单入口：重新翻译 / 停止翻译 / 清除缓存。 */
+    val translate: String,
     val fontSize: String,
     val navHint: String,
     val ok: String,
@@ -67,6 +69,8 @@ internal data class ReaderUiState(
     val bookmarkEnabled: Boolean = false,
     val gotoEnabled: Boolean = false,
     val exportEnabled: Boolean = false,
+    /** 「翻译」按钮能不能点：只有明眼文字（需要翻译的那种）才有意义。 */
+    val translateEnabled: Boolean = false,
 )
 
 /**
@@ -122,7 +126,17 @@ internal sealed interface ReaderDialog {
     ) : ReaderDialog
     data class ExportCustomGeometry(val title: String) : ReaderDialog
     data class FontSize(val title: String, val labels: List<String>) : ReaderDialog
+    /** 翻译菜单：标题、条目、每条的说明、以及每条对应的动作。 */
+    data class Translate(
+        val title: String,
+        val labels: List<String>,
+        val descriptions: List<String>,
+        val actions: List<TranslateAction>,
+    ) : ReaderDialog
 }
+
+/** 翻译菜单里的动作。条目按当前状态动态生成，序号与这里一一对应。 */
+internal enum class TranslateAction { RETRY, STOP, CLEAR_CACHE }
 
 @Composable
 internal fun BrailleReaderScreen(
@@ -138,6 +152,8 @@ internal fun BrailleReaderScreen(
     onBookmark: () -> Unit,
     onGoto: () -> Unit,
     onExport: () -> Unit,
+    onTranslate: () -> Unit = {},
+    onTranslatePick: (Int) -> Unit = {},
     onFont: () -> Unit,
     onFontSizePick: (Int) -> Unit,
     onTocPick: (Int) -> Unit,
@@ -256,6 +272,15 @@ internal fun BrailleReaderScreen(
                 ) {
                     Text(labels.bookmark)
                 }
+                // 翻译入口：重新翻译、停止翻译、清除缓存都收在这个菜单里，
+                // 盲文文件不需要翻译，按状态置灰。
+                OutlinedButton(
+                    onClick = onTranslate,
+                    enabled = uiState.translateEnabled,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(labels.translate)
+                }
             }
 
             // 第三行：字号 / 导出为盲文
@@ -319,6 +344,10 @@ internal fun BrailleReaderScreen(
             is ReaderDialog.FontSize -> ListDialog(
                 current.title, current.labels, labels.cancel,
                 onPick = onFontSizePick, onDismiss = onDismissDialog)
+            is ReaderDialog.Translate -> ListDialog(
+                current.title, current.labels, labels.cancel,
+                onPick = onTranslatePick, onDismiss = onDismissDialog,
+                descriptions = current.descriptions)
         }
     }
 }

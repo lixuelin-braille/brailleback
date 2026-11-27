@@ -102,6 +102,7 @@ internal data class TranslatedChunk(
 internal fun BrailleReaderActivity.translateParagraphs(
         text: String,
         translator: BrailleTranslator,
+        onPersist: (String, IntArray) -> Unit,
         onChunk: (TranslatedChunk) -> Unit,
     ) {
         val startedAt = System.currentTimeMillis()
@@ -123,6 +124,8 @@ internal fun BrailleReaderActivity.translateParagraphs(
             publishedChars = sb.length
             publishedCells += deltaCells.size
             lastPublishAt = SystemClock.uptimeMillis()
+            // 先落盘再上屏：写盘顺序与 append 顺序一致，中途被杀也只丢最后一块。
+            onPersist(delta, deltaCells)
             onChunk(TranslatedChunk(
                 text = delta,
                 cellPositions = deltaCells,
@@ -134,6 +137,8 @@ internal fun BrailleReaderActivity.translateParagraphs(
 
         try {
             for (paragraph in text.split('\n')) {
+                // 用户点了「停止翻译」：保留已经翻好并落盘的部分，直接结束。
+                if (mCancelTranslate) break
                 if (paragraph.isBlank()) {
                     sb.append('\n')
                     paragraphStart += paragraph.length + 1

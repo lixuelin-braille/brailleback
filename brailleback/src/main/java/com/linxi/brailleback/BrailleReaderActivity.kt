@@ -43,6 +43,7 @@ import com.linxi.brailleback.compose.ReaderDialog
 import com.linxi.brailleback.compose.ReaderLabels
 import com.linxi.brailleback.compose.ReaderScrollState
 import com.linxi.brailleback.compose.ReaderUiState
+import com.linxi.brailleback.compose.TranslateAction
 import com.linxi.brailleback.reader.ReaderChapters
 import com.linxi.brailleback.reader.ReaderDisplayAction
 import com.linxi.brailleback.reader.ReaderDisplayKey
@@ -148,6 +149,18 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
 
     /** 翻译服务未就绪时挂起的翻译请求。 */
     internal var mPendingTranslation: PendingTranslation? = null
+
+    /**
+     * 用户点了「停止翻译」。
+     *
+     * 翻译跑在独立线程里，只能靠这个标志在段边界收尾；已经翻好的部分
+     * 照常上屏、照常留在落盘文件里，只是不再写完成标记。
+     */
+    @Volatile
+    internal var mCancelTranslate = false
+
+    /** 当前书的文件名，重新翻译时重建阅读流要用（mFileUri 可能是 content:// 的编码串）。 */
+    internal var mFileName: String? = null
 
     internal val mTranslationReadyListener: TranslatorManager.OnTablesChangedListener =
         object : TranslatorManager.OnTablesChangedListener {
@@ -296,6 +309,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
                     bookmark = getString(R.string.braille_reader_bookmark),
                     goto = getString(R.string.braille_reader_goto),
                     export = getString(R.string.braille_reader_export),
+                    translate = getString(R.string.braille_reader_translate_menu),
                     fontSize = getString(R.string.braille_reader_font_size),
                     navHint = getString(R.string.braille_reader_nav_hint),
                     ok = getString(android.R.string.ok),
@@ -321,6 +335,8 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
                 onBookmark = ::showBookmarks,
                 onGoto = ::showGotoDialog,
                 onExport = ::showExportMenu,
+                onTranslate = ::showTranslateMenu,
+                onTranslatePick = ::onTranslatePick,
                 onFont = ::showFontSizeDialog,
                 onFontSizePick = ::onFontSizePicked,
                 onTocPick = ::onTocPicked,
@@ -353,10 +369,10 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
                 mFileUri = uri
                 // 同一本书续读上次进度；换了一本书从第 1 页开始。
                 // 否则盲人用户从书架重开书永远回到第 1 页，长书重新定位成本高。
+                // 按书各存一份位置：以前只存「最近读的那一本」一个槽，
+                // 读过 B 书再回 A 书，A 的进度就被覆盖没了。
                 val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-                val savedOffset = if (prefs.getString(KEY_URI, null) == uriStr) {
-                    prefs.getInt(KEY_OFFSET, 0)
-                } else 0
+                val savedOffset = prefs.getInt(perBookOffsetKey(uriStr), 0)
                 loadFile(uri, savedOffset)
             } catch (e: Exception) {
                 Toast.makeText(this,
@@ -462,6 +478,86 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     // ------------------------------------------------------------------
 
     /**
+     * 缓存键里的盲文表标识。
+     *
+     * 换表之后点位完全不同，缓存必须跟着表走；翻译服务还没起来时给个
+     * 稳定占位，等服务就绪再查同一份缓存也不冲突（那时表名已确定，
+     * 命中与否自然分开）。
+     */
+    internal fun translationTableName(): String {
+        val info = mTranslatorManager.getTranslator()?.tableInfo ?: return "unknown"
+        return "${info.id ?: ""}|${info.locale}|${info.grade}|${info.isEightDot}"
+    }
+
+    /**
+     * 「翻译」菜单：重新翻译 / 停止翻译 / 清除本书缓存。
+     *
+     * 盲文文件本来不翻译，入口置灰并且点了一句说明，免得用户以为坏了。
+     */
+    internal fun showTranslateMenu() {
+        if (mSourceKind != ReaderSourceKind.TEXT) {
+            announce(getString(R.string.braille_reader_translate_no_text))
+            return
+        }
+        val uri = mFileUri ?: return
+        val labels = ArrayList<String>(3)
+        val descriptions = ArrayList<String>(3)
+        val actions = ArrayList<TranslateAction>(3)
+        if (mTranslating) {
+            labels.add(getString(R.string.braille_reader_translate_stop))
+            descriptions.add(getString(R.string.braille_reader_translate_stop_desc))
+            actions.add(TranslateAction.STOP)
+        } else {
+            labels.add(getString(R.string.braille_reader_translate_retry))
+            descriptions.add(getString(R.string.braille_reader_translate_retry_desc))
+            actions.add(TranslateAction.RETRY)
+        }
+        if (ReaderTranslationCache.isComplete(this, uri, translationTableName())) {
+            labels.add(getString(R.string.braille_reader_translate_clear))
+            descriptions.add(getString(R.string.braille_reader_translate_clear_desc))
+            actions.add(TranslateAction.CLEAR_CACHE)
+        }
+        readerDialog = ReaderDialog.Translate(
+            getString(R.string.braille_reader_translate_menu_title),
+            labels, descriptions, actions)
+    }
+
+    internal fun onTranslatePick(which: Int) {
+        val dialog = readerDialog as? ReaderDialog.Translate ?: return
+        val action = dialog.actions.getOrNull(which) ?: return
+        readerDialog = null
+        val uri = mFileUri ?: return
+        when (action) {
+            TranslateAction.STOP -> {
+                // 不收流、不清屏：已经翻好的部分正在读，停下来就该原地不动。
+                mCancelTranslate = true
+                Log.d(LOG_TAG, "translate stop requested")
+            }
+            TranslateAction.RETRY -> {
+                // 重翻：丢掉缓存与当前译流，位置记住，靠 mPendingRestoreOffset
+                // 等新流翻到那个位置再自动落回去（与首次打开同一套机制）。
+                ReaderTranslationCache.clear(this, uri, translationTableName())
+                val keep = mOffset
+                mStream = ""
+                mCellSpans = null
+                mIsTranslated = false
+                mPageOffsets = intArrayOf()
+                mOffset = 0
+                rebuildPageOffsets()
+                showPage()
+                startTranslation(mSourceText, mFileName ?: mFileUri?.lastPathSegment, uri,
+                    resetPosition = true, targetOffset = keep, force = true)
+            }
+            TranslateAction.CLEAR_CACHE -> {
+                ReaderTranslationCache.clear(this, uri, translationTableName())
+                val msg = getString(R.string.braille_reader_translate_cache_cleared)
+                announce(msg)
+                Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    /**
      * 启动翻译。翻译服务（TranslatorService）是异步绑定的，首次打开 txt
      * 时可能尚未就绪；未就绪则挂起请求，服务就绪后由 [mTranslationReadyListener]
      * 自动继续。
@@ -471,9 +567,25 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         name: String?,
         uri: Uri,
         resetPosition: Boolean,
-        targetOffset: Int? = null
+        targetOffset: Int? = null,
+        force: Boolean = false,
     ) {
         if (mTranslating) return
+        // 这本书翻过：直接用上次落盘的点位，不重翻、不播报、不碰翻译服务。
+        // 翻译服务没起来也能靠这份缓存读，所以这一步放在取 translator 之前。
+        if (!force) {
+            val stored = ReaderTranslationCache.read(this, uri, translationTableName())
+            if (stored != null) {
+                mSourceText = text
+                mSourceKind = ReaderSourceKind.TEXT
+                setBrailleStream(stored.text, name, uri, resetPosition, targetOffset,
+                    isTranslated = true,
+                    cellSpans = CellSourceTable(text, stored.cells),
+                    notifyLoaded = false)
+                Log.d(LOG_TAG, "translate cache hit: chars=${stored.text.length}")
+                return
+            }
+        }
         val translator = mTranslatorManager.getTranslator()
         if (translator == null) {
             mPendingTranslation = PendingTranslation(text, name, uri, resetPosition, targetOffset)
@@ -503,6 +615,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             return
         }
         mTranslating = true
+        mCancelTranslate = false
         Log.d(LOG_TAG, "translate start: chars=${text.length}")
         uiState = uiState.copy(
             readerText = getString(R.string.braille_reader_translating))
@@ -510,12 +623,19 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         // 后台翻译要「边翻边能读」：进度挂在字段里，翻出第一块就先上屏，
         // 之后按间隔续块，用户不用干等整本（3MB 书整本约一分钟）。
         mPendingRestoreOffset = targetOffset
+        // 边翻边落盘：下次打开这本书直接读点位，不用再翻一遍。
+        val cacheTable = translationTableName()
+        ReaderTranslationCache.begin(this, uri, cacheTable)
         Thread {
-            translateParagraphs(text, translator) { chunk ->
-                runOnUiThread {
-                    applyTranslatedChunk(chunk, name, uri, resetPosition, targetOffset)
-                }
-            }
+            translateParagraphs(text, translator,
+                onPersist = { deltaText, deltaCells ->
+                    ReaderTranslationCache.append(this, uri, cacheTable, deltaText, deltaCells)
+                },
+                onChunk = { chunk ->
+                    runOnUiThread {
+                        applyTranslatedChunk(chunk, name, uri, resetPosition, targetOffset)
+                    }
+                })
         }.start()
     }
 
@@ -562,11 +682,19 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
         restorePendingOffsetIfReached()
         if (chunk.done) {
             mTranslating = false
-            val msg = if (chunk.failedAtParagraph > 0) {
-                getString(R.string.braille_reader_translate_partial_stop,
+            val stopped = mCancelTranslate
+            mCancelTranslate = false
+            // 完整翻完才写完成标记：停止或失败留下的半本不能当缓存复用，
+            // 否则下次打开会以为整本都在，读到后面直接断掉。
+            if (!stopped && chunk.failedAtParagraph == 0) {
+                ReaderTranslationCache.complete(this, uri, translationTableName())
+            }
+            val msg = when {
+                stopped -> getString(R.string.braille_reader_translate_stopped)
+                chunk.failedAtParagraph > 0 -> getString(
+                    R.string.braille_reader_translate_partial_stop,
                     chunk.failedAtParagraph, totalUnits())
-            } else {
-                getString(R.string.braille_reader_translate_done)
+                else -> getString(R.string.braille_reader_translate_done)
             }
             announce(msg)
             Toast.makeText(this, msg, Toast.LENGTH_LONG).show()

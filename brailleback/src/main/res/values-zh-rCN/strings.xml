@@ -71,7 +71,18 @@
     
     
     
-    <string name="braille_reader_hint">"从书架选一本书开始阅读。ASCII 盲文会显示为 Unicode 盲文。"</string>
+    <string name="braille_reader_translate_menu">"翻译"</string>
+    <string name="braille_reader_translate_menu_title">"翻译"</string>
+    <string name="braille_reader_translate_retry">"重新翻译"</string>
+    <string name="braille_reader_translate_retry_desc">"丢掉上次的结果，从头再翻一遍"</string>
+    <string name="braille_reader_translate_stop">"停止翻译"</string>
+    <string name="braille_reader_translate_stop_desc">"停在这里，已经翻好的部分照常读"</string>
+    <string name="braille_reader_translate_clear">"清除本书翻译缓存"</string>
+    <string name="braille_reader_translate_clear_desc">"删掉已存下的点位，下次打开重新翻"</string>
+    <string name="braille_reader_translate_stopped">"翻译已停止"</string>
+    <string name="braille_reader_translate_cache_cleared">"已清除本书翻译缓存"</string>
+    <string name="braille_reader_translate_no_text">"本书是盲文文件，无需翻译"</string>
+    <string name="braille_reader_translate_cached">"已用上次翻译结果"</string>    <string name="braille_reader_hint">"从书架选一本书开始阅读。ASCII 盲文会显示为 Unicode 盲文。"</string>
     <string name="braille_reader_at_start">"已经是书的开头了。"</string>
     <string name="braille_reader_at_end">"已经是书的末尾了。"</string>
     <string name="braille_reader_translator_pending">"翻译服务启动中，先读原文"</string>
