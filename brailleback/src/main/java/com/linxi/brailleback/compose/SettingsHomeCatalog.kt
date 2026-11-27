@@ -36,6 +36,8 @@ internal sealed interface HomeAction {
     /** 屏幕盲文键盘：服务没起来时只能提示，不能跳转（目标页会空指针）。 */
     data object BrailleKeyboard : HomeAction
     data object Licenses : HomeAction
+    /** 侧载自检：无障碍 / USB / 自启动 / 电池与厂商独有步骤。 */
+    data object SelfCheck : HomeAction
 }
 
 /**
@@ -56,7 +58,7 @@ internal data class HomeEntry(
 
 /**
  * 主屏全部入口，列表顺序就是读屏的浏览顺序：先「怎么开始用」，再「设置分类」，
- * 最后「功能与内容」。三组共九行，加上三个分组标题，一屏 12 个可聚焦节点。
+ * 最后「功能与内容」。三组共十行，加上三个分组标题，一屏 13 个可聚焦节点。
  */
 internal object SettingsHomeCatalog {
 
@@ -126,6 +128,13 @@ internal object SettingsHomeCatalog {
             summaryRes = R.string.pref_os_license_summary,
             section = HomeSection.FEATURES,
             action = HomeAction.Licenses,
+        ),
+        HomeEntry(
+            key = "selfcheck_device_permission",
+            titleRes = R.string.selfcheck_title,
+            summaryRes = R.string.selfcheck_summary,
+            section = HomeSection.FEATURES,
+            action = HomeAction.SelfCheck,
         ),
     )
 
