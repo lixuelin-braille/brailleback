@@ -126,6 +126,15 @@ internal class DefaultNavigationMode(
     /** 本次滚动是否已经上过一帧；上过之后冷却期内一律静默，保证一屏只刷一次。 */
     private var mCooldownFrameDone = false
 
+    /**
+     * 仅盲文模式下的独占期：用点显器按键/滚轮移动后，系统重置焦点的那些事件
+     * 一律不理，直到用户真的用手指碰屏幕为止。
+     *
+     * 不用时间窗判，是因为滚动事件个数不固定（实测一屏能连发四个），
+     * 用时间判必然在「慢」和「闪」之间反复；触摸是有明确起点的事件，切换确定。
+     */
+    internal var mIgnoreFocusUntilTouch = false
+
     private val mSettleRunnable = Runnable {
         mSettlePending = false
         val fallback = mSettleFallback
@@ -265,6 +274,12 @@ internal class DefaultNavigationMode(
 
     override fun onAccessibilityEvent(event: AccessibilityEvent): Boolean {
         when (event.eventType) {
+            // 手指一碰屏幕就退出独占：读屏的触摸浏览重新成为盲文的来源。
+            AccessibilityEvent.TYPE_TOUCH_INTERACTION_START,
+            AccessibilityEvent.TYPE_TOUCH_EXPLORATION_GESTURE_START -> {
+                mIgnoreFocusUntilTouch = false
+                return true
+            }
             AccessibilityEvent.TYPE_VIEW_SCROLLED -> {
                 // 读屏自己的手势滚动和惯性滚动不经过 attemptScrollAction，
                 // 但系统滚完同样会把焦点重置到新一屏首行，这里统一记冷却起点。
@@ -272,6 +287,9 @@ internal class DefaultNavigationMode(
                 return true
             }
             AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED -> {
+                if (mIgnoreFocusUntilTouch) {
+                    return true
+                }
                 if (!shouldFollowFocusEvent(mScrollUpdatePending, sinceScrollMillis())) {
                     // 滚动后系统把焦点重置到新一屏的正确位置，这是唯一可信的一帧：
                     // 立刻刷，不等冷却结束，否则屏要滞后半秒才动。
@@ -283,6 +301,9 @@ internal class DefaultNavigationMode(
                 scheduleFocusBraille(fallback = true) { brailleNodeFromEvent(event) }
             }
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
+                if (mIgnoreFocusUntilTouch) {
+                    return true
+                }
                 if (!shouldFollowFocusEvent(mScrollUpdatePending, sinceScrollMillis())) {
                     // 页面重绘不代表焦点落定，跟着刷会先闪中间态；只留一帧兜底，
                     // 万一这次滚动没有焦点事件，冷却结束时也不至于空白。
@@ -292,6 +313,8 @@ internal class DefaultNavigationMode(
                 scheduleFocusBraille(fallback = false) { brailleFocusedNode() }
             }
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
+                // 换了窗口，独占期结束：新界面的焦点是可信的。
+                mIgnoreFocusUntilTouch = false
                 if (!brailleFocusedNode()) {
                     // Since focus is typically not set in a newly opened
                     // window, so braille the window as-if the first focusable
@@ -348,6 +371,9 @@ internal class DefaultNavigationMode(
     internal fun onScrollStarted() {
         mLastScrollActionAt = SystemClock.uptimeMillis()
         mCooldownFrameDone = false
+        if (isQuietNavigationEnabled()) {
+            mIgnoreFocusUntilTouch = true
+        }
     }
 
     /**

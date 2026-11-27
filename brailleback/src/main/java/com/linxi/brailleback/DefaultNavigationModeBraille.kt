@@ -85,6 +85,9 @@ internal fun DefaultNavigationMode.focusOrBraille(node: AccessibilityNodeInfoCom
         return node.performAction(
                 AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS)
     }
+    // 用点显器移动即进入独占：之后系统重置焦点的那些事件不再改写盲文，
+    // 直到用户真的用手指碰屏幕，或换了窗口。
+    mIgnoreFocusUntilTouch = true
     rememberScrollContainer(node)
     val content = mNodeBrailler.brailleNode(node, node) ?: return false
     content.setPanStrategy(Content.PAN_CURSOR)
