@@ -41,7 +41,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import com.googlecode.eyesfree.braille.display.BrailleInputEvent
 import com.googlecode.eyesfree.braille.display.Display
 import com.linxi.brailleback.compose.KeysGesturesLogic
-import com.googlecode.eyesfree.braille.service.display.ConnectionProtocolPolicy
+import com.linxi.brailleback.compose.SoundBehaviorLogic
 import com.googlecode.eyesfree.braille.service.display.HidBridge
 import com.linxi.brailleback.rule.BrailleRuleRepository
 import com.linxi.brailleback.utils.PreferenceUtils
@@ -644,22 +644,24 @@ class BrailleBackService : AccessibilityService(),
     }
 
     /**
-     * 运动模式按连接方式取默认值：USB 默认开启，蓝牙默认关闭。
-     * 用户在设置里手动拨过开关后，这个显式选择优先，不再随连接方式变化。
+     * 运动模式一律默认关闭，不再按连接方式推导。
+     *
+     * 用户在设置里手动拨过开关后（motion_mode_explicit 为 true），这个显式选择优先，
+     * 完全以用户存下的值为准；从未手动拨过时，把运动模式归一化为关闭写回并下发。
+     *
+     * 历史口径：早期按连接方式推导（USB 默认开、蓝牙默认关）。USB 默认开会让每次刷新
+     * 都被运动去抖压住 MOTION_MODE_DEBOUNCE_MS 再补刷，翻页有可感知延迟；现改为一律
+     * 默认关闭，需要「快速滑动合并刷新、停下再刷」的用户可在设置里手动开启。
      */
     internal fun applyMotionModeDefault(prefs: SharedPreferences) {
         val motionKey = getString(R.string.pref_motion_mode_key)
-        val value = if (prefs.getBoolean(
-                        getString(R.string.pref_motion_mode_explicit_key), false)) {
-            prefs.getBoolean(motionKey, false)
-        } else {
-            val protocol = ConnectionProtocolPolicy.normalize(
-                    prefs.getString(getString(R.string.pref_connection_protocol_key), null))
-            val usb = ConnectionProtocolPolicy.USB == protocol
-            if (prefs.getBoolean(motionKey, !usb) != usb) {
-                prefs.edit().putBoolean(motionKey, usb).apply()
-            }
-            usb
+        val explicit = prefs.getBoolean(
+                getString(R.string.pref_motion_mode_explicit_key), false)
+        val stored = prefs.getBoolean(motionKey, false)
+        val value = SoundBehaviorLogic.resolveMotionMode(explicit, stored)
+        if (!explicit && stored) {
+            // 未显式拨过：旧版本可能按 USB 推导写入过 true，归一化写回关闭。
+            prefs.edit().putBoolean(motionKey, false).apply()
         }
         displayManager?.setMotionMode(value)
     }

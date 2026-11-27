@@ -37,6 +37,12 @@ import timber.log.Timber
 internal const val USER_DISCOVERY_WINDOW_DURATION = 12000L
 
 /**
+ * `INPUT_DEVICE_ADDED` 广播里携带设备 id 的 extra 名（与 framework
+ * `InputManager.EXTRA_DEVICE_ID` 同名；hidden API，这里按字面量读取，取不到返回 -1）。
+ */
+private const val EXTRA_INPUT_DEVICE_ID = "deviceId"
+
+/**
  * DisplayService 的连接编排：协议判定、连接入口、自动重连与发现窗口。
  *
  * 这些函数从 DisplayService.kt 原样搬出，仍以 DisplayService 作接收者，因此
@@ -233,8 +239,8 @@ internal const val USER_DISCOVERY_WINDOW_DURATION = 12000L
         val device: BluetoothDevice? =
                 intent?.getParcelableExtra<BluetoothDevice>(
                         BluetoothDevice.EXTRA_DEVICE)
+        var address: String? = null
         if (device != null) {
-            var address: String? = null
             try {
                 address = device.getAddress()
             } catch (e: SecurityException) {
@@ -248,24 +254,38 @@ internal const val USER_DISCOVERY_WINDOW_DURATION = 12000L
                 return
             }
         }
-        prepareAutomaticRetry("Bluetooth link appeared")
+        prepareAutomaticRetry("Bluetooth link appeared",
+                address?.let { "bt:$it" })
     }
 
     /** Retries an HID attempt when a new input device is registered. */
-    internal fun DisplayService.retryHidWhenInputDeviceAppears() {
+    internal fun DisplayService.retryHidWhenInputDeviceAppears(intent: Intent?) {
         // Wired USB HID devices also arrive as InputDevice additions, even
         // though they are not part of the Bluetooth HID protocol set.
         val wiredUsbHid = isUsbProtocol()
         if ((!isHidRequested() && !wiredUsbHid) || isConnectionActive()) {
             return
         }
-        prepareAutomaticRetry("HID input device appeared")
+        val deviceId = intent?.getIntExtra(EXTRA_INPUT_DEVICE_ID, -1) ?: -1
+        val sourceKey = if (deviceId >= 0) "hid:$deviceId" else null
+        prepareAutomaticRetry("HID input device appeared", sourceKey)
     }
 
-    internal fun DisplayService.prepareAutomaticRetry(reason: String?) {
-        if (isConnectionActive()) {
+    internal fun DisplayService.prepareAutomaticRetry(
+        reason: String?,
+        sourceKey: String? = null,
+    ) {
+        // 活跃态必须在进守卫之前取到并喂进去：守卫据此记录 settle 起点。
+        // 活跃 / 在途的短路由守卫的 active 分支承担，语义与原先提前返回等价，
+        // 但活跃观察不会被挡在守卫之外（否则 settle 退化成死代码）。
+        val active = isConnectionActive()
+        val inFlight = mConnectPending || mWaitingForHidController
+        // 活跃短路 + 连接后 settle 稳定期 + 最小间隔 + 同设备去重：启动期成串重复广播只放行一次。
+        if (!autoRetryGate.shouldAllow(active, inFlight, sourceKey)) {
+            Timber.i("Automatic retry suppressed (active/settle/cooldown/dedup): %s", reason)
             return
         }
+        autoRetryGate.recordReleased(sourceKey)
         mHandler.cancelHidControllerTimeout()
         mWaitingForHidController = false
         resetConnectionAttemptFlags()

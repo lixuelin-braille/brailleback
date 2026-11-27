@@ -139,6 +139,20 @@ class SoundBehaviorLogicTest {
         assertFalse(SoundBehaviorLogic.MOTION_MODE_DEFAULT)
     }
 
+    @Test
+    fun `未显式拨过时一律默认关闭，不看连接方式`() {
+        // 旧版本按 USB 推导写入过 true；未显式标记时归一化为关闭。
+        assertFalse(SoundBehaviorLogic.resolveMotionMode(explicit = false, stored = true))
+        assertFalse(SoundBehaviorLogic.resolveMotionMode(explicit = false, stored = false))
+    }
+
+    @Test
+    fun `显式选择永远优先于默认值`() {
+        // 用户手动拨过：存什么用什么，不再被默认值覆盖。
+        assertTrue(SoundBehaviorLogic.resolveMotionMode(explicit = true, stored = true))
+        assertFalse(SoundBehaviorLogic.resolveMotionMode(explicit = true, stored = false))
+    }
+
     // ------------------------------------------------------------ 键清单
 
     @Test

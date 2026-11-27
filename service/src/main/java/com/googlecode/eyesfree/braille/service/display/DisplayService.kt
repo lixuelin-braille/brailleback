@@ -250,7 +250,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
             object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (ACTION_INPUT_DEVICE_ADDED.equals(intent?.getAction())) {
-                retryHidWhenInputDeviceAppears()
+                retryHidWhenInputDeviceAppears(intent)
             }
         }
     };
@@ -356,6 +356,12 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
      * controller. {@link HidBridge} notifies us as soon as it appears.
      */
     var mWaitingForHidController = false
+
+    /**
+     * 自动重连触发的幂等 / 冷却判据：最小间隔、同设备去重、连接后 settle 稳定期。
+     * 纯逻辑对象，状态自管，不取消任何进行中的连接尝试。
+     */
+    internal val autoRetryGate = AutoRetryGate()
     /**
      * Error returned by the last HID attempt, or {@code 0} if no attempt has
      * failed yet. Used to replace the generic failure message with an

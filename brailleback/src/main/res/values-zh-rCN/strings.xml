@@ -201,8 +201,8 @@
     <string name="pref_idle_clear_3min_label">3分钟</string>
     <string name="pref_idle_clear_5min_label">5分钟</string>
 
-    <string name="pref_motion_mode_summary_on">快速滑动时合并点显刷新，停下来才刷新。USB 连接默认开启</string>
-    <string name="pref_motion_mode_summary_off">每次更新立即刷新点显。蓝牙连接默认使用这种正常模式</string>
+    <string name="pref_motion_mode_summary_on">已开启。快速滑动时合并点显刷新，停下来才刷新。本模式默认关闭，需要时再手动开启。</string>
+    <string name="pref_motion_mode_summary_off">已关闭。每次更新立即刷新点显。这是默认状态。</string>
 
     <string name="pref_volume_gestures_enabled_title">音量键手势</string>
     <string name="pref_volume_gestures_enabled_summary_on">已开启。慢一点的普通按压在松手约 0.3 秒后调一格音量；长按和快速双击只执行下方设定的动作，不会改变音量。设为「关闭」的槽位仍按普通按压调音量。</string>

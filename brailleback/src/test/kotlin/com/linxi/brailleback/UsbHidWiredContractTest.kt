@@ -292,7 +292,7 @@ class UsbHidWiredContractTest {
     fun usbHidRetriesWhenAnInputDeviceAppears() {
         val body = methodBody(
             displayServiceSource(),
-            "DisplayService.retryHidWhenInputDeviceAppears()",
+            "DisplayService.retryHidWhenInputDeviceAppears(",
         )
         assertTrue(body.contains("val wiredUsbHid = isUsbProtocol()"))
         assertTrue(body.contains("prepareAutomaticRetry("))

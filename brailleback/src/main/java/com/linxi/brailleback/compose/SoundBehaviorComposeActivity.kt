@@ -11,7 +11,7 @@
  * - 音效总开关与音量走 SoundSchemeManager（同一个默认 SharedPreferences 文件），
  *   音量是 Int 且夹在 0..100，设置页不能直接拼 key 写 String；
  * - 运动模式被用户手动拨过时，要同时写 motion_mode_explicit，
- *   否则 BrailleBackService 会在下次连接时按 USB / 蓝牙把值覆盖回去。
+ *   否则 BrailleBackService 会在下次连接时按默认值（关闭）把值覆盖回去。
  */
 
 package com.linxi.brailleback.compose
