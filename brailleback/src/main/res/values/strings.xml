@@ -176,8 +176,6 @@
     <string name="braille_reader_export_fmt_brl_desc">Real braille characters (U+2800), for devices and editors that accept Unicode braille. Keeps dots 7 and 8. No page breaks.</string>
     <string name="braille_reader_export_fmt_utf">Text (Unicode braille)</string>
     <string name="braille_reader_export_fmt_utf_desc">Unicode braille as plain text, one paragraph per line, never wrapped. For reading or editing on a phone or PC, not for embossing.</string>
-    <string name="braille_reader_export_fmt_json">JSON (cell points)</string>
-    <string name="braille_reader_export_fmt_json_desc">Every cell as dot numbers, with its line, column and the original text it came from. For print heads and scripts. No display or embosser can open it.</string>
     <string name="braille_reader_export_preparing">Preparing to export…</string>
     <string name="braille_reader_export_done">Exported: %1$s</string>
     <string name="braille_reader_export_fail">Export failed: cannot write to the selected location, try another folder</string>

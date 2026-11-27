@@ -21,7 +21,6 @@ class ExportFormatCatalogTest {
         assertEquals(BrailleExportFormat.BRF, ExportFormatCatalog.formatAt(0))
         assertEquals(BrailleExportFormat.BRL, ExportFormatCatalog.formatAt(1))
         assertEquals(BrailleExportFormat.UNICODE_TXT, ExportFormatCatalog.formatAt(2))
-        assertEquals(BrailleExportFormat.JSON, ExportFormatCatalog.formatAt(3))
     }
 
     @Test
@@ -34,7 +33,7 @@ class ExportFormatCatalogTest {
     @Test
     fun everyFormatAppearsExactlyOnce() {
         val labels = ExportFormatCatalog.formats
-        assertEquals(4, labels.size)
+        assertEquals(3, labels.size)
         assertEquals(labels.toSet().size, labels.size)
         BrailleExportFormat.entries.forEach { format ->
             val picks = BrailleExportFormat.entries.indices.count {

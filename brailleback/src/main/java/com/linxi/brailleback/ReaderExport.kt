@@ -25,14 +25,12 @@ internal fun BrailleReaderActivity.exportFormatLabelRes(format: BrailleExportFor
         BrailleExportFormat.BRF -> R.string.braille_reader_export_fmt_brf
         BrailleExportFormat.BRL -> R.string.braille_reader_export_fmt_brl
         BrailleExportFormat.UNICODE_TXT -> R.string.braille_reader_export_fmt_utf
-        BrailleExportFormat.JSON -> R.string.braille_reader_export_fmt_json
     }
 
 internal fun BrailleReaderActivity.exportFormatDescRes(format: BrailleExportFormat): Int = when (format) {
         BrailleExportFormat.BRF -> R.string.braille_reader_export_fmt_brf_desc
         BrailleExportFormat.BRL -> R.string.braille_reader_export_fmt_brl_desc
         BrailleExportFormat.UNICODE_TXT -> R.string.braille_reader_export_fmt_utf_desc
-        BrailleExportFormat.JSON -> R.string.braille_reader_export_fmt_json_desc
     }
 
 internal fun BrailleReaderActivity.onExportPicked(index: Int) {
@@ -182,7 +180,6 @@ internal fun BrailleReaderActivity.startExport(format: BrailleExportFormat) {
             BrailleExportFormat.BRF -> brfExportLauncher.launch(initialName)
             BrailleExportFormat.BRL,
             BrailleExportFormat.UNICODE_TXT -> textExportLauncher.launch(initialName)
-            BrailleExportFormat.JSON -> jsonExportLauncher.launch(initialName)
         }
     }
 
@@ -206,8 +203,7 @@ internal fun BrailleReaderActivity.onExportUri(uri: Uri?) {
         val wrapMode = if (wordWrapEnabled()) BrailleWrapMode.WORD else BrailleWrapMode.CELL
         Thread {
             val result = try {
-                BrailleExporter.export(mStream, format, geometry,
-                    currentBookName(), mCellSpans, wrapMode)
+                BrailleExporter.export(mStream, format, geometry, wrapMode)
             } catch (e: Exception) {
                 Log.w(BrailleReaderActivity.LOG_TAG, "导出编码失败: ${e.message}")
                 null

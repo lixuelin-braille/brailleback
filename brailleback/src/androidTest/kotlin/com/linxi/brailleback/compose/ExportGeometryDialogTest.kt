@@ -9,6 +9,7 @@
 
 package com.linxi.brailleback.compose
 
+import com.linxi.brailleback.ReaderSegment
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.assertIsDisplayed
@@ -38,12 +39,20 @@ class ExportGeometryDialogTest {
         toc = "目录", bookmark = "书签", goto = "跳页", export = "导出为盲文",
         fontSize = "字号", navHint = "长按逐行微调", ok = "确定", cancel = "取消",
         delete = "删除", clearAll = "清空",
+        pageLine = { _, _ -> "行" },
+        pageScrubber = { _, _ -> "页" },
+        pageScrubberAction = "页码动作",
+        pageLineAction = "行号动作",
     )
 
     @Composable
     private fun Dialog(picked: MutableList<Int>) {
         BrailleReaderScreen(
-            uiState = ReaderUiState(readerText = "一个", focusSegments = listOf("一个")),
+            uiState = ReaderUiState(
+                readerText = "一个",
+                focusSegments = listOf(ReaderSegment("一个", 0)),
+            ),
+            scrollState = ReaderScrollState(),
             labels = readerLabels,
             dialog = ReaderDialog.ExportGeometry(
                 title = "选择版面",

@@ -1,14 +1,12 @@
 /*
  * Copyright (C) 2026 盲文服务 (Braille Service)
  *
- * 逐格源区间契约：位置有效时逐字映射；无效位置回挂段落兜底；段间不跨段引用；
- * 跨度随点位 JSON 往返保真。
+ * 逐格源区间契约：位置有效时逐字映射；无效位置回挂段落兜底；段间不跨段引用。
  */
 
 package com.linxi.brailleback
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -60,28 +58,4 @@ class SourceSpanMapperTest {
         assertEquals(firstSpans.size + secondSpans.size, all.size)
     }
 
-    @Test
-    fun jsonRoundTripCarriesSourceSpanAndText() {
-        val paragraph = "你好世界"
-        val cellSources = SourceSpanMapper.buildParagraphSpans(
-            paragraph, intArrayOf(0, 1, 2, 3))
-        val stream = (1..4).joinToString("") { (0x2800 + 1).toChar().toString() }
-
-        val doc = ExportDocument.build(stream, "book", PageGeometry(40, 25), cellSources)
-        val restored = ExportDocument.fromJson(doc.toJson())
-
-        assertEquals(4, restored.cells.size)
-        restored.cells.forEachIndexed { i, cell ->
-            assertEquals(listOf(i, i + 1), cell.sourceSpan)
-            assertEquals(paragraph[i].toString(), cell.sourceText)
-        }
-    }
-
-    @Test
-    fun missingCellSourcesStayNull() {
-        val doc = ExportDocument.build(
-            (0x2800 + 1).toChar().toString(), "book", PageGeometry(40, 25))
-        assertNull(doc.cells[0].sourceSpan)
-        assertNull(doc.cells[0].sourceText)
-    }
 }

@@ -44,7 +44,6 @@ enum class BrailleExportFormat(val extension: String, val mime: String) {
     BRF("brf", "application/octet-stream"),
     BRL("brl", "text/plain"),
     UNICODE_TXT("txt", "text/plain"),
-    JSON("json", "application/json"),
 }
 
 /**
@@ -130,37 +129,13 @@ object BrailleExporter {
         stream: String,
         format: BrailleExportFormat,
         geometry: PageGeometry = PageGeometry.Default,
-        title: String = "book",
-        cellSources: List<CellSource>? = null,
         wrapMode: BrailleWrapMode = BrailleWrapMode.WORD,
     ): BrailleExportResult {
         return when (format) {
             BrailleExportFormat.BRF -> exportBrf(stream, geometry, wrapMode)
             BrailleExportFormat.BRL -> exportBrl(stream, geometry, wrapMode)
             BrailleExportFormat.UNICODE_TXT -> exportUnicodeTxt(stream)
-            BrailleExportFormat.JSON -> exportJson(stream, geometry, title, cellSources)
         }
-    }
-
-    /** 点位 JSON：逐格 dots/mask/line/column/role/source_span/source_text + 文档元信息。 */
-    private fun exportJson(
-        stream: String,
-        geometry: PageGeometry,
-        title: String,
-        cellSources: List<CellSource>?,
-    ): BrailleExportResult {
-        var dropped = 0
-        var eightDot = 0
-        for (c in stream) {
-            if (c == '\n' || c == '\r') continue
-            if (c.code in 0x2800..0x28FF) {
-                if (c.code - 0x2800 >= 64) eightDot++
-            } else {
-                dropped++
-            }
-        }
-        val document = ExportDocument.build(stream, title, geometry, cellSources)
-        return BrailleExportResult(document.toJson(), 0, dropped, eightDot)
     }
 
     /** BRF：Unicode 盲文回写 NABCC ASCII，按几何折行、CRLF、每 [linesPerPage] 行一个 FF。 */

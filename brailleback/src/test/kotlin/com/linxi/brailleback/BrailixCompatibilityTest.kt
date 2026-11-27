@@ -1,10 +1,11 @@
 /*
  * Copyright (C) 2026 盲文服务 (Braille Service)
  *
- * 与 Brailix brf.py/cells.py 的逐字节兼容核对（参考只读，未复制其代码）：
+ * 与 Brailix brf.py 的逐字节兼容核对（参考只读，未复制其代码）：
  * - NABCC 64 个掩码与 Brailix 索引表逐字符一致；
  * - BRF 输出 = NABCC 字符 + CRLF，满 25 行插 FF，末页不挂尾 FF；
  * - BRF ASCII 经解码器往返，逐格掩码与原文一致。
+ * 注：原点位 JSON 与 cells.py 的字段级对齐随 JSON 格式一并移除，见 docs/142。
  */
 
 package com.linxi.brailleback

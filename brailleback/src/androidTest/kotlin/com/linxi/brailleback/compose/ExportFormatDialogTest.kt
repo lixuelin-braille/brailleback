@@ -3,7 +3,7 @@
  *
  * 仪器测试：导出格式弹窗的「用途说明」是否真的能被读到、点得到。
  *
- * 为什么需要它：弹窗原来是四个纯格式名（BRF / BRL / Text / JSON），读屏用户听到
+ * 为什么需要它：弹窗原来是三个纯格式名（BRF / BRL / Text），读屏用户听到
  * 名字也不知道哪个能上点显器、哪个能刻印。现在每条格式都带一句用途说明，并且
  * 格式名与说明合并成同一个焦点。合并语义、说明文字是否存在、点击是否回到正确下标，
  * 这三件事只有真实渲染才能验证，纯 JVM 测不到。
@@ -14,6 +14,7 @@
 
 package com.linxi.brailleback.compose
 
+import com.linxi.brailleback.ReaderSegment
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.assertIsDisplayed
@@ -36,14 +37,12 @@ class ExportFormatDialogTest {
         "BRF (ASCII braille)",
         "BRL (Unicode braille)",
         "Text (Unicode braille)",
-        "JSON (cell points)",
     )
 
     private val descriptions = listOf(
         "BRF 用途说明：刻印机与支持 .brf 的点显器",
         "BRL 用途说明：认 U+2800 的设备与编辑器",
         "TXT 用途说明：手机电脑上直接读或改",
-        "JSON 用途说明：点位数据，给打印头与脚本",
     )
 
     private val hint = "想刻印或上点显器，先选 BRF"
@@ -61,12 +60,20 @@ class ExportFormatDialogTest {
         cancel = "取消",
         delete = "删除",
         clearAll = "清空",
+        pageLine = { _, _ -> "行" },
+        pageScrubber = { _, _ -> "页" },
+        pageScrubberAction = "页码动作",
+        pageLineAction = "行号动作",
     )
 
     @Composable
     private fun Dialog(picked: MutableList<Int>) {
         BrailleReaderScreen(
-            uiState = ReaderUiState(readerText = "一个", focusSegments = listOf("一个")),
+            uiState = ReaderUiState(
+                readerText = "一个",
+                focusSegments = listOf(ReaderSegment("一个", 0)),
+            ),
+            scrollState = ReaderScrollState(),
             labels = readerLabels,
             dialog = ReaderDialog.ExportFormat(
                 title = "选择导出格式",
@@ -100,7 +107,7 @@ class ExportFormatDialogTest {
         val picked = mutableListOf<Int>()
         composeRule.setContent { MaterialTheme { Dialog(picked) } }
         composeRule.onNodeWithText(labels[0]).performClick()
-        composeRule.onNodeWithText(labels[3]).performClick()
-        assertEquals(listOf(0, 3), picked)
+        composeRule.onNodeWithText(labels[2]).performClick()
+        assertEquals(listOf(0, 2), picked)
     }
 }

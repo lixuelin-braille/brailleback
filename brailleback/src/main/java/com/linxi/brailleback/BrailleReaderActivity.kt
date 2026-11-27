@@ -118,7 +118,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     /** 当前流是否来自明眼 txt 翻译。翻译流与屏幕尺寸无关，重排时无需重翻。 */
     internal var mIsTranslated = false
 
-    /** 逐格源区间（仅翻译流有）；点位 JSON 导出与屏幕取字共用。 */
+    /** 逐格源区间（仅翻译流有）；目录、翻译对齐与屏幕取字共用。 */
     internal var mCellSpans: List<CellSource>? = null
 
     /** TEXT 源原始明文；盲文源为空。屏幕回显原文用，不参与点显/导出。 */
@@ -234,10 +234,6 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     }
     internal val textExportLauncher = registerForActivityResult(
         ActivityResultContracts.CreateDocument("text/plain")) { uri ->
-        onExportUri(uri)
-    }
-    internal val jsonExportLauncher = registerForActivityResult(
-        ActivityResultContracts.CreateDocument("application/json")) { uri ->
         onExportUri(uri)
     }
 

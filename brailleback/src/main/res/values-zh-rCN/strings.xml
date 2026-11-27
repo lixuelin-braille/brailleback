@@ -148,8 +148,6 @@
     <string name="braille_reader_export_fmt_brl_desc">"真正的盲文字符，给认 Unicode 盲文的点显器和编辑器用。保留 7 点、8 点；不插分页符。"</string>
     <string name="braille_reader_export_fmt_utf">"文本（Unicode 盲文）"</string>
     <string name="braille_reader_export_fmt_utf_desc">"Unicode 盲文纯文本，一段一行，不折行。适合在手机、电脑上直接读或改，不适合刻印排版。"</string>
-    <string name="braille_reader_export_fmt_json">"点位 JSON（逐格）"</string>
-    <string name="braille_reader_export_fmt_json_desc">"每格的点位、所在行和列、对应原文。给打印头和脚本用；点显器和刻印机都不能直接打开。"</string>
     <string name="braille_reader_export_preparing">"正在导出，请稍候…"</string>
     <string name="braille_reader_export_done">"已导出：%1$s"</string>
     <string name="braille_reader_export_fail">"导出失败：无法写入所选位置，换一个文件夹再试"</string>
