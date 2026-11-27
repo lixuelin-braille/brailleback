@@ -10,8 +10,8 @@ package com.linxi.brailleback.compose
  * 六个 key 与 res/xml/settings.xml 中同名子屏一一对应。注意两个特殊点：
  * 1) pref_sound_enabled / pref_sound_volume 实际由 SoundSchemeManager 读写，
  *    这里的常量用于契约测试交叉校验，避免 Compose 页漂到另一套键；
- * 2) motion_mode 没有 XML 默认值，服务会按连接方式（USB 开 / 蓝牙关）动态写入；
- *    用户手动拨过之后必须同时置 motion_mode_explicit，否则下次连接会被覆盖。
+ * 2) motion_mode 没有 XML 默认值；未手动拨过时服务一律按关闭写回。用户手动拨过之后
+ *    必须同时置 motion_mode_explicit，否则下次连接会被默认值覆盖。
  *
  * 键名常量由 SoundBehaviorContractTest 与 donottranslate.xml / strings.xml
  * 交叉校验，防止迁移后读写到另一份数据。
@@ -74,11 +74,20 @@ object SoundBehaviorLogic {
      * 手动拨动运动模式时要写入的键值对。
      *
      * 显式标记必须和值一起写：BrailleBackService.applyMotionModeDefault 只在
-     * motion_mode_explicit 为 false 时才按 USB / 蓝牙覆盖该值。少写一项，
+     * motion_mode_explicit 为 false 时才按默认值（关闭）覆盖该值。少写一项，
      * 用户的选择会在下次连接设备时悄悄丢失。
      */
     fun motionModeWrite(value: Boolean): Map<String, Boolean> = mapOf(
         KEY_MOTION_MODE to value,
         KEY_MOTION_MODE_EXPLICIT to true,
     )
+
+    /**
+     * 运动模式生效值解析（纯逻辑，便于 JVM 单测）。
+     *
+     * 用户显式拨过（[explicit] = true）时完全以存下的 [stored] 值为准；从未拨过时
+     * 一律默认关闭，不再按连接方式推导。显式选择永远优先于默认值。
+     */
+    fun resolveMotionMode(explicit: Boolean, stored: Boolean): Boolean =
+        if (explicit) stored else false
 }

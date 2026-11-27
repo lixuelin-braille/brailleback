@@ -248,8 +248,8 @@
     <string name="pref_idle_clear_3min_label">3 minutes</string>
     <string name="pref_idle_clear_5min_label">5 minutes</string>
 
-    <string name="pref_motion_mode_summary_on">Coalesce display updates during fast scrolling. On by default for USB connections</string>
-    <string name="pref_motion_mode_summary_off">Refresh the display on every update. The default for Bluetooth connections</string>
+    <string name="pref_motion_mode_summary_on">On. Rapid scrolling updates are coalesced and the display refreshes again after you stop scrolling. Off by default; turn it on manually only if you need it.</string>
+    <string name="pref_motion_mode_summary_off">Off. The display refreshes immediately on every update. This is the default.</string>
 
     <string name="pref_volume_gestures_enabled_title">Volume key gestures</string>
     <string name="pref_volume_gestures_enabled_summary_on">On. A slow press changes the volume by one step about 0.3 s after you release the key; a long press or a fast double press only runs the action below and never changes the volume. A slot set to None still behaves as an ordinary press.</string>

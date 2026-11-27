@@ -16,7 +16,7 @@ import java.io.File
  * 护栏要防四件事：
  * 1) 六个设置项在迁移中丢项，两个分组标题的 heading 语义丢失；
  * 2) 音效总开关 / 音量漂到另一套键或另一种数据类型（SoundSchemeManager 用 Boolean + Int）；
- * 3) 运动模式漏写 motion_mode_explicit —— 用户手动拨过的值会被服务按连接方式覆盖，
+ * 3) 运动模式漏写 motion_mode_explicit —— 用户手动拨过的值会被服务按默认值覆盖，
  *    这是本屏唯一「看不见但会丢设置」的动态逻辑；
  * 4) 音量对话框退化成只能靠手势拖的滑杆，中文读屏用户无法精确调节。
  *
@@ -192,7 +192,7 @@ class SoundBehaviorContractTest {
     fun motionModeToggleWritesExplicitMarkerExactlyLikeLegacyFragment() {
         val logic = compose("SoundBehaviorLogic.kt")
         assertTrue(
-            "手动拨动必须把显式标记置 true，否则服务会按连接方式覆盖用户选择",
+            "手动拨动必须把显式标记置 true，否则服务会按默认值覆盖用户选择",
             logic.contains("KEY_MOTION_MODE_EXPLICIT to true,")
         )
         val activity = compose("SoundBehaviorComposeActivity.kt")

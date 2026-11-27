@@ -28,6 +28,29 @@ class RefreshPolicyTest {
     }
 
     @Test
+    fun `默认关闭时单次刷新立即下发，不经运动去抖`() {
+        // 运动模式默认关闭后，单次焦点变化走 Send 分支，不进 motionDebouncer，
+        // 也就不会被 MOTION_MODE_DEBOUNCE_MS（350ms）压住再补刷。
+        assertEquals(
+            RefreshDecision.Send,
+            decide(connected = true, frozen = false, motion = false),
+        )
+    }
+
+    @Test
+    fun `显式开启运动模式时仍走运动去抖，行为与改前一致`() {
+        // 用户手动开启后，快速滑动合并刷新、停下再刷的设计意图保持不变。
+        val decision = decide(connected = true, frozen = false, motion = true)
+        assertTrue(
+            decision is RefreshDecision.Blocked,
+        )
+        assertEquals(
+            RefreshBlock.MOTION,
+            (decision as RefreshDecision.Blocked).reason,
+        )
+    }
+
+    @Test
     fun `未连点显器一律不刷`() {
         // 未连接时连冻结/运动模式都不必看：没有下游可发。
         assertEquals(
