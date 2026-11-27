@@ -713,6 +713,21 @@ class DisplayManager(
     }
 
     /**
+     * 前台窗口换到了别的应用（TYPE_WINDOW_STATE_CHANGED 且包名不是本应用）。
+     *
+     * 兜底自愈：独占只在本应用前台时成立。万一因为异常路径漏了一次
+     * release，hostOwned 会一直残留——压输出又吞按键，用户看到的就是
+     * 「退出阅读器后无障碍彻底不动」。这里不依赖阅读器的 hold/release 配对。
+     */
+    internal fun onForeignAppWindow() {
+        if (!hostOwned) {
+            return
+        }
+        LogUtils.i(this, "前台已换到别的应用，交还点显器")
+        releaseFromHostApp()
+    }
+
+    /**
      * Toggles the paused state. Returns `true` if the display is now
      * paused.
      */

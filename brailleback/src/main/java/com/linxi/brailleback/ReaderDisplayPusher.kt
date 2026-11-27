@@ -82,9 +82,14 @@ internal fun BrailleReaderActivity.holdDisplay() {
         holdingDisplay = BrailleBackService.holdDisplayForApp()
     }
 
-    /** 交还点显器；重复调用无副作用。 */
+    /**
+     * 交还点显器；重复调用无副作用。
+     *
+     * 不按 holdingDisplay 提前返回：那个标志是本地的，可能因为一次
+     * onResume 初始化或连接抖动被清掉，而服务侧的独占还开着。漏掉这一次
+     * release，服务就永久压输出+吞按键。服务侧 release 本身幂等，多调无害。
+     */
 internal fun BrailleReaderActivity.releaseDisplay() {
-        if (!holdingDisplay) return
         holdingDisplay = false
         BrailleBackService.releaseDisplayForApp()
     }

@@ -608,6 +608,15 @@ class BrailleBackService : AccessibilityService(),
             LogUtils.log(this, Log.VERBOSE, "Event detail: %s", event.toString())
             LogUtils.log(this, Log.VERBOSE, "Node detail: %s", event.source)
         }
+        // 应用内界面（阅读器）独占点显器期间，前台一旦换成别的应用就立刻交还。
+        // 只认 WINDOW_STATE_CHANGED：内容变化的噪音太大，下拉通知栏这类浮层
+        // 不该被当成「离开本应用」。
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            val pkg = event.packageName?.toString()
+            if (pkg != null && pkg != packageName) {
+                displayManager?.onForeignAppWindow()
+            }
+        }
         modeSwitcher?.let { switcher ->
             switcher.onObserveAccessibilityEvent(event)
             switcher.onAccessibilityEvent(event)

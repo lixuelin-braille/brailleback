@@ -430,8 +430,11 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             mReportedCells = cells.takeIf { it in 1..MAX_DISPLAY_CELLS }
         } else {
             mReportedCells = null
-            // 断开后冻结没有意义，清掉独占标记；重连时正文在屏会重新申请。
-            holdingDisplay = false
+            // 独占标记不在这里清。onResume 会先灌一次 NOT_CONNECTED 做初始化，
+            // 若在此清标志，等服务侧那份 hold 已经发出去了，两边就失去配对：
+            // 退出正文时 release 被 `if (!holdingDisplay) return` 拦掉，
+            // 服务侧 hostOwned 一直留着，压输出又吞按键，表现为阅读器一退
+            // 无障碍就彻底不动。真正的交还点只有 onPause 的 releaseDisplay()。
         }
         // 阅读单元随连接状态/方数变化：连接后按点显器一屏步进、断开后回屏幕一屏。
         // 页表步进单位变了必须重建，但只换「翻页的格子」，不移动当前阅读位置。
