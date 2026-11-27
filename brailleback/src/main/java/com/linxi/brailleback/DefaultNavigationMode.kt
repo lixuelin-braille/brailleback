@@ -130,6 +130,15 @@ internal class DefaultNavigationMode(
     private var mPendingBackwardScroll = false
 
     /**
+     * 最近一次滚动的方向：true 表示往上滚。
+     *
+     * 逻辑焦点滚出视口后要挑一个可见项接上，这时必须挑与滚动方向同一端的
+     * 那一头，否则往上翻会接回视口第一行，看起来像「没滚上去」，再按换行键
+     * 又因为已经在第一行而报「到头」。
+     */
+    internal var mLastScrollBackward = false
+
+    /**
      * 仅盲文模式下的独占期：用点显器按键/滚轮移动后，系统重置焦点的那些事件
      * 一律不理，直到用户真的用手指碰屏幕为止。
      *
@@ -290,8 +299,10 @@ internal class DefaultNavigationMode(
                     // 往上滚：系统仍把焦点重置到视口第一项，但用户要的是
                     // 上一屏的最后一行，所以这一帧不能跟，得自己取底部。
                     mPendingBackwardScroll = true
+                    mLastScrollBackward = true
                 } else if (event.scrollDeltaY > 0) {
                     mPendingBackwardScroll = false
+                    mLastScrollBackward = false
                 }
                 onScrollStarted()
                 return true

@@ -268,6 +268,7 @@ internal fun DefaultNavigationMode.scheduleBrailleAfterScroll(
     // 冷却窗口从滚动开始算：系统在这之后的重置都属于「跟着滚动走」的自动焦点，
     // 不能让它改写盲文；用户自己的触摸一般早过了窗口。
     onScrollStarted()
+    mLastScrollBackward = !forward
     val containerCopy = AccessibilityNodeInfoCompat.obtain(container)
     val previousCopy = AccessibilityNodeInfoCompat.obtain(previous)
     updateAfterScroll(sequence, containerCopy, previousCopy, forward,
@@ -412,7 +413,9 @@ internal fun DefaultNavigationMode.findFocusableInLastScrollContainer():
         }
         val visible = collectVisibleNodes(container)
         try {
-            return chooseVisibleTarget(visible, null, true)
+            // 接回逻辑焦点时取与滚动方向同一端的那一项：往上翻就接底部，
+            // 往下翻才接顶部。固定取顶部会让往上翻看起来像没滚上去。
+            return chooseVisibleTarget(visible, null, forward = !mLastScrollBackward)
         } finally {
             recycleSnapshots(visible)
         }
