@@ -1,0 +1,515 @@
+Calculating task graph as no cached configuration is available for tasks: :brailleback:lintDebug
+> Task :build-logic:extractPluginRequests UP-TO-DATE
+> Task :build-logic:generatePluginAdapters UP-TO-DATE
+> Task :build-logic:compileJava UP-TO-DATE
+> Task :build-logic:compileGroovy NO-SOURCE
+> Task :build-logic:compileGroovyPlugins UP-TO-DATE
+> Task :build-logic:pluginDescriptors UP-TO-DATE
+> Task :build-logic:processResources UP-TO-DATE
+> Task :build-logic:classes UP-TO-DATE
+> Task :build-logic:jar UP-TO-DATE
+
+> Configure project :brailleback
+WARNING: The option setting 'android.overridePathCheck=true' is experimental.
+The current default is 'false'.
+WARNING: The option setting 'android.enableResourceOptimizations=false' is deprecated.
+The current default is 'true'.
+It will be removed in version 9.0 of the Android Gradle plugin.
+
+> Task :addon:brailletranslate:preBuild UP-TO-DATE
+> Task :addon:tbcompat:preBuild UP-TO-DATE
+> Task :addon:braillecommon:preBuild UP-TO-DATE
+> Task :addon:braillecommon:generateDebugAssets UP-TO-DATE
+> Task :addon:brailleime:generateDebugAssets UP-TO-DATE
+> Task :addon:brailleimeanalytics:preBuild UP-TO-DATE
+> Task :addon:brailleinterfaces:preBuild UP-TO-DATE
+> Task :addon:brailleime:preBuild UP-TO-DATE
+> Task :addon:brailleimeanalytics:generateDebugAssets UP-TO-DATE
+> Task :addon:tbcompat:preDebugBuild UP-TO-DATE
+> Task :addon:brailleime:preDebugBuild UP-TO-DATE
+> Task :addon:brailletranslate:generateDebugAssets UP-TO-DATE
+> Task :addon:brailleimeanalytics:preDebugBuild UP-TO-DATE
+> Task :addon:brailleinterfaces:preDebugBuild UP-TO-DATE
+> Task :addon:brailletranslate:preDebugBuild UP-TO-DATE
+> Task :addon:braillecommon:preDebugBuild UP-TO-DATE
+> Task :addon:tbcompat:processDebugNavigationResources UP-TO-DATE
+> Task :addon:tbcompat:generateDebugResources UP-TO-DATE
+> Task :addon:tbcompat:writeDebugAarMetadata UP-TO-DATE
+> Task :addon:brailleimeanalytics:writeDebugAarMetadata UP-TO-DATE
+> Task :addon:brailleinterfaces:writeDebugAarMetadata UP-TO-DATE
+> Task :addon:braillecommon:generateDebugResources UP-TO-DATE
+> Task :addon:braillecommon:writeDebugAarMetadata UP-TO-DATE
+> Task :addon:brailletranslate:writeDebugAarMetadata UP-TO-DATE
+> Task :addon:braillecommon:processDebugNavigationResources UP-TO-DATE
+> Task :addon:brailleinterfaces:generateDebugResources UP-TO-DATE
+> Task :addon:brailleinterfaces:processDebugNavigationResources UP-TO-DATE
+> Task :addon:brailletranslate:generateDebugResources UP-TO-DATE
+> Task :addon:brailleime:mergeDebugJniLibFolders UP-TO-DATE
+> Task :addon:brailletranslate:processDebugNavigationResources UP-TO-DATE
+> Task :addon:tbcompat:javaPreCompileDebug UP-TO-DATE
+> Task :addon:tbcompat:generateDebugBuildConfig UP-TO-DATE
+> Task :addon:brailleime:mergeDebugNativeLibs NO-SOURCE
+> Task :addon:brailleinterfaces:javaPreCompileDebug UP-TO-DATE
+> Task :addon:brailleinterfaces:packageDebugResources UP-TO-DATE
+> Task :addon:braillecommon:packageDebugResources UP-TO-DATE
+> Task :addon:brailletranslate:packageDebugResources UP-TO-DATE
+> Task :addon:tbcompat:packageDebugResources UP-TO-DATE
+> Task :addon:braillecommon:javaPreCompileDebug UP-TO-DATE
+> Task :addon:brailletranslate:javaPreCompileDebug UP-TO-DATE
+> Task :addon:brailleime:stripDebugDebugSymbols NO-SOURCE
+> Task :addon:brailleime:generateDebugResources UP-TO-DATE
+> Task :addon:braillecommon:parseDebugLocalResources UP-TO-DATE
+> Task :addon:brailleinterfaces:parseDebugLocalResources UP-TO-DATE
+> Task :addon:brailletranslate:parseDebugLocalResources UP-TO-DATE
+> Task :addon:tbcompat:parseDebugLocalResources UP-TO-DATE
+> Task :addon:brailleime:processDebugNavigationResources UP-TO-DATE
+> Task :addon:brailleimeanalytics:generateDebugResources UP-TO-DATE
+> Task :addon:brailleimeanalytics:processDebugNavigationResources UP-TO-DATE
+> Task :addon:brailleimeanalytics:javaPreCompileDebug UP-TO-DATE
+> Task :addon:brailleime:mergeDebugAssets UP-TO-DATE
+> Task :addon:brailleime:javaPreCompileDebug UP-TO-DATE
+> Task :addon:brailleime:packageDebugResources UP-TO-DATE
+> Task :addon:brailleimeanalytics:packageDebugResources UP-TO-DATE
+> Task :addon:brailleime:writeDebugAarMetadata UP-TO-DATE
+> Task :addon:brailleimeanalytics:parseDebugLocalResources UP-TO-DATE
+> Task :addon:brailleime:parseDebugLocalResources UP-TO-DATE
+> Task :addon:brailleime:processDebugManifest UP-TO-DATE
+> Task :addon:tbcompat:generateDebugRFile UP-TO-DATE
+> Task :addon:brailleimeanalytics:mergeDebugJniLibFolders UP-TO-DATE
+> Task :addon:brailleimeanalytics:mergeDebugAssets UP-TO-DATE
+> Task :addon:brailleime:prepareDebugArtProfile
+> Task :addon:brailleimeanalytics:mergeDebugNativeLibs NO-SOURCE
+> Task :addon:brailleime:copyDebugJniLibsProjectAndLocalJars
+> Task :addon:brailleimeanalytics:prepareLintJarForPublish
+> Task :addon:braillecommon:prepareLintJarForPublish
+> Task :addon:brailleime:prepareLintJarForPublish
+> Task :addon:brailleimeanalytics:prepareDebugArtProfile
+> Task :addon:brailleimeanalytics:stripDebugDebugSymbols NO-SOURCE
+> Task :addon:braillecommon:mergeDebugJniLibFolders UP-TO-DATE
+> Task :addon:brailleimeanalytics:processDebugManifest UP-TO-DATE
+> Task :addon:braillecommon:mergeDebugNativeLibs NO-SOURCE
+> Task :addon:brailleinterfaces:generateDebugRFile UP-TO-DATE
+> Task :addon:braillecommon:mergeDebugAssets UP-TO-DATE
+> Task :addon:brailleime:extractDeepLinksForAarDebug FROM-CACHE
+> Task :addon:braillecommon:stripDebugDebugSymbols NO-SOURCE
+> Task :addon:brailleimeanalytics:extractDeepLinksForAarDebug FROM-CACHE
+> Task :addon:braillecommon:processDebugManifest UP-TO-DATE
+> Task :addon:brailleimeanalytics:copyDebugJniLibsProjectAndLocalJars
+> Task :addon:braillecommon:extractDeepLinksForAarDebug FROM-CACHE
+> Task :addon:brailletranslate:generateDebugRFile UP-TO-DATE
+> Task :addon:braillecommon:prepareDebugArtProfile
+> Task :addon:braillecommon:copyDebugJniLibsProjectAndLocalJars
+> Task :addon:brailletranslate:mergeDebugJniLibFolders UP-TO-DATE
+> Task :addon:brailletranslate:mergeDebugAssets UP-TO-DATE
+> Task :addon:brailletranslate:processDebugManifest UP-TO-DATE
+> Task :addon:brailletranslate:extractDeepLinksForAarDebug FROM-CACHE
+> Task :addon:braillecommon:generateDebugRFile UP-TO-DATE
+> Task :addon:brailletranslate:prepareDebugArtProfile
+> Task :addon:brailletranslate:prepareLintJarForPublish
+> Task :addon:brailleinterfaces:generateDebugAssets UP-TO-DATE
+> Task :addon:brailleinterfaces:mergeDebugJniLibFolders UP-TO-DATE
+> Task :addon:brailleinterfaces:mergeDebugAssets UP-TO-DATE
+> Task :addon:brailleinterfaces:mergeDebugNativeLibs NO-SOURCE
+> Task :addon:brailleinterfaces:stripDebugDebugSymbols NO-SOURCE
+> Task :addon:brailleimeanalytics:generateDebugRFile UP-TO-DATE
+> Task :addon:brailleinterfaces:prepareDebugArtProfile
+> Task :addon:brailleinterfaces:extractDeepLinksForAarDebug FROM-CACHE
+> Task :addon:brailleinterfaces:copyDebugJniLibsProjectAndLocalJars
+> Task :addon:brailleinterfaces:processDebugManifest UP-TO-DATE
+> Task :addon:brailleinterfaces:prepareLintJarForPublish
+> Task :addon:brailleime:generateDebugRFile UP-TO-DATE
+> Task :addon:tbcompat:mergeDebugJniLibFolders UP-TO-DATE
+> Task :addon:tbcompat:mergeDebugNativeLibs NO-SOURCE
+> Task :addon:tbcompat:stripDebugDebugSymbols NO-SOURCE
+> Task :addon:tbcompat:copyDebugJniLibsProjectAndLocalJars
+> Task :addon:tbcompat:extractDeepLinksForAarDebug FROM-CACHE
+> Task :addon:tbcompat:generateDebugAssets UP-TO-DATE
+> Task :addon:brailleimeanalytics:checkDebugAarMetadata
+> Task :addon:brailleime:checkDebugAarMetadata
+> Task :addon:braillecommon:checkDebugAarMetadata
+> Task :addon:tbcompat:mergeDebugAssets UP-TO-DATE
+> Task :client:preBuild UP-TO-DATE
+> Task :client:generateDebugAssets UP-TO-DATE
+> Task :client:preDebugBuild UP-TO-DATE
+> Task :addon:tbcompat:prepareDebugArtProfile
+> Task :addon:brailletranslate:configureNdkBuildDebug[arm64-v8a]
+> Task :addon:brailletranslate:configureNdkBuildDebug[armeabi-v7a]
+> Task :addon:brailleinterfaces:checkDebugAarMetadata
+> Task :addon:brailletranslate:checkDebugAarMetadata
+> Task :client:mergeDebugJniLibFolders UP-TO-DATE
+> Task :addon:tbcompat:prepareLintJarForPublish
+> Task :client:generateDebugResources UP-TO-DATE
+> Task :addon:tbcompat:processDebugManifest UP-TO-DATE
+> Task :client:prepareLintJarForPublish
+> Task :client:processDebugNavigationResources UP-TO-DATE
+> Task :client:checkDebugAarMetadata
+> Task :client:mergeDebugNativeLibs NO-SOURCE
+> Task :client:javaPreCompileDebug UP-TO-DATE
+> Task :client:mergeDebugAssets UP-TO-DATE
+> Task :client:packageDebugResources UP-TO-DATE
+> Task :client:writeDebugAarMetadata UP-TO-DATE
+> Task :client:stripDebugDebugSymbols NO-SOURCE
+> Task :libraries:compatutils:preBuild UP-TO-DATE
+> Task :libraries:compatutils:preDebugBuild UP-TO-DATE
+> Task :client:parseDebugLocalResources UP-TO-DATE
+> Task :libraries:compatutils:writeDebugAarMetadata UP-TO-DATE
+> Task :client:processDebugManifest UP-TO-DATE
+> Task :libraries:utils:preBuild UP-TO-DATE
+> Task :libraries:utils:preDebugBuild UP-TO-DATE
+> Task :libraries:compatutils:generateDebugResources UP-TO-DATE
+> Task :client:prepareDebugArtProfile
+> Task :libraries:utils:writeDebugAarMetadata UP-TO-DATE
+> Task :client:generateDebugRFile UP-TO-DATE
+> Task :addon:tbcompat:checkDebugAarMetadata
+> Task :client:extractDeepLinksForAarDebug FROM-CACHE
+> Task :client:copyDebugJniLibsProjectAndLocalJars
+> Task :libraries:compatutils:processDebugNavigationResources UP-TO-DATE
+> Task :libraries:utils:generateDebugResources UP-TO-DATE
+> Task :libraries:compatutils:javaPreCompileDebug UP-TO-DATE
+> Task :libraries:utils:processDebugNavigationResources UP-TO-DATE
+> Task :libraries:utils:javaPreCompileDebug UP-TO-DATE
+> Task :service:generateDebugAssets UP-TO-DATE
+> Task :libraries:utils:mergeDebugJniLibFolders UP-TO-DATE
+> Task :libraries:compatutils:packageDebugResources UP-TO-DATE
+> Task :libraries:utils:packageDebugResources UP-TO-DATE
+> Task :libraries:utils:mergeDebugNativeLibs NO-SOURCE
+> Task :service:prepareLintJarForPublish
+> Task :libraries:compatutils:parseDebugLocalResources UP-TO-DATE
+> Task :libraries:utils:parseDebugLocalResources UP-TO-DATE
+> Task :libraries:utils:generateDebugAssets UP-TO-DATE
+> Task :libraries:utils:stripDebugDebugSymbols NO-SOURCE
+> Task :libraries:compatutils:generateDebugRFile UP-TO-DATE
+> Task :libraries:utils:mergeDebugAssets UP-TO-DATE
+> Task :libraries:utils:generateDebugRFile UP-TO-DATE
+> Task :libraries:utils:copyDebugJniLibsProjectAndLocalJars
+> Task :libraries:utils:extractDeepLinksForAarDebug FROM-CACHE
+> Task :libraries:utils:prepareDebugArtProfile
+> Task :libraries:utils:checkDebugAarMetadata
+> Task :libraries:utils:prepareLintJarForPublish
+> Task :libraries:utils:processDebugManifest UP-TO-DATE
+> Task :libraries:compatutils:mergeDebugJniLibFolders UP-TO-DATE
+> Task :libraries:compatutils:mergeDebugNativeLibs NO-SOURCE
+> Task :libraries:compatutils:stripDebugDebugSymbols NO-SOURCE
+> Task :libraries:compatutils:checkDebugAarMetadata
+> Task :libraries:compatutils:generateDebugAssets UP-TO-DATE
+> Task :libraries:compatutils:extractDeepLinksForAarDebug FROM-CACHE
+> Task :libraries:compatutils:mergeDebugAssets UP-TO-DATE
+> Task :libraries:compatutils:copyDebugJniLibsProjectAndLocalJars
+> Task :libraries:compatutils:prepareDebugArtProfile
+> Task :brailleback:preBuild UP-TO-DATE
+> Task :brailleback:preDebugBuild UP-TO-DATE
+> Task :libraries:compatutils:prepareLintJarForPublish
+> Task :libraries:compatutils:processDebugManifest UP-TO-DATE
+> Task :brailleback:generateDebugBuildConfig UP-TO-DATE
+> Task :brailleback:javaPreCompileDebug UP-TO-DATE
+> Task :brailleback:generateDebugResources UP-TO-DATE
+> Task :brailleback:mapDebugSourceSetPaths UP-TO-DATE
+> Task :brailleback:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :brailleback:extractDeepLinksDebug UP-TO-DATE
+> Task :client:extractDeepLinksDebug UP-TO-DATE
+> Task :brailleback:packageDebugResources UP-TO-DATE
+> Task :addon:braillecommon:extractDeepLinksDebug UP-TO-DATE
+> Task :addon:brailleime:extractDeepLinksDebug UP-TO-DATE
+> Task :addon:brailleimeanalytics:extractDeepLinksDebug UP-TO-DATE
+> Task :addon:brailleinterfaces:extractDeepLinksDebug UP-TO-DATE
+> Task :addon:brailletranslate:extractDeepLinksDebug UP-TO-DATE
+> Task :addon:tbcompat:extractDeepLinksDebug UP-TO-DATE
+> Task :libraries:compatutils:extractDeepLinksDebug UP-TO-DATE
+> Task :libraries:utils:extractDeepLinksDebug UP-TO-DATE
+> Task :client:mapDebugSourceSetPaths UP-TO-DATE
+> Task :client:compileDebugLibraryResources UP-TO-DATE
+> Task :addon:brailleime:mapDebugSourceSetPaths UP-TO-DATE
+> Task :addon:brailleimeanalytics:mapDebugSourceSetPaths UP-TO-DATE
+> Task :addon:braillecommon:mapDebugSourceSetPaths UP-TO-DATE
+> Task :addon:brailleime:compileDebugLibraryResources UP-TO-DATE
+> Task :addon:brailleimeanalytics:compileDebugLibraryResources UP-TO-DATE
+> Task :addon:braillecommon:compileDebugLibraryResources UP-TO-DATE
+> Task :addon:brailleinterfaces:mapDebugSourceSetPaths UP-TO-DATE
+> Task :addon:brailletranslate:mapDebugSourceSetPaths UP-TO-DATE
+> Task :addon:brailleinterfaces:compileDebugLibraryResources UP-TO-DATE
+> Task :addon:tbcompat:mapDebugSourceSetPaths UP-TO-DATE
+> Task :libraries:compatutils:mapDebugSourceSetPaths UP-TO-DATE
+> Task :addon:tbcompat:compileDebugLibraryResources UP-TO-DATE
+> Task :addon:brailletranslate:compileDebugLibraryResources UP-TO-DATE
+> Task :brailleback:preDebugAndroidTestBuild SKIPPED
+> Task :libraries:compatutils:compileDebugLibraryResources UP-TO-DATE
+> Task :libraries:utils:mapDebugSourceSetPaths UP-TO-DATE
+> Task :libraries:utils:compileDebugLibraryResources UP-TO-DATE
+> Task :client:writeDebugLintModelMetadata
+> Task :addon:brailleime:writeDebugLintModelMetadata
+> Task :addon:braillecommon:writeDebugLintModelMetadata
+> Task :addon:brailleinterfaces:writeDebugLintModelMetadata
+> Task :addon:brailletranslate:writeDebugLintModelMetadata
+> Task :addon:brailleimeanalytics:writeDebugLintModelMetadata
+> Task :libraries:compatutils:compileDebugKotlin UP-TO-DATE
+> Task :libraries:compatutils:compileDebugJavaWithJavac NO-SOURCE
+> Task :libraries:compatutils:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :libraries:utils:writeDebugLintModelMetadata
+> Task :libraries:compatutils:writeDebugLintModelMetadata
+> Task :addon:tbcompat:writeDebugLintModelMetadata
+> Task :libraries:compatutils:processDebugJavaRes UP-TO-DATE
+> Task :libraries:compatutils:mergeDebugGeneratedProguardFiles
+> Task :client:compileDebugKotlin UP-TO-DATE
+> Task :libraries:compatutils:mergeDebugConsumerProguardFiles
+> Task :client:processDebugJavaRes UP-TO-DATE
+> Task :client:compileDebugJavaWithJavac UP-TO-DATE
+> Task :libraries:utils:compileDebugKotlin UP-TO-DATE
+> Task :addon:tbcompat:compileDebugKotlin UP-TO-DATE
+> Task :addon:tbcompat:compileDebugJavaWithJavac UP-TO-DATE
+> Task :addon:tbcompat:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :client:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :client:mergeDebugGeneratedProguardFiles
+> Task :libraries:compatutils:mergeDebugJavaResource
+> Task :addon:tbcompat:mergeDebugGeneratedProguardFiles
+> Task :addon:tbcompat:processDebugJavaRes UP-TO-DATE
+> Task :addon:tbcompat:mergeDebugConsumerProguardFiles
+> Task :client:mergeDebugJavaResource
+> Task :libraries:utils:compileDebugJavaWithJavac NO-SOURCE
+> Task :client:mergeDebugConsumerProguardFiles
+> Task :libraries:utils:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :libraries:utils:processDebugJavaRes UP-TO-DATE
+> Task :libraries:utils:mergeDebugGeneratedProguardFiles
+> Task :addon:tbcompat:mergeDebugJavaResource
+> Task :libraries:utils:mergeDebugConsumerProguardFiles
+> Task :service:verifyNativeLibs
+> Task :service:preBuild
+> Task :service:preDebugBuild
+> Task :client:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :addon:tbcompat:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :service:generateDebugBuildConfig UP-TO-DATE
+> Task :service:generateDebugResources UP-TO-DATE
+> Task :service:packageDebugResources UP-TO-DATE
+> Task :service:processDebugNavigationResources UP-TO-DATE
+> Task :service:parseDebugLocalResources UP-TO-DATE
+> Task :libraries:utils:mergeDebugJavaResource
+> Task :service:generateDebugRFile UP-TO-DATE
+> Task :service:checkDebugAarMetadata
+> Task :libraries:compatutils:extractDebugAnnotations FROM-CACHE
+> Task :addon:brailleinterfaces:extractDebugAnnotations FROM-CACHE
+> Task :client:extractDebugAnnotations FROM-CACHE
+> Task :service:javaPreCompileDebug UP-TO-DATE
+> Task :service:mergeDebugAssets UP-TO-DATE
+> Task :service:processDebugManifest UP-TO-DATE
+> Task :addon:tbcompat:extractDebugAnnotations FROM-CACHE
+> Task :service:prepareDebugArtProfile
+> Task :service:extractDeepLinksForAarDebug FROM-CACHE
+> Task :service:writeDebugAarMetadata UP-TO-DATE
+> Task :brailleback:processDebugNavigationResources UP-TO-DATE
+> Task :brailleback:parseDebugLocalResources UP-TO-DATE
+> Task :brailleback:checkDebugAarMetadata UP-TO-DATE
+> Task :addon:brailleinterfaces:compileDebugKotlin UP-TO-DATE
+> Task :brailleback:compileDebugNavigationResources UP-TO-DATE
+> Task :addon:brailleinterfaces:compileDebugJavaWithJavac UP-TO-DATE
+> Task :brailleback:generateDebugRFile UP-TO-DATE
+> Task :libraries:compatutils:syncDebugLibJars FROM-CACHE
+> Task :client:syncDebugLibJars FROM-CACHE
+> Task :addon:brailleinterfaces:mergeDebugGeneratedProguardFiles
+> Task :addon:brailleinterfaces:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :brailleback:mergeDebugResources UP-TO-DATE
+> Task :addon:brailleinterfaces:processDebugJavaRes UP-TO-DATE
+> Task :addon:tbcompat:syncDebugLibJars FROM-CACHE
+> Task :libraries:utils:extractDebugAnnotations
+> Task :service:mergeDebugJniLibFolders
+> Task :addon:brailleinterfaces:mergeDebugConsumerProguardFiles
+> Task :client:bundleDebugLocalLintAar
+> Task :addon:brailleinterfaces:mergeDebugJavaResource
+> Task :libraries:compatutils:bundleDebugLocalLintAar
+> Task :addon:brailletranslate:extractDebugAnnotations FROM-CACHE
+> Task :service:extractDeepLinksDebug UP-TO-DATE
+> Task :service:mapDebugSourceSetPaths UP-TO-DATE
+> Task :service:compileDebugLibraryResources UP-TO-DATE
+> Task :libraries:utils:syncDebugLibJars FROM-CACHE
+> Task :addon:tbcompat:bundleDebugLocalLintAar
+> Task :service:writeDebugLintModelMetadata
+> Task :addon:brailleinterfaces:syncDebugLibJars FROM-CACHE
+> Task :addon:brailleinterfaces:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :service:compileDebugKotlin UP-TO-DATE
+> Task :brailleback:processDebugMainManifest UP-TO-DATE
+> Task :service:extractDebugAnnotations
+> Task :service:processDebugJavaRes UP-TO-DATE
+> Task :brailleback:processDebugManifest UP-TO-DATE
+> Task :service:compileDebugJavaWithJavac UP-TO-DATE
+> Task :service:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :brailleback:processDebugManifestForPackage UP-TO-DATE
+> Task :service:mergeDebugGeneratedProguardFiles
+> Task :service:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :libraries:utils:bundleDebugLocalLintAar
+> Task :addon:brailleinterfaces:bundleDebugLocalLintAar
+> Task :service:mergeDebugNativeLibs
+> Task :client:createFullJarDebug
+> Task :libraries:compatutils:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :service:mergeDebugJavaResource
+> Task :addon:brailleinterfaces:createFullJarDebug
+> Task :service:mergeDebugConsumerProguardFiles
+> Task :libraries:utils:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :addon:brailletranslate:compileDebugKotlin UP-TO-DATE
+> Task :addon:brailletranslate:compileDebugJavaWithJavac UP-TO-DATE
+> Task :addon:brailletranslate:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :brailleback:processDebugResources UP-TO-DATE
+> Task :client:extractProguardFiles
+> Task :brailleback:extractProguardFiles
+> Task :addon:brailletranslate:processDebugJavaRes UP-TO-DATE
+> Task :libraries:compatutils:createFullJarDebug
+> Task :addon:brailletranslate:mergeDebugGeneratedProguardFiles
+> Task :addon:brailletranslate:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :addon:brailletranslate:mergeDebugConsumerProguardFiles
+> Task :libraries:utils:createFullJarDebug
+> Task :service:createFullJarDebug
+> Task :addon:brailletranslate:mergeDebugJavaResource
+> Task :addon:braillecommon:extractDebugAnnotations FROM-CACHE
+> Task :service:syncDebugLibJars FROM-CACHE
+> Task :service:extractProguardFiles
+> Task :addon:brailletranslate:createFullJarDebug
+> Task :libraries:compatutils:extractProguardFiles
+> Task :addon:tbcompat:createFullJarDebug
+> Task :libraries:utils:extractProguardFiles
+> Task :addon:braillecommon:extractProguardFiles
+> Task :addon:brailleinterfaces:extractProguardFiles
+> Task :brailleback:preDebugUnitTestBuild UP-TO-DATE
+> Task :addon:tbcompat:extractProguardFiles
+> Task :addon:brailletranslate:syncDebugLibJars FROM-CACHE
+> Task :addon:brailletranslate:extractProguardFiles
+> Task :addon:brailleime:extractProguardFiles
+> Task :addon:brailleimeanalytics:extractProguardFiles
+> Task :client:preDebugUnitTestBuild UP-TO-DATE
+> Task :client:preDebugAndroidTestBuild UP-TO-DATE
+> Task :addon:braillecommon:compileDebugKotlin UP-TO-DATE
+> Task :addon:braillecommon:compileDebugJavaWithJavac UP-TO-DATE
+> Task :addon:braillecommon:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :addon:brailleimeanalytics:compileDebugKotlin UP-TO-DATE
+> Task :addon:brailleimeanalytics:compileDebugJavaWithJavac NO-SOURCE
+> Task :addon:brailleimeanalytics:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :addon:brailleime:extractDebugAnnotations FROM-CACHE
+> Task :addon:brailletranslate:buildNdkBuildDebug[arm64-v8a]
+> Task :addon:brailleimeanalytics:extractDebugAnnotations FROM-CACHE
+> Task :addon:brailleimeanalytics:mergeDebugGeneratedProguardFiles
+> Task :addon:brailleimeanalytics:mergeDebugConsumerProguardFiles
+> Task :addon:brailleimeanalytics:processDebugJavaRes UP-TO-DATE
+> Task :addon:brailleimeanalytics:mergeDebugJavaResource
+> Task :addon:brailleimeanalytics:syncDebugLibJars FROM-CACHE
+> Task :addon:brailleime:compileDebugKotlin UP-TO-DATE
+> Task :addon:brailleime:compileDebugJavaWithJavac UP-TO-DATE
+> Task :addon:brailleime:mergeDebugGeneratedProguardFiles
+> Task :addon:brailleime:mergeDebugConsumerProguardFiles
+> Task :addon:brailleimeanalytics:bundleDebugLocalLintAar
+> Task :addon:brailleime:processDebugJavaRes UP-TO-DATE
+> Task :addon:braillecommon:mergeDebugGeneratedProguardFiles
+> Task :addon:braillecommon:mergeDebugConsumerProguardFiles
+> Task :addon:braillecommon:processDebugJavaRes UP-TO-DATE
+> Task :addon:brailleime:mergeDebugJavaResource
+> Task :addon:braillecommon:mergeDebugJavaResource
+> Task :addon:brailleime:syncDebugLibJars FROM-CACHE
+> Task :addon:braillecommon:syncDebugLibJars FROM-CACHE
+> Task :addon:braillecommon:bundleDebugLocalLintAar
+> Task :addon:brailleime:bundleDebugLocalLintAar
+> Task :addon:brailleime:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :addon:braillecommon:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :addon:braillecommon:createFullJarDebug
+> Task :addon:brailleime:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :addon:brailletranslate:buildNdkBuildDebug[armeabi-v7a]
+> Task :addon:brailletranslate:mergeDebugNativeLibs UP-TO-DATE
+> Task :addon:brailleime:createFullJarDebug
+> Task :addon:brailleimeanalytics:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :addon:brailleimeanalytics:createFullJarDebug
+> Task :service:stripDebugDebugSymbols
+> Task :brailleback:compileDebugKotlin UP-TO-DATE
+> Task :brailleback:compileDebugJavaWithJavac UP-TO-DATE
+> Task :brailleback:bundleDebugClassesToCompileJar UP-TO-DATE
+> Task :service:preDebugAndroidTestBuild
+> Task :service:preDebugUnitTestBuild
+> Task :addon:braillecommon:preDebugAndroidTestBuild UP-TO-DATE
+> Task :addon:braillecommon:preDebugUnitTestBuild UP-TO-DATE
+> Task :addon:brailleime:preDebugAndroidTestBuild UP-TO-DATE
+> Task :addon:brailleime:preDebugUnitTestBuild UP-TO-DATE
+> Task :addon:brailleimeanalytics:preDebugAndroidTestBuild UP-TO-DATE
+> Task :addon:brailleimeanalytics:preDebugUnitTestBuild UP-TO-DATE
+> Task :addon:brailleinterfaces:preDebugAndroidTestBuild UP-TO-DATE
+> Task :service:copyDebugJniLibsProjectAndLocalJars
+> Task :service:bundleDebugLocalLintAar
+> Task :addon:brailletranslate:stripDebugDebugSymbols
+> Task :addon:brailletranslate:copyDebugJniLibsProjectAndLocalJars
+> Task :addon:brailletranslate:bundleDebugLocalLintAar
+> Task :client:generateDebugLintModel
+> Task :client:lintAnalyzeDebug FROM-CACHE
+> Task :client:generateDebugUnitTestLintModel
+> Task :libraries:compatutils:generateDebugLintModel
+> Task :service:generateDebugAndroidTestLintModel
+> Task :addon:tbcompat:generateDebugLintModel
+> Task :service:generateDebugUnitTestLintModel
+> Task :libraries:utils:generateDebugLintModel
+> Task :service:generateDebugLintModel
+> Task :addon:brailleinterfaces:generateDebugLintModel
+> Task :addon:braillecommon:generateDebugAndroidTestLintModel
+> Task :addon:braillecommon:generateDebugUnitTestLintModel
+> Task :addon:brailletranslate:generateDebugLintModel
+> Task :addon:brailleime:generateDebugAndroidTestLintModel
+> Task :addon:brailleime:generateDebugUnitTestLintModel
+> Task :addon:brailleinterfaces:preDebugUnitTestBuild UP-TO-DATE
+> Task :addon:brailleimeanalytics:generateDebugAndroidTestLintModel
+> Task :addon:brailletranslate:preDebugAndroidTestBuild UP-TO-DATE
+> Task :addon:braillecommon:generateDebugLintModel
+> Task :addon:brailleinterfaces:generateDebugUnitTestLintModel
+> Task :addon:brailletranslate:preDebugUnitTestBuild UP-TO-DATE
+> Task :client:generateDebugAndroidTestLintModel
+> Task :addon:tbcompat:preDebugAndroidTestBuild UP-TO-DATE
+> Task :addon:brailletranslate:generateDebugAndroidTestLintModel
+> Task :addon:tbcompat:preDebugUnitTestBuild UP-TO-DATE
+> Task :addon:brailleimeanalytics:generateDebugUnitTestLintModel
+> Task :libraries:compatutils:preDebugAndroidTestBuild UP-TO-DATE
+> Task :addon:brailleimeanalytics:generateDebugLintModel
+> Task :addon:brailletranslate:generateDebugUnitTestLintModel
+> Task :libraries:compatutils:preDebugUnitTestBuild UP-TO-DATE
+> Task :addon:brailleime:generateDebugLintModel
+> Task :libraries:compatutils:generateDebugAndroidTestLintModel
+> Task :addon:tbcompat:generateDebugUnitTestLintModel
+> Task :libraries:utils:preDebugAndroidTestBuild UP-TO-DATE
+> Task :libraries:utils:preDebugUnitTestBuild UP-TO-DATE
+> Task :addon:tbcompat:generateDebugAndroidTestLintModel
+> Task :libraries:compatutils:generateDebugUnitTestLintModel
+> Task :libraries:utils:generateDebugUnitTestLintModel
+> Task :libraries:utils:generateDebugAndroidTestLintModel
+> Task :brailleback:generateDebugLintReportModel
+> Task :addon:tbcompat:lintAnalyzeDebug FROM-CACHE
+> Task :libraries:compatutils:lintAnalyzeDebug FROM-CACHE
+> Task :addon:brailleinterfaces:lintAnalyzeDebug FROM-CACHE
+> Task :addon:brailleinterfaces:generateDebugAndroidTestLintModel
+> Task :client:lintAnalyzeDebugAndroidTest FROM-CACHE
+> Task :addon:brailletranslate:lintAnalyzeDebug FROM-CACHE
+> Task :client:lintAnalyzeDebugUnitTest FROM-CACHE
+> Task :brailleback:generateDebugAndroidTestLintModel
+> Task :brailleback:generateDebugUnitTestLintModel
+> Task :brailleback:lintAnalyzeDebugAndroidTest
+> Task :service:lintAnalyzeDebugAndroidTest
+> Task :libraries:utils:lintAnalyzeDebug
+> Task :service:lintAnalyzeDebugUnitTest
+> Task :addon:braillecommon:lintAnalyzeDebugAndroidTest
+> Task :brailleback:lintAnalyzeDebugUnitTest
+> Task :addon:braillecommon:lintAnalyzeDebug
+> Task :addon:braillecommon:lintAnalyzeDebugUnitTest
+> Task :addon:brailleime:lintAnalyzeDebugAndroidTest
+> Task :addon:brailleime:lintAnalyzeDebugUnitTest
+> Task :addon:brailleimeanalytics:lintAnalyzeDebugAndroidTest
+> Task :addon:brailleimeanalytics:lintAnalyzeDebugUnitTest
+> Task :addon:brailleinterfaces:lintAnalyzeDebugAndroidTest FROM-CACHE
+> Task :addon:brailleinterfaces:lintAnalyzeDebugUnitTest FROM-CACHE
+> Task :addon:brailletranslate:lintAnalyzeDebugAndroidTest
+> Task :addon:brailletranslate:lintAnalyzeDebugUnitTest
+> Task :addon:tbcompat:lintAnalyzeDebugAndroidTest FROM-CACHE
+> Task :addon:tbcompat:lintAnalyzeDebugUnitTest FROM-CACHE
+> Task :libraries:compatutils:lintAnalyzeDebugAndroidTest FROM-CACHE
+> Task :libraries:compatutils:lintAnalyzeDebugUnitTest FROM-CACHE
+> Task :libraries:utils:lintAnalyzeDebugAndroidTest FROM-CACHE
+> Task :libraries:utils:lintAnalyzeDebugUnitTest FROM-CACHE
+> Task :addon:brailleimeanalytics:lintAnalyzeDebug
+> Task :service:lintAnalyzeDebug
+> Task :addon:brailleime:lintAnalyzeDebug
+> Task :brailleback:lintAnalyzeDebug
+
+> Task :brailleback:lintReportDebug
+Wrote HTML report to file:///D:/bb-wt/sunshine/brailleback/build/reports/lint-results-debug.html
+
+> Task :brailleback:lintDebug
+
+BUILD SUCCESSFUL in 3m 16s
+424 actionable tasks: 175 executed, 43 from cache, 206 up-to-date
+Configuration cache entry stored.

@@ -1,0 +1,21 @@
+N3 打印预检 · 门禁与实证汇总（feat/print-preflight）
+
+一、门禁结果
+- :brailleback:testDebugUnitTest：BUILD SUCCESSFUL；全量 1082 例，失败 0，错误 0，跳过 0。
+  其中 PrintPreflightTest 16 例全绿（main 基线 1066 例 + 本轮新增 16 例，不减用例、不新增失败）。
+- :brailleback:lintDebug：BUILD SUCCESSFUL；error 0，warning 944（既有基线告警，abortOnError=true 下不红）。
+- 日志：test.log、lint.log。
+
+二、新增文件
+- brailleback/src/main/java/com/linxi/brailleback/PrintPreflight.kt
+- brailleback/src/test/kotlin/com/linxi/brailleback/PrintPreflightTest.kt
+
+三、四项检查触发情况（实证样本，见 preflight-report.txt）
+- LINE_WIDTH 行宽越界：触发 1 条（第 7 行 34 方，超 4 方）。
+- PAGE_COUNT 页数超限：触发 1 条（预估 2 页，超上限 1 页）。
+- BINDING_MARGIN 装订边不足：触发 1 条（剩 165.0 mm，需 180.0 mm，差 15.0 mm）。
+- DOT_DENSITY 点密度超限：触发 2 条（第 7 行 204 点、第 12 行 72 点，上限 60）。
+- 判定：需重排。N3 验收判据（125 §3：预检能判出一次「需重排」）达成。
+
+四、单测口径
+- 四项检查各 1 正 1 反；边界值：等于上限判可打，超 1 方判需重排；另含空输入、朗读稿汇总用例。

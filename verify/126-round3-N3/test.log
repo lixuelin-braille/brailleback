@@ -1,0 +1,377 @@
+Starting a Gradle Daemon, 1 busy and 1 stopped Daemons could not be reused, use --status for details
+Reusing configuration cache.
+> Task :addon:braillecommon:preBuild UP-TO-DATE
+> Task :addon:tbcompat:preBuild UP-TO-DATE
+> Task :addon:brailleime:preBuild UP-TO-DATE
+> Task :addon:brailleinterfaces:preBuild UP-TO-DATE
+> Task :libraries:utils:preBuild UP-TO-DATE
+> Task :addon:brailleimeanalytics:preBuild UP-TO-DATE
+> Task :client:preBuild UP-TO-DATE
+> Task :addon:brailletranslate:preBuild UP-TO-DATE
+> Task :brailleback:preBuild UP-TO-DATE
+> Task :libraries:compatutils:preBuild UP-TO-DATE
+> Task :addon:brailleime:preDebugBuild UP-TO-DATE
+> Task :addon:tbcompat:preDebugBuild UP-TO-DATE
+> Task :libraries:utils:preDebugBuild UP-TO-DATE
+> Task :addon:brailleinterfaces:preDebugBuild UP-TO-DATE
+> Task :client:preDebugBuild UP-TO-DATE
+> Task :libraries:compatutils:preDebugBuild UP-TO-DATE
+> Task :addon:braillecommon:preDebugBuild UP-TO-DATE
+> Task :brailleback:preDebugBuild UP-TO-DATE
+> Task :addon:brailletranslate:preDebugBuild UP-TO-DATE
+> Task :addon:brailleimeanalytics:preDebugBuild UP-TO-DATE
+> Task :addon:brailletranslate:processDebugNavigationResources UP-TO-DATE
+> Task :addon:tbcompat:processDebugNavigationResources UP-TO-DATE
+> Task :client:processDebugNavigationResources UP-TO-DATE
+> Task :addon:brailleimeanalytics:processDebugNavigationResources UP-TO-DATE
+> Task :brailleback:generateDebugBuildConfig UP-TO-DATE
+> Task :libraries:compatutils:processDebugNavigationResources UP-TO-DATE
+> Task :addon:brailleinterfaces:processDebugNavigationResources UP-TO-DATE
+> Task :libraries:utils:processDebugNavigationResources UP-TO-DATE
+> Task :libraries:compatutils:generateDebugResources UP-TO-DATE
+> Task :addon:brailletranslate:generateDebugResources UP-TO-DATE
+> Task :libraries:utils:generateDebugResources UP-TO-DATE
+> Task :client:generateDebugResources UP-TO-DATE
+> Task :addon:tbcompat:generateDebugResources UP-TO-DATE
+> Task :addon:brailleinterfaces:generateDebugResources UP-TO-DATE
+> Task :brailleback:generateDebugResources UP-TO-DATE
+> Task :addon:braillecommon:generateDebugResources UP-TO-DATE
+> Task :addon:braillecommon:processDebugNavigationResources UP-TO-DATE
+> Task :addon:brailleime:generateDebugResources UP-TO-DATE
+> Task :addon:brailleime:processDebugNavigationResources UP-TO-DATE
+> Task :addon:brailleimeanalytics:generateDebugResources UP-TO-DATE
+> Task :client:javaPreCompileDebug UP-TO-DATE
+> Task :libraries:utils:javaPreCompileDebug UP-TO-DATE
+> Task :libraries:compatutils:javaPreCompileDebug UP-TO-DATE
+> Task :addon:tbcompat:packageDebugResources UP-TO-DATE
+> Task :client:packageDebugResources UP-TO-DATE
+> Task :libraries:utils:packageDebugResources UP-TO-DATE
+> Task :libraries:compatutils:packageDebugResources UP-TO-DATE
+> Task :addon:brailletranslate:packageDebugResources UP-TO-DATE
+> Task :addon:brailleinterfaces:packageDebugResources UP-TO-DATE
+> Task :addon:tbcompat:generateDebugBuildConfig UP-TO-DATE
+> Task :addon:tbcompat:javaPreCompileDebug UP-TO-DATE
+> Task :addon:brailleimeanalytics:packageDebugResources UP-TO-DATE
+> Task :brailleback:packageDebugResources UP-TO-DATE
+> Task :addon:brailleinterfaces:javaPreCompileDebug UP-TO-DATE
+> Task :addon:brailletranslate:javaPreCompileDebug UP-TO-DATE
+> Task :addon:brailleimeanalytics:javaPreCompileDebug UP-TO-DATE
+> Task :addon:braillecommon:javaPreCompileDebug UP-TO-DATE
+> Task :brailleback:javaPreCompileDebug UP-TO-DATE
+> Task :addon:brailleime:javaPreCompileDebug UP-TO-DATE
+> Task :addon:brailleinterfaces:parseDebugLocalResources UP-TO-DATE
+> Task :addon:brailletranslate:parseDebugLocalResources UP-TO-DATE
+> Task :client:writeDebugAarMetadata UP-TO-DATE
+> Task :libraries:utils:parseDebugLocalResources UP-TO-DATE
+> Task :addon:brailleimeanalytics:parseDebugLocalResources UP-TO-DATE
+> Task :addon:tbcompat:parseDebugLocalResources UP-TO-DATE
+> Task :client:parseDebugLocalResources UP-TO-DATE
+> Task :libraries:compatutils:parseDebugLocalResources UP-TO-DATE
+> Task :addon:braillecommon:writeDebugAarMetadata UP-TO-DATE
+> Task :addon:brailleime:writeDebugAarMetadata UP-TO-DATE
+> Task :addon:brailleimeanalytics:writeDebugAarMetadata UP-TO-DATE
+> Task :addon:tbcompat:writeDebugAarMetadata UP-TO-DATE
+> Task :addon:brailleinterfaces:writeDebugAarMetadata UP-TO-DATE
+> Task :addon:brailletranslate:writeDebugAarMetadata UP-TO-DATE
+> Task :libraries:utils:writeDebugAarMetadata UP-TO-DATE
+> Task :client:extractDeepLinksDebug UP-TO-DATE
+> Task :brailleback:mapDebugSourceSetPaths UP-TO-DATE
+> Task :brailleback:extractDeepLinksDebug UP-TO-DATE
+> Task :client:generateDebugRFile UP-TO-DATE
+> Task :addon:braillecommon:extractDeepLinksDebug UP-TO-DATE
+> Task :addon:brailleime:extractDeepLinksDebug UP-TO-DATE
+> Task :addon:braillecommon:packageDebugResources UP-TO-DATE
+> Task :addon:brailleimeanalytics:extractDeepLinksDebug UP-TO-DATE
+> Task :brailleback:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :libraries:compatutils:writeDebugAarMetadata UP-TO-DATE
+> Task :client:processDebugManifest UP-TO-DATE
+> Task :addon:brailleime:processDebugManifest UP-TO-DATE
+> Task :addon:braillecommon:parseDebugLocalResources UP-TO-DATE
+> Task :addon:brailleinterfaces:extractDeepLinksDebug UP-TO-DATE
+> Task :addon:braillecommon:processDebugManifest UP-TO-DATE
+> Task :libraries:compatutils:extractDeepLinksDebug UP-TO-DATE
+> Task :addon:brailletranslate:extractDeepLinksDebug UP-TO-DATE
+> Task :addon:brailleinterfaces:processDebugManifest UP-TO-DATE
+> Task :addon:brailletranslate:processDebugManifest UP-TO-DATE
+> Task :addon:tbcompat:extractDeepLinksDebug UP-TO-DATE
+> Task :libraries:utils:extractDeepLinksDebug UP-TO-DATE
+> Task :libraries:compatutils:processDebugManifest UP-TO-DATE
+> Task :client:mapDebugSourceSetPaths UP-TO-DATE
+> Task :addon:braillecommon:mapDebugSourceSetPaths UP-TO-DATE
+> Task :addon:brailleimeanalytics:mapDebugSourceSetPaths UP-TO-DATE
+> Task :addon:brailleime:mapDebugSourceSetPaths UP-TO-DATE
+> Task :libraries:utils:processDebugManifest UP-TO-DATE
+> Task :addon:tbcompat:processDebugManifest UP-TO-DATE
+> Task :client:compileDebugLibraryResources UP-TO-DATE
+> Task :addon:brailleimeanalytics:compileDebugLibraryResources UP-TO-DATE
+> Task :addon:brailletranslate:mapDebugSourceSetPaths UP-TO-DATE
+> Task :addon:tbcompat:mapDebugSourceSetPaths UP-TO-DATE
+> Task :addon:brailleinterfaces:mapDebugSourceSetPaths UP-TO-DATE
+> Task :libraries:compatutils:mapDebugSourceSetPaths UP-TO-DATE
+> Task :libraries:utils:mapDebugSourceSetPaths UP-TO-DATE
+> Task :addon:braillecommon:compileDebugLibraryResources UP-TO-DATE
+> Task :addon:brailleime:packageDebugResources UP-TO-DATE
+> Task :addon:brailletranslate:compileDebugLibraryResources UP-TO-DATE
+> Task :addon:brailleimeanalytics:processDebugManifest UP-TO-DATE
+> Task :addon:tbcompat:compileDebugLibraryResources UP-TO-DATE
+> Task :brailleback:preDebugUnitTestBuild UP-TO-DATE
+> Task :addon:brailleinterfaces:compileDebugLibraryResources UP-TO-DATE
+> Task :libraries:utils:compileDebugLibraryResources UP-TO-DATE
+> Task :libraries:compatutils:compileDebugLibraryResources UP-TO-DATE
+> Task :addon:brailleime:parseDebugLocalResources UP-TO-DATE
+> Task :brailleback:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :addon:brailleime:compileDebugLibraryResources UP-TO-DATE
+> Task :libraries:compatutils:generateDebugRFile UP-TO-DATE
+> Task :libraries:utils:generateDebugRFile UP-TO-DATE
+> Task :addon:tbcompat:generateDebugRFile UP-TO-DATE
+> Task :addon:brailleinterfaces:generateDebugRFile UP-TO-DATE
+> Task :libraries:compatutils:compileDebugKotlin UP-TO-DATE
+> Task :client:compileDebugKotlin UP-TO-DATE
+> Task :libraries:compatutils:processDebugJavaRes UP-TO-DATE
+> Task :client:processDebugJavaRes UP-TO-DATE
+> Task :libraries:compatutils:compileDebugJavaWithJavac NO-SOURCE
+> Task :libraries:compatutils:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :libraries:compatutils:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :client:compileDebugJavaWithJavac UP-TO-DATE
+> Task :addon:brailletranslate:generateDebugRFile UP-TO-DATE
+> Task :client:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :client:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :addon:braillecommon:generateDebugRFile UP-TO-DATE
+> Task :addon:brailleimeanalytics:generateDebugRFile UP-TO-DATE
+> Task :addon:brailleime:generateDebugRFile UP-TO-DATE
+> Task :addon:tbcompat:compileDebugKotlin UP-TO-DATE
+> Task :addon:tbcompat:compileDebugJavaWithJavac UP-TO-DATE
+> Task :addon:tbcompat:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :addon:tbcompat:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :addon:tbcompat:processDebugJavaRes UP-TO-DATE
+> Task :libraries:utils:compileDebugKotlin UP-TO-DATE
+> Task :libraries:utils:compileDebugJavaWithJavac NO-SOURCE
+> Task :libraries:utils:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :libraries:utils:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :libraries:utils:processDebugJavaRes UP-TO-DATE
+> Task :addon:brailleinterfaces:compileDebugKotlin UP-TO-DATE
+> Task :addon:brailleinterfaces:compileDebugJavaWithJavac UP-TO-DATE
+> Task :service:verifyNativeLibs
+> Task :service:preBuild
+> Task :service:preDebugBuild
+> Task :addon:brailleinterfaces:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :addon:brailleinterfaces:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :service:writeDebugAarMetadata UP-TO-DATE
+> Task :service:javaPreCompileDebug UP-TO-DATE
+> Task :service:extractDeepLinksDebug UP-TO-DATE
+> Task :addon:brailleinterfaces:processDebugJavaRes UP-TO-DATE
+> Task :service:generateDebugBuildConfig UP-TO-DATE
+> Task :service:processDebugManifest UP-TO-DATE
+> Task :service:mapDebugSourceSetPaths UP-TO-DATE
+> Task :service:generateDebugResources UP-TO-DATE
+> Task :service:processDebugNavigationResources UP-TO-DATE
+> Task :addon:brailletranslate:compileDebugKotlin UP-TO-DATE
+> Task :service:packageDebugResources UP-TO-DATE
+> Task :service:parseDebugLocalResources UP-TO-DATE
+> Task :service:generateDebugRFile UP-TO-DATE
+> Task :addon:brailletranslate:compileDebugJavaWithJavac UP-TO-DATE
+> Task :addon:brailletranslate:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :addon:brailletranslate:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :addon:brailletranslate:processDebugJavaRes UP-TO-DATE
+> Task :service:compileDebugLibraryResources UP-TO-DATE
+> Task :brailleback:processDebugNavigationResources UP-TO-DATE
+> Task :brailleback:checkDebugAarMetadata UP-TO-DATE
+> Task :brailleback:compileDebugNavigationResources UP-TO-DATE
+> Task :brailleback:parseDebugLocalResources UP-TO-DATE
+> Task :brailleback:processDebugMainManifest UP-TO-DATE
+> Task :brailleback:processDebugManifest UP-TO-DATE
+> Task :brailleback:processDebugManifestForPackage UP-TO-DATE
+> Task :brailleback:mergeDebugResources UP-TO-DATE
+> Task :brailleback:generateDebugRFile UP-TO-DATE
+> Task :addon:braillecommon:compileDebugKotlin UP-TO-DATE
+> Task :addon:braillecommon:compileDebugJavaWithJavac UP-TO-DATE
+> Task :addon:braillecommon:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :addon:braillecommon:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :addon:braillecommon:processDebugJavaRes UP-TO-DATE
+> Task :service:compileDebugKotlin UP-TO-DATE
+> Task :addon:brailleimeanalytics:compileDebugKotlin UP-TO-DATE
+> Task :addon:brailleimeanalytics:compileDebugJavaWithJavac NO-SOURCE
+> Task :addon:brailleimeanalytics:processDebugJavaRes UP-TO-DATE
+> Task :addon:brailleimeanalytics:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :service:processDebugJavaRes UP-TO-DATE
+> Task :addon:brailleimeanalytics:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :service:compileDebugJavaWithJavac UP-TO-DATE
+> Task :service:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :service:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :addon:brailleime:compileDebugKotlin UP-TO-DATE
+> Task :addon:brailleime:compileDebugJavaWithJavac UP-TO-DATE
+> Task :addon:brailleime:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :addon:brailleime:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :addon:brailleime:processDebugJavaRes UP-TO-DATE
+> Task :brailleback:processDebugResources
+
+> Task :brailleback:compileDebugKotlin
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/BrailleBackService.kt:171:37 'constructor(): Handler' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/BrailleBackService.kt:304:13 'when' is exhaustive so 'else' is redundant here.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/BrailleBackService.kt:688:17 'constructor(p0: Any!): AccessibilityNodeInfoCompat' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/BrailleIME.kt:416:52 'fun switchToNextInputMethod(p0: IBinder!, p1: Boolean): Boolean' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/BrailleMenuNavigationMode.kt:175:42 'val info: Any!' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/BrailleMenuNavigationMode.kt:279:30 'val info: Any!' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/BrailleReaderActivity.kt:276:26 'fun announceForAccessibility(p0: CharSequence!): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/DefaultNavigationModeActions.kt:91:25 'fun getInfo(): Any!' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/DefaultNavigationModeActions.kt:92:40 'val actions: Int' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/DefaultNavigationModeActions.kt:161:25 'fun getInfo(): Any!' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/DefaultNavigationModeBraille.kt:160:13 'constructor(p0: Any!): AccessibilityNodeInfoCompat' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/DefaultNavigationModeBraille.kt:200:12 'constructor(p0: Any!): AccessibilityNodeInfoCompat' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/DefaultNavigationModeScrolling.kt:117:27 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/DefaultNavigationModeScrolling.kt:122:19 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/DefaultNavigationModeScrolling.kt:145:14 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/DefaultNavigationModeScrolling.kt:158:20 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/DefaultNavigationModeScrolling.kt:162:16 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/DefaultNavigationModeScrolling.kt:222:19 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/DefaultNavigationModeScrolling.kt:252:23 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/DefaultNavigationModeScrolling.kt:283:27 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/DefaultNavigationModeScrolling.kt:284:26 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/DefaultNavigationModeScrolling.kt:295:27 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/DefaultNavigationModeScrolling.kt:315:36 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/DefaultNavigationModeScrolling.kt:331:27 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/DefaultNavigationModeScrolling.kt:333:27 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/DefaultNavigationModeScrolling.kt:334:26 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/DefaultNavigationModeScrolling.kt:383:18 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/DefaultNavigationModeScrolling.kt:386:19 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/DefaultNavigationModeScrolling.kt:413:19 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/DisplayManager.kt:243:30 'static field SCREEN_DIM_WAKE_LOCK: Int' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/DisplayManager.kt:327:31 The corresponding parameter in the supertype 'OnInputEventListener' is named 'inputEvent'. This may cause problems when calling this function with named arguments.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/DisplaySpans.kt:141:70 'val info: Any!' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/DisplaySpans.kt:157:18 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/DraggableOverlay.kt:167:32 'constructor(p0: Handler.Callback?): Handler' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/FocusFinder.kt:43:87 'val info: Any!' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/FocusFinder.kt:93:27 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/FocusFinder.kt:144:27 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/FocusFinder.kt:171:28 'constructor(p0: Any!): AccessibilityNodeInfoCompat' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/FocusFinder.kt:174:23 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/FocusFinder.kt:175:26 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/HomeContainerActivity.kt:164:30 'fun announceForAccessibility(p0: CharSequence!): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/HomeContainerActivity.kt:241:26 'fun announceForAccessibility(p0: CharSequence!): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/HomeContainerActivity.kt:287:30 'fun announceForAccessibility(p0: CharSequence!): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/IMENavigationMode.kt:420:18 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/IMESetupWizardActivity.kt:20:8 'class Fragment : Any, ComponentCallbacks2, View.OnCreateContextMenuListener' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/IMESetupWizardActivity.kt:21:8 'class FragmentManager : Any' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/IMESetupWizardActivity.kt:22:8 'class FragmentTransaction : Any' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/IMESetupWizardActivity.kt:101:38 'constructor(): Fragment' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/IMESetupWizardActivity.kt:101:38 'class Fragment : Any, ComponentCallbacks2, View.OnCreateContextMenuListener' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/IMESetupWizardActivity.kt:103:22 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/IMESetupWizardActivity.kt:108:27 'val activity: Activity!' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/IMESetupWizardActivity.kt:119:18 'val activity: Activity!' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/IMESetupWizardActivity.kt:129:39 'constructor(): Fragment' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/IMESetupWizardActivity.kt:129:39 'class Fragment : Any, ComponentCallbacks2, View.OnCreateContextMenuListener' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/IMESetupWizardActivity.kt:137:22 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/IMESetupWizardActivity.kt:141:27 'val activity: Activity!' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/IMESetupWizardActivity.kt:160:22 This declaration overrides a deprecated member but is not marked as deprecated itself. Add the '@Deprecated' annotation or suppress the diagnostic.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/IMESetupWizardActivity.kt:161:19 'fun onResume(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/IMESetupWizardActivity.kt:170:24 'val activity: Activity!' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/IMESetupWizardActivity.kt:223:43 'class Fragment : Any, ComponentCallbacks2, View.OnCreateContextMenuListener' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/IMESetupWizardActivity.kt:224:31 'val fragmentManager: FragmentManager!' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/IMESetupWizardActivity.kt:225:51 'fun beginTransaction(): FragmentTransaction!' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/IMESetupWizardActivity.kt:226:29 'fun replace(p0: Int, p1: Fragment!): FragmentTransaction!' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/IMESetupWizardActivity.kt:227:29 'fun commit(): Int' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/IMESetupWizardActivity.kt:234:27 'constructor(): Handler' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/NodeBrailler.kt:124:27 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/NodeBrailler.kt:128:23 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/OverlayDisplay.kt:232:27 The corresponding parameter in the supertype 'OnResizeListener' is named 'maxNumTextCells'. This may cause problems when calling this function with named arguments.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/SearchNavigationMode.kt:230:21 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/SearchNavigationMode.kt:480:13 'constructor(p0: Any!): AccessibilityNodeInfoCompat' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/SearchView.kt:63:38 'fun getColor(p0: Int): Int' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/SearchView.kt:64:38 'fun getColor(p0: Int): Int' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/SelfBrailleService.kt:68:18 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/SelfBrailleService.kt:127:36 'val info: Any!' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/SelfBrailleService.kt:232:26 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/SelfBrailleService.kt:252:25 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/SelfBrailleService.kt:261:18 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/SelfBrailleService.kt:286:44 'val info: Any!' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/TranslatorManager.kt:129:45 Java type mismatch: inferred type is 'ArrayList<TableInfo>?', but '(Mutable)List<out TableInfo!>' was expected.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/TranslatorManager.kt:135:53 'field locale: Locale!' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/TranslatorManager.kt:138:36 'field locale: Locale!' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/TreeDebugNavigationMode.kt:155:49 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/TreeDebugNavigationMode.kt:160:49 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/TreeDebugNavigationMode.kt:175:56 'constructor(p0: Any!): AccessibilityNodeInfoCompat' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/TreeDebugNavigationMode.kt:202:23 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/TreeDebugNavigationMode.kt:207:20 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/TreeDebugNavigationMode.kt:208:19 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/TreeDebugNavigationMode.kt:209:18 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/TreeDebugNavigationMode.kt:232:22 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/TreeDebugNavigationMode.kt:236:20 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/TreeDebugNavigationMode.kt:237:18 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/TreeDebugNavigationMode.kt:276:29 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/TreeDebugNavigationMode.kt:296:27 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/TreeDebugNavigationMode.kt:320:30 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/TreeDebugNavigationMode.kt:323:30 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/TreeDebugNavigationMode.kt:373:31 'constructor(p0: Any!): AccessibilityNodeInfoCompat' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/compose/BrailleDisplayComposeActivity.kt:405:26 'fun announceForAccessibility(p0: CharSequence!): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/compose/BrailleDisplayComposeActivity.kt:420:13 'constructor(p0: String!, p1: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/compose/BrailleDisplayComposeActivity.kt:428:28 'constructor(p0: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/compose/BrailleReaderScreen.kt:202:53 'fun SemanticsPropertyReceiver.invisibleToUser(): Unit' is deprecated. Use `hideFromAccessibility()` instead.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/compose/DeviceConnectionComposeActivity.kt:324:30 'fun announceForAccessibility(p0: CharSequence!): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/compose/DeviceConnectionComposeActivity.kt:329:30 'fun announceForAccessibility(p0: CharSequence!): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/compose/HomeNavigationCatalog.kt:18:29 This annotation is currently applied to the value parameter only, but in the future it will also be applied to field.
+- To opt in to applying to both value parameter and field, add '-Xannotation-default-target=param-property' to your compiler arguments.
+- To keep applying to the value parameter only, use the '@param:' annotation target.
+
+See https://youtrack.jetbrains.com/issue/KT-73255 for more details.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/compose/SettingsHomeCatalog.kt:21:50 This annotation is currently applied to the value parameter only, but in the future it will also be applied to field.
+- To opt in to applying to both value parameter and field, add '-Xannotation-default-target=param-property' to your compiler arguments.
+- To keep applying to the value parameter only, use the '@param:' annotation target.
+
+See https://youtrack.jetbrains.com/issue/KT-73255 for more details.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/compose/SettingsHomeCatalog.kt:33:23 This annotation is currently applied to the value parameter only, but in the future it will also be applied to field.
+- To opt in to applying to both value parameter and field, add '-Xannotation-default-target=param-property' to your compiler arguments.
+- To keep applying to the value parameter only, use the '@param:' annotation target.
+
+See https://youtrack.jetbrains.com/issue/KT-73255 for more details.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/compose/SettingsHomeCatalog.kt:52:5 This annotation is currently applied to the value parameter only, but in the future it will also be applied to field.
+- To opt in to applying to both value parameter and field, add '-Xannotation-default-target=param-property' to your compiler arguments.
+- To keep applying to the value parameter only, use the '@param:' annotation target.
+
+See https://youtrack.jetbrains.com/issue/KT-73255 for more details.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/compose/SettingsHomeCatalog.kt:53:5 This annotation is currently applied to the value parameter only, but in the future it will also be applied to field.
+- To opt in to applying to both value parameter and field, add '-Xannotation-default-target=param-property' to your compiler arguments.
+- To keep applying to the value parameter only, use the '@param:' annotation target.
+
+See https://youtrack.jetbrains.com/issue/KT-73255 for more details.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/compose/UsbPermissionProxyActivity.kt:48:30 'fun <T : Parcelable!> getParcelableExtra(p0: String!): T?' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/ime/BrailleImeHostPassthrough.kt:60:35 'fun getDefaultDisplay(): Display!' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/ime/BrailleImeHostPassthrough.kt:61:13 'fun getRealMetrics(p0: DisplayMetrics!): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/ime/BrailleImeHostSpeech.kt:108:38 'static fun obtain(p0: Int): AccessibilityEvent!' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/ime/BrailleImeHostSpeech.kt:108:64 'static field TYPE_ANNOUNCEMENT: Int' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/ime/LegacyEditBuffer.kt:35:62 The corresponding parameter in the supertype 'EditBuffer' is named 'brailleCharacter'. This may cause problems when calling this function with named arguments.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/ime/LegacyEditBuffer.kt:117:13 Condition is always 'false'.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/math/MathBrailleActivity.kt:360:26 'fun announceForAccessibility(p0: CharSequence!): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/rule/DefaultBrailleRule.kt:42:30 'val labeledBy: AccessibilityNodeInfoCompat!' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/rule/DefaultBrailleRule.kt:45:23 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/rule/DefaultBrailleRule.kt:56:38 'var isChecked: Boolean' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/rule/DefaultBrailleRule.kt:57:47 'var isChecked: Boolean' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/tactile/TactileExportActivity.kt:478:26 'fun announceForAccessibility(p0: CharSequence!): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/tactile/TactileStripActivity.kt:130:37 'static field VIBRATOR_SERVICE: String' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/tactile/TactileStripActivity.kt:301:26 'fun announceForAccessibility(p0: CharSequence!): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/utils/LabelingUtils.kt:41:34 'val info: Any!' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/wrapping/ParagraphBlock.kt:208:23 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/wrapping/ParagraphBlock.kt:273:30 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/wrapping/ParagraphBlock.kt:285:27 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/wrapping/ParagraphBlock.kt:299:23 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/wrapping/ParagraphBlock.kt:322:30 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/wrapping/ParagraphBlock.kt:337:31 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/wrapping/ParagraphBlock.kt:347:27 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/wrapping/ParagraphBlock.kt:370:23 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/wrapping/ParagraphBlock.kt:409:23 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/wrapping/ParagraphBlock.kt:441:29 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/wrapping/ParagraphBlock.kt:450:26 'fun recycle(): Unit' is deprecated. Deprecated in Java.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/wrapping/WrapStrategy.kt:444:13 Condition is always 'false'.
+w: file:///D:/bb-wt/sunshine/brailleback/src/main/java/com/linxi/brailleback/wrapping/WrapStrategy.kt:507:13 Condition is always 'false'.
+
+> Task :brailleback:processDebugJavaRes
+> Task :brailleback:compileDebugJavaWithJavac UP-TO-DATE
+> Task :brailleback:bundleDebugClassesToRuntimeJar
+> Task :brailleback:bundleDebugClassesToCompileJar
+> Task :brailleback:compileDebugUnitTestKotlin
+> Task :brailleback:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :brailleback:processDebugUnitTestJavaRes
+> Task :brailleback:testDebugUnitTest
+
+BUILD SUCCESSFUL in 39s
+186 actionable tasks: 9 executed, 177 up-to-date
+Configuration cache entry reused.
