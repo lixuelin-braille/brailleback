@@ -43,6 +43,7 @@ import com.linxi.brailleback.compose.ReaderDialog
 import com.linxi.brailleback.compose.ReaderLabels
 import com.linxi.brailleback.compose.ReaderScrollState
 import com.linxi.brailleback.compose.ReaderUiState
+import com.linxi.brailleback.compose.MoreAction
 import com.linxi.brailleback.compose.TranslateAction
 import com.linxi.brailleback.reader.ReaderChapters
 import com.linxi.brailleback.reader.ReaderDisplayAction
@@ -310,6 +311,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
                     goto = getString(R.string.braille_reader_goto),
                     export = getString(R.string.braille_reader_export),
                     translate = getString(R.string.braille_reader_translate_menu),
+                    more = getString(R.string.braille_reader_more),
                     fontSize = getString(R.string.braille_reader_font_size),
                     navHint = getString(R.string.braille_reader_nav_hint),
                     ok = getString(android.R.string.ok),
@@ -337,6 +339,8 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
                 onExport = ::showExportMenu,
                 onTranslate = ::showTranslateMenu,
                 onTranslatePick = ::onTranslatePick,
+                onMore = ::showMoreMenu,
+                onMorePick = ::onMorePick,
                 onFont = ::showFontSizeDialog,
                 onFontSizePick = ::onFontSizePicked,
                 onTocPick = ::onTocPicked,
@@ -487,6 +491,45 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
     internal fun translationTableName(): String {
         val info = mTranslatorManager.getTranslator()?.tableInfo ?: return "unknown"
         return "${info.id ?: ""}|${info.locale}|${info.grade}|${info.isEightDot}"
+    }
+
+    /**
+     * 「更多」菜单：翻译、字号、导出。
+     *
+     * 正文上方只留 目录 / 书签 / 更多 三个入口。按钮一多，读屏滑过按钮区
+     * 要多走好几步，正文区也被挤短；字号、导出这些低频操作收进来更划算。
+     */
+    internal fun showMoreMenu() {
+        val labels = ArrayList<String>(3)
+        val descriptions = ArrayList<String>(3)
+        val actions = ArrayList<MoreAction>(3)
+        // 只有明眼文字书才有翻译这回事；盲文文件连这一项都不列，省得白点。
+        if (mSourceKind == ReaderSourceKind.TEXT) {
+            labels.add(getString(R.string.braille_reader_translate_menu))
+            descriptions.add(getString(R.string.braille_reader_more_translate_desc))
+            actions.add(MoreAction.TRANSLATE)
+        }
+        labels.add(getString(R.string.braille_reader_font_size))
+        descriptions.add(getString(R.string.braille_reader_more_font_desc, uiState.fontSizeSp))
+        actions.add(MoreAction.FONT)
+        if (mStream.isNotEmpty()) {
+            labels.add(getString(R.string.braille_reader_export))
+            descriptions.add(getString(R.string.braille_reader_more_export_desc))
+            actions.add(MoreAction.EXPORT)
+        }
+        readerDialog = ReaderDialog.More(
+            getString(R.string.braille_reader_more_title), labels, descriptions, actions)
+    }
+
+    internal fun onMorePick(which: Int) {
+        val dialog = readerDialog as? ReaderDialog.More ?: return
+        val action = dialog.actions.getOrNull(which) ?: return
+        readerDialog = null
+        when (action) {
+            MoreAction.TRANSLATE -> showTranslateMenu()
+            MoreAction.FONT -> showFontSizeDialog()
+            MoreAction.EXPORT -> showExportMenu()
+        }
     }
 
     /**

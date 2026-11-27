@@ -38,6 +38,8 @@ internal data class ReaderLabels(
     val export: String,
     /** 「翻译」菜单入口：重新翻译 / 停止翻译 / 清除缓存。 */
     val translate: String,
+    /** 「更多」菜单入口：翻译、字号、导出都收在里面。 */
+    val more: String,
     val fontSize: String,
     val navHint: String,
     val ok: String,
@@ -71,6 +73,8 @@ internal data class ReaderUiState(
     val exportEnabled: Boolean = false,
     /** 「翻译」按钮能不能点：只有明眼文字（需要翻译的那种）才有意义。 */
     val translateEnabled: Boolean = false,
+    /** 「更多」按钮：有正文才摆出来。 */
+    val moreEnabled: Boolean = false,
 )
 
 /**
@@ -133,10 +137,20 @@ internal sealed interface ReaderDialog {
         val descriptions: List<String>,
         val actions: List<TranslateAction>,
     ) : ReaderDialog
+    /** 「更多」菜单：标题、条目、说明与对应动作。 */
+    data class More(
+        val title: String,
+        val labels: List<String>,
+        val descriptions: List<String>,
+        val actions: List<MoreAction>,
+    ) : ReaderDialog
 }
 
 /** 翻译菜单里的动作。条目按当前状态动态生成，序号与这里一一对应。 */
 internal enum class TranslateAction { RETRY, STOP, CLEAR_CACHE }
+
+/** 「更多」菜单里的动作：翻译、字号、导出。 */
+internal enum class MoreAction { TRANSLATE, FONT, EXPORT }
 
 @Composable
 internal fun BrailleReaderScreen(
@@ -154,6 +168,8 @@ internal fun BrailleReaderScreen(
     onExport: () -> Unit,
     onTranslate: () -> Unit = {},
     onTranslatePick: (Int) -> Unit = {},
+    onMore: () -> Unit = {},
+    onMorePick: (Int) -> Unit = {},
     onFont: () -> Unit,
     onFontSizePick: (Int) -> Unit,
     onTocPick: (Int) -> Unit,
@@ -272,34 +288,14 @@ internal fun BrailleReaderScreen(
                 ) {
                     Text(labels.bookmark)
                 }
-                // 翻译入口：重新翻译、停止翻译、清除缓存都收在这个菜单里，
-                // 盲文文件不需要翻译，按状态置灰。
+                // 翻译、字号、导出都收进「更多」：正文上方只留三个入口，
+                // 免得一排按钮把正文挤没，读屏滑过按钮区也要多走好几步。
                 OutlinedButton(
-                    onClick = onTranslate,
-                    enabled = uiState.translateEnabled,
+                    onClick = onMore,
+                    enabled = uiState.moreEnabled,
                     modifier = Modifier.weight(1f),
                 ) {
-                    Text(labels.translate)
-                }
-            }
-
-            // 第三行：字号 / 导出为盲文
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OutlinedButton(
-                    onClick = onFont,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(labels.fontSize)
-                }
-                Button(
-                    onClick = onExport,
-                    enabled = uiState.exportEnabled,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(labels.export)
+                    Text(labels.more)
                 }
             }
         }
@@ -347,6 +343,10 @@ internal fun BrailleReaderScreen(
             is ReaderDialog.Translate -> ListDialog(
                 current.title, current.labels, labels.cancel,
                 onPick = onTranslatePick, onDismiss = onDismissDialog,
+                descriptions = current.descriptions)
+            is ReaderDialog.More -> ListDialog(
+                current.title, current.labels, labels.cancel,
+                onPick = onMorePick, onDismiss = onDismissDialog,
                 descriptions = current.descriptions)
         }
     }

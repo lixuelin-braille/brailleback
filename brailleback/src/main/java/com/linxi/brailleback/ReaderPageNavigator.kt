@@ -441,5 +441,6 @@ internal fun BrailleReaderActivity.updateUiState() {
             exportEnabled = hasContent,
             // 盲文文件本来就不翻译，翻译菜单只在明眼文字书上有意义。
             translateEnabled = hasContent && mSourceKind == ReaderSourceKind.TEXT,
+            moreEnabled = hasContent,
         )
     }

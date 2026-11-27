@@ -125,7 +125,11 @@
     <string name="braille_reader_err_doc_legacy">Legacy .doc is not supported. Save it as .docx in Word and open it again</string>
     <string name="braille_reader_err_no_text">This file has no readable text (images only)</string>
     <string name="braille_reader_err_too_large">The file is too large to unpack (limit 128 MB)</string>
-    <string name="braille_reader_translate_menu">Translate</string>
+    <string name="braille_reader_more">More</string>
+    <string name="braille_reader_more_title">More</string>
+    <string name="braille_reader_more_translate_desc">Translate again, stop translating, clear the stored translation</string>
+    <string name="braille_reader_more_font_desc">Current size: %1$d</string>
+    <string name="braille_reader_more_export_desc">Export as BRF, BRL or text</string>    <string name="braille_reader_translate_menu">Translate</string>
     <string name="braille_reader_translate_menu_title">Translation</string>
     <string name="braille_reader_translate_retry">Translate again</string>
     <string name="braille_reader_translate_retry_desc">Discard the previous result and start over</string>

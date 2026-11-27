@@ -71,7 +71,11 @@
     
     
     
-    <string name="braille_reader_translate_menu">"翻译"</string>
+    <string name="braille_reader_more">"更多"</string>
+    <string name="braille_reader_more_title">"更多"</string>
+    <string name="braille_reader_more_translate_desc">"重新翻译、停止翻译、清除本书缓存"</string>
+    <string name="braille_reader_more_font_desc">"当前 %1$d 号字"</string>
+    <string name="braille_reader_more_export_desc">"导出为 BRF、BRL 或文本"</string>    <string name="braille_reader_translate_menu">"翻译"</string>
     <string name="braille_reader_translate_menu_title">"翻译"</string>
     <string name="braille_reader_translate_retry">"重新翻译"</string>
     <string name="braille_reader_translate_retry_desc">"丢掉上次的结果，从头再翻一遍"</string>
