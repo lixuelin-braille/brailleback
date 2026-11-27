@@ -126,6 +126,9 @@ internal class DefaultNavigationMode(
     /** 本次滚动是否已经上过一帧；上过之后冷却期内一律静默，保证一屏只刷一次。 */
     private var mCooldownFrameDone = false
 
+    /** 最近一次滚动是不是往上滚；用来把盲文落到上一屏最后一行。 */
+    private var mPendingBackwardScroll = false
+
     /**
      * 仅盲文模式下的独占期：用点显器按键/滚轮移动后，系统重置焦点的那些事件
      * 一律不理，直到用户真的用手指碰屏幕为止。
@@ -283,12 +286,25 @@ internal class DefaultNavigationMode(
             AccessibilityEvent.TYPE_VIEW_SCROLLED -> {
                 // 读屏自己的手势滚动和惯性滚动不经过 attemptScrollAction，
                 // 但系统滚完同样会把焦点重置到新一屏首行，这里统一记冷却起点。
+                if (event.scrollDeltaY < 0) {
+                    // 往上滚：系统仍把焦点重置到视口第一项，但用户要的是
+                    // 上一屏的最后一行，所以这一帧不能跟，得自己取底部。
+                    mPendingBackwardScroll = true
+                } else if (event.scrollDeltaY > 0) {
+                    mPendingBackwardScroll = false
+                }
                 onScrollStarted()
                 return true
             }
             AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED -> {
                 if (mIgnoreFocusUntilTouch) {
                     return true
+                }
+                if (mPendingBackwardScroll) {
+                    mPendingBackwardScroll = false
+                    if (brailleLastLineOfContainer()) {
+                        return true
+                    }
                 }
                 if (!shouldFollowFocusEvent(mScrollUpdatePending, sinceScrollMillis())) {
                     // 滚动后系统把焦点重置到新一屏的正确位置，这是唯一可信的一帧：
@@ -430,6 +446,41 @@ internal class DefaultNavigationMode(
         mScrollGuardRunnable = null
         // settle 已经把这屏刷上去了，本次滚动的帧名额用掉。
         mCooldownFrameDone = true
+    }
+
+    /**
+     * 往上滚之后，把盲文落到视口里最靠下的可聚焦项，也就是上一屏的最后一行。
+     *
+     * 系统滚完会把焦点重置到视口第一项，跟着它就会停在新一屏第 1 行，和用户
+     * 「回上一屏」的预期正好相反。这里不去跟那一帧，直接按可见范围取底部队尾。
+     *
+     * @return 是否已经上屏；取不到滚动容器或没有可聚焦项时返回 false，
+     *         让调用方回到普通跟随，避免盲文僵在旧内容上。
+     */
+    internal fun brailleLastLineOfContainer(): Boolean {
+        val stored = mLastScrollableNode.get() ?: return false
+        val container = AccessibilityNodeInfoUtils.refreshNode(stored)
+                ?: return false
+        try {
+            if (!container.isVisibleToUser) {
+                return false
+            }
+            val visible = collectVisibleNodes(container)
+            try {
+                val target = chooseVisibleTarget(visible, null, forward = false)
+                        ?: return false
+                try {
+                    focusOrBraille(target)
+                    return true
+                } finally {
+                    target.recycle()
+                }
+            } finally {
+                recycleSnapshots(visible)
+            }
+        } finally {
+            container.recycle()
+        }
     }
 
     override fun onInvalidateAccessibilityNode(
