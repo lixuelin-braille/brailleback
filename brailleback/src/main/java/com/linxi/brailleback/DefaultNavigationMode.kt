@@ -19,6 +19,7 @@ package com.linxi.brailleback
 import android.accessibilityservice.AccessibilityService
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
@@ -41,6 +42,14 @@ internal const val HTML_ELEMENT_MOVE_BY_LIST =
         WebInterfaceUtils.HTML_ELEMENT_MOVE_BY_LIST
 
 /**
+ * 焦点稳定窗口（毫秒）：系统让无障碍焦点在两个节点间来回跳时，窗口内的
+ * 连续焦点事件只补刷最后一帧。首帧不受影响，所以单步移动的响应不变。
+ * 取 120 是因为它低于人能察觉的「迟滞」门限，又足够吞掉一次自绘控件抖动；
+ * 再大的话，连续换焦点会明显发木。
+ */
+internal const val FOCUS_SETTLE_MILLIS = 120L
+
+/**
  * Navigation mode that is based on traversing the node tree using
  * accessibility focus.
  */
@@ -61,6 +70,26 @@ internal class DefaultNavigationMode(
     internal val mLastScrollableNode = AccessibilityNodeInfoRef()
 
     internal val mMainHandler = Handler(Looper.getMainLooper())
+
+    /**
+     * 焦点稳定闸门：空闲后的第一帧立刻上屏，同一窗口内的后续焦点事件合并成一帧。
+     * 只在「系统让焦点来回跳」时起作用，正常单步浏览不会变慢。
+     */
+    private val mFocusSettleGate = FocusSettleGate(FOCUS_SETTLE_MILLIS)
+
+    /** 是否已有一个补刷帧排在主线程队列里（队列里有就不再重复排）。 */
+    private var mSettlePending = false
+
+    /** 补刷时若取不到焦点节点，是否退到「第一个可聚焦节点」。 */
+    private var mSettleFallback = false
+
+    private val mSettleRunnable = Runnable {
+        mSettlePending = false
+        val fallback = mSettleFallback
+        mSettleFallback = false
+        mFocusSettleGate.onFlushed()
+        performSettledBraille(fallback)
+    }
 
     internal var mScrollSequence = 0
 
@@ -180,6 +209,8 @@ internal class DefaultNavigationMode(
     }
 
     override fun onDeactivate() {
+        cancelSettle()
+        mFocusSettleGate.reset()
         mScrollSequence++
         mScrollUpdatePending = false
         mLastScrollableNode.clear()
@@ -192,9 +223,11 @@ internal class DefaultNavigationMode(
     override fun onAccessibilityEvent(event: AccessibilityEvent): Boolean {
         when (event.eventType) {
             AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED ->
-                brailleNodeFromEvent(event)
+                // 事件节点此刻还活着，首帧可以直接用它；被合并的那一帧等到期时
+                // 事件对象已回收，改取「当前焦点」，避免读到失效节点。
+                scheduleFocusBraille(fallback = true) { brailleNodeFromEvent(event) }
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED ->
-                brailleFocusedNode()
+                scheduleFocusBraille(fallback = false) { brailleFocusedNode() }
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
                 if (!brailleFocusedNode()) {
                     // Since focus is typically not set in a newly opened
@@ -207,6 +240,40 @@ internal class DefaultNavigationMode(
             }
         }
         return true
+    }
+
+    /**
+     * 焦点相关事件的统一入口：第一帧立刻执行 [immediate]，同一窗口内的后续事件
+     * 合并成一次补刷。补刷取「当前焦点」而不是事件节点，见
+     * [AccessibilityEvent] 的回收规则。
+     */
+    private fun scheduleFocusBraille(fallback: Boolean, immediate: () -> Unit) {
+        mSettleFallback = mSettleFallback || fallback
+        val delay = mFocusSettleGate.onEvent(SystemClock.uptimeMillis())
+        if (delay <= 0L) {
+            // 首帧放行：队列里若有更早的补刷，它的内容会被这一帧取代。
+            cancelSettle()
+            immediate()
+            return
+        }
+        if (mSettlePending) {
+            return
+        }
+        mSettlePending = true
+        mMainHandler.postDelayed(mSettleRunnable, delay)
+    }
+
+    private fun cancelSettle() {
+        mSettlePending = false
+        mSettleFallback = false
+        mMainHandler.removeCallbacks(mSettleRunnable)
+    }
+
+    /** 补刷：优先当前焦点节点，取不到时按调用场景决定是否退到第一个可聚焦节点。 */
+    private fun performSettledBraille(fallback: Boolean) {
+        if (!brailleFocusedNode() && fallback) {
+            brailleFirstFocusableNode()
+        }
     }
 
     override fun onInvalidateAccessibilityNode(
