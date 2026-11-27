@@ -87,7 +87,18 @@ internal fun BrailleReaderActivity.loadBytes(uri: Uri, resetPosition: Boolean, t
             val name = decoded.second
             Log.d(BrailleReaderActivity.LOG_TAG, "load done: name=$name chars=${text.length}")
             runOnUiThread {
-                when (BrailleFileDecoder.detectKind(text)) {
+                // 后缀本身是电子盲文（.brf/.brl/.bdo/.bdoc）就直接读点位，不送翻译：
+                // 内容启发式只在后缀不表态时才用，因为部分 BRF 的 ASCII 组成
+                // 跟普通英文正文分不开，会被判成明眼文字白翻一遍。
+                val kind = BrailleFileDecoder.detectKind(text).let { detected ->
+                    if (detected == BrailleFileDecoder.ContentKind.TEXT &&
+                        BrailleFileDecoder.isBrailleFileName(name)) {
+                        BrailleFileDecoder.ContentKind.ASCII
+                    } else {
+                        detected
+                    }
+                }
+                when (kind) {
                     BrailleFileDecoder.ContentKind.TEXT -> {
                         mSourceText = text
                         mSourceKind = ReaderSourceKind.TEXT

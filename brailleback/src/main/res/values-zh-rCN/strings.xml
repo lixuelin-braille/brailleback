@@ -74,8 +74,8 @@
     <string name="braille_reader_hint">"从书架选一本书开始阅读。ASCII 盲文会显示为 Unicode 盲文。"</string>
     <string name="braille_reader_at_start">"已经是书的开头了。"</string>
     <string name="braille_reader_at_end">"已经是书的末尾了。"</string>
-    <string name="braille_reader_translator_pending">"翻译服务还没就绪，先显示原文，服务起来后会自动换成盲文。"</string>
-    <string name="braille_reader_translator_unavailable">"翻译服务没有启动，先按原文阅读；需要盲文请重新打开这本书重试。"</string>
+    <string name="braille_reader_translator_pending">"翻译服务启动中，先读原文"</string>
+    <string name="braille_reader_translator_unavailable">"翻译服务没启动，先按原文读"</string>
     <string name="braille_reader_export_wait_translate">"正在翻译，翻完就自动打开导出。"</string>
     <string name="braille_reader_export_need_translate">"导出需要盲文，但翻译服务还没就绪。现在按原文显示，等翻译可用后再导出。"</string>
     <string name="braille_reader_open">"打开"</string>
@@ -93,11 +93,11 @@
     <string name="braille_reader_err_doc_legacy">"旧版 .doc 暂不支持，请用 Word 另存为 .docx 后再打开"</string>
     <string name="braille_reader_err_no_text">"文件里没有可读的文字（可能只有图片）"</string>
     <string name="braille_reader_err_too_large">"文件体积过大，已停止解压（上限 128 MB）"</string>
-    <string name="braille_reader_translating">"正在翻译为盲文…"</string>
+    <string name="braille_reader_translating">"开始翻译"</string>
     <string name="braille_reader_translator_waiting">"正在启动盲文翻译服务…"</string>
     <string name="braille_reader_translate_fail">"翻译失败，已显示原文；连接点显器可输出盲文"</string>
     <string name="braille_reader_translate_partial">"已翻出前 %1$d 页，可以先读；剩下的在后台接着翻。"</string>
-    <string name="braille_reader_translate_done">"整本翻译完成，共 %1$d 页。"</string>
+    <string name="braille_reader_translate_done">"翻译结束"</string>
     <string name="braille_reader_translate_partial_stop">"翻译在第 %1$d 段停下，已翻出的 %2$d 页可以先读。"</string>
     <string name="braille_reader_restored">"已回到上次读到的第 %1$d 页，共 %2$d 页。"</string>
     <string name="braille_reader_table_mismatch">"当前盲文表（%1$s）可能不支持本书的语言，翻译结果可能不正确；请在设置中选择中文盲文表"</string>

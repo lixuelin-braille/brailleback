@@ -106,8 +106,8 @@
     <string name="braille_reader_last_page">Already at the last page.</string>
     <string name="braille_reader_prev_page">Previous page</string>
     <string name="braille_reader_next_page">Next page</string>
-    <string name="braille_reader_translator_pending">Translation service is not ready yet — showing the original text for now. It switches to braille automatically once the service is up.</string>
-    <string name="braille_reader_translator_unavailable">The translation service did not start. You can keep reading the original text; reopen the book to retry braille.</string>
+    <string name="braille_reader_translator_pending">Translation is starting; reading the original text for now</string>
+    <string name="braille_reader_translator_unavailable">Translation did not start; reading the original text</string>
     <string name="braille_reader_export_wait_translate">Translation is still running — the export dialog will open as soon as it finishes.</string>
     <string name="braille_reader_export_need_translate">Export needs braille, but the translation service is not ready. Reading the original text for now; try exporting again once translation is available.</string>
     <string name="braille_reader_open">Open</string>
@@ -125,11 +125,11 @@
     <string name="braille_reader_err_doc_legacy">Legacy .doc is not supported. Save it as .docx in Word and open it again</string>
     <string name="braille_reader_err_no_text">This file has no readable text (images only)</string>
     <string name="braille_reader_err_too_large">The file is too large to unpack (limit 128 MB)</string>
-    <string name="braille_reader_translating">Translating to braille…</string>
+    <string name="braille_reader_translating">Starting translation</string>
     <string name="braille_reader_translator_waiting">Starting braille translation service…</string>
     <string name="braille_reader_translate_fail">Translation failed. Showing original text; connect a display for braille output.</string>
     <string name="braille_reader_translate_partial">First %1$d pages are ready — you can read now, the rest keeps translating in the background.</string>
-    <string name="braille_reader_translate_done">Whole book translated, %1$d pages.</string>
+    <string name="braille_reader_translate_done">Translation finished</string>
     <string name="braille_reader_translate_partial_stop">Translation stopped at paragraph %1$d; the %2$d pages already done are readable.</string>
     <string name="braille_reader_restored">Back to page %1$d of %2$d.</string>
     <string name="braille_reader_table_mismatch">The current braille table (%1$s) may not support this book\'s language. Pick a Chinese braille table in Settings for proper output.</string>

@@ -480,8 +480,10 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
             mTranslatorManager.addOnTablesChangedListener(mTranslationReadyListener)
             // 翻译服务没就绪也不能让用户对着空屏干等：先把原文铺进阅读流，
             // 至少能听到正文、能翻页、能进目录；服务就绪后自动切成盲文流。
+            // 翻译没起来时也别报「已加载共 N 页」：这一屏只是临时铺的原文，
+            // 读屏一进书就连着报两句，正文还没开始就先吵了一轮。
             setBrailleStream(text, name, uri, resetPosition, targetOffset,
-                isTranslated = false)
+                isTranslated = false, notifyLoaded = false)
             Toast.makeText(this,
                 getString(R.string.braille_reader_translator_pending),
                 Toast.LENGTH_LONG).show()
@@ -551,12 +553,9 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
                 if (keepPlace) null else targetOffset,
                 isTranslated = true,
                 cellSpans = CellSourceTable(mSourceText, chunk.cellPositions),
-                notifyLoaded = chunk.done)
-            if (!chunk.done) {
-                // 先报一句「已经能读了、后面还在翻」，免得用户以为就这些。
-                announce(getString(R.string.braille_reader_translate_partial,
-                    totalUnits()))
-            }
+                // 翻译只播「开始翻译」和「翻译结束」两句：中间每次切块都报
+                // 「已翻出前 N 页」「已加载共 N 页」，读屏会一直打断正文。
+                notifyLoaded = false)
         } else if (chunk.text.isNotEmpty()) {
             appendBrailleStream(chunk.text, chunk.cellPositions)
         }
@@ -567,7 +566,7 @@ class BrailleReaderActivity : ComponentActivity(), Display.OnConnectionStateChan
                 getString(R.string.braille_reader_translate_partial_stop,
                     chunk.failedAtParagraph, totalUnits())
             } else {
-                getString(R.string.braille_reader_translate_done, totalUnits())
+                getString(R.string.braille_reader_translate_done)
             }
             announce(msg)
             Toast.makeText(this, msg, Toast.LENGTH_LONG).show()

@@ -525,6 +525,22 @@ object BrailleFileDecoder {
      *        明眼英文正文几乎只有小写字母和空格）
      * 4. 其余一律 [TEXT]
      */
+    /** 盲文文件后缀：`.brf`（ASCII 盲文）、`.brl`（Unicode 盲文）、`.bdo`/`.bdoc`（Bword）。 */
+    private val BRAILLE_FILE_EXT = setOf("brf", "brl", "bdo", "bdoc")
+
+    /**
+     * 文件名后缀是否已经表明这是盲文文件，不需要翻译。
+     *
+     * 后缀比内容启发式可靠：有些 BRF 的 ASCII 组成与普通英文正文几乎一样，
+     * [detectKind] 会判成明眼文字，于是白跑一遍翻译服务，出来还是乱码。
+     * `.docx` 不在表里——阳光盲文图书馆的 docx 靠正文 PUA 判定，
+     * 普通 Word 仍是明眼文字。
+     */
+    fun isBrailleFileName(name: String?): Boolean {
+        val ext = name?.substringAfterLast('.', "")?.lowercase() ?: return false
+        return ext in BRAILLE_FILE_EXT
+    }
+
     fun detectKind(text: String): ContentKind {
         var braille = 0
         var pua = 0
