@@ -50,6 +50,34 @@ internal const val HTML_ELEMENT_MOVE_BY_LIST =
 internal const val FOCUS_SETTLE_MILLIS = 120L
 
 /**
+ * 滚动兜底窗口（毫秒）：滚动更新期间压下的焦点事件，若 settle 回调因为序列
+ * 变化提前退出、`mScrollUpdatePending` 没被清，至少要有一帧能补上来。
+ * 补上来的帧与已上屏内容相同时会被内容指纹挡掉，不会多闪一次。
+ */
+internal const val SCROLL_GUARD_MILLIS = 400L
+
+/**
+ * 系统的无障碍焦点事件该不该跟。
+ *
+ * 两种不跟的情况：
+ *
+ * 1. [scrollPending]：滚动更新还没落定。系统在这一刻会把焦点重置到新一屏的
+ *    第一行，跟着它刷会先闪一帧错的，settle 完成后再刷一帧对的，摸起来就是
+ *    「跳两下」，有时直接停在第一行。
+ * 2. [quiet] 且 [hasLogicalFocus]：盲文导航自己维护逻辑焦点，系统焦点可能属于
+ *    别的读屏，或是页面自动重置的结果，抢过来会把盲文拽回第一行。
+ */
+internal fun shouldFollowFocusEvent(
+        scrollPending: Boolean,
+        quiet: Boolean,
+        hasLogicalFocus: Boolean): Boolean {
+    if (scrollPending) {
+        return false
+    }
+    return !(quiet && hasLogicalFocus)
+}
+
+/**
  * Navigation mode that is based on traversing the node tree using
  * accessibility focus.
  */
@@ -82,6 +110,9 @@ internal class DefaultNavigationMode(
 
     /** 补刷时若取不到焦点节点，是否退到「第一个可聚焦节点」。 */
     private var mSettleFallback = false
+
+    /** 滚动期间压下焦点事件时排的兜底帧；没有在排就为 null。 */
+    private var mScrollGuardRunnable: Runnable? = null
 
     private val mSettleRunnable = Runnable {
         mSettlePending = false
@@ -222,12 +253,25 @@ internal class DefaultNavigationMode(
 
     override fun onAccessibilityEvent(event: AccessibilityEvent): Boolean {
         when (event.eventType) {
-            AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED ->
+            AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED -> {
+                if (!shouldFollowFocusEvent(
+                                mScrollUpdatePending,
+                                isQuietNavigationEnabled(),
+                                !AccessibilityNodeInfoRef.isNull(mLastFocusedNode))) {
+                    scheduleScrollGuard(fallback = true)
+                    return true
+                }
                 // 事件节点此刻还活着，首帧可以直接用它；被合并的那一帧等到期时
                 // 事件对象已回收，改取「当前焦点」，避免读到失效节点。
                 scheduleFocusBraille(fallback = true) { brailleNodeFromEvent(event) }
-            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED ->
+            }
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
+                if (mScrollUpdatePending) {
+                    scheduleScrollGuard(fallback = false)
+                    return true
+                }
                 scheduleFocusBraille(fallback = false) { brailleFocusedNode() }
+            }
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
                 if (!brailleFocusedNode()) {
                     // Since focus is typically not set in a newly opened
@@ -267,6 +311,8 @@ internal class DefaultNavigationMode(
         mSettlePending = false
         mSettleFallback = false
         mMainHandler.removeCallbacks(mSettleRunnable)
+        mScrollGuardRunnable?.let { mMainHandler.removeCallbacks(it) }
+        mScrollGuardRunnable = null
     }
 
     /** 补刷：优先当前焦点节点，取不到时按调用场景决定是否退到第一个可聚焦节点。 */
@@ -274,6 +320,22 @@ internal class DefaultNavigationMode(
         if (!brailleFocusedNode() && fallback) {
             brailleFirstFocusableNode()
         }
+    }
+
+    /**
+     * 滚动期间压下的焦点事件留一帧兜底，避免 settle 回调提前退出后屏上再也不刷新。
+     * 是否真的补，取决于到期时滚动是否已落定。
+     */
+    private fun scheduleScrollGuard(fallback: Boolean) {
+        mScrollGuardRunnable?.let { mMainHandler.removeCallbacks(it) }
+        val runnable = Runnable {
+            mScrollGuardRunnable = null
+            if (!mScrollUpdatePending) {
+                performSettledBraille(fallback)
+            }
+        }
+        mScrollGuardRunnable = runnable
+        mMainHandler.postDelayed(runnable, SCROLL_GUARD_MILLIS)
     }
 
     override fun onInvalidateAccessibilityNode(
