@@ -123,6 +123,9 @@ internal class DefaultNavigationMode(
     /** 滚动期间压下焦点事件时排的兜底帧；没有在排就为 null。 */
     private var mScrollGuardRunnable: Runnable? = null
 
+    /** 本次滚动是否已经上过一帧；上过之后冷却期内一律静默，保证一屏只刷一次。 */
+    private var mCooldownFrameDone = false
+
     private val mSettleRunnable = Runnable {
         mSettlePending = false
         val fallback = mSettleFallback
@@ -265,12 +268,14 @@ internal class DefaultNavigationMode(
             AccessibilityEvent.TYPE_VIEW_SCROLLED -> {
                 // 读屏自己的手势滚动和惯性滚动不经过 attemptScrollAction，
                 // 但系统滚完同样会把焦点重置到新一屏首行，这里统一记冷却起点。
-                mLastScrollActionAt = SystemClock.uptimeMillis()
+                onScrollStarted()
                 return true
             }
             AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED -> {
                 if (!shouldFollowFocusEvent(mScrollUpdatePending, sinceScrollMillis())) {
-                    scheduleCooldownRefresh()
+                    // 滚动后系统把焦点重置到新一屏的正确位置，这是唯一可信的一帧：
+                    // 立刻刷，不等冷却结束，否则屏要滞后半秒才动。
+                    brailleFirstFrameAfterScroll()
                     return true
                 }
                 // 事件节点此刻还活着，首帧可以直接用它；被合并的那一帧等到期时
@@ -279,6 +284,8 @@ internal class DefaultNavigationMode(
             }
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
                 if (!shouldFollowFocusEvent(mScrollUpdatePending, sinceScrollMillis())) {
+                    // 页面重绘不代表焦点落定，跟着刷会先闪中间态；只留一帧兜底，
+                    // 万一这次滚动没有焦点事件，冷却结束时也不至于空白。
                     scheduleCooldownRefresh()
                     return true
                 }
@@ -335,8 +342,31 @@ internal class DefaultNavigationMode(
     }
 
     /**
+     * 记录一次滚动的开始：重置冷却起点，并允许这次滚动再上屏一帧。
+     * 读屏手势滚动、惯性滚动、点显器滚动键都从这里进。
+     */
+    internal fun onScrollStarted() {
+        mLastScrollActionAt = SystemClock.uptimeMillis()
+        mCooldownFrameDone = false
+    }
+
+    /**
+     * 滚动后的第一帧：立刻上屏，然后本次滚动内不再刷。
+     *
+     * 之前是把这一帧推迟到冷却结束才补，实测要等半秒才动，摸起来「很慢」；
+     * 而每次都跟又会把系统重置焦点时的中间态闪出来。只放行第一帧，两种毛病都没有。
+     */
+    private fun brailleFirstFrameAfterScroll() {
+        if (mScrollUpdatePending || mCooldownFrameDone) {
+            return
+        }
+        mCooldownFrameDone = true
+        performSettledBraille(fallback = true)
+    }
+
+    /**
      * 滚动期间压下的焦点事件留一帧兜底，避免 settle 回调提前退出后屏上再也不刷新。
-     * 是否真的补，取决于到期时滚动是否已落定。
+     * 是否真的补，取决于到期时滚动是否已落定、这次滚动是否已经刷过。
      */
     private fun scheduleCooldownRefresh() {
         mScrollGuardRunnable?.let { mMainHandler.removeCallbacks(it) }
@@ -351,9 +381,10 @@ internal class DefaultNavigationMode(
             mScrollGuardRunnable = null
             // 滚动 settle 还没落定：让它自己刷正确的那一帧，这里不抢，
             // 否则会把 settle 选好的行覆盖成系统焦点所在的首行。
-            if (mScrollUpdatePending) {
+            if (mScrollUpdatePending || mCooldownFrameDone) {
                 return@Runnable
             }
+            mCooldownFrameDone = true
             performSettledBraille(fallback = false)
         }
         mScrollGuardRunnable = runnable
@@ -371,6 +402,8 @@ internal class DefaultNavigationMode(
     internal fun cancelCooldownRefresh() {
         mScrollGuardRunnable?.let { mMainHandler.removeCallbacks(it) }
         mScrollGuardRunnable = null
+        // settle 已经把这屏刷上去了，本次滚动的帧名额用掉。
+        mCooldownFrameDone = true
     }
 
     override fun onInvalidateAccessibilityNode(
