@@ -4,10 +4,8 @@
   <CurrentIssues>
     <ID>ComplexCondition:BrailleSegmenter.kt$BrailleSegmenter$word.length == 1 &amp;&amp; SUFFIX.contains(word) &amp;&amp; merged.isNotEmpty() &amp;&amp; !isPunct(merged[merged.size - 1][0]) &amp;&amp; !NON_STEM.contains(merged[merged.size - 1][0])</ID>
     <ID>ComplexCondition:BrailleSegmenter.kt$BrailleSegmenter$word.length == 4 &amp;&amp; !CONNECT.contains(word) &amp;&amp; !SPLIT4.contains(word) &amp;&amp; !NAMESET.contains(word) &amp;&amp; !SPLIT4_INNER.contains(word)</ID>
-    <ID>ComplexCondition:DisplayService.kt$DisplayService.&lt;no name provided&gt;$mConnectionState == STATE_CONNECTED || mReadThread != null || mHidConnection != null || mWujieConnection != null || mUsbConnection != null</ID>
-    <ID>ComplexCondition:DisplayService.kt$DisplayService.&lt;no name provided&gt;.&lt;no name provided&gt;$hidRequested &amp;&amp; mConnectionState == STATE_DISCONNECTED &amp;&amp; mReadThread == null &amp;&amp; mHidConnection == null &amp;&amp; mWujieConnection == null &amp;&amp; mUsbConnection == null</ID>
     <ID>ComplexCondition:DisplayServiceHandlerActions.kt$service.mDataFileState == DisplayService.FILES_EXTRACTED &amp;&amp; service.mConnectionState == DisplayService.STATE_DISCONNECTED &amp;&amp; !service.isConnectionActive() &amp;&amp; !service.mConnectPending &amp;&amp; !service.mWaitingForHidController</ID>
-    <ID>ComplexCondition:DisplayServiceHandlerActions.kt$service.mDataFileState == DisplayService.FILES_NOT_EXTRACTED || (service.mConnectionState == DisplayService.STATE_DISCONNECTED &amp;&amp; (service.mReadThread != null || (service.mHidConnection != null &amp;&amp; !service.mHidConnection!! .isDisconnecting()) || service.mWujieConnection != null || service.mUsbConnection != null))</ID>
+    <ID>ComplexCondition:DisplayServiceHandlerActions.kt$service.mDataFileState == DisplayService.FILES_NOT_EXTRACTED || (service.mConnectionState == DisplayService.STATE_DISCONNECTED &amp;&amp; (service.mReadThread != null || (service.mHidConnection != null &amp;&amp; !service.mHidConnection!! .isDisconnecting()) || service.mUsbConnection != null))</ID>
     <ID>ComplexCondition:ParagraphBlock.kt$ParagraphBlock$className != FRAME_LAYOUT_CLASS &amp;&amp; className != LINEAR_LAYOUT_CLASS &amp;&amp; className != RELATIVE_LAYOUT_CLASS &amp;&amp; className != VIEW_GROUP_CLASS &amp;&amp; className != VIEW_CLASS</ID>
     <ID>ComplexCondition:UsbBrailleDevice.kt$UsbBrailleDevice.Companion$c.code in 0x20 until 0x7f &amp;&amp; c != '+' &amp;&amp; c != '=' &amp;&amp; c != ',' &amp;&amp; c != ':'</ID>
     <ID>CyclomaticComplexMethod:AccessibilityEventUtils.kt$AccessibilityEventUtils$@JvmStatic fun eventEquals(first: AccessibilityEvent?, second: AccessibilityEvent?): Boolean</ID>
@@ -21,7 +19,6 @@
     <ID>CyclomaticComplexMethod:JiebaDict.kt$JiebaDict$private fun loadWordList(stream: InputStream, overrideExisting: Boolean, label: String): Int</ID>
     <ID>CyclomaticComplexMethod:ParagraphIndent.kt$ParagraphIndent$fun apply( text: CharSequence?, translation: TranslationResult, indentFirst: Boolean = false ): TranslationResult</ID>
     <ID>CyclomaticComplexMethod:UserSegDict.kt$UserSegDict$@Synchronized fun match(words: List&lt;Array&lt;String&gt;&gt;, start: Int): Match?</ID>
-    <ID>CyclomaticComplexMethod:WujieGattConnection.kt$WujieGattConnection$private fun inspectServices(gatt: BluetoothGatt)</ID>
     <ID>EmptyFunctionBlock:BrailleImeHostBridge.kt$BrailleImeHostBridge.&lt;no name provided&gt;${}</ID>
     <ID>EmptyFunctionBlock:HidDisplayConnection.kt$HidDisplayConnection.NoOpOutputStream${ }</ID>
     <ID>EmptyFunctionBlock:IMENavigationMode.kt$IMENavigationMode${}</ID>
@@ -99,11 +96,6 @@
     <ID>MayBeConst:StringBuilderUtils.kt$StringBuilderUtils$/** * Non-breaking separator inserted between text. Used when text already ends * with some sort of breaking separator or non-alphanumeric character. */ @JvmField val DEFAULT_SEPARATOR = " "</ID>
     <ID>MayBeConst:WriteData.kt$WriteData.Companion$private val PROP_SELECTION_END = "selectionEnd"</ID>
     <ID>MayBeConst:WriteData.kt$WriteData.Companion$private val PROP_SELECTION_START = "selectionStart"</ID>
-    <ID>MayBeConst:WujieGattConnection.kt$WujieGattConnection.Companion$private val CONNECT_TIMEOUT_MS = 15000L</ID>
-    <ID>MayBeConst:WujieGattConnection.kt$WujieGattConnection.Companion$private val KEY_NAME_NEXT = "next"</ID>
-    <ID>MayBeConst:WujieGattConnection.kt$WujieGattConnection.Companion$private val KEY_NAME_PREVIOUS = "prev"</ID>
-    <ID>MayBeConst:WujieGattConnection.kt$WujieGattConnection.Companion$private val REQUESTED_MTU = 500</ID>
-    <ID>MayBeConst:WujieGattConnection.kt$WujieGattConnection.Companion$private val SETUP_TIMEOUT_MS = 4000L</ID>
     <ID>NestedBlockDepth:TranslatorClient.kt$TranslatorClient$fun getTranslator(tableId: String): BrailleTranslator?</ID>
     <ID>NewLineAtEndOfFile:DisplayManager.kt$com.linxi.brailleback.DisplayManager.kt</ID>
     <ID>NewLineAtEndOfFile:LogFileWriter.kt$com.linxi.brailleback.utils.LogFileWriter.kt</ID>
@@ -231,7 +223,6 @@
     <ID>UnusedParameter:OverlayTutorialActivity.kt$OverlayTutorialActivity$v: View</ID>
     <ID>UnusedParameter:SearchTutorialActivity.kt$SearchTutorialActivity$v: View</ID>
     <ID>UnusedParameter:StabilityScreen.kt$vendor: OemVendor</ID>
-    <ID>UnusedParameter:WujieGattConnection.kt$WujieGattConnection$gatt: BluetoothGatt</ID>
     <ID>UnusedPrivateMember:DisplayService.kt$DisplayService$private fun getHidFailureMessage(): String</ID>
     <ID>UnusedPrivateProperty:BrailleDisplayProperties.kt$BrailleDisplayProperties.Companion$i</ID>
     <ID>UnusedPrivateProperty:BrailleSegmenter.kt$BrailleSegmenter.Companion$private const val LOG_TAG = "BrailleSegmenter"</ID>
@@ -257,7 +248,6 @@
     <ID>UseRequire:SQLiteTableBuilder.kt$SQLiteTableBuilder$throw IllegalArgumentException("Invalid column name.")</ID>
     <ID>UseRequire:SQLiteTableBuilder.kt$SQLiteTableBuilder$throw IllegalArgumentException("Invalid table name.")</ID>
     <ID>UseRequire:SQLiteTableBuilder.kt$SQLiteTableBuilder$throw IllegalArgumentException("Table name cannot be empty.")</ID>
-    <ID>UseRequire:WujieBrailleFrameCodec.kt$WujieBrailleFrameCodec.Companion$throw IllegalArgumentException("Unsupported cell count: $cellCount")</ID>
     <ID>UtilityClassWithPublicConstructor:LabelsTable.kt$LabelsTable</ID>
     <ID>VariableNaming:BookshelfActivity.kt$BookshelfActivity$val when_ = DateUtils.getRelativeTimeSpanString( book.openedAt, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS)</ID>
     <ID>VariableNaming:BrailleKeyBinding.kt$BrailleKeyBinding$private val FLAG_LONG_PRESS = 0x00000001</ID>

@@ -21,7 +21,6 @@ import android.os.Message
 import com.googlecode.eyesfree.braille.display.BrailleDisplayProperties
 import com.googlecode.eyesfree.braille.display.BrailleInputEvent
 import com.googlecode.eyesfree.braille.display.IBrailleServiceCallback
-import com.googlecode.eyesfree.braille.service.R
 import timber.log.Timber
 
 // Message actions for DisplayServiceHandler; split out of DisplayService.kt.
@@ -51,7 +50,6 @@ fun handleRegisterCallback(
     val hidBusy = hidConnection != null && !hidConnection.isDisconnecting()
     val connectionInProgress = service.mReadThread != null
             || hidBusy
-            || service.mWujieConnection != null
             || service.mUsbConnection != null
     if (service.mDataFileState == DisplayService.FILES_NOT_EXTRACTED
             || (service.mConnectionState == DisplayService.STATE_DISCONNECTED && connectionInProgress)) {
@@ -87,7 +85,6 @@ fun handleConnectionEstablished(
     service.mDisplayProperties = properties
     service.mConnectPending = false
     service.mHidTried = false
-    service.mWujieTried = false
     service.mUsbSerialTried = false
     service.mUsbHidTried = false
     service.mHidConnectionIsUsb = false
@@ -179,65 +176,6 @@ fun handleOnHidConnectFailed(
     // forced HID reports the existing failure message.
     service.connectBraille()
     service.scheduleAutoReconnectIfNeeded()
-}
-
-fun handleOnWujieConnected(
-        service: DisplayService, event: WujieEvent) {
-    if (event.connection != service.mWujieConnection) {
-        Timber.w("Ignoring stale Wujie connected callback")
-        return
-    }
-    handleConnectionEstablished(service, event.properties)
-}
-
-fun handleOnWujieDisconnected(
-        service: DisplayService, event: WujieEvent) {
-    if (event.connection != service.mWujieConnection) {
-        Timber.w("Ignoring stale Wujie disconnected callback")
-        return
-    }
-    service.mWujieConnection = null
-    handleConnectionReleased(service)
-}
-
-fun handleOnWujieConnectFailed(
-        service: DisplayService, event: WujieEvent) {
-    if (event.connection != service.mWujieConnection) {
-        Timber.w("Ignoring stale Wujie failure callback %d",
-                event.error)
-        return
-    }
-    service.mWujieConnection = null
-    service.mConnectPending = false
-    Timber.e("Wujie GATT connect failed (%d)", event.error)
-    val message: Int = when (event.error) {
-        WujieGattConnection.ERROR_PERMISSION -> R.string.connprog_wujie_permission
-        WujieGattConnection.ERROR_SERVICE -> R.string.connprog_wujie_service_missing
-        WujieGattConnection.ERROR_MTU -> R.string.connprog_wujie_mtu
-        WujieGattConnection.ERROR_NO_WRITE -> R.string.connprog_wujie_no_write
-        WujieGattConnection.ERROR_TIMEOUT -> R.string.connprog_wujie_timeout
-        else -> {
-            service.mHandler.setConnectionProgress(
-                    service.getString(
-                            R.string.connprog_wujie_failed_code,
-                            event.error))
-            service.scheduleAutoReconnectIfNeeded()
-            return
-        }
-    }
-    service.mHandler.setConnectionProgress(
-            service.getString(message))
-    service.scheduleAutoReconnectIfNeeded()
-}
-
-fun handleOnWujieInputEvent(
-        service: DisplayService, input: WujieInputEvent) {
-    if (input.connection != service.mWujieConnection
-            || input.event == null) {
-        Timber.w("Ignoring stale Wujie input event")
-        return
-    }
-    service.broadcastInputEvent(input.event)
 }
 
 fun handleRetryHid(service: DisplayService) {

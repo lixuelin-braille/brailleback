@@ -626,9 +626,9 @@
     <string name="compose_settings_disconnect_idle">No braille display connected</string>
     <string name="compose_settings_disconnect_done">Disconnected. Automatic reconnect is paused; double-tap a device to connect again</string>
 
-    <!-- Bluetooth-internal transport. Automatic keeps the existing behaviour
-         (Wujie-family displays skip HID and use SPP); the two explicit values
-         let the user pin one path instead of letting the fallback chain decide. -->
+    <!-- Bluetooth-internal transport. Automatic keeps the existing behaviour;
+         the explicit values let the user pin one path instead of letting the
+         fallback chain decide. -->
     <string name="compose_settings_transport_title">Connection type</string>
     <string name="compose_settings_transport_auto">Automatic (recommended)</string>
     <string name="compose_settings_transport_hid">Standard HID (Bluetooth LE)</string>
@@ -636,7 +636,6 @@
     <string name="compose_settings_transport_usb_serial">Wired USB serial</string>
     <string name="compose_settings_transport_hid_classic">Classic Bluetooth HID</string>
     <string name="compose_settings_transport_serial">Classic serial (SPP)</string>
-    <string name="compose_settings_transport_summary_auto">HID first; a Wujie or Orbit display is sent to classic serial because its HID channel never reports keys</string>
     <string name="compose_settings_transport_summary_hid">Standard HID only, no serial fallback; the link is handled by the system braille controller</string>
     <string name="compose_settings_transport_summary_hid_usb">Wired USB HID only, no Bluetooth; plug the cable in and allow the USB prompt</string>
     <string name="compose_settings_transport_summary_usb_serial">Wired USB serial only; plug the cable in and allow the USB prompt</string>

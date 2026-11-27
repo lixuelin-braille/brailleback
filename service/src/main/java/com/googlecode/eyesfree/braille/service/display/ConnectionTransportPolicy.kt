@@ -68,7 +68,7 @@ object ConnectionTransportPolicy {
      * 本次连接要不要跳过标准 HID。
      *
      * [legacyDecision] 就是 [AUTO] 下既有的厂商判断，由调用方传入，避免把
-     * 「哪些名字算 Wujie」这类规则复制第二份。
+     * 「哪些名字走串口」这类规则复制第二份。
      *
      * 只有 [HID_BLE] 明确不跳过；[HID_USB] / [HID_CLASSIC] / [SERIAL] 都不走
      * 蓝牙 HID（前两者的链路不是 GATT，后者根本不用 HID）。

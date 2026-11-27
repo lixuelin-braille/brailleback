@@ -158,7 +158,6 @@ internal const val USER_DISCOVERY_WINDOW_DURATION = 12000L
         mHidTried = false
         mHidRetryCount = 0
         mLastHidError = 0
-        mWujieTried = false
         mUsbSerialTried = false
         mUsbHidTried = false
         mHidConnectionIsUsb = false
@@ -277,7 +276,6 @@ internal const val USER_DISCOVERY_WINDOW_DURATION = 12000L
         return mConnectionState == DisplayService.STATE_CONNECTED
                 || mReadThread != null
                 || mHidConnection != null
-                || mWujieConnection != null
                 || mUsbConnection != null
     }
 
@@ -599,7 +597,6 @@ internal const val USER_DISCOVERY_WINDOW_DURATION = 12000L
         stopDiscoverySession("known display discovered")
         mPendingBluetoothAddress = address
         mHidTried = false
-        mWujieTried = false
         mHidRetryCount = 0
         mLastHidError = 0
         autoConnectBraille()

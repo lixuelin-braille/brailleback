@@ -52,7 +52,7 @@ class DeviceFinderNameMatchTest {
      *
      * 命中 2 条会让服务端下发的候选数组里出现两个相同地址，客户端 Compose
      * 列表以地址为 key，重复 key 抛 IllegalArgumentException 直接闪退。
-     * 早先 "Orbit" 这条正则同时命中无界（Orbit wujie 30）和 APH 条目，
+     * 早先 "Orbit" 这条正则同时命中 Orbit/wujie 30 和 APH 条目，
      * 就是真机上闪退的原因。
      */
     @Test

@@ -40,7 +40,6 @@ class LargeClassConversionContractTest {
 
     private val converted = listOf(
         display + "DeviceFinder.kt",
-        display + "WujieGattConnection.kt",
         ime + "BrailleImeHostBridge.kt",
     )
 
@@ -85,7 +84,6 @@ class LargeClassConversionContractTest {
     fun deviceFinderKeepsEverySupportedDeviceMatcher() {
         val src = text(display + "DeviceFinder.kt")
         // 16 个 NameRegexSupportedDevice 条目、17 个 Pattern.compile（HandyTech 有 2 个正则）。
-        // Orbit（无界）点显器走后，条目由 15 增至 16。
         assertEquals(
             "设备支持表条目数漂移",
             16, Regex("""NameRegexSupportedDevice\(""").findAll(src).count()
@@ -100,36 +98,6 @@ class LargeClassConversionContractTest {
         }
         assertTrue(src.contains("00001101-0000-1000-8000-00805F9B34FB"))
         assertTrue(src.contains("hid:name=unused"))
-    }
-
-    @Test
-    fun wujieGattConnectionKeepsStaticContract() {
-        val src = text(display + "WujieGattConnection.kt")
-        // Kotlin 侧 DisplayServiceHandlerActions 按 ERROR_* 取提示文案。
-        for (pair in listOf(
-            "ERROR_CONNECT" to "-1",
-            "ERROR_PERMISSION" to "-2",
-            "ERROR_SERVICE" to "-3",
-            "ERROR_MTU" to "-4",
-            "ERROR_NO_WRITE" to "-5",
-        )) {
-            val (name, value) = pair
-            assertTrue(
-                "$name 的值必须是 $value",
-                Regex("""$name\s*[:=][^=\n]*?=\s*$value\b""").containsMatchIn(src) ||
-                    Regex("""$name\s*=\s*$value\b""").containsMatchIn(src)
-            )
-        }
-        // 9 个公开 UUID + CCCD，共 10 个，字面量一个都不能漂。
-        for (suffix in listOf("abcdef0", "abcdef1", "abcdef2", "abcdef3",
-                "abcdef4", "abcdef5", "abcdef6", "abcdef7", "abcdefa")) {
-            assertTrue(
-                "缺少 UUID 12345678-1234-5678-1234-56789$suffix",
-                src.contains("12345678-1234-5678-1234-56789$suffix")
-            )
-        }
-        assertTrue(src.contains("interface Listener"))
-        assertTrue(src.contains("@JvmField"))
     }
 
     @Test

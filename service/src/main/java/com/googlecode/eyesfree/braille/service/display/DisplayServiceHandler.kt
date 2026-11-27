@@ -33,15 +33,6 @@ class HidEvent(
         val properties: BrailleDisplayProperties?,
         val error: Int)
 
-class WujieEvent(
-        val connection: WujieGattConnection?,
-        val properties: BrailleDisplayProperties?,
-        val error: Int)
-
-class WujieInputEvent(
-        val connection: WujieGattConnection?,
-        val event: BrailleInputEvent?)
-
 class MainHandler(service: DisplayService) :
         Handler(Looper.getMainLooper()) {
     private val mService: WeakReference<DisplayService> =
@@ -59,10 +50,6 @@ class MainHandler(service: DisplayService) :
         private const val MSG_ON_HID_DISCONNECTED = 9
         private const val MSG_ON_HID_CONNECT_FAILED = 10
         private const val MSG_RETRY_HID = 11
-        private const val MSG_ON_WUJIE_CONNECTED = 12
-        private const val MSG_ON_WUJIE_DISCONNECTED = 13
-        private const val MSG_ON_WUJIE_CONNECT_FAILED = 14
-        private const val MSG_ON_WUJIE_INPUT_EVENT = 15
         private const val MSG_HID_CONTROLLER_TIMEOUT = 16
         private const val MSG_AUTO_RECONNECT = 17
         private const val MSG_DISCOVERY_TIMEOUT = 18
@@ -99,29 +86,6 @@ class MainHandler(service: DisplayService) :
     fun onHidConnectFailed(source: HidDisplayConnection?, error: Int) {
         obtainMessage(MSG_ON_HID_CONNECT_FAILED,
                 HidEvent(source, null, error)).sendToTarget()
-    }
-
-    fun onWujieConnected(source: WujieGattConnection?,
-            properties: BrailleDisplayProperties?) {
-        obtainMessage(MSG_ON_WUJIE_CONNECTED,
-                WujieEvent(source, properties, 0)).sendToTarget()
-    }
-
-    fun onWujieDisconnected(source: WujieGattConnection?) {
-        obtainMessage(MSG_ON_WUJIE_DISCONNECTED,
-                WujieEvent(source, null, 0)).sendToTarget()
-    }
-
-    fun onWujieInputEvent(source: WujieGattConnection?,
-            event: BrailleInputEvent?) {
-        obtainMessage(MSG_ON_WUJIE_INPUT_EVENT,
-                WujieInputEvent(source, event)).sendToTarget()
-    }
-
-    fun onWujieConnectFailed(source: WujieGattConnection?,
-            error: Int) {
-        obtainMessage(MSG_ON_WUJIE_CONNECT_FAILED,
-                WujieEvent(source, null, error)).sendToTarget()
     }
 
     fun setConnectionProgress(description: String?) {
@@ -290,19 +254,6 @@ class MainHandler(service: DisplayService) :
             }
             MSG_RETRY_HID -> {
                 handleRetryHid(service)
-            }
-            MSG_ON_WUJIE_CONNECTED -> {
-                handleOnWujieConnected(service, msg.obj as WujieEvent)
-            }
-            MSG_ON_WUJIE_DISCONNECTED -> {
-                handleOnWujieDisconnected(service, msg.obj as WujieEvent)
-            }
-            MSG_ON_WUJIE_CONNECT_FAILED -> {
-                handleOnWujieConnectFailed(service, msg.obj as WujieEvent)
-            }
-            MSG_ON_WUJIE_INPUT_EVENT -> {
-                handleOnWujieInputEvent(service,
-                        msg.obj as WujieInputEvent)
             }
             MSG_HID_CONTROLLER_TIMEOUT -> {
                 handleHidControllerTimeout(service)

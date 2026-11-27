@@ -330,7 +330,7 @@ class DisplayManager(
         LogUtils.log(this, Log.VERBOSE, "InputEvent: %s", event)
         // 自定义按键映射必须发生在所有分发之前：panLeft/panRight 在本类内被本地拦截，
         // sendMappedEvent 还会对带位置参数的命令做坐标换算，晚一步都会走错分支。
-        // 这里是 brltty/JNI 主路径与 BLE 旁路（WujieGattConnection）的唯一汇聚点。
+        // 这里是 brltty/JNI 主路径的输入事件汇聚点。
         val effectiveEvent = applyCustomKeyMap(event) ?: return
         // We're called from within the handler thread, so we forward
         // the call only if we are going to invoke the user's callback.

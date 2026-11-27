@@ -207,7 +207,6 @@ class RollingFileLog @JvmOverloads constructor(
             "UsbDisplayConnection",
             "HidDisplayConnection",
             "BluetoothConnection",
-            "WujieGattConnection",
             "DeviceFinder",
             "DisplayService",
             "BrlttyWrapper",

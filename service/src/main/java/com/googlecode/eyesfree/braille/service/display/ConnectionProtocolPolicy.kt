@@ -19,8 +19,9 @@ package com.googlecode.eyesfree.braille.service.display
 /**
  * The connection choices shown to the user.
  *
- * Bluetooth covers every wireless transport (HID, RFCOMM and the vendor BLE
- * path for Wujie). USB covers both the brltty serial driver and USB HID.
+ * Bluetooth covers every wireless transport (standard Braille HID over GATT,
+ * classic HID and classic RFCOMM). USB covers both the brltty serial driver
+ * and USB HID.
  * Auto means "pick at connect time": a plugged braille display wins over
  * Bluetooth, because a wired link does not share the radio and survives
  * Bluetooth being switched off. Legacy preference values are folded into

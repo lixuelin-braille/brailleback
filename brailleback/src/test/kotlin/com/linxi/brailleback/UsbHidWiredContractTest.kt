@@ -21,11 +21,11 @@ import java.io.File
  * ported from Google TalkBack 16.2.
  *
  * The settings expose "bluetooth", "usb" and "auto". The Bluetooth choice
- * covers Wujie BLE, Braille HID and classic RFCOMM, while the USB choice
+ * covers Braille HID and classic RFCOMM, while the USB choice
  * covers the brltty serial backend with the system BrailleDisplayController
  * USB HID overload as its fallback. Auto decides per attempt: a plugged display
  * wins, otherwise it behaves like Bluetooth. The tests catch a regression that
- * reintroduces separate USB HID / RFCOMM / Wujie options, drops the protocol
+ * reintroduces separate USB HID / RFCOMM options, drops the protocol
  * from the settings, or leaves wired retry dependent on Bluetooth.
  */
 class UsbHidWiredContractTest {
@@ -180,26 +180,6 @@ class UsbHidWiredContractTest {
         assertTrue(source.contains("HidTransportRouting.shouldReactToUsbAttach("))
         val wiredOrAuto = methodBody(source, "DisplayService.isWiredOrAutoProtocol()")
         assertTrue(wiredOrAuto.contains("isUsbProtocol() || isAutoProtocol()"))
-    }
-
-    @Test
-    fun bluetoothEntryPointCoversWujieHidAndRfcomm() {
-        val source = displayServiceSource()
-        val bluetooth = methodBody(source, "fun connectBluetooth()")
-        // The bonded Wujie probe moved one level down into isWujieTarget(),
-        // which decides from the pending address as well. Assert both halves
-        // and keep the ordering guarantee, so the entry point still can not
-        // reach HID before the Wujie BLE attempt.
-        assertTrue(bluetooth.contains("isWujieTarget()"))
-        assertTrue(bluetooth.contains("connectWujie("))
-        assertTrue(bluetooth.contains("tryConnectHid()"))
-        assertTrue(bluetooth.contains("ReadThread("))
-        assertTrue(
-            "Wujie BLE must be attempted before HID",
-            bluetooth.indexOf("connectWujie(") < bluetooth.indexOf("tryConnectHid()"),
-        )
-        val target = methodBody(source, "fun isWujieTarget()")
-        assertTrue(target.contains("findNamedWujieAddress()"))
     }
 
     @Test

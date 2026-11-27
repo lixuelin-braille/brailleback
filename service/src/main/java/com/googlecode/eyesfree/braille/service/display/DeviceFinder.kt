@@ -577,7 +577,7 @@ private val SUPPORTED_DEVICES: List<SupportedDevice> =
             // TODO: Follow up on why secure connections can't be established
             // with some devices.
 
-            // Orbit（无界）系列点显器。固件走经典蓝牙 SPP，序列协议与
+            // Orbit/wujie 系列点显器。固件走经典蓝牙 SPP，序列协议与
             // BRLTTY 的 Baum 驱动（码 bm，上游名称表把 "Orbit Reader" 映
             // 射到 bm）兼容，因此直接按 bm 连接，显示与按键都走串口。
             // 名称正则只认 "wujie" 系列（"Orbit wujie 30" 这类）。
@@ -729,7 +729,7 @@ private val SUPPORTED_DEVICES: List<SupportedDevice> =
                             .add("Space", R.string.key_Space)
                             .build(),
                     // 只认 APH 的 "Orbit Reader"。早先这里写成 "Orbit"，与上面
-                    // 无界（Orbit wujie 30）那条同时命中同一台设备，导致同一地址
+                    // Orbit/wujie 30 那条同时命中同一台设备，导致同一地址
                     // 在候选列表里出现两次，Compose 列表以地址为 key 会直接崩。
                     Pattern.compile("Orbit Reader")))
 

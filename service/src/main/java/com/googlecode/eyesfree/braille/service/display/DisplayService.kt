@@ -70,17 +70,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         val LOG_TAG: String = DisplayService::class.java.simpleName
 
         /**
-         * 【临时诊断开关 2026-11-13】为验证 brltty 标准驱动能否自己认这台点显器，
-         * 置 true 时完全跳过厂商私有 BLE（Wujie GATT），强制回落到标准 Braille
-         * HID → RFCOMM。诊断结束改回 false 即恢复，不需要动别的地方。
-         *
-         * 注意：这个开关只影响「要不要走厂商私有协议」，不改任何驱动实现。
-         * 打开后日志里不会再出现 "Creating custom GATT connection"。
-         */
-        const val DISABLE_VENDOR_BLE_TEMP = true
-
-        /**
-         * 置 true 时，识别为 Wujie/Orbit 的点显器跳过标准 Braille HID，
+         * 置 true 时，识别为 Orbit/wujie 系列的点显器跳过标准 Braille HID，
          * 直接走经典蓝牙 SPP（RFCOMM）+ brltty 的 bm（Baum）驱动。
          *
          * 原因：该固件的 HOGP 通道只声明输入报告、实际从不推送按键
@@ -143,7 +133,6 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         private const val ROUTE_NONE = 0
         private const val ROUTE_USB = 1
         private const val ROUTE_HID = 2
-        private const val ROUTE_WUJIE = 3
         private const val ROUTE_READ_THREAD = 4
 
         @JvmStatic
@@ -151,7 +140,6 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
             return when (route) {
                 ROUTE_USB -> "usb"
                 ROUTE_HID -> "hid"
-                ROUTE_WUJIE -> "wujie"
                 ROUTE_READ_THREAD -> "readthread"
                 else -> "none"
             }
@@ -279,11 +267,6 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
      */
     @Volatile
     var mHidConnection: HidDisplayConnection? = null
-    /**
-     * Custom BLE GATT connection used by the Wujie / Orbit 30-cell display.
-     */
-    @Volatile
-    var mWujieConnection: WujieGattConnection? = null
     /** Wired USB connection (brltty USB backend), null unless selected. */
     @Volatile
     var mUsbConnection: UsbDisplayConnection? = null
@@ -303,7 +286,6 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
             val calls = mDotsCalls.get()
             val hasConnection = mUsbConnection != null
                     || mHidConnection != null
-                    || mWujieConnection != null
                     || mReadThread != null
             val key = listOf(
                 hasConnection,
@@ -312,7 +294,6 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
                 mDotsLastCells,
                 mUsbConnection != null,
                 mHidConnection != null,
-                mWujieConnection != null,
                 mReadThread != null,
             ).joinToString("|")
             val now = SystemClock.uptimeMillis()
@@ -321,12 +302,12 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
             if (hasConnection || changed || idleBeat) {
                 LogUtils.i(this@DisplayService,
                         "dots stats: calls=%d (+%d) route=%s digest=%08X "
-                        + "cells=%d usb=%s usbActive=%s hid=%s wujie=%s read=%s",
+                        + "cells=%d usb=%s usbActive=%s hid=%s read=%s",
                         calls, calls - mDotsReportedCalls,
                         routeName(mDotsLastRoute), mDotsLastDigest,
                         mDotsLastCells,
                         mUsbConnection != null, isUsbActive(),
-                        mHidConnection != null, mWujieConnection != null,
+                        mHidConnection != null,
                         mReadThread != null)
                 mDotsLastKey = key
                 mDotsLastBeatUptime = now
@@ -335,8 +316,6 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
             mHandler.postDelayed(this, DOTS_TELEMETRY_INTERVAL)
         }
     }
-    /** True after the vendor BLE path was attempted in this cycle. */
-    var mWujieTried = false
     /** True after the brltty serial USB path was attempted in this cycle. */
     var mUsbSerialTried = false
     /** True after the system USB HID path was attempted in this cycle. */
@@ -417,7 +396,6 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
                     Timber.i("Connection protocol changed to %s", protocol)
                     if (mConnectionState == STATE_CONNECTED
                             || mReadThread != null || mHidConnection != null
-                            || mWujieConnection != null
                             || mUsbConnection != null) {
                         // Reconnect with the new protocol only after the current
                         // connection has been fully torn down. HID disconnect is
@@ -471,7 +449,6 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
                     }
                     if (hidRequested && mConnectionState == STATE_DISCONNECTED
                             && mReadThread == null && mHidConnection == null
-                            && mWujieConnection == null
                             && mUsbConnection == null) {
                         mHidTried = false
                         autoConnectBraille()
@@ -667,12 +644,6 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
                 hidConnection.writeWindow(patterns)
                 return
             }
-            val wujieConnection = mWujieConnection
-            if (wujieConnection != null) {
-                recordDots(patterns, ROUTE_WUJIE)
-                wujieConnection.writeWindow(patterns)
-                return
-            }
             val localReadThread = mReadThread
             if (localReadThread == null) {
                 recordDots(patterns, ROUTE_NONE)
@@ -781,7 +752,6 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         // system controller has really been released. Clearing it here
         // lets a new connection race the asynchronous teardown.
         mHidConnection?.disconnect()
-        mWujieConnection?.disconnect()
         // Like HID, this reports back asynchronously once the native
         // driver has actually stopped.
         mUsbConnection?.disconnect()
@@ -852,7 +822,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         }
 
         if (mReadThread != null || mHidConnection != null
-                || mWujieConnection != null || mUsbConnection != null) {
+                || mUsbConnection != null) {
             // We must wait until the previous attempt is done before
             // retrying a connect, so just set the flag here.
             mConnectPending = true
@@ -883,16 +853,8 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         }
     }
 
-    /** Tries the wireless transports in order: Wujie BLE, HID, then RFCOMM. */
+    /** Tries the wireless transports in order: standard Braille HID, then RFCOMM. */
     private fun connectBluetooth() {
-        if (!mWujieTried && isWujieTarget()) {
-            mWujieTried = true
-            // connectWujie() prefers mPendingBluetoothAddress, so a display
-            // found by discovery is dialled directly instead of being
-            // re-scanned for.
-            connectWujie()
-            return
-        }
         if (!mHidTried && !shouldSkipHidForWujie()) {
             if (tryConnectHid()) {
                 // A Braille HID connection attempt was started (async).
@@ -1001,7 +963,6 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
      * reading service state directly instead of through a wrapper.
      */
     private val mHidListener = createHidListener()
-    private val mWujieListener = createWujieListener()
     private val mUsbListener = createUsbListener()
 
     /**
@@ -1073,84 +1034,11 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
     }
 
     /**
-     * Starts the private BLE GATT connection used by the Wujie display.
-     * Unlike the HID path this does not depend on the system braille HID
-     * service, so the display can stay in its vendor BLE mode.
-     */
-    private fun connectWujie() {
-        var address: String? = mPendingBluetoothAddress
-        if (address == null) {
-            address = findWujieAddress()
-        }
-        connectWujie(address)
-    }
-
-    private fun connectWujie(address: String?) {
-        if (address == null) {
-            Timber.w("No bonded Wujie display found")
-            mHandler.setConnectionProgress(
-                    getString(R.string.connprog_no_devices))
-            scheduleAutoReconnectIfNeeded()
-            return
-        }
-        mPendingBluetoothAddress = null
-        mHandler.setConnectionProgress(
-                getString(R.string.connprog_trying_wujie))
-        val connection =
-                WujieGattConnection(this, mWujieListener)
-        mWujieConnection = connection
-        Timber.i("Creating custom GATT connection for %s", address)
-        connection.connect(address)
-    }
-
-    /**
-     * True when the display this cycle is about to reach is a Wujie / Orbit
-     * device, which only answers the vendor BLE GATT protocol.
+     * True when this connection cycle targets an Orbit/wujie-family display and
+     * the serial SPP path must be used instead of the standard Braille HID path.
      *
-     * <p>The pending address must be inspected, not just its absence: a
-     * discovery result or a fresh bond sets {@link #mPendingBluetoothAddress},
-     * and the old "pending is null" precondition made a rediscovered display
-     * skip the Wujie path entirely and fall through to the standard Braille
-     * HID path, which the vendor BLE mode never answers.
-     */
-    private fun isWujieTarget(): Boolean {
-        // 临时诊断：厂商私有 BLE 已被 DISABLE_VENDOR_BLE_TEMP 关掉，
-        // 一律按「不是 Wujie」处理，让连接落到标准 Braille HID / RFCOMM。
-        if (DISABLE_VENDOR_BLE_TEMP) {
-            Timber.i("Vendor BLE disabled by DISABLE_VENDOR_BLE_TEMP; "
-                    + "falling back to standard HID/RFCOMM")
-            return false
-        }
-        val pending = mPendingBluetoothAddress
-        if (pending == null) {
-            return findNamedWujieAddress() != null
-        }
-        if (isWujieName(readRemoteDeviceName(pending))) {
-            return true
-        }
-        // Fallback through the bonded scan: the remote name can be
-        // unavailable without BLUETOOTH_CONNECT, and a user-renamed display
-        // still matches by address.
-        val bonded = findNamedWujieAddress()
-        if (bonded != null && bonded.equals(pending, ignoreCase = true)) {
-            return true
-        }
-        // Deliberately not falling back to the lastConnected preference: it
-        // records the last display of ANY protocol, so treating it as Wujie
-        // evidence would send a plain RFCOMM display through a doomed BLE
-        // attempt on every reconnect.
-        return false
-    }
-
-    /**
-     * True when this connection cycle targets a Wujie/Orbit display and the
-     * serial SPP path must be used instead of the standard Braille HID path.
-     *
-     * <p>Mirrors [isWujieTarget] but deliberately ignores
-     * [DISABLE_VENDOR_BLE_TEMP]: that switch only gates the vendor GATT
-     * protocol, while this decision is about HID versus RFCOMM. The firmware
-     * declares an HID input report but never sends it, so HID would give a
-     * display-only link with dead keys; SPP carries both directions.
+     * <p>The firmware declares an HID input report but never sends it, so HID
+     * would give a display-only link with dead keys; SPP carries both directions.
      */
     internal fun legacyShouldSkipHidByVendor(): Boolean {
         if (!PREFER_RFCOMM_FOR_WUJIE) {
@@ -1194,20 +1082,6 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
         }
     }
 
-    /**
-     * Returns the address of a bonded Wujie / Orbit display. Name matching is
-     * deliberately broad because the display advertises as "Orbit wujie 30"
-     * and the user may have renamed it.
-     */
-    private fun findWujieAddress(): String? {
-        val named = findNamedWujieAddress()
-        if (named != null) {
-            return named
-        }
-        return SettingsStore.get(this)
-                .getString("lastBluetoothDevice", null)
-    }
-
     /** Strict discovery for automatic Bluetooth fallback. */
     private fun findNamedWujieAddress(): String? {
         val adapter = BluetoothAdapter.getDefaultAdapter()
@@ -1233,7 +1107,7 @@ class DisplayService : Service(), DriverThread.OnInputEventListener {
             }
         } catch (e: SecurityException) {
             Log.w(LOG_TAG,
-                    "BLUETOOTH_CONNECT permission denied finding Wujie device",
+                    "BLUETOOTH_CONNECT permission denied finding Orbit/wujie-family device",
                     e)
             return null
         }

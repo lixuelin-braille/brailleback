@@ -18,7 +18,6 @@
 package com.googlecode.eyesfree.braille.service.display
 
 import com.googlecode.eyesfree.braille.display.BrailleDisplayProperties
-import com.googlecode.eyesfree.braille.display.BrailleInputEvent
 import com.googlecode.eyesfree.braille.service.R
 import timber.log.Timber
 
@@ -43,28 +42,6 @@ fun DisplayService.createHidListener(): HidDisplayConnection.Listener =
 
     override fun onHidConnectFailed(source: HidDisplayConnection?, error: Int) {
         mHandler.onHidConnectFailed(source, error)
-    }
-}
-
-fun DisplayService.createWujieListener(): WujieGattConnection.Listener =
-        object : WujieGattConnection.Listener {
-    override fun onWujieConnected(source: WujieGattConnection?,
-            properties: BrailleDisplayProperties?) {
-        mHandler.onWujieConnected(source, properties)
-    }
-
-    override fun onWujieInputEvent(source: WujieGattConnection?,
-            event: BrailleInputEvent?) {
-        mHandler.onWujieInputEvent(source, event)
-    }
-
-    override fun onWujieDisconnected(source: WujieGattConnection?) {
-        mHandler.onWujieDisconnected(source)
-    }
-
-    override fun onWujieConnectFailed(source: WujieGattConnection?,
-            error: Int) {
-        mHandler.onWujieConnectFailed(source, error)
     }
 }
 
