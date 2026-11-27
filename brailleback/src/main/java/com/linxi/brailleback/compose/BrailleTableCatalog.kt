@@ -15,10 +15,14 @@ import java.text.Collator
  * - 第二级是全屏的该语言表列表，平铺、没有分组标题，条目名自带国家/地区
  *   （谷歌源码 LocaleLanguageActivity.java:84-99 用 getUserFacingName 区分 locale）。
  *
- * 与谷歌有两点差别，都由本项目数据决定：
+ * 与谷歌有三点差别，都由本项目数据决定：
  * 1) 语言清单来自运行时 `TranslatorClient.getTables()`，不是静态 Code 枚举；
  * 2) 国家/地区名必须过 [regionName] 的合规映射，中国台湾/中国香港/中国澳门
- *    显式带「中国」前缀，不能直接用系统 `Locale.getDisplayName()`。
+ *    显式带「中国」前缀，不能直接用系统 `Locale.getDisplayName()`；
+ * 3) liblouis 的 268 张主表里有 6 张不是「某国盲文」（方框绘制、国际象棋、
+ *    数学、行间注），另有 12 张是古代文字或语族聚合表。它们按 [TableKind]
+ *    单独成组，不并进语言列表——混在一起的后果是盲人在「德语」下面点开
+ *    看到「de-chess」不知道是什么。
  *
  * 条目名仍复用旧的 `table_name_*` 模板资源，与旧 Fragment 一一对应；
  * 只是 [TableSeed.localeName] 改由 [compliantLocaleName] 生成，避免系统
@@ -27,6 +31,77 @@ import java.text.Collator
 object BrailleTableCatalog {
 
     const val AUTO_VALUE = "auto"
+
+    /** 特殊用途表与古代/语族表的伪语言码，避免与真实语言码（如 "zh"）冲突。 */
+    const val SPECIAL_GROUP_KEY = "@special"
+    const val LEGACY_GROUP_KEY = "@legacy"
+
+    private const val DEFAULT_SPECIAL_TITLE = "特殊用途表"
+    private const val DEFAULT_LEGACY_TITLE = "古代与语族表"
+
+    /**
+     * 表用途。界面上只有普通语言表按「语言 → 国家/地区 → 变体」陈列。
+     */
+    enum class TableKind {
+        /** 某语言的常规转写表。 */
+        LANGUAGE,
+
+        /** 非自然语言用途：方框绘制、国际象棋、数学、行间注。 */
+        SPECIAL,
+
+        /** 古代文字、已不通行文字与语族聚合表。 */
+        LEGACY,
+    }
+
+    /** 非自然语言用途的表 id（不含扩展名）。 */
+    private val SPECIAL_TABLE_IDS = setOf(
+        "boxes",
+        "de-chess",
+        "en-chess",
+        "en-ueb-math",
+        "en-us-mathtext",
+        "en-us-interline",
+    )
+
+    /**
+     * 古代文字与语族聚合表的 id：
+     * `akk` 阿卡德语、`cop` 科普特语、`cuneiform-*` 楔形文字转写、
+     * `ancient-languages*` 古代语言合集、`ethio` 埃塞俄比亚文、`dra` 达罗毗荼语族。
+     */
+    private val LEGACY_TABLE_IDS = setOf(
+        "akk",
+        "akk-borger",
+        "ancient-languages",
+        "ancient-languages-borger",
+        "ancient-languages-us",
+        "cop",
+        "cop-eg-comp8",
+        "cuneiform-transliterated",
+        "cuneiform-transliterated-compact",
+        "ethio",
+        "ethio-g1",
+        "dra",
+    )
+
+    /**
+     * 无国家码语言的国别兜底。
+     *
+     * liblouis 里 `bg.ctb`、`el.ctb` 这类表只写语言码，但表本身是单一国家的规范，
+     * 补上后第二级才能读到「保加利亚语（保加利亚）」而不是「保加利亚语（通用）」。
+     * 只收无争议的单一规范国；跨国的（ur、sw、ta、pi 等）不猜，仍显示「（通用）」。
+     * `zhcn`/`zh` 不在此列：中文方案已按现行/双拼/通用单独拆成方案，口径不从这里来。
+     */
+    private val REGION_HINTS = mapOf(
+        "bg" to "BG", "el" to "GR", "et" to "EE", "hr" to "HR", "is" to "IS",
+        "lt" to "LT", "lv" to "LV", "sk" to "SK", "sl" to "SI", "sq" to "AL",
+        "sr" to "RS", "mn" to "MN", "my" to "MM", "ne" to "NP", "si" to "LK",
+        "th" to "TH", "vi" to "VN", "fa" to "IR", "fil" to "PH", "ms" to "MY",
+        "mt" to "MT", "pl" to "PL", "pt" to "PT", "ro" to "RO", "ru" to "RU",
+        "fi" to "FI", "fr" to "FR", "ga" to "IE", "gd" to "GB", "nl" to "NL",
+        "ko" to "KR", "ca" to "ES", "es" to "ES", "haw" to "US", "iu" to "CA",
+        "afr" to "ZA", "xh" to "ZA", "zu" to "ZA", "ve" to "ZA",
+        "tsn" to "BW", "nso" to "ZA", "sot" to "LS", "bo" to "CN",
+    )
 
     /** 一张表在界面上需要的全部信息；本地化显示名由 Activity 层算好后传入。 */
     data class TableSeed(
@@ -56,12 +131,16 @@ object BrailleTableCatalog {
         val variant: String,
         val grade: String,
         val variantGrade: String,
+        /** 特殊用途表分组的标题；空串时用内置中文兜底（只在测试路径出现）。 */
+        val specialGroupTitle: String = "",
+        /** 古代与语族表分组的标题；空串时用内置中文兜底。 */
+        val legacyGroupTitle: String = "",
     )
 
     data class TableChoice(val id: String, val label: String)
 
     /**
-     * 第一级的一项 = 一种语言。
+     * 第一级的一项 = 一种语言（或一个非语言分组）。
      * [language] 是稳定 key（语言码），[title] 才是本地化显示名；
      * 第二级全屏页用语言码定位，界面语言切换后不会指错组。
      */
@@ -82,6 +161,25 @@ object BrailleTableCatalog {
     private val CHINA_REGIONS_EN = mapOf(
         "TW" to "Taiwan, China", "HK" to "Hong Kong, China", "MO" to "Macao, China",
     )
+
+    /**
+     * 表 id → 用途。
+     *
+     * id 可能带扩展名或变体后缀（`de-chess.ctb`、`en-ueb-math`），
+     * 先去掉扩展名，再整串匹配；匹配不上就是普通语言表。
+     */
+    fun kindOf(id: String): TableKind {
+        val base = id.lowercase().removeSuffix(".ctb").removeSuffix(".utb")
+        return when {
+            base in SPECIAL_TABLE_IDS -> TableKind.SPECIAL
+            base in LEGACY_TABLE_IDS -> TableKind.LEGACY
+            else -> TableKind.LANGUAGE
+        }
+    }
+
+    /** 无国家码时按语言补的国别；没有映射返回空串，调用方保持「（通用）」。 */
+    fun regionHintOf(language: String): String =
+        REGION_HINTS[language.lowercase()].orEmpty()
 
     /** [useChineseNames] 由当前界面语言决定；其余国家沿用系统本地化名。 */
     fun regionName(country: String, localizedName: String, useChineseNames: Boolean): String {
@@ -140,9 +238,12 @@ object BrailleTableCatalog {
      * 生成按语言分组、一次性加载的两级列表。
      *
      * 排序规则（照抄谷歌 `AddLanguageActivity`）：系统语言所在组置顶，
-     * 其余组用 Collator 按语言显示名排序。组内（第二级）先按国家/地区名聚拢
+     * 其余语言组用 Collator 按语言显示名排序。组内（第二级）先按国家/地区名聚拢
      * （无国家码的通用表排最前），再六点先于八点、等级升序、变体按 Collator；
      * 组内不产生任何分组标题，整屏平铺。
+     *
+     * 特殊用途表（rank 2）与古代/语族表（rank 3）排在所有语言组之后，
+     * 各自成组、内部按表名排；它们不进 [gradeCounts]，避免把同语言的等级判断带偏。
      */
     fun build(
         seeds: List<TableSeed>,
@@ -150,21 +251,34 @@ object BrailleTableCatalog {
         labels: TableLabels,
     ): List<TableGroup> {
         val collator = Collator.getInstance()
+
+        // 先按用途分流：语言表进语言分组，其余两类各自独立成组。
+        val languageSeeds = ArrayList<TableSeed>()
+        val specialSeeds = ArrayList<TableSeed>()
+        val legacySeeds = ArrayList<TableSeed>()
+        seeds.forEach { seed ->
+            when (kindOf(seed.id)) {
+                TableKind.SPECIAL -> specialSeeds.add(seed)
+                TableKind.LEGACY -> legacySeeds.add(seed)
+                TableKind.LANGUAGE -> languageSeeds.add(seed)
+            }
+        }
+
         // 旧版 gradeCount 统计「同 locale 的非八点表」，这里按同一口径预计算。
-        val gradeCounts = seeds.asSequence()
+        val gradeCounts = languageSeeds.asSequence()
             .filter { !it.isEightDot }
             .groupingBy { it.localeKey() }
             .eachCount()
 
         // 按语言码聚合，不用显示名当 key：界面语言切换后仍是同一组。
         val grouped = LinkedHashMap<String, MutableList<TableSeed>>()
-        seeds.forEach { seed ->
+        languageSeeds.forEach { seed ->
             grouped.getOrPut(seed.language.lowercase()) { ArrayList() }.add(seed)
         }
 
         data class Ranked(val rank: Int, val group: TableGroup)
 
-        return grouped.map { (language, members) ->
+        val languageGroups = grouped.map { (language, members) ->
             val sorted = members.sortedWith(
                 compareBy<TableSeed>(
                     { collator.getCollationKey(it.countryName) },
@@ -188,6 +302,49 @@ object BrailleTableCatalog {
                 ),
             )
         }
+
+        fun extraGroup(
+            rank: Int,
+            key: String,
+            title: String,
+            members: List<TableSeed>,
+        ): Ranked = Ranked(
+            rank,
+            TableGroup(
+                language = key,
+                title = title,
+                choices = members
+                    .sortedWith(compareBy({ collator.getCollationKey(it.id) }))
+                    .map {
+                        // 特殊表没有「语言（国家）」的概念，直接读表名或变体名。
+                        TableChoice(it.id, it.variant.ifEmpty { it.id })
+                    },
+            ),
+        )
+
+        val extras = ArrayList<Ranked>()
+        if (specialSeeds.isNotEmpty()) {
+            extras.add(
+                extraGroup(
+                    2,
+                    SPECIAL_GROUP_KEY,
+                    labels.specialGroupTitle.ifEmpty { DEFAULT_SPECIAL_TITLE },
+                    specialSeeds,
+                )
+            )
+        }
+        if (legacySeeds.isNotEmpty()) {
+            extras.add(
+                extraGroup(
+                    3,
+                    LEGACY_GROUP_KEY,
+                    labels.legacyGroupTitle.ifEmpty { DEFAULT_LEGACY_TITLE },
+                    legacySeeds,
+                )
+            )
+        }
+
+        return (languageGroups + extras)
             .sortedWith(compareBy({ it.rank }, { collator.getCollationKey(it.group.title) }))
             .map { it.group }
     }

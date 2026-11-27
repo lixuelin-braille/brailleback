@@ -673,6 +673,8 @@
     <string name="compose_table_picker_title">Manage braille codes by language</string>
     <string name="compose_table_group_auto">Automatic</string>
     <string name="compose_table_group_generic"> (Generic)</string>
+    <string name="compose_table_group_special">Special purpose tables</string>
+    <string name="compose_table_group_legacy">Ancient and language-family tables</string>
     <string name="compose_table_locale_pattern">%1$s (%2$s)</string>
     <string name="compose_code_language_summary">%1$d codes, %2$d enabled%3$s</string>
     <string name="compose_table_language_current">, current code is in this language</string>

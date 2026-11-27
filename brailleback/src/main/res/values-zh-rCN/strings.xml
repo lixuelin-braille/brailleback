@@ -477,6 +477,8 @@
     <string name="compose_table_picker_title">按语言管理盲文方案</string>
     <string name="compose_table_group_auto">自动选择</string>
     <string name="compose_table_group_generic">（通用）</string>
+    <string name="compose_table_group_special">特殊用途表</string>
+    <string name="compose_table_group_legacy">古代与语族表</string>
     <string name="compose_table_locale_pattern">%1$s（%2$s）</string>
     <string name="compose_code_language_summary">共 %1$d 个方案，已启用 %2$d 个%3$s</string>
     <string name="compose_table_language_current">，当前方案在此语言</string>

@@ -144,6 +144,8 @@ class BrailleDisplayComposeActivity : AppCompatActivity(),
             variant = getString(R.string.table_name_variant),
             grade = getString(R.string.table_name_grade),
             variantGrade = getString(R.string.table_name_variant_grade),
+            specialGroupTitle = getString(R.string.compose_table_group_special),
+            legacyGroupTitle = getString(R.string.compose_table_group_legacy),
         )
         codeLabels = BrailleCodeCatalog.CodeLabels(
             eightDotName = getString(R.string.compose_code_eight_dot),
@@ -413,7 +415,9 @@ class BrailleDisplayComposeActivity : AppCompatActivity(),
 
     /** TableInfo 是 Android Parcelable，转成纯数据结构后再交给零依赖的分组逻辑。 */
     private fun TableInfo.toSeed(): BrailleTableCatalog.TableSeed {
-        val country = locale.country
+        // 无国家码的表按语言补规范国：liblouis 的 bg.ctb、el.ctb 只写语言码，不补就
+        // 全落到「（通用）」，第二级读不出是哪个国家（映射表见 BrailleTableCatalog）。
+        val country = locale.country.ifEmpty { BrailleTableCatalog.regionHintOf(locale.language) }
         val localizedCountry = if (country.isEmpty()) {
             ""
         } else {
