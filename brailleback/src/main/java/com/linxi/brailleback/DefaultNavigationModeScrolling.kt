@@ -20,6 +20,7 @@ import android.accessibilityservice.AccessibilityService
 import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -264,6 +265,9 @@ internal fun DefaultNavigationMode.scheduleBrailleAfterScroll(
         beforeBounds: List<Rect>) {
     val sequence = ++mScrollSequence
     mScrollUpdatePending = true
+    // 冷却窗口从滚动开始算：系统在这之后的重置都属于「跟着滚动走」的自动焦点，
+    // 不能让它改写盲文；用户自己的触摸一般早过了窗口。
+    mLastScrollActionAt = SystemClock.uptimeMillis()
     val containerCopy = AccessibilityNodeInfoCompat.obtain(container)
     val previousCopy = AccessibilityNodeInfoCompat.obtain(previous)
     updateAfterScroll(sequence, containerCopy, previousCopy, forward,

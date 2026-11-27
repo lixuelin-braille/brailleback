@@ -57,24 +57,31 @@ internal const val FOCUS_SETTLE_MILLIS = 120L
 internal const val SCROLL_GUARD_MILLIS = 400L
 
 /**
+ * 滚动后的焦点冷却窗口（毫秒）：滚动/翻页会让系统把无障碍焦点重置到新一屏
+ * 的第一行，这些自动重置都落在 settle 期间和 settle 之后的一小段时间里。
+ * settle 最坏要三次尝试（80 + 120 + 180），留到 500 能全覆盖；用户翻页后
+ * 再用手去滑读屏，通常早过了这个窗口，所以正常触摸浏览不受影响。
+ */
+internal const val SCROLL_FOCUS_COOLDOWN_MILLIS = 500L
+
+/**
  * 系统的无障碍焦点事件该不该跟。
  *
- * 两种不跟的情况：
+ * 只挡「滚动引起的自动焦点重置」，不挡用户自己的操作：翻页/滚屏时系统会把焦点
+ * 重置到新一屏第一行，跟着刷会先闪错帧、settle 后再闪对帧，摸起来就是跳两下，
+ * 有时直接停在第一行。用户用手指滑读屏、或读屏自己移动焦点时，距离上次滚动
+ * 早已超出冷却窗口，照常跟随。
  *
- * 1. [scrollPending]：滚动更新还没落定。系统在这一刻会把焦点重置到新一屏的
- *    第一行，跟着它刷会先闪一帧错的，settle 完成后再刷一帧对的，摸起来就是
- *    「跳两下」，有时直接停在第一行。
- * 2. [quiet] 且 [hasLogicalFocus]：盲文导航自己维护逻辑焦点，系统焦点可能属于
- *    别的读屏，或是页面自动重置的结果，抢过来会把盲文拽回第一行。
+ * @param scrollPending 滚动更新是否还没落定（settle 未完成）。
+ * @param sinceScrollMillis 距上次滚动动作开始过了多少毫秒；从未滚动时传一个很大的值。
  */
 internal fun shouldFollowFocusEvent(
         scrollPending: Boolean,
-        quiet: Boolean,
-        hasLogicalFocus: Boolean): Boolean {
+        sinceScrollMillis: Long): Boolean {
     if (scrollPending) {
         return false
     }
-    return !(quiet && hasLogicalFocus)
+    return sinceScrollMillis >= SCROLL_FOCUS_COOLDOWN_MILLIS
 }
 
 /**
@@ -110,6 +117,9 @@ internal class DefaultNavigationMode(
 
     /** 补刷时若取不到焦点节点，是否退到「第一个可聚焦节点」。 */
     private var mSettleFallback = false
+
+    /** 最近一次滚动动作的开始时刻（uptime）；0 表示这次会话还没滚动过。 */
+    internal var mLastScrollActionAt = 0L
 
     /** 滚动期间压下焦点事件时排的兜底帧；没有在排就为 null。 */
     private var mScrollGuardRunnable: Runnable? = null
@@ -254,10 +264,12 @@ internal class DefaultNavigationMode(
     override fun onAccessibilityEvent(event: AccessibilityEvent): Boolean {
         when (event.eventType) {
             AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED -> {
-                if (!shouldFollowFocusEvent(
-                                mScrollUpdatePending,
-                                isQuietNavigationEnabled(),
-                                !AccessibilityNodeInfoRef.isNull(mLastFocusedNode))) {
+                val sinceScroll = if (mLastScrollActionAt == 0L) {
+                        Long.MAX_VALUE
+                    } else {
+                        SystemClock.uptimeMillis() - mLastScrollActionAt
+                    }
+                if (!shouldFollowFocusEvent(mScrollUpdatePending, sinceScroll)) {
                     scheduleScrollGuard(fallback = true)
                     return true
                 }

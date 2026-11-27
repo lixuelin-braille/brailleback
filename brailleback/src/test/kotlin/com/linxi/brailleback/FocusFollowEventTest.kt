@@ -11,41 +11,45 @@ import org.junit.Test
 /**
  * 系统无障碍焦点事件该不该跟。
  *
- * 钉住用户真机上摸到的两个现象：
- * 1. 翻页/滚屏时系统把焦点重置到新一屏第一行，跟它会「跳两下」；
- * 2. 盲文导航自己维护逻辑焦点（quiet）时，系统焦点属于别的读屏，抢过来会把
- *    盲文拽回第一行。
+ * 要同时满足两个真机诉求：
+ * 1. 翻页/滚屏后不跟：系统会把焦点重置到新一屏第一行，跟了就是跳两下、停首行。
+ * 2. 用手指滑读屏时照常跟：那和滚动无关，不能被冷却窗口误伤。
  */
 class FocusFollowEventTest {
 
     @Test
-    fun `滚动更新未落定时任何模式都不跟`() {
+    fun `滚动更新未落定时不跟`() {
         assertFalse(
-                "跟了会先闪一帧错内容，settle 后再闪一帧，摸起来是跳两下",
-                shouldFollowFocusEvent(scrollPending = true, quiet = false, hasLogicalFocus = false))
-        assertFalse(
-                "quiet 模式在滚动期间同样要压住",
-                shouldFollowFocusEvent(scrollPending = true, quiet = true, hasLogicalFocus = true))
+                "跟了会先闪错帧，settle 后再闪对帧，摸起来是跳两下",
+                shouldFollowFocusEvent(scrollPending = true, sinceScrollMillis = 10_000L))
     }
 
     @Test
-    fun `quiet 模式下已有逻辑焦点就不跟`() {
+    fun `滚动后冷却窗口内不跟`() {
         assertFalse(
-                "系统焦点可能属于别的读屏，抢过来会跳回第一行",
-                shouldFollowFocusEvent(scrollPending = false, quiet = true, hasLogicalFocus = true))
+                "系统自动重置到首行就发生在这段时间里",
+                shouldFollowFocusEvent(scrollPending = false, sinceScrollMillis = 200L))
+        assertFalse(
+                "499 仍在窗口内",
+                shouldFollowFocusEvent(scrollPending = false,
+                        sinceScrollMillis = SCROLL_FOCUS_COOLDOWN_MILLIS - 1))
     }
 
     @Test
-    fun `quiet 模式下还没有逻辑焦点时跟一次`() {
+    fun `冷却窗口过后的焦点照常跟`() {
         assertTrue(
-                "刚启用时没有自己的焦点，先跟系统的把屏填上",
-                shouldFollowFocusEvent(scrollPending = false, quiet = true, hasLogicalFocus = false))
+                "手指滑读屏属于这类，必须正常跟随",
+                shouldFollowFocusEvent(scrollPending = false,
+                        sinceScrollMillis = SCROLL_FOCUS_COOLDOWN_MILLIS))
+        assertTrue(
+                "很久没滚动也要跟",
+                shouldFollowFocusEvent(scrollPending = false, sinceScrollMillis = 60_000L))
     }
 
     @Test
-    fun `跟随模式下滚动外正常跟`() {
+    fun `从未滚动过一律跟`() {
         assertTrue(
-                "非 quiet 且不在滚动，焦点事件必须照常显示",
-                shouldFollowFocusEvent(scrollPending = false, quiet = false, hasLogicalFocus = false))
+                "刚启动时没有滚动记录，不能因为冷却误判成不跟",
+                shouldFollowFocusEvent(scrollPending = false, sinceScrollMillis = Long.MAX_VALUE))
     }
 }
