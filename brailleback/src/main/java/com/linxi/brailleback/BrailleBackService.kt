@@ -735,14 +735,14 @@ class BrailleBackService : AccessibilityService(),
         @JvmStatic
         fun holdDisplayForApp(): Boolean {
             val dm = instance?.displayManager ?: return false
-            dm.setFrozen(true, clear = false)
+            dm.holdForHostApp()
             return true
         }
 
-        /** 交还点显器：解冻并让服务按当前焦点内容重画一遍。 */
+        /** 交还点显器：恢复输入，等前台界面稳定一拍再按焦点重画。 */
         @JvmStatic
         fun releaseDisplayForApp() {
-            instance?.displayManager?.setFrozen(false)
+            instance?.displayManager?.releaseFromHostApp()
         }
 
         /**

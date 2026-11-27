@@ -33,6 +33,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.android.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import com.googlecode.eyesfree.braille.display.BrailleInputEvent
 import com.googlecode.eyesfree.braille.display.Display
 import com.googlecode.eyesfree.braille.display.DisplayClient
@@ -325,6 +327,11 @@ class DisplayManager(
     }
 
     override fun onInputEvent(event: BrailleInputEvent) {
+        // 应用内界面独占期间不处理按键：设备按键是广播的，另一份已经在
+        // 那边处理过，这里再跑一次会重复翻页甚至误触控件。
+        if (hostOwned) {
+            return
+        }
         keepAwake()
         resetIdleTimer()
         LogUtils.log(this, Log.VERBOSE, "InputEvent: %s", event)
@@ -667,6 +674,45 @@ class DisplayManager(
     }
 
     /**
+     * 应用内界面（阅读器等）独占点显器期间为 true。
+     *
+     * 与 [setFrozen] 的分工：冻结只压输出，输入照旧分发。设备按键是广播给
+     * 所有客户端的（DisplayService.broadcastInputEvent），阅读器和服务侧会
+     * 同时收到同一个键，服务侧还会白跑一遍导航，非仅盲文模式下甚至去
+     * performAction 误触控件。独占期把输入直接吞掉，一个键只由一个模块处理。
+     */
+    @Volatile
+    private var hostOwned = false
+
+    /**
+     * 应用内界面接管点显器：压输出、停输入，且不清屏。
+     *
+     * 不清屏是必需的——调用方刚把点位画上去，这条清屏命令会把它擦掉。
+     */
+    fun holdForHostApp() {
+        hostOwned = true
+        displayHandler.post {
+            runtimeState.update { it.copy(frozen = true) }
+        }
+    }
+
+    /**
+     * 应用内界面交还点显器：恢复输入，等前台界面稳定一拍再按焦点重画。
+     *
+     * 不立刻 refresh 的原因：交还发生在 onPause，此刻前台 Activity 正在重建，
+     * 直接取「当前焦点」很容易拿到刚失效的节点，退出阅读器后第一屏会是空白
+     * 或旧内容。留一拍让前台先落定。
+     */
+    fun releaseFromHostApp() {
+        hostOwned = false
+        displayScope.launch {
+            runtimeState.update { it.copy(frozen = false) }
+            delay(HOST_RELEASE_REFRESH_DELAY_MILLIS)
+            refresh()
+        }
+    }
+
+    /**
      * Toggles the paused state. Returns `true` if the display is now
      * paused.
      */
@@ -814,3 +860,10 @@ class DisplayManager(
         private const val MSG_STOP = 3
     }
 }
+/**
+ * 交还点显器后等多久再按焦点重画（毫秒）。
+ *
+ * 取 150 是为了让 onPause 之后的前台 Activity 先完成一次布局与焦点分配；
+ * 再短容易读到失效节点，再长用户会觉得回到列表后屏是空的。
+ */
+private const val HOST_RELEASE_REFRESH_DELAY_MILLIS = 150L
