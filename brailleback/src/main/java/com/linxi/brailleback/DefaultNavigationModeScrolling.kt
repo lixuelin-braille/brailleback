@@ -304,6 +304,9 @@ internal fun DefaultNavigationMode.updateAfterScroll(
         }
 
         mScrollUpdatePending = false
+        // settle 自己会刷正确的一帧，把冷却期间排的补帧撤掉，避免它把屏
+        // 覆盖成系统焦点所在的首行。
+        cancelCooldownRefresh()
         LogUtils.log(this, Log.VERBOSE,
                 "Auto-scroll settled: moved=%s attempt=%d",
                 moved, attempt)

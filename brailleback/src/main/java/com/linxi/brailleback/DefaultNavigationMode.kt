@@ -54,7 +54,6 @@ internal const val FOCUS_SETTLE_MILLIS = 120L
  * 变化提前退出、`mScrollUpdatePending` 没被清，至少要有一帧能补上来。
  * 补上来的帧与已上屏内容相同时会被内容指纹挡掉，不会多闪一次。
  */
-internal const val SCROLL_GUARD_MILLIS = 400L
 
 /**
  * 滚动后的焦点冷却窗口（毫秒）：滚动/翻页会让系统把无障碍焦点重置到新一屏
@@ -263,14 +262,15 @@ internal class DefaultNavigationMode(
 
     override fun onAccessibilityEvent(event: AccessibilityEvent): Boolean {
         when (event.eventType) {
+            AccessibilityEvent.TYPE_VIEW_SCROLLED -> {
+                // 读屏自己的手势滚动和惯性滚动不经过 attemptScrollAction，
+                // 但系统滚完同样会把焦点重置到新一屏首行，这里统一记冷却起点。
+                mLastScrollActionAt = SystemClock.uptimeMillis()
+                return true
+            }
             AccessibilityEvent.TYPE_VIEW_ACCESSIBILITY_FOCUSED -> {
-                val sinceScroll = if (mLastScrollActionAt == 0L) {
-                        Long.MAX_VALUE
-                    } else {
-                        SystemClock.uptimeMillis() - mLastScrollActionAt
-                    }
-                if (!shouldFollowFocusEvent(mScrollUpdatePending, sinceScroll)) {
-                    scheduleScrollGuard(fallback = true)
+                if (!shouldFollowFocusEvent(mScrollUpdatePending, sinceScrollMillis())) {
+                    scheduleCooldownRefresh()
                     return true
                 }
                 // 事件节点此刻还活着，首帧可以直接用它；被合并的那一帧等到期时
@@ -278,8 +278,8 @@ internal class DefaultNavigationMode(
                 scheduleFocusBraille(fallback = true) { brailleNodeFromEvent(event) }
             }
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
-                if (mScrollUpdatePending) {
-                    scheduleScrollGuard(fallback = false)
+                if (!shouldFollowFocusEvent(mScrollUpdatePending, sinceScrollMillis())) {
+                    scheduleCooldownRefresh()
                     return true
                 }
                 scheduleFocusBraille(fallback = false) { brailleFocusedNode() }
@@ -338,16 +338,39 @@ internal class DefaultNavigationMode(
      * 滚动期间压下的焦点事件留一帧兜底，避免 settle 回调提前退出后屏上再也不刷新。
      * 是否真的补，取决于到期时滚动是否已落定。
      */
-    private fun scheduleScrollGuard(fallback: Boolean) {
+    private fun scheduleCooldownRefresh() {
         mScrollGuardRunnable?.let { mMainHandler.removeCallbacks(it) }
+        val at = mLastScrollActionAt
+        val elapsed = if (at == 0L) {
+            SCROLL_FOCUS_COOLDOWN_MILLIS
+        } else {
+            SystemClock.uptimeMillis() - at
+        }
+        val delay = (SCROLL_FOCUS_COOLDOWN_MILLIS - elapsed).coerceAtLeast(0L)
         val runnable = Runnable {
             mScrollGuardRunnable = null
-            if (!mScrollUpdatePending) {
-                performSettledBraille(fallback)
+            // 滚动 settle 还没落定：让它自己刷正确的那一帧，这里不抢，
+            // 否则会把 settle 选好的行覆盖成系统焦点所在的首行。
+            if (mScrollUpdatePending) {
+                return@Runnable
             }
+            performSettledBraille(fallback = false)
         }
         mScrollGuardRunnable = runnable
-        mMainHandler.postDelayed(runnable, SCROLL_GUARD_MILLIS)
+        mMainHandler.postDelayed(runnable, delay)
+    }
+
+    /** 距上次滚动动作过了多少毫秒；从未滚动过时返回最大值，表示不设防。 */
+    private fun sinceScrollMillis(): Long = if (mLastScrollActionAt == 0L) {
+        Long.MAX_VALUE
+    } else {
+        SystemClock.uptimeMillis() - mLastScrollActionAt
+    }
+
+    /** settle 已经上屏了正确的一帧，冷却补帧没有存在的必要，撤掉。 */
+    internal fun cancelCooldownRefresh() {
+        mScrollGuardRunnable?.let { mMainHandler.removeCallbacks(it) }
+        mScrollGuardRunnable = null
     }
 
     override fun onInvalidateAccessibilityNode(
