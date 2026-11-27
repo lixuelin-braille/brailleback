@@ -1,0 +1,48 @@
+BrailleBack（定制 / 派生版本）
+Copyright (C) 2015 Google Inc. and individual contributors
+
+本项目是 Google BrailleBack（eyes-free）的定制 / 派生版本，保留全部上游版权
+声明。项目本体按 Apache License 2.0 发布，许可证全文见同目录 LICENSE。
+
+下列第三方组件的版权与许可按仓库内源码证据列出；上游版权行未作删除。
+
+-------------------------------------------------------------------------------
+
+1. Google BrailleBack（eyes-free）—— 本项目上游
+   许可：Apache License 2.0
+   出处：service/、addon/、client/、libraries/ 下
+         com.googlecode.eyesfree 与 com.google.android.accessibility.braille 包
+   版权：Copyright (C) 2015 Google Inc. 及贡献者
+
+2. liblouis —— 盲文翻译 / 反翻译库
+   许可：GNU Lesser General Public License, version 2.1, or (at your option)
+         any later version (LGPL-2.1-or-later)
+   出处：addon/brailletranslate/jni/third_party/liblouis/liblouis/
+         service/jni/liblouiswrapper/
+   版权（源码头声明）：
+         Copyright (C) 2004, 2005, 2006 ViewPlus Technologies, Inc.
+         Copyright (C) 2004, 2005, 2006 JJB Software, Inc.
+         Copyright (C) 2016 Mike Gray, American Printing House for the Blind
+         Copyright (C) 2016 Davy Kager, Dedicon
+         基于 BRLTTY，Copyright (C) 1999-2006 The BRLTTY Team
+
+3. BRLTTY —— 点显器驱动与 BrlAPI 适配
+   许可：仓库内驱动源码许可头为 LGPL-2.1-or-later；上游 BRLTTY 整体为
+         GPLv2-or-later，盲文表格与 BrlAPI 客户端为例外 LGPL 条款
+   出处：service/jni/brlttywrapper/third_party/brltty/
+   版权：Copyright (C) 1995-2026 The BRLTTY Team
+   维护：Dave Mielke <dave@mielke.cc>；项目主页 http://brltty.app/
+
+4. jieba —— 中文分词算法与词频词典
+   许可：MIT License
+   出处：service/src/main/java/com/googlecode/eyesfree/braille/service/translate/
+         HmmSegmenter.kt（finalseg BMES 四状态 HMM 概率表与状态转移取自
+         jieba 0.42.1）；
+         service/src/main/assets/jiebadt.txt（jieba 格式词频词典）
+   说明：分词器本体为本项目 Kotlin 自实现（零第三方依赖），算法对标 jieba；
+         仓库内未保留 jieba 源码本体。
+
+5. libraries/utils 兼容工具
+   许可：MIT License
+   出处：libraries/utils/
+   版权：Copyright (c) 2017 Alex Leffelman
